@@ -50,6 +50,10 @@ if __name__ == "__main__":
 
         default_angles = np.array(config["default_angles"], dtype=np.float32)
 
+        arm_waist_kps = np.array(config["arm_waist_kps"], dtype=np.float32)
+        arm_waist_kds = np.array(config["arm_waist_kds"], dtype=np.float32)
+        arm_waist_target = np.array(config["arm_waist_target"], dtype=np.float32)
+
         ang_vel_scale = config["ang_vel_scale"]
         dof_pos_scale = config["dof_pos_scale"]
         dof_vel_scale = config["dof_vel_scale"]
@@ -81,8 +85,21 @@ if __name__ == "__main__":
         start = time.time()
         while viewer.is_running() and time.time() - start < simulation_duration:
             step_start = time.time()
-            tau = pd_control(target_dof_pos, d.qpos[7:], kps, np.zeros_like(kds), d.qvel[6:], kds)
-            d.ctrl[:] = tau
+            
+            # --- 1. 腿部控制 (0~11) ---
+            # qpos[7:19] 为腿部的 12 个关节，qvel[6:18] 为对应的速度
+            leg_q = d.qpos[7:19]
+            leg_dq = d.qvel[6:18]
+            tau_leg = pd_control(target_dof_pos, leg_q, kps, np.zeros_like(kds), leg_dq, kds)
+            d.ctrl[:12] = tau_leg
+
+            # --- 2. 腰部与手臂控制 (12~22) ---
+            # 共有 11 个关节 (1 腰 + 5 左臂 + 5 右臂)
+            arm_waist_q = d.qpos[19:30]
+            arm_waist_dq = d.qvel[18:29]
+            tau_arm_waist = pd_control(arm_waist_target, arm_waist_q, arm_waist_kps, np.zeros_like(arm_waist_kds), arm_waist_dq, arm_waist_kds)
+            d.ctrl[12:23] = tau_arm_waist
+
             # mj_step can be replaced with code that also evaluates
             # a policy and applies a control signal before stepping the physics.
             mujoco.mj_step(m, d)
@@ -91,9 +108,9 @@ if __name__ == "__main__":
             if counter % control_decimation == 0:
                 # Apply control signal here.
 
-                # create observation
-                qj = d.qpos[7:]
-                dqj = d.qvel[6:]
+                # create observation (RL策略只观测腿部状态，需要截取前12个关节)
+                qj = d.qpos[7:19]
+                dqj = d.qvel[6:18]
                 quat = d.qpos[3:7]
                 omega = d.qvel[3:6]
 

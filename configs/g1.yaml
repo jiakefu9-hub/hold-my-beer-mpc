@@ -1,6 +1,6 @@
 # 
 policy_path: "/home/fjk/g1_ws/g1_hand_plate_project/policy/motion.pt"
-xml_path: "/home/fjk/g1_ws/g1_hand_plate_project/resources/g1_description/scene.xml"
+xml_path: "/home/fjk/g1_ws/g1_hand_plate_project/resources/g1_description/g1_23dof_rev_1_0.xml"
 
 # Total simulation time
 simulation_duration: 60.0
@@ -14,6 +14,16 @@ kds: [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2]
 
 default_angles: [-0.1,  0.0,  0.0,  0.3, -0.2, 0.0, 
                   -0.1,  0.0,  0.0,  0.3, -0.2, 0.0]
+
+arm_waist_kps: [100, 
+                100, 100, 50, 50, 20,
+                100, 100, 50, 50, 20]
+arm_waist_kds: [2,
+                2, 2, 2, 2, 1,
+                2, 2, 2, 2, 1]
+arm_waist_target: [0,
+                   0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0]
 
 ang_vel_scale: 0.25
 dof_pos_scale: 1.0
