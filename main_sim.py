@@ -7,10 +7,11 @@ from legged_gym import LEGGED_GYM_ROOT_DIR
 import torch
 import yaml
 
-# --- 引入我们独立的控制器 (随时在这里一键切换算法！) ---
-from arm_pd import ArmPDController
-# from arm_mpc import ArmMPC
-# from arm_lqr import ArmLQR
+# --- 引入我们独立的策略 (所有的算法最终只输出 target_q 目标位置！) ---
+from arm_fixed import ArmFixedPolicy
+# from arm_pid import ArmPIDPolicy
+# from arm_lqr import ArmLQRPolicy
+# from arm_mpc import ArmMPCPolicy
 
 
 def get_gravity_orientation(quaternion):
@@ -98,8 +99,11 @@ if __name__ == "__main__":
     # load policy
     policy = torch.jit.load(policy_path)
 
-    # --- 实例化手臂控制器 (在这里把 yaml 里的参数喂进去) ---
-    arm_controller = ArmPDController(kps=arm_waist_kps, kds=arm_waist_kds)
+    # --- 实例化手臂控制策略 (这里我们传入要锁死的 target_q 数组) ---
+    arm_policy = ArmFixedPolicy(target_q=arm_waist_target)
+
+    # 预先找到 torso_link 的 ID，方便后续每步读取它的姿态和角速度
+    torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
@@ -115,16 +119,27 @@ if __name__ == "__main__":
             d.ctrl[:12] = tau_leg
 
             # --- 2. 腰部与手臂控制 (12~22) ---
-            # 腰部和手臂关节在 d.qpos 中是从索引 19 到 29 (共11个)，在 d.qvel 中是 18 到 28
+            # 1. 提取当前上肢关节状态
             arm_waist_q = d.qpos[19:30]
             arm_waist_dq = d.qvel[18:29]
             
-            # --- 核心：在这里调用控制器！---
-            # 这个 compute_tau 接口是所有控制器公用的标准接口
-            tau_arm_waist = arm_controller.compute_tau(
-                q=arm_waist_q, 
-                dq=arm_waist_dq, 
-                target_q=arm_waist_target
+            # 2. 提取躯干(torso_link)的姿态和角速度（这是上肢控制最重要的反馈！）
+            torso_quat = d.xquat[torso_id]
+            torso_omega = d.cvel[torso_id][3:6] # cvel 前3位角速度，后3位线速度
+            
+            # 3. --- 核心：在这里调用控制策略！---
+            # 所有未来的策略 (PID, LQR, MPC) 都会用这个标准接口，吃状态，吐目标角度
+            target_arm_waist_q = arm_policy.compute_action(
+                torso_quat=torso_quat, 
+                torso_omega=torso_omega, 
+                current_q=arm_waist_q, 
+                current_dq=arm_waist_dq
+            )
+            
+            # 4. 统一执行 PD 控制计算最终力矩 (完全模拟真机底层的电机闭环)
+            tau_arm_waist = pd_control(
+                target_arm_waist_q, arm_waist_q, arm_waist_kps, 
+                np.zeros_like(arm_waist_kds), arm_waist_dq, arm_waist_kds
             )
             d.ctrl[12:23] = tau_arm_waist
 
