@@ -42,7 +42,7 @@ if __name__ == "__main__":
     parser.add_argument("config_file", type=str, help="config file name in the config folder")
     args = parser.parse_args()
     config_file = args.config_file
-    with open(f"/home/fjk/g1_ws/g1_hand_plate_project/configs/{config_file}", "r") as f:
+    with open(f"/home/fjk/g1_ws/hold-my-beer-mpc/configs/{config_file}", "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
         policy_path = config["policy_path"]
         xml_path = config["xml_path"]

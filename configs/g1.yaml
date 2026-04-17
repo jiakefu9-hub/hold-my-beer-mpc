@@ -1,6 +1,6 @@
 # 
-policy_path: "/home/fjk/g1_ws/g1_hand_plate_project/policy/motion.pt"
-xml_path: "/home/fjk/g1_ws/g1_hand_plate_project/resources/g1_description/scene.xml"
+policy_path: "/home/fjk/g1_ws/hold-my-beer-mpc/policy/motion.pt"
+xml_path: "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml"
 
 # Total simulation time
 simulation_duration: 60.0
