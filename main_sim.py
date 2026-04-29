@@ -3,7 +3,6 @@ import time
 import mujoco.viewer
 import mujoco
 import numpy as np
-from legged_gym import LEGGED_GYM_ROOT_DIR
 import torch
 import yaml
 
