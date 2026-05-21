@@ -1,0 +1,94 @@
+# 基于步态相位的躯干扰动预测器 (Torso Disturbance Predictor)
+
+## 1. 目标
+本项目中，下肢运动由预训练的强化学习策略（RL）控制，上肢手臂由 MPC 控制，用于稳定末端执行器（水杯），尽量降低水体溅出的风险。
+机器人行走时，躯干（Torso）会产生周期性的线性加速度、角速度、角加速度和姿态变化。这些扰动会通过手臂基座传递到末端执行器，导致末端产生额外的加速度波动。
+因此，本文设计一个扰动预测器，根据机器人当前所处的步态相位 `phase`，预测未来一段时间内的 Torso 扰动，并将其作为前馈项输入到上肢 MPC 中，使手臂能够提前补偿由行走引起的躯干晃动。
+
+第一版扰动预测器采用固定步态周期和固定行走速度的假设，将 Torso 扰动近似建模为步态相位的函数：
+$$
+d_{torso} \approx f(phase)
+$$
+其中，`phase` 表示机器人当前处于一个行走周期中的哪个阶段。
+
+## 2. 基本假设
+第一版扰动预测器基于以下假设：
+1. **下肢策略固定**：下肢 RL 策略固定不变。
+2. **速度指令固定**：行走速度指令固定不变。
+3. **周期固定**：步态周期固定，例如 `period = 0.8 s`。
+4. **地形固定**：机器人在平地上行走。
+5. **稳态假设**：机器人经过短暂启动阶段后，会进入相对稳定的周期性行走状态。
+6. **相位一致性**：在固定速度、周期和平地条件下，同一 `phase` 对应的 Torso 扰动具有高度相似性。
+
+基于以上，可以用 `phase` 作为自变量，建立扰动模板：`phase → torso disturbance`。
+
+## 3. 仿真时间与真实时间（核心对齐）
+在仿真中，步态相位**必须**基于 MuJoCo 的仿真步数计算，而不是真实世界中的墙钟时间（Wall-clock time）。
+这是因为电脑计算物理仿真、运行神经网络、刷新渲染界面会导致真实时间出现卡顿，如果用 `time.time()` 计算相位，会导致步态相位与机器人实际仿真物理状态发生严重错位。
+
+**获取方式（与底层 RL 策略严格对齐）**：
+在当前的 `main_sim.py` 代码中，底层强化学习步态策略使用了一个外部维护的 `counter` 来计算相位：
+```python
+count = counter * simulation_dt
+phase = count % period / period
+```
+**重要结论**：对于我们的扰动预测器，**必须原封不动地使用这个 `counter * dt` 来计算相位！**
+绝对不能使用 `d.time`。尽管 `d.time` 在物理引擎中也是精确的，但为了确保我们采集的“扰动相位”与 RL 神经网络推理时吃进去的“步态相位”在**数值上绝对严丝合缝地对齐**（消除任何浮点数精度偏差），共用同一个 `counter` 是最安全、最工程化的做法。
+
+## 4. 步态相位计算
+在固定周期 `period` 下，当前步态相位定义为 $phase \in [0, 1)$：
+- `phase = 0.00`：步态周期的起点。
+- `phase = 0.25`：周期的 1/4 处。
+- `phase = 0.50`：周期的一半。
+
+RL 策略使用连续的 `sin(2π phase)` 和 `cos(2π phase)` 作为输入，而在扰动模板构建中，核心变量直接使用 `phase` 进行分桶（Binning）、对齐和平均。
+
+## 5. 数据采样频率与采集对象
+- **采样频率**：采用 MuJoCo 的仿真底层频率（即每次 `mujoco.mj_step(m, d)` 后采集一次）。例如 `dt=0.002s` 则采样率为 500Hz。高频采样能完整记录高频扰动，后续可进行滤波或降采样。
+- **采集对象**：采集的是上半身机座 `torso_link` 的运动状态，而不是 `pelvis`。因为手臂直接连接在 Torso 上，上肢 MPC 的扰动前馈应当严格基于 Torso 的坐标系。
+
+## 6. 记录的数据结构
+每个仿真步需记录以下数据：
+
+### 6.1 时间与相位信息
+- `counter`: 仿真循环步数
+- `count`: `counter * simulation_dt`
+- `phase`: `count % period / period`
+- `sin_phase`, `cos_phase`
+
+### 6.2 Torso 扰动信息（通过传感器获取）
+**强烈建议**：不要通过微分位置来计算加速度，而是直接在 XML 中为 Torso 添加 `accelerometer` 和 `gyro` 传感器，从 `d.sensordata` 中直接读取：
+- `torso_linear_acceleration` (来自传感器，天然包含重力补偿)
+- `torso_angular_velocity` (来自 gyro)
+- `torso_angular_acceleration` (角速度的一阶差分)
+- `torso_quaternion`: `d.xquat[torso_id]` `[qw, qx, qy, qz]`
+
+**处理策略**：采集阶段仅记录四元数（避免欧拉角奇异性），在接入 MPC 建模时，再转换为旋转矩阵 $R_{torso} \in \mathbb{R}^{3 \times 3}$。
+
+### 6.3 左右脚状态（用于验证相位的唯一性）
+- `left_foot_z`, `right_foot_z`
+- `left_contact`, `right_contact` (通过碰撞检测或力传感器获取)
+这些信息用于验证 `phase` 是否能够唯一或近似唯一地表示当前步态阶段。
+
+## 7. 扰动模板的构建（后处理）
+1. **剔除瞬态**：丢弃前 3~5 秒的启动阶段数据（`count > discard_time`），避免非周期性瞬态数据污染模板。
+2. **相位分桶（Binning）**：将一个周期划分为 $N$ 个 bin（如 $N=100$）。每个样本的归属为 `bin_id = floor(phase * N)`。
+3. **求均值**：对落入同一个 bin 内的扰动数据求平均：
+   `d_template[bin_id] = mean(d_torso samples in this bin)`
+4. **唯一性验证**：检查同一 phase bin 内左右脚状态是否高度集中。如果分布混乱，说明 phase 不能唯一表示步态，需将预测器扩展为二维查表：$d_{torso} \approx f(phase, support\_leg)$。
+
+## 8. 在 MPC 预测时域中的应用
+在 MPC 在线运行时，获取当前 `count` 推算当前相位 `phase_now`。
+对于预测时域中的第 $k$ 个预测步，未来相位计算为：
+$$
+phase_k = (phase_{now} + \frac{k \cdot dt_{mpc}}{period}) \pmod 1
+$$
+从扰动模板中插值读取对应的预测扰动序列 $d_{pred}[0...N-1]$。
+
+**控制学意义**：
+末端执行器加速度近似为：$a_{EE} \approx a_{torso\_disturbance} + arm\_compensation$
+MPC 的目标是选择未来的手臂运动指令，使预测的躯干扰动被提前抵消：
+$$
+a_{torso\_pred} + arm\_compensation \approx 0
+$$
+通过引入该前馈项，MPC 化被动反馈为主动悬挂，极大提高端杯的抗扰动稳定性。
