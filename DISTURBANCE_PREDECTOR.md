@@ -60,8 +60,12 @@ RL 策略使用连续的 `sin(2π phase)` 和 `cos(2π phase)` 作为输入，�
 **强烈建议**：不要通过微分位置来计算加速度，而是直接在 XML 中为 Torso 添加 `accelerometer` 和 `gyro` 传感器，从 `d.sensordata` 中直接读取：
 - `torso_linear_acceleration` (来自传感器，天然包含重力补偿)
 - `torso_angular_velocity` (来自 gyro)
-- `torso_angular_acceleration` (角速度的一阶差分)
+- `torso_angular_acceleration` (角速度的一阶差分计算获得)
+  - **计算方法**：在代码里，你需要记录上一帧的角速度 $\omega_{k-1}$ 和当前帧的角速度 $\omega_k$，然后用公式计算：
+    $$\alpha_{torso} = \frac{\omega_k - \omega_{k-1}}{simulation\_dt}$$
+  - *(注意：因为这是一阶差分，可能会引入高频噪声，在后续处理扰动模板时，你可能需要对计算出的角加速度进行一次简单的低通滤波或平滑处理。)*
 - `torso_quaternion`: `d.xquat[torso_id]` `[qw, qx, qy, qz]`
+  - **仿真与真机的数据获取差异**：在 MuJoCo 仿真中，实体的绝对姿态（Quaternion）是可以直接从物理引擎的底层状态（`d.xquat`）完美读出的，不需要经过虚拟传感器。而在真实硬件上，绝对姿态是由底层控制板通过 IMU 传感器（融合加速度计和陀螺仪的数据，经过卡尔曼滤波等算法估算）计算得出，然后作为系统状态发送给上层控制器的。
 
 **处理策略**：采集阶段仅记录四元数（避免欧拉角奇异性），在接入 MPC 建模时，再转换为旋转矩阵 $R_{torso} \in \mathbb{R}^{3 \times 3}$。
 
