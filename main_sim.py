@@ -33,6 +33,49 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
     return (target_q - q) * kp + (target_dq - dq) * kd
 
 
+def add_imu_axis_visual(scene, pos, rot, axis_length=0.20, axis_radius=0.008):
+    """在 viewer.user_scn 中画出 IMU 的位置和局部坐标轴。
+    红=X, 绿=Y, 蓝=Z。
+    注意：交点严格位于 XML 中 `imu_in_torso` 的 site 位置；如果 IMU 在机身内部，靠拉长坐标轴来显示其位置。
+    """
+    scene.ngeom = 0
+
+    mujoco.mjv_initGeom(
+        scene.geoms[scene.ngeom],
+        mujoco.mjtGeom.mjGEOM_SPHERE,
+        np.array([0.02, 0.0, 0.0]),
+        pos,
+        np.eye(3).reshape(-1),
+        np.array([1.0, 1.0, 0.0, 0.9]),
+    )
+    scene.ngeom += 1
+
+    axis_colors = [
+        np.array([1.0, 0.0, 0.0, 0.9]),
+        np.array([0.0, 1.0, 0.0, 0.9]),
+        np.array([0.0, 0.0, 1.0, 0.9]),
+    ]
+
+    for i in range(3):
+        end = pos + rot[:, i] * axis_length
+        mujoco.mjv_initGeom(
+            scene.geoms[scene.ngeom],
+            mujoco.mjtGeom.mjGEOM_CAPSULE,
+            np.zeros(3),
+            np.zeros(3),
+            np.eye(3).reshape(-1),
+            axis_colors[i],
+        )
+        mujoco.mjv_connector(
+            scene.geoms[scene.ngeom],
+            mujoco.mjtGeom.mjGEOM_CAPSULE,
+            axis_radius,
+            pos,
+            end,
+        )
+        scene.ngeom += 1
+
+
 if __name__ == "__main__":
     # get config file name from command line
     import argparse
@@ -101,12 +144,14 @@ if __name__ == "__main__":
     # --- 实例化手臂控制策略 (这里我们传入要锁死的 target_q 数组) ---
     arm_policy = ArmFixedPolicy(target_q=arm_waist_target)
 
-    # 预先找到 torso_link 的 ID，方便后续每步读取它的姿态和角速度
+    # 预先找到 torso_link 和 torso IMU 的 ID，方便后续读取和可视化
     torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
+    imu_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "imu_in_torso")
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
         start = time.time()
+        print("IMU 可视化已开启：红=X轴，绿=Y轴，蓝=Z轴")
         while viewer.is_running() and time.time() - start < simulation_duration:
             step_start = time.time()
             
@@ -179,6 +224,11 @@ if __name__ == "__main__":
                 action = policy(obs_tensor).detach().numpy().squeeze()
                 # transform action to target_dof_pos
                 target_dof_pos = action * action_scale + default_angles
+
+            # 在 viewer 中画出 torso 上的 IMU 位置与局部坐标轴
+            imu_pos = d.site_xpos[imu_site_id].copy()
+            imu_rot = d.site_xmat[imu_site_id].reshape(3, 3).copy()
+            add_imu_axis_visual(viewer.user_scn, imu_pos, imu_rot)
 
             # Pick up changes to the physics state, apply perturbations, update options from GUI.
             viewer.sync()
