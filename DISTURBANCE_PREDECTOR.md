@@ -43,9 +43,12 @@ phase = count % period / period
 
 RL 策略使用连续的 `sin(2π phase)` 和 `cos(2π phase)` 作为输入，而在扰动模板构建中，核心变量直接使用 `phase` 进行分桶（Binning）、对齐和平均。
 
-## 5. 数据采样频率与采集对象
-- **采样频率**：采用 MuJoCo 的仿真底层频率（即每次 `mujoco.mj_step(m, d)` 后采集一次）。例如 `dt=0.002s` 则采样率为 500Hz。高频采样能完整记录高频扰动，后续可进行滤波或降采样。
-- **采集对象**：采集的是上半身机座 `torso_link` 的运动状态，而不是 `pelvis`。因为手臂直接连接在 Torso 上，上肢 MPC 的扰动前馈应当严格基于 Torso 的坐标系。
+## 5. 数据采样频率与基座坐标系 (Base Frame) 重定义
+- **采样频率**：采用 MuJoCo 的仿真底层频率（例如 `dt=0.002s` 则采样率为 500Hz）。
+- **基座坐标系 $\{B\}$ 重定义（核心 Sim2Real 优化）**：
+  在原始推导中，我们可能倾向于将躯干质心 (CoM) 作为 Base 系。但为了**极其平滑的真机落地**，我们**将基座坐标系 $\{B\}$ 严格定义在物理 IMU 传感器的中心点**。
+  - **原因**：如果基座在质心，我们将不得不把 IMU 测得的线加速度通过离心力 $\omega \times (\omega \times r)$ 和切向力 $\alpha \times r$ 转移到质心。这段十几厘米的距离在剧烈行走时会放大极高的噪声。
+  - **优势**：将 $\{B\}$ 定义在 IMU 处，后续所有的正向运动学 (FK) 直接以 `imu_link` 为树根进行展开，完美避开了加速度的空间平移噪声！
 
 ## 6. 记录的数据结构
 每个仿真步需记录以下数据：
@@ -56,16 +59,13 @@ RL 策略使用连续的 `sin(2π phase)` 和 `cos(2π phase)` 作为输入，�
 - `phase`: `count % period / period`
 - `sin_phase`, `cos_phase`
 
-### 6.2 Torso 扰动信息（通过传感器获取）
-**强烈建议**：不要通过微分位置来计算加速度，而是直接在 XML 中为 Torso 添加 `accelerometer` 和 `gyro` 传感器，从 `d.sensordata` 中直接读取：
-- `torso_linear_acceleration` (来自传感器，天然包含重力补偿)
-- `torso_angular_velocity` (来自 gyro)
-- `torso_angular_acceleration` (角速度的一阶差分计算获得)
-  - **计算方法**：在代码里，你需要记录上一帧的角速度 $\omega_{k-1}$ 和当前帧的角速度 $\omega_k$，然后用公式计算：
-    $$\alpha_{torso} = \frac{\omega_k - \omega_{k-1}}{simulation\_dt}$$
-  - *(注意：因为这是一阶差分，可能会引入高频噪声，在后续处理扰动模板时，你可能需要对计算出的角加速度进行一次简单的低通滤波或平滑处理。)*
-- `torso_quaternion`: `d.xquat[torso_id]` `[qw, qx, qy, qz]`
-  - **仿真与真机的数据获取差异**：在 MuJoCo 仿真中，实体的绝对姿态（Quaternion）是可以直接从物理引擎的底层状态（`d.xquat`）完美读出的，不需要经过虚拟传感器。而在真实硬件上，绝对姿态是由底层控制板通过 IMU 传感器（融合加速度计和陀螺仪的数据，经过卡尔曼滤波等算法估算）计算得出，然后作为系统状态发送给上层控制器的。
+### 6.2 Torso 扰动信息（最原始的局部传感器数据）
+**设计哲学：在数据采集阶段，我们只做大自然的搬运工，采集最原汁原味、包含重力偏置的局部传感器数据，所有坐标系转换留到后处理！**
+从 `d.sensordata` 中读取：
+- `torso_linear_acceleration` (局部坐标系下的加速度计原始数据，包含向上的 $9.81 m/s^2$ 反作用力)
+- `torso_angular_velocity` (局部坐标系下的陀螺仪原始数据)
+- `torso_angular_acceleration` (对局部角速度做一阶差分计算获得)
+- `torso_quaternion`: `d.xquat[torso_id]` (世界系下的绝对姿态)
 
 **处理策略**：采集阶段仅记录四元数（避免欧拉角奇异性），在接入 MPC 建模时，再转换为旋转矩阵 $R_{torso} \in \mathbb{R}^{3 \times 3}$。
 
@@ -74,14 +74,33 @@ RL 策略使用连续的 `sin(2π phase)` 和 `cos(2π phase)` 作为输入，�
 - `left_contact`, `right_contact` (通过碰撞检测或力传感器获取)
 这些信息用于验证 `phase` 是否能够唯一或近似唯一地表示当前步态阶段。
 
-## 7. 扰动模板的构建（后处理）
+## 7. 数据处理与坐标系转换 (Data Processing & Coordinate Transformation)
+在收集完原始数据后，必须进入后处理阶段。由于 MPC 需要世界坐标系下的纯运动学加速度，我们需要对采集到的 IMU 原始数据进行坐标系转换与重力剥离：
+
+1. **四元数转旋转矩阵**：将采集到的 `torso_quaternion` 转换为旋转矩阵 ${}^W R_{IMU}$。
+2. **角速度与角加速度转换**：
+   $
+   {}^W \omega_{IMU} = {}^W R_{IMU} \cdot {}^{IMU}\omega_{\text{gyro\_raw}}
+   $
+   $
+   {}^W \alpha_{IMU} = {}^W R_{IMU} \cdot {}^{IMU}\alpha_{\text{angular\_acc\_raw}}
+   $
+3. **线加速度转换与重力剥离（核心步骤）**：
+   由于原始加速度包含抵御重力的支撑力分量（例如，机器人静止且 Y 轴朝天时，加速度计测得的是 `[0, 9.81, 0]`）。我们需要将其旋转到世界坐标系后，再减去 Z 轴向上的 $9.81\,m/s^2$（即重力的反作用力），以获得纯粹的运动学加速度：
+   $
+   {}^W a_{IMU} = {}^W R_{IMU} \cdot {}^{IMU}a_{\text{accel\_raw}} - \begin{bmatrix} 0 \\ 0 \\ 9.81 \end{bmatrix}
+   $
+
+转换完成后，得到纯净的 ${}^W a_{IMU}$、${}^W \omega_{IMU}$ 和 ${}^W \alpha_{IMU}$，我们才进入下一阶段的**相位对齐与平均**，构建最终的扰动模板。
+
+## 8. 扰动模板的构建（后处理的第二步）
 1. **剔除瞬态**：丢弃前 3~5 秒的启动阶段数据（`count > discard_time`），避免非周期性瞬态数据污染模板。
 2. **相位分桶（Binning）**：将一个周期划分为 $N$ 个 bin（如 $N=100$）。每个样本的归属为 `bin_id = floor(phase * N)`。
-3. **求均值**：对落入同一个 bin 内的扰动数据求平均：
+3. **求均值**：对落入同一个 bin 内的转换后的扰动数据求平均：
    `d_template[bin_id] = mean(d_torso samples in this bin)`
 4. **唯一性验证**：检查同一 phase bin 内左右脚状态是否高度集中。如果分布混乱，说明 phase 不能唯一表示步态，需将预测器扩展为二维查表：$d_{torso} \approx f(phase, support\_leg)$。
 
-## 8. 在 MPC 预测时域中的应用
+## 9. 在 MPC 预测时域中的应用
 在 MPC 在线运行时，获取当前 `count` 推算当前相位 `phase_now`。
 对于预测时域中的第 $k$ 个预测步，未来相位计算为：
 $$
