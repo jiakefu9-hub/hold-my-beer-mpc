@@ -79,7 +79,7 @@ def format_std_box(std_arr, prefix):
     return "\n".join(lines)
 
 
-def print_summary(data):
+def print_summary(data, title):
     period = float(data["period"])
     num_bins = int(data["num_bins"])
     dt_bin = float(data["dt_bin"])
@@ -98,7 +98,7 @@ def print_summary(data):
     right_std = np.asarray(data["right_foot_z_std"])
 
     print("=" * 72)
-    print("最终扰动模板摘要")
+    print(f"最终扰动模板摘要: {title}")
     print("=" * 72)
     print(f"period                  : {period:.6f} s")
     print(f"num_bins                : {num_bins}")
@@ -121,7 +121,7 @@ def print_summary(data):
     print(f"  right_foot_z_std mean : {right_std.mean():.6f}")
 
 
-def plot_template(data):
+def plot_templates(template_dict):
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -129,106 +129,59 @@ def plot_template(data):
         print("安装命令: pip install matplotlib")
         return
 
-    phase = np.asarray(data["phase_centers"])
-
-    acc = np.asarray(data["torso_linear_acceleration_template"])
-    acc_std = np.asarray(data["torso_linear_acceleration_std"])
-
-    omega = np.asarray(data["torso_angular_velocity_template"])
-    omega_std = np.asarray(data["torso_angular_velocity_std"])
-
-    alpha = np.asarray(data["torso_angular_acceleration_template"])
-
     labels = ["x", "y", "z"]
     colors = ["tab:blue", "tab:orange", "tab:green"]
+    col_titles = ["Raw Template", "Half Smoothed Template", "Fully Smoothed Template"]
+    row_titles = [
+        "Heading-Frame Linear Acceleration",
+        "Heading-Frame Angular Velocity",
+        "Heading-Frame Angular Acceleration",
+    ]
 
-    fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
-    fig.canvas.manager.set_window_title("Disturbance Template")
+    fig, axes = plt.subplots(3, 3, figsize=(26, 12), sharex=True)
+    fig.canvas.manager.set_window_title("Disturbance Template Comparison")
 
-    # 1) acc_H template
-    for i in range(3):
-        axes[0].plot(phase, acc[:, i], color=colors[i], label=f"acc_H_{labels[i]}")
-        axes[0].fill_between(
-            phase,
-            acc[:, i] - acc_std[:, i],
-            acc[:, i] + acc_std[:, i],
-            color=colors[i],
-            alpha=0.18,
-        )
-    axes[0].set_ylabel("m/s^2")
-    axes[0].set_title("Template: Heading-Frame Linear Acceleration")
-    axes[0].grid(True, axis="y", alpha=0.3)
-    axes[0].legend(loc="upper left")
-    axes[0].text(
-        1.01,
-        0.98,
-        format_std_box(acc_std, "acc_H"),
-        transform=axes[0].transAxes,
-        va="top",
-        ha="left",
-        fontsize=9,
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.85),
-    )
+    for c, (title, data) in enumerate(zip(col_titles, template_dict)):
+        phase = np.asarray(data["phase_centers"])
+        acc = np.asarray(data["torso_linear_acceleration_template"])
+        acc_std = np.asarray(data["torso_linear_acceleration_std"])
+        omega = np.asarray(data["torso_angular_velocity_template"])
+        omega_std = np.asarray(data["torso_angular_velocity_std"])
+        alpha = np.asarray(data["torso_angular_acceleration_template"])
 
-    # 2) omega_H template
-    for i in range(3):
-        axes[1].plot(phase, omega[:, i], color=colors[i], label=f"omega_H_{labels[i]}")
-        axes[1].fill_between(
-            phase,
-            omega[:, i] - omega_std[:, i],
-            omega[:, i] + omega_std[:, i],
-            color=colors[i],
-            alpha=0.18,
-        )
-    axes[1].set_ylabel("rad/s")
-    axes[1].set_title("Template: Heading-Frame Angular Velocity")
-    axes[1].grid(True, axis="y", alpha=0.3)
-    axes[1].legend(loc="upper left")
-    axes[1].text(
-        1.01,
-        0.98,
-        format_std_box(omega_std, "omega_H"),
-        transform=axes[1].transAxes,
-        va="top",
-        ha="left",
-        fontsize=9,
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.85),
-    )
+        for i in range(3):
+            axes[0, c].plot(phase, acc[:, i], color=colors[i], label=f"acc_H_{labels[i]}")
+            axes[0, c].fill_between(phase, acc[:, i] - acc_std[:, i], acc[:, i] + acc_std[:, i], color=colors[i], alpha=0.18)
+        axes[0, c].grid(True, axis="y", alpha=0.3)
 
-    # 3) alpha_H template
-    for i in range(3):
-        axes[2].plot(phase, alpha[:, i], color=colors[i], label=f"alpha_H_{labels[i]}")
-    axes[2].set_ylabel("rad/s^2")
-    axes[2].set_xlabel("phase")
-    axes[2].set_title("Template: Heading-Frame Angular Acceleration")
-    axes[2].grid(True, axis="y", alpha=0.3)
-    axes[2].legend(loc="upper left")
-    axes[2].text(
-        1.01,
-        0.98,
-        "alpha_H is computed\nfrom omega_H template\nusing periodic central\ndifference\n(no separate std)",
-        transform=axes[2].transAxes,
-        va="top",
-        ha="left",
-        fontsize=9,
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.85),
-    )
+        for i in range(3):
+            axes[1, c].plot(phase, omega[:, i], color=colors[i], label=f"omega_H_{labels[i]}")
+            axes[1, c].fill_between(phase, omega[:, i] - omega_std[:, i], omega[:, i] + omega_std[:, i], color=colors[i], alpha=0.18)
+        axes[1, c].grid(True, axis="y", alpha=0.3)
 
-    for ax in axes:
-        ax.set_xlim(0.0, 1.0)
+        for i in range(3):
+            axes[2, c].plot(phase, alpha[:, i], color=colors[i], label=f"alpha_H_{labels[i]}")
+        axes[2, c].grid(True, axis="y", alpha=0.3)
 
-    fig.tight_layout(rect=[0, 0, 0.86, 1])
+        for r in range(3):
+            axes[r, c].set_xlim(0.0, 1.0)
+            if r == 0:
+                axes[r, c].set_title(title)
+            if c == 0:
+                axes[r, c].set_ylabel(row_titles[r])
+            if r == 2:
+                axes[r, c].set_xlabel("phase")
+            axes[r, c].legend(loc="upper right", fontsize=8)
+
+    fig.tight_layout()
     plt.show()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="检查 disturbance_template.npz 并画模板图")
-    parser.add_argument(
-        "--npz",
-        type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template.npz",
-        help="模板 npz 文件路径",
-    )
+    parser = argparse.ArgumentParser(description="同时检查 raw / half smoothed / fully smoothed 三种模板并画九宫格对比图")
+    parser.add_argument("--raw", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template.npz", help="raw 模板 npz 文件路径")
+    parser.add_argument("--half", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template_half_smoothed.npz", help="half smoothed 模板 npz 文件路径")
+    parser.add_argument("--full", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template_fully_smoothed.npz", help="fully smoothed 模板 npz 文件路径")
     parser.add_argument(
         "--no-plot",
         action="store_true",
@@ -237,15 +190,19 @@ def main():
     args = parser.parse_args()
 
     try:
-        data = load_npz(args.npz)
+        raw_data = load_npz(args.raw)
+        half_data = load_npz(args.half)
+        full_data = load_npz(args.full)
     except Exception as e:
         print(f"读取失败: {e}")
         sys.exit(1)
 
-    print_summary(data)
+    print_summary(raw_data, "Raw Template")
+    print_summary(half_data, "Half Smoothed Template")
+    print_summary(full_data, "Fully Smoothed Template")
 
     if not args.no_plot:
-        plot_template(data)
+        plot_templates([raw_data, half_data, full_data])
 
 
 if __name__ == "__main__":
