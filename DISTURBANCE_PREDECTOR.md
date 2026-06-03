@@ -115,7 +115,7 @@ $
    \alpha_k = \frac{\omega_k - \omega_{k-1}}{dt}
    $
    这一操作会把角速度中的微小抖动显著放大成高频尖峰。更稳妥的做法是：
-   - 先将转换后的世界系角速度 ${}^W \omega$ 按 `phase` 分桶平均，得到角速度模板 $\bar{\omega}(phase)$；
+   - 先将转换后的H系角速度 ${}^H \omega$ 按 `phase` 分桶平均，得到角速度模板 $\bar{\omega}(phase)$；
    - 再对平均后的角速度模板求导，得到更平滑、更可信的角加速度模板 $\bar{\alpha}(phase)$。
 5. **唯一性验证**：检查同一 phase bin 内左右脚状态是否高度集中。如果分布混乱，说明 phase 不能唯一表示步态，需将预测器扩展为二维查表：$d_{torso} \approx f(phase, support\_leg)$。
 
