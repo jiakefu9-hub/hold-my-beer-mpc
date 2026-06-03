@@ -1,18 +1,18 @@
 # 怎么用
 # - 使用默认输入输出路径：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_smoothed_disturbance_template.py
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_half_smoothed_disturbance_template.py
 #
 # - 指定输入模板：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_smoothed_disturbance_template.py \
-#       --input /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template.npz
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_half_smoothed_disturbance_template.py \
+#       --input /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template.npz
 #
 # - 指定平滑窗口（奇数，单位：bin）：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_smoothed_disturbance_template.py \
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_half_smoothed_disturbance_template.py \
 #       --window-size 5
 #
 # - 指定输出前缀：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_smoothed_disturbance_template.py \
-#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template_smoothed
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_half_smoothed_disturbance_template.py \
+#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template_half_smoothed
 
 import argparse
 import csv
@@ -260,7 +260,7 @@ def main():
     parser.add_argument(
         "--input",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template.npz",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template.npz",
         help="输入模板 npz 文件路径",
     )
     parser.add_argument(
@@ -272,7 +272,7 @@ def main():
     parser.add_argument(
         "--output-prefix",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template_smoothed",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template_half_smoothed",
         help="输出文件前缀",
     )
     args = parser.parse_args()

@@ -1,11 +1,11 @@
 # 怎么用
 # - 只打印统计信息：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/inspect_processed_disturbance.py --no-plot
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/inspect_processed_disturbance.py --no-plot
 # - 打印统计信息并画图：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/inspect_processed_disturbance.py
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/inspect_processed_disturbance.py
 # - 指定别的 processed npz 文件：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/inspect_processed_disturbance.py \
-#       --npz /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed.npz
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/inspect_processed_disturbance.py \
+#       --npz /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed.npz
 
 import argparse
 import os
@@ -227,7 +227,7 @@ def main():
     parser.add_argument(
         "--npz",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed.npz",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed.npz",
         help="processed npz 文件路径",
     )
     parser.add_argument(

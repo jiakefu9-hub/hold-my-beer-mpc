@@ -1,18 +1,18 @@
 # 怎么用
 # - 使用默认输入输出路径：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/process_heading_disturbance.py
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/process_heading_disturbance.py
 #
 # - 指定输入 processed npz：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/process_heading_disturbance.py \
-#       --input /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed.npz
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/process_heading_disturbance.py \
+#       --input /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed.npz
 #
 # - 指定平滑窗口（奇数，单位：样本点）：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/process_heading_disturbance.py \
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/process_heading_disturbance.py \
 #       --window-size 1001
 #
 # - 指定输出前缀：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/process_heading_disturbance.py \
-#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_heading
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/process_heading_disturbance.py \
+#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_heading
 
 import argparse
 import csv
@@ -312,7 +312,7 @@ def main():
     parser.add_argument(
         "--input",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed.npz",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed.npz",
         help="输入 processed npz 文件路径",
     )
     parser.add_argument(
@@ -324,7 +324,7 @@ def main():
     parser.add_argument(
         "--output-prefix",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_heading",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_heading",
         help="输出文件前缀",
     )
     args = parser.parse_args()

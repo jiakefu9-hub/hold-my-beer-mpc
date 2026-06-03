@@ -250,8 +250,8 @@ if __name__ == "__main__":
         
         # --- 仿真结束，保存数据 ---
         print("\n--- 仿真结束，正在保存采集的数据 ---")
-        npz_path = "/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data.npz"
-        csv_path = "/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_preview.csv"
+        npz_path = "/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data.npz"
+        csv_path = "/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_preview.csv"
         np.savez(npz_path, **disturbance_data)
 
         with open(csv_path, "w", newline="") as f:

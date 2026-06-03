@@ -1,12 +1,12 @@
 # 怎么用
 # - 使用默认输入输出路径：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/process_disturbance.py
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/process_disturbance.py
 # - 指定原始 npz 文件：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/process_disturbance.py \
-#       --input /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data.npz
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/process_disturbance.py \
+#       --input /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data.npz
 # - 指定输出文件前缀：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/process_disturbance.py \
-#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/process_disturbance.py \
+#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed
 
 import argparse
 import csv
@@ -246,13 +246,13 @@ def main():
     parser.add_argument(
         "--input",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data.npz",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data.npz",
         help="原始扰动数据 npz 路径",
     )
     parser.add_argument(
         "--output-prefix",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed",
         help="输出文件前缀（会生成 .npz 和 _preview.csv）",
     )
     args = parser.parse_args()

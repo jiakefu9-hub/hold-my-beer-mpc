@@ -1,13 +1,13 @@
 # 怎么用
 # - 只打印统计信息：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/inspect_disturbance_template.py --no-plot
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/inspect_disturbance_template.py --no-plot
 #
 # - 打印统计信息并画图：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/inspect_disturbance_template.py
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/inspect_disturbance_template.py
 #
 # - 指定别的模板文件：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/inspect_disturbance_template.py \
-#       --npz /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template.npz
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/inspect_disturbance_template.py \
+#       --raw /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template.npz
 
 import argparse
 import os
@@ -179,9 +179,9 @@ def plot_templates(template_dict):
 
 def main():
     parser = argparse.ArgumentParser(description="同时检查 raw / half smoothed / fully smoothed 三种模板并画九宫格对比图")
-    parser.add_argument("--raw", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template.npz", help="raw 模板 npz 文件路径")
-    parser.add_argument("--half", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template_half_smoothed.npz", help="half smoothed 模板 npz 文件路径")
-    parser.add_argument("--full", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template_fully_smoothed.npz", help="fully smoothed 模板 npz 文件路径")
+    parser.add_argument("--raw", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template.npz", help="raw 模板 npz 文件路径")
+    parser.add_argument("--half", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template_half_smoothed.npz", help="half smoothed 模板 npz 文件路径")
+    parser.add_argument("--full", type=str, default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template_fully_smoothed.npz", help="fully smoothed 模板 npz 文件路径")
     parser.add_argument(
         "--no-plot",
         action="store_true",

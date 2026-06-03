@@ -1,18 +1,18 @@
 # 怎么用
 # - 使用默认输入输出路径：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_disturbance_template.py
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_disturbance_template.py
 #
 # - 指定输入文件：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_disturbance_template.py \
-#       --heading /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_heading.npz \
-#       --processed /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed.npz
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_disturbance_template.py \
+#       --heading /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_heading.npz \
+#       --processed /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed.npz
 #
 # - 指定 bin 数：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_disturbance_template.py --num-bins 100
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_disturbance_template.py --num-bins 100
 #
 # - 指定输出前缀：
-#   python /home/fjk/g1_ws/hold-my-beer-mpc/build_disturbance_template.py \
-#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template
+#   python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/build_disturbance_template.py \
+#       --output-prefix /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template
 
 import argparse
 import csv
@@ -302,13 +302,13 @@ def main():
     parser.add_argument(
         "--heading",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_heading.npz",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_heading.npz",
         help="H 系扰动数据 npz",
     )
     parser.add_argument(
         "--processed",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_data_processed.npz",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_data_processed.npz",
         help="processed 数据 npz（用于左右脚高度唯一性验证）",
     )
     parser.add_argument(
@@ -332,7 +332,7 @@ def main():
     parser.add_argument(
         "--output-prefix",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_template",
+        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model/disturbance_template",
         help="输出文件前缀",
     )
     args = parser.parse_args()
