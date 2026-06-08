@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import yaml
 
-# --- 引入我们独立的策略 (所有的算法最终只输出 target_q 目标位置！) ---
+# --- 引入我们独立的策略 ---
 from arm_fixed import ArmFixedPolicy
 # from arm_pid import ArmPIDPolicy
 # from arm_lqr import ArmLQRPolicy
@@ -33,20 +33,18 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
     return (target_q - q) * kp + (target_dq - dq) * kd
 
 
-def add_imu_axis_visual(scene, pos, rot, axis_length=0.20, axis_radius=0.008):
-    """在 viewer.user_scn 中画出 IMU 的位置和局部坐标轴。
-    红=X, 绿=Y, 蓝=Z。
-    注意：交点严格位于 XML 中 `imu_in_torso` 的 site 位置；如果 IMU 在机身内部，靠拉长坐标轴来显示其位置。
-    """
-    scene.ngeom = 0
+def add_axis_visual(scene, pos, rot, sphere_radius=0.02, axis_length=0.20, axis_radius=0.008, origin_rgba=None):
+    """在 viewer.user_scn 中画出任意局部坐标轴。红=X, 绿=Y, 蓝=Z。"""
+    if origin_rgba is None:
+        origin_rgba = np.array([1.0, 1.0, 0.0, 0.9])
 
     mujoco.mjv_initGeom(
         scene.geoms[scene.ngeom],
         mujoco.mjtGeom.mjGEOM_SPHERE,
-        np.array([0.02, 0.0, 0.0]),
+        np.array([sphere_radius, 0.0, 0.0]),
         pos,
         np.eye(3).reshape(-1),
-        np.array([1.0, 1.0, 0.0, 0.9]),
+        origin_rgba,
     )
     scene.ngeom += 1
 
@@ -141,12 +139,15 @@ if __name__ == "__main__":
     # load policy
     policy = torch.jit.load(policy_path)
 
-    # --- 实例化手臂控制策略 (这里我们传入要锁死的 target_q 数组) ---
-    arm_policy = ArmFixedPolicy(target_q=arm_waist_target)
+    # --- 实例化右臂控制策略（只传入右臂 5 维默认目标） ---
+    right_arm_target = arm_waist_target[6:11].copy()
+    arm_policy = ArmFixedPolicy(target_q=right_arm_target)
 
-    # 预先找到 torso_link 和 torso IMU 的 ID，方便后续读取和可视化
+    # 预先找到 torso_link、torso IMU 和任务末端 grasp site 的 ID，方便后续读取和可视化
     torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
     imu_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "imu_in_torso")
+    left_grasp_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "left_grasp_site")
+    right_grasp_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "right_grasp_site")
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
@@ -163,26 +164,31 @@ if __name__ == "__main__":
             d.ctrl[:12] = tau_leg
 
             # --- 2. 腰部与手臂控制 (12~22) ---
-            # 1. 提取当前上肢关节状态
+            # 顺序: waist(1), left_arm(5), right_arm(5)
             arm_waist_q = d.qpos[19:30]
             arm_waist_dq = d.qvel[18:29]
-            
-            # 2. 提取躯干(torso_link)的姿态和角速度（这是上肢控制最重要的反馈！）
+
+            waist_left_target_q = arm_waist_target[:6].copy()
+            waist_left_target_dq = np.zeros(6, dtype=np.float32)
+
+            right_arm_q = arm_waist_q[6:11]
+            right_arm_dq = arm_waist_dq[6:11]
+
             torso_quat = d.xquat[torso_id]
             torso_omega = d.cvel[torso_id][3:6] # cvel 前3位角速度，后3位线速度
-            
-            # 3. --- 核心：在这里调用统一控制策略接口 ---
-            # 所有策略统一输入 arm_obs/helpers，统一输出 q_ref, dq_ref
+
             arm_obs = {
-                "current_q": arm_waist_q,
-                "current_dq": arm_waist_dq,
+                "current_q": right_arm_q,
+                "current_dq": right_arm_dq,
                 "torso_quat": torso_quat,
                 "torso_omega": torso_omega,
             }
             helpers = None
-            target_arm_waist_q, target_arm_waist_dq = arm_policy.compute_action(arm_obs, helpers)
-            
-            # 4. 统一执行 PD 控制计算最终力矩 (模拟真机底层位置/速度闭环)
+            target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(arm_obs, helpers)
+
+            target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
+            target_arm_waist_dq = np.concatenate([waist_left_target_dq, target_right_arm_dq])
+
             tau_arm_waist = pd_control(
                 target_arm_waist_q, arm_waist_q, arm_waist_kps,
                 target_arm_waist_dq, arm_waist_dq, arm_waist_kds
@@ -227,10 +233,20 @@ if __name__ == "__main__":
                 # transform action to target_dof_pos
                 target_dof_pos = action * action_scale + default_angles
 
-            # 在 viewer 中画出 torso 上的 IMU 位置与局部坐标轴
+            # 在 viewer 中画出 torso IMU、左手抓持点、右手抓持点的局部坐标轴
+            viewer.user_scn.ngeom = 0
+
             imu_pos = d.site_xpos[imu_site_id].copy()
             imu_rot = d.site_xmat[imu_site_id].reshape(3, 3).copy()
-            add_imu_axis_visual(viewer.user_scn, imu_pos, imu_rot)
+            add_axis_visual(viewer.user_scn, imu_pos, imu_rot, sphere_radius=0.02, axis_length=0.20, axis_radius=0.008, origin_rgba=np.array([1.0, 1.0, 0.0, 0.9]))
+
+            left_grasp_pos = d.site_xpos[left_grasp_site_id].copy()
+            left_grasp_rot = d.site_xmat[left_grasp_site_id].reshape(3, 3).copy()
+            add_axis_visual(viewer.user_scn, left_grasp_pos, left_grasp_rot, sphere_radius=0.015, axis_length=0.08, axis_radius=0.006, origin_rgba=np.array([1.0, 0.5, 0.0, 0.9]))
+
+            right_grasp_pos = d.site_xpos[right_grasp_site_id].copy()
+            right_grasp_rot = d.site_xmat[right_grasp_site_id].reshape(3, 3).copy()
+            add_axis_visual(viewer.user_scn, right_grasp_pos, right_grasp_rot, sphere_radius=0.015, axis_length=0.08, axis_radius=0.006, origin_rgba=np.array([0.0, 1.0, 1.0, 0.9]))
 
             # Pick up changes to the physics state, apply perturbations, update options from GUI.
             viewer.sync()

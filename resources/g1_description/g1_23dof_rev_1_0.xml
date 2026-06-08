@@ -162,10 +162,11 @@
                   <body name="left_bottle" pos="0.2 -0.035 0">
                     <!-- 瓶身 (直径6.5cm, 高度20cm, 质量249.5g) -->
                     <!-- 注: MuJoCo的cylinder size参数为 [radius, half_height] -->
-                    <geom name="left_bottle_body" type="cylinder" size="0.0325 0.1" mass="0.2495" rgba="0.2 0.8 0.4 1.0"/>
+                    <geom name="left_bottle_body" type="cylinder" size="0.0325 0.1" mass="0.2495" rgba="0.85 0.85 0.88 0.35"/>
+                    <site name="left_grasp_site" pos="0 0 0" size="0.01" rgba="1 0.5 0 1"/>
                     <!-- 瓶盖 (高度1.2cm, 质量0.5g) -->
                     <!-- 瓶盖中心Z坐标 = 瓶身半高(0.1) + 瓶盖半高(0.006) = 0.106 -->
-                    <geom name="left_bottle_neck" type="cylinder" size="0.015 0.006" pos="0 0 0.106" mass="0.0005" rgba="0.9 0.1 0.1 1.0"/>
+                    <geom name="left_bottle_neck" type="cylinder" size="0.015 0.006" pos="0 0 0.106" mass="0.0005" rgba="0.35 0.35 0.40 0.45"/>
                   </body>
                 </body>
               </body>
@@ -201,9 +202,10 @@
                   <!-- 右手 250g 模拟塑料可乐瓶 -->
                   <body name="right_bottle" pos="0.2 0.035 0">
                     <!-- 瓶身 (直径6.5cm, 高度20cm, 质量249.5g) -->
-                    <geom name="right_bottle_body" type="cylinder" size="0.0325 0.1" mass="0.2495" rgba="0.2 0.8 0.4 1.0"/>
+                    <geom name="right_bottle_body" type="cylinder" size="0.0325 0.1" mass="0.2495" rgba="0.85 0.85 0.88 0.35"/>
+                    <site name="right_grasp_site" pos="0 0 0" size="0.01" rgba="0 1 1 1"/>
                     <!-- 瓶盖 (高度1.2cm, 质量0.5g) -->
-                    <geom name="right_bottle_neck" type="cylinder" size="0.015 0.006" pos="0 0 0.106" mass="0.0005" rgba="0.9 0.1 0.1 1.0"/>
+                    <geom name="right_bottle_neck" type="cylinder" size="0.015 0.006" pos="0 0 0.106" mass="0.0005" rgba="0.35 0.35 0.40 0.45"/>
                   </body>
                 </body>
               </body>

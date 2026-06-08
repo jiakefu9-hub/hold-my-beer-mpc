@@ -1,10 +1,10 @@
 import numpy as np
 
 class ArmPIDPolicy:
-    """PID 控制器接口骨架。统一输出 q_ref, dq_ref。"""
+    """PID 控制器接口骨架。统一输出右臂 5 维 q_ref, dq_ref。"""
 
     def __init__(self, default_q, kp_pose=None, kd_pose=None, ki_pose=0.0):
-        self.default_q = np.array(default_q, dtype=np.float32)
+        self.default_q = np.array(default_q, dtype=np.float32)  # right arm only (5 DoF)
         self.kp_pose = kp_pose
         self.kd_pose = kd_pose
         self.ki_pose = ki_pose

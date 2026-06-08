@@ -1,10 +1,10 @@
 import numpy as np
 
 class ArmMPCPolicy:
-    """MPC 控制器接口骨架。统一输出 q_ref, dq_ref。"""
+    """MPC 控制器接口骨架。统一输出右臂 5 维 q_ref, dq_ref。"""
 
     def __init__(self, default_q, horizon, dt, Q_weights=None, R_weights=None):
-        self.default_q = np.array(default_q, dtype=np.float32)
+        self.default_q = np.array(default_q, dtype=np.float32)  # right arm only (5 DoF)
         self.horizon = horizon
         self.dt = dt
         self.Q = Q_weights
