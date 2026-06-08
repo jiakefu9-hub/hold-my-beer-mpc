@@ -171,19 +171,21 @@ if __name__ == "__main__":
             torso_quat = d.xquat[torso_id]
             torso_omega = d.cvel[torso_id][3:6] # cvel 前3位角速度，后3位线速度
             
-            # 3. --- 核心：在这里调用控制策略！---
-            # 所有未来的策略 (PID, LQR, MPC) 都会用这个标准接口，吃状态，吐目标角度
-            target_arm_waist_q = arm_policy.compute_action(
-                torso_quat=torso_quat, 
-                torso_omega=torso_omega, 
-                current_q=arm_waist_q, 
-                current_dq=arm_waist_dq
-            )
+            # 3. --- 核心：在这里调用统一控制策略接口 ---
+            # 所有策略统一输入 arm_obs/helpers，统一输出 q_ref, dq_ref
+            arm_obs = {
+                "current_q": arm_waist_q,
+                "current_dq": arm_waist_dq,
+                "torso_quat": torso_quat,
+                "torso_omega": torso_omega,
+            }
+            helpers = None
+            target_arm_waist_q, target_arm_waist_dq = arm_policy.compute_action(arm_obs, helpers)
             
-            # 4. 统一执行 PD 控制计算最终力矩 (完全模拟真机底层的电机闭环)
+            # 4. 统一执行 PD 控制计算最终力矩 (模拟真机底层位置/速度闭环)
             tau_arm_waist = pd_control(
-                target_arm_waist_q, arm_waist_q, arm_waist_kps, 
-                np.zeros_like(arm_waist_kds), arm_waist_dq, arm_waist_kds
+                target_arm_waist_q, arm_waist_q, arm_waist_kps,
+                target_arm_waist_dq, arm_waist_dq, arm_waist_kds
             )
             d.ctrl[12:23] = tau_arm_waist
 
