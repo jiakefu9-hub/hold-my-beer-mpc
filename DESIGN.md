@@ -6,8 +6,8 @@
 - **下肢控制**：采用现有的强化学习 (RL) 策略进行运动控制。
 - **上肢控制**：采用模型预测控制 (MPC) 算法控制单侧手臂，确保末端执行器 (End-Effector, EE) 保持稳定。
 - **核心创新点（前馈补偿）**：基于死锁状态下采集的躯干震动数据，拟合/训练出一个机座（Base）的周期性扰动模型。将该扰动模型作为前馈补偿项（Feedforward Compensation）引入到 MPC 的预测时域中，从而在震动传导至末端前提前主动抵消，实现极致的稳定性。
-- **验证与评估**：在末端绑带装有水的瓶子作为直观的稳定性参考。然而，实际算法表现和性能评估将严格依赖末端的真实数据（线加速度、角加速度和姿态误差）。
-- **姿态参考的工程定义**：末端姿态误差的参考基准采用手臂理论上的 `0` 度目标姿态（即理想水平姿态），而不采用挂瓶后自然下垂形成的被动稳态姿态。这样定义的误差同时包含静态负载补偿和动态扰动抑制两部分，更能体现控制算法将末端稳定在理想目标附近的能力。
+- **验证与评估**：在末端绑带装有水的瓶子作为直观的稳定性参考。然而，实际算法表现和性能评估将严格依赖末端的真实数据（线加速度、角加速度和基于重力方向的倾斜误差）。
+- **姿态参考的工程定义**：末端姿态项不再直接采用完整的旋转误差向量，而采用重力方向在末端坐标系下的 XY 投影作为主要“防洒水”指标；同时加入关节名义姿态正则项，将右臂维持在理论 `0` 度持杯姿态附近，避免手臂在水平面内漂移到不自然构型。
 
 ---
 
@@ -57,6 +57,8 @@ ${}^W a_E = {}^W a_B + \underbrace{{}^W \alpha_B \times ({}^W R_B {}^B p_E)}_{\t
 - **$C_{acc} \dot{q}$ (速度耦合项)**： $\left( 2 [{}^W \omega_B]_{\times} {}^W R_B {}^B J_v + {}^W R_B {}^B \dot{J}_v \right) \dot{q}$
 - **$B_{acc} u$ (控制映射项)**： $({}^W R_B {}^B J_v) u$
 
+这里需要特别说明：严格来说，${}^B J_v = {}^B J_v(q)$ 是关节构型 $q$ 的函数，而 ${}^B \dot{J}_v = {}^B \dot{J}_v(q, \dot q)$ 同时依赖 $q$ 和 $\dot q$。因此，诸如 ${}^B \dot{J}_v \dot q$ 这样的项在严格数学上通常会包含更高阶的非线性（例如三角函数乘以速度平方），并不是全局精确的仿射形式。本文后续将其写成 $D_{acc} + C_{acc}\dot q + B_{acc}u$，其含义是：在每个 MPC 控制步长，围绕当前工作点 $(q^\star, \dot q^\star)$ 对这些非线性项做局部线性化，并将 ${}^B J_v(q^\star)$、${}^B \dot{J}_v(q^\star, \dot q^\star)$ 以及 ${}^W R_B, {}^W \omega_B, {}^W \alpha_B$ 等量冻结为本轮 QP 中的已知系数。换言之，这里的 $C_{acc}, B_{acc}, D_{acc}$ 应理解为“当前工作点附近的局部仿射近似系数”，而不是对所有状态都严格成立的全局常数矩阵。
+
 **2. 末端角加速度 ${}^W \alpha_E$ 的严密推导**
 
 绝对角速度：
@@ -70,17 +72,24 @@ ${}^W \alpha_E = {}^W \alpha_B + {}^W \omega_B \times ({}^W R_B {}^B J_\omega \d
 - **$C_{\alpha} \dot{q}$ (速度耦合项)**： $\left( [{}^W \omega_B]_{\times} {}^W R_B {}^B J_\omega + {}^W R_B {}^B \dot{J}_\omega \right) \dot{q}$
 - **$B_{\alpha} u$ (控制映射项)**： $({}^W R_B {}^B J_\omega) u$
 
+同理，${}^B J_\omega = {}^B J_\omega(q)$、${}^B \dot{J}_\omega = {}^B \dot{J}_\omega(q, \dot q)$ 本身并不是常数。这里将它们并入 $C_{\alpha}$ 和 $B_{\alpha}$，同样表示在当前工作点处冻结系数后的局部线性化模型。后续 QP 推导默认建立在这一“逐时刻重线性化 / 逐时刻冻结系数”的工程近似基础上。
+
 ### 二、 状态空间模型的严格构建 (State-Space)
 
-定义状态向量 $x_k \in \mathbb{R}^{2n+3}$，其中 $e_{ori} \in \mathbb{R}^3$ 为世界系下的姿态误差向量（李代数 $\log$ 映射），以及控制输入 $u_k \in \mathbb{R}^n$：
-$x_k = \begin{bmatrix} q_k \\ \dot{q}_k \\ e_{ori, k} \end{bmatrix}, \quad u_k = \ddot{q}_k$
+由于当前代价函数中的姿态项改为“重力方向在末端坐标系下的 XY 投影误差”，其本质上是 $q_k$ 的非线性函数，而不再单独引入一个独立演化的姿态误差状态。因此这里采用更简洁的二阶关节空间状态：
 
-定义选择矩阵 $S_v = \begin{bmatrix} 0_{n\times n} & I_{n\times n} & 0_{n\times 3} \end{bmatrix}$，使得 $\dot{q}_k = S_v x_k$。
+定义状态向量 $x_k \in \mathbb{R}^{2n}$ 以及控制输入 $u_k \in \mathbb{R}^n$：
+$x_k = \begin{bmatrix} q_k \\ \dot{q}_k \end{bmatrix}, \quad u_k = \ddot{q}_k$
 
-严密的离散化状态转移方程 $x_{k+1} = A_k x_k + B_k u_k + d_{ext, k}$：
-$A_k = \begin{bmatrix} I_n & \Delta t \cdot I_n & 0 \\ 0 & I_n & 0 \\ 0 & {}^W R_{B, k} {}^B J_\omega \Delta t  & I_3 \end{bmatrix}, \quad B_k = \begin{bmatrix} 0.5 \Delta t^2 \cdot I_n \\ \Delta t \cdot I_n \\ 0 \end{bmatrix}, \quad d_{ext, k} = \begin{bmatrix} 0 \\ 0 \\ {}^W \omega_{B, k} \Delta t \end{bmatrix}$
+定义选择矩阵 $S_q = \begin{bmatrix} I_{n\times n} & 0_{n\times n} \end{bmatrix}$、$S_v = \begin{bmatrix} 0_{n\times n} & I_{n\times n} \end{bmatrix}$，使得 $q_k = S_q x_k$、$\dot{q}_k = S_v x_k$。
 
-*(注：姿态误差演化 $e_{ori, k+1} = e_{ori, k} + {}^W \omega_{E, k} \Delta t$ 是一阶欧拉积分，对于 $100$Hz 的 MPC 来说，在李代数空间中近似误差极小，完全成立)。*
+离散化状态转移方程采用标准二阶积分器形式：
+$A_k = \begin{bmatrix} I_n & \Delta t \cdot I_n \\ 0 & I_n \end{bmatrix}, \quad B_k = \begin{bmatrix} 0.5 \Delta t^2 \cdot I_n \\ \Delta t \cdot I_n \end{bmatrix}$
+
+即：
+$x_{k+1} = A_k x_k + B_k u_k$
+
+这里与下肢步态相关的基座扰动仍然通过 ${}^W a_{B,k}, {}^W \omega_{B,k}, {}^W \alpha_{B,k}, {}^W R_{B,k}$ 进入末端线加速度和角加速度观测方程，而不再额外构造 $e_{ori}$ 的状态演化方程。
 
 **预测扰动 $d_k$ (由外部预测器提供)：**
 系统在未来每个时刻 $k$ 都受到来自下肢移动导致的基座扰动，其包含了基座在世界系 $\{W\}$ 下的线加速度、角速度、角加速度以及旋转矩阵：
@@ -102,7 +111,8 @@ $d_k = \begin{bmatrix} {}^W a_{B, k} \\ {}^W \omega_{B, k} \\ {}^W \alpha_{B, k}
 ### 目标：从物理代价函数映射到 OSQP 标准型
 
 我们在每一个控制步长 $k$ 下的局部代价函数为：
-$J_k = ||{}^W a_{EE, k}||_{Q_a}^2 + ||{}^W \alpha_{EE, k}||_{Q_\alpha}^2 + ||e_{ori, k}||_{Q_{ori}}^2 + ||\dot{q}_k||_{Q_v}^2 + ||u_k||_R^2$
+$J_k = ||{}^W a_{EE, k}||_{Q_a}^2 + ||{}^W \alpha_{EE, k}||_{Q_\alpha}^2 + ||P_{xy}({}^E R_{W,k} g^W)||_{Q_g}^2 + ||q_k - q_{\text{nom}}||_{Q_q}^2 + ||\dot{q}_k||_{Q_v}^2 + ||u_k||_R^2$
+其中，$g^W = [0, 0, -9.81]^T$ 为世界系重力向量，${}^E R_{W,k} = ({}^W R_{E,k})^T$，$P_{xy}$ 表示提取末端坐标系下前两个分量（即倾斜误差），而 $q_{\text{nom}}$ 为名义持杯姿态；在当前 `main_sim.py` 的实验设定中，$q_{\text{nom}} = 0$。
 
 这里我们将 MPC 的决策变量取为关节加速度 $u_k = \ddot q_k$，而不是直接取 $q$、$\dot q$ 或 $\tau$，主要有以下原因：
 
@@ -133,14 +143,38 @@ $= \frac{1}{2} x_k^T H_{xx} x_k + \frac{1}{2} u_k^T H_{uu} u_k + x_k^T H_{xu} u_
 
 ### 步骤一：提取状态自身的惩罚项 (State & Control Penalty)
 
-首先处理最简单的三项：姿态误差、关节速度、关节加速度控制量。
+首先处理最简单的三项：关节名义姿态正则、关节速度、关节加速度控制量。
 定义一个组合状态权重矩阵 $Q_{state}$：
-$$Q_{state} = \text{block\_diag}(0_{n \times n}, \ Q_v, \ Q_{ori})$$
-*(因为状态 $x_k = [q_k^T, \dot{q}_k^T, e_{ori, k}^T]^T$，我们不惩罚绝对位置 $q_k$，所以第一块为 0)*
+$Q_{state} = \text{block\_diag}(Q_q, \ Q_v)$
+*(因为状态 $x_k = [q_k^T, \dot{q}_k^T]^T$，这里直接对关节位置偏离名义姿态 $q_{\text{nom}}$ 以及关节速度进行惩罚)*
 
-则这三项可以完美写为：
-$$||e_{ori, k}||_{Q_{ori}}^2 + ||\dot{q}_k||_{Q_v}^2 = x_k^T Q_{state} x_k$$
-$$||u_k||_R^2 = u_k^T R u_k$$
+则关节位置与速度两项可以写为：
+$||q_k - q_{\text{nom}}||_{Q_q}^2 + ||\dot{q}_k||_{Q_v}^2 = x_k^T Q_{state} x_k - 2 q_{\text{nom}}^T Q_q S_q x_k + q_{\text{nom}}^T Q_q q_{\text{nom}}$
+其中最后一项为常数，可在优化中丢弃；因此它等价于一个二次项加一个关于 $x_k$ 的线性项。
+
+同时：
+$||u_k||_R^2 = u_k^T R u_k$
+
+另一方面，重力方向误差项 $||P_{xy}({}^E R_{W,k} g^W)||_{Q_g}^2$ 不是一个独立状态分量的二次型，而是通过当前关节构型 $q_k$ 决定的非线性观测项。为将其并入 QP，在每个控制步长都需要围绕当前工作点 $(q^\star, \dot q^\star)$ 对其进行局部线性化。
+
+记
+$r_g(q_k) = P_{xy}({}^E R_{W,k}(q_k) g^W) \in \mathbb{R}^2$
+则在当前工作点 $q^\star$ 附近做一阶泰勒展开：
+$r_g(q_k) \approx r_g(q^\star) + J_g(q^\star)(q_k - q^\star)$
+其中
+$J_g(q^\star) = \left. \frac{\partial r_g}{\partial q} \right|_{q=q^\star} \in \mathbb{R}^{2 \times n}$
+表示重力方向误差对关节构型的局部雅可比矩阵。
+
+由于 $q_k = S_q x_k$，可将其整理成关于状态 $x_k$ 的仿射形式：
+$r_g(x_k) \approx d_g + G_g x_k$
+其中
+$G_g = J_g(q^\star) S_q$
+$d_g = r_g(q^\star) - J_g(q^\star) q^\star$
+于是该项的平方代价就变为标准二次型：
+$||r_g(x_k)||_{Q_g}^2 \approx (d_g + G_g x_k)^T Q_g (d_g + G_g x_k)$
+展开后得到：
+$x_k^T G_g^T Q_g G_g x_k + 2 d_g^T Q_g G_g x_k + d_g^T Q_g d_g$
+其中最后一项为常数，可在优化中丢弃。因此，重力方向误差项在每个控制步长都可以通过“局部线性化 + 平方展开”的方式并入 QP 的二次项和一次项。
 
 ---
 
@@ -171,7 +205,7 @@ $$y^T Q y = (D + C S_v x_k + B u_k)^T Q (D + C S_v x_k + B u_k)$$
 合并后，原始物理代价函数 $J_k$ 中各部分的系数如下：
 
 **1. 对应 $x_k^T [\dots] x_k$ 的系数总和：**
-$$\text{Coef}_{xx} = \underbrace{S_v^T C_{acc}^T Q_a C_{acc} S_v}_{\text{线加速度的 } x \text{ 二次项}} + \underbrace{S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v}_{\text{角加速度的 } x \text{ 二次项}} + \underbrace{Q_{state}}_{\text{状态自身惩罚}}$$
+$\text{Coef}_{xx} = \underbrace{S_v^T C_{acc}^T Q_a C_{acc} S_v}_{\text{线加速度的 } x \text{ 二次项}} + \underbrace{S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v}_{\text{角加速度的 } x \text{ 二次项}} + \underbrace{G_g^T Q_g G_g}_{\text{重力方向误差的 } x \text{ 二次项}} + \underbrace{Q_{state}}_{\text{状态自身惩罚}}$
 
 **2. 对应 $u_k^T [\dots] u_k$ 的系数总和：**
 $$\text{Coef}_{uu} = \underbrace{B_{acc}^T Q_a B_{acc}}_{\text{线加速度的 } u \text{ 二次项}} + \underbrace{B_{\alpha}^T Q_\alpha B_{\alpha}}_{\text{角加速度的 } u \text{ 二次项}} + \underbrace{R}_{\text{控制量自身惩罚}}$$
@@ -180,7 +214,7 @@ $$\text{Coef}_{uu} = \underbrace{B_{acc}^T Q_a B_{acc}}_{\text{线加速度的 }
 $$\text{Coef}_{xu} = \underbrace{2 S_v^T C_{acc}^T Q_a B_{acc}}_{\text{线加速度的 } x,u \text{ 交叉项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha B_{\alpha}}_{\text{角加速度的 } x,u \text{ 交叉项}}$$
 
 **4. 对应 $x_k$ 一次项 $f_x$ 的系数总和：**
-$$f_x = \underbrace{2 S_v^T C_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } x \text{ 线性项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } x \text{ 线性项}}$$
+$f_x = \underbrace{2 S_v^T C_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } x \text{ 线性项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } x \text{ 线性项}} + \underbrace{2 G_g^T Q_g d_g}_{\text{重力方向误差的 } x \text{ 线性项}} - \underbrace{2 S_q^T Q_q q_{\text{nom}}}_{\text{名义姿态正则的 } x \text{ 线性项}}$
 
 **5. 对应 $u_k$ 一次项 $f_u$ 的系数总和：**
 $$f_u = \underbrace{2 B_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } u \text{ 线性项}} + \underbrace{2 B_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } u \text{ 线性项}}$$
@@ -194,7 +228,7 @@ $$f_u = \underbrace{2 B_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } u \text{ �
 回忆 OSQP 的公式：$\frac{1}{2} x_k^T H_{xx} x_k + \frac{1}{2} u_k^T H_{uu} u_k + x_k^T H_{xu} u_k + f_x^T x_k + f_u^T u_k$
 
 * **推导 $H_{xx}$：** 因为 OSQP 公式里有一个 $\frac{1}{2}$，所以 $H_{xx} = 2 \times \text{Coef}_{xx}$。
-    $$H_{xx} = 2 \left( S_v^T C_{acc}^T Q_a C_{acc} S_v + S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v + Q_{state} \right)$$
+    $H_{xx} = 2 \left( S_v^T C_{acc}^T Q_a C_{acc} S_v + S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v + G_g^T Q_g G_g + Q_{state} \right)$
 * **推导 $H_{uu}$：** 同理，因为有 $\frac{1}{2}$，所以 $H_{uu} = 2 \times \text{Coef}_{uu}$。
     $$H_{uu} = 2 \left( B_{acc}^T Q_a B_{acc} + B_{\alpha}^T Q_\alpha B_{\alpha} + R \right)$$
 * **推导 $H_{xu}$：** OSQP 交叉项公式里**没有** $\frac{1}{2}$，所以 $H_{xu}$ 直接等于 $\text{Coef}_{xu}$。
@@ -202,8 +236,8 @@ $$f_u = \underbrace{2 B_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } u \text{ �
 * **推导 $H_{ux}$：** 为保证 Hessian 对称矩阵的性质：
     $$H_{ux} = H_{xu}^T = 2 \left( B_{acc}^T Q_a C_{acc} S_v + B_{\alpha}^T Q_\alpha C_{\alpha} S_v \right)$$
 * **推导 $f_x$ 和 $f_u$：** 一次项完全一一对应，无需乘以 2（因为前面的展开过程中已经产生了 2）。
-    $$f_x = 2 \left( S_v^T C_{acc}^T Q_a D_{acc} + S_v^T C_{\alpha}^T Q_\alpha D_{\alpha} \right)$$
-    $$f_u = 2 \left( B_{acc}^T Q_a D_{acc} + B_{\alpha}^T Q_\alpha D_{\alpha} \right)$$
+    $f_x = 2 \left( S_v^T C_{acc}^T Q_a D_{acc} + S_v^T C_{\alpha}^T Q_\alpha D_{\alpha} + G_g^T Q_g d_g - S_q^T Q_q q_{\text{nom}} \right)$
+    $f_u = 2 \left( B_{acc}^T Q_a D_{acc} + B_{\alpha}^T Q_\alpha D_{\alpha} \right)$
 
 ---
 
@@ -216,7 +250,7 @@ $f_k = \begin{bmatrix} f_x \\ f_u \end{bmatrix}$
 
 ## 🧮 零、 维度与超级变量定义 (The Super-Variable)
 
-假设你的预测时域为 $N$ 步。状态变量 $x_k \in \mathbb{R}^{n_x}$ （在我们的例子中，$n_x = 2n+3$）。控制输入 $u_k \in \mathbb{R}^{n_u}$ （在我们的例子中，$n_u = n$）。
+假设你的预测时域为 $N$ 步。状态变量 $x_k \in \mathbb{R}^{n_x}$ （在我们的例子中，$n_x = 2n$）。控制输入 $u_k \in \mathbb{R}^{n_u}$ （在我们的例子中，$n_u = n$）。
 
 为了让求解器一次性看到所有的未来，我们把从 $k=0$ 到 $k=N$ 的所有状态，以及从 $k=0$ 到 $k=N-1$ 的所有控制量，垂直拼接成一个超级变量向量 $Y$。注意：包含了终端状态 $x_N$，但没有 $u_N$（因为第 $N$ 步不需要再输出了）。
 
@@ -227,7 +261,19 @@ $Y = \begin{bmatrix} x_0 \\ u_0 \\ x_1 \\ u_1 \\ \vdots \\ x_{N-1} \\ u_{N-1} \\
 
 ## 🏗️ 一、 全局代价矩阵构建 (Global Cost Matrices)
 
-OSQP 的目标函数为 $\min_Y \frac{1}{2} Y^T P Y + q_{vec}^T Y$。我们只需将你之前算出的单步 $H_k = \begin{bmatrix} H_{xx, k} & H_{xu, k} \\ H_{ux, k} & H_{uu, k} \end{bmatrix}$ 和 $f_k = \begin{bmatrix} f_{x, k} \\ f_{u, k} \end{bmatrix}$ 沿着对角线排布。对于最后的终端状态 $x_N$，我们只有状态惩罚 $H_{xx, N}$ 和 $f_{x, N}$（通常只惩罚终端的姿态和速度，无加速度惩罚）。
+OSQP 的目标函数为 $\min_Y \frac{1}{2} Y^T P Y + q_{vec}^T Y$。我们只需将你之前算出的单步 $H_k = \begin{bmatrix} H_{xx, k} & H_{xu, k} \\ H_{ux, k} & H_{uu, k} \end{bmatrix}$ 和 $f_k = \begin{bmatrix} f_{x, k} \\ f_{u, k} \end{bmatrix}$ 沿着对角线排布。对于最后的终端状态 $x_N$，我们只有状态惩罚 $H_{xx, N}$ 和 $f_{x, N}$（通常只惩罚终端的关节构型偏差和关节速度，无加速度惩罚，终端代价可以加重力姿态误差项，但初版为了更简单更稳不加更合适）。
+
+在当前定义下，若终端代价仅保留
+$||q_N - q_{\text{nom}}||_{Q_q}^2 + ||\dot q_N||_{Q_v}^2$
+则有
+$Q_{\text{terminal}} = \text{block\_diag}(Q_q, Q_v)$
+并且终端状态项可写为
+$x_N^T Q_{\text{terminal}} x_N - 2 q_{\text{nom}}^T Q_q S_q x_N + q_{\text{nom}}^T Q_q q_{\text{nom}}$
+去掉常数项后，与 OSQP 标准型对齐可得：
+$H_{xx, N} = 2 Q_{\text{terminal}} = 2\,\text{block\_diag}(Q_q, Q_v)$
+$f_{x, N} = \begin{bmatrix} -2 Q_q q_{\text{nom}} \\ 0 \end{bmatrix}$
+若当前实验设定中 $q_{\text{nom}} = 0$，则进一步有：
+$f_{x, N} = 0$
 
 **1. 全局 Hessian 矩阵 $P$ (Block-Diagonal, 维度 $M \times M$)：**
 
@@ -313,7 +359,7 @@ I_{n_x} & 0 & 0 & \dots & 0 \\
 
 **2. 不等式上下界 $l_{ineq}$ 和 $u_{ineq}$ (维度 $M \times 1$)：**
 
-如果某些状态（比如姿态误差 $e_{ori}$）不需要硬约束，就填入 $-\infty$ 和 $\infty$。
+如果某些状态（比如关节位置或关节速度中的某些分量）不需要硬约束，就填入 $-\infty$ 和 $\infty$。
 
 $l_{ineq} = \begin{bmatrix} x_{min} \\ u_{min} \\ x_{min} \\ u_{min} \\ \vdots \\ x_{min} \end{bmatrix}, \quad
 u_{ineq} = \begin{bmatrix} x_{max} \\ u_{max} \\ x_{max} \\ u_{max} \\ \vdots \\ x_{max} \end{bmatrix}$
