@@ -14,6 +14,7 @@ from arm_fixed import ArmFixedPolicy
 # from arm_pid import ArmPIDPolicy
 # from arm_lqr import ArmLQRPolicy
 # from arm_mpc import ArmMPCPolicy
+from kinematics_helper import KinematicsHelper
 
 
 def get_gravity_orientation(quaternion):
@@ -192,6 +193,10 @@ if __name__ == "__main__":
     left_grasp_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "left_grasp_site")
     right_grasp_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "right_grasp_site")
 
+    # 右臂 5 个关节在 qpos 中对应索引 25:30；helper 用它来“冻结当前整机，只扰动右臂”
+    right_arm_qpos_indices = np.arange(25, 30, dtype=np.int32)
+    right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_qpos_indices, imu_site_name="imu_in_torso")
+
     with mujoco.viewer.launch_passive(m, d) as viewer:
         print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
         while viewer.is_running() and counter * simulation_dt < eval_duration:
@@ -223,8 +228,10 @@ if __name__ == "__main__":
                 "current_dq": right_arm_dq,
                 "torso_quat": torso_quat,
                 "torso_omega": torso_omega,
+                "torso_rotmat": d.site_xmat[imu_site_id].reshape(3, 3).copy(),
+                "dt": simulation_dt,
             }
-            helpers = None
+            helpers = right_arm_helper.build_helpers(d)
             target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(arm_obs, helpers)
 
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
