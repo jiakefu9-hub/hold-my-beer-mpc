@@ -11,7 +11,7 @@ import yaml
 
 # --- 引入我们独立的策略 ---
 from arm_fixed import ArmFixedPolicy
-# from arm_pid import ArmPIDPolicy
+from arm_pid import ArmPIDPolicy
 # from arm_lqr import ArmLQRPolicy
 # from arm_mpc import ArmMPCPolicy
 from kinematics_helper import KinematicsHelper
@@ -61,7 +61,7 @@ def tilt_error_from_rot(rot):
     return (rot.T @ np.array([0.0, 0.0, -9.81]))[:2]
 
 
-def save_eval(prefix, data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period):
+def save_eval(prefix, data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name):
     def fmt3(v):
         return f"[{v[0]:.4f}, {v[1]:.4f}, {v[2]:.4f}]"
 
@@ -100,7 +100,7 @@ def save_eval(prefix, data, eval_start_time, eval_end_time, walk_distance, total
                 axes[r,c].text(0.98,0.95,f"mean={stats[f'{side}_{key}_mean']:.6f}\nstd={stats[f'{side}_{key}_std']:.6f}\nrms={stats[f'{side}_{key}_rms']:.6f}", transform=axes[r,c].transAxes, ha="right", va="top", fontsize=8, bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"))
             for r in range(6): axes[r,c].set_title(titles[r])
         axes[5,0].set_xlabel("time [s]"); axes[5,1].set_xlabel("time [s]")
-        fig.suptitle(f"fixed_both_arms | left/right palm grasp sites | {warmup_cycles}+{evaluation_cycles}+{cooldown_cycles} cycles\nwalk distance xy = {walk_distance:.3f} m")
+        fig.suptitle(f"{experiment_name} | left/right palm grasp sites | {warmup_cycles}+{evaluation_cycles}+{cooldown_cycles} cycles\nwalk distance xy = {walk_distance:.3f} m")
         fig.tight_layout(); fig.savefig(prefix + ".png", dpi=160); plt.close(fig)
     np.savez(prefix + ".npz", **data, **stats)
     return stats
@@ -157,7 +157,8 @@ if __name__ == "__main__":
     eval_start_time = warmup_cycles * gait_period
     eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
     eval_duration = min(simulation_duration, total_cycles * gait_period)
-    eval_prefix = "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/fixed_both_arms_metrics"
+    experiment_name = "left_fixed_right_pid"
+    eval_prefix = f"/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/{experiment_name}_metrics"
     eval_data = {"time": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []}
     prev_left_lin_vel = np.zeros(3); prev_left_ang_vel = np.zeros(3)
     prev_right_lin_vel = np.zeros(3); prev_right_ang_vel = np.zeros(3); torso_xy_start = None
@@ -185,7 +186,10 @@ if __name__ == "__main__":
 
     # --- 实例化右臂控制策略（只传入右臂 5 维默认目标） ---
     right_arm_target = arm_waist_target[6:11].copy()
-    arm_policy = ArmFixedPolicy(target_q=right_arm_target)
+    arm_policy = ArmPIDPolicy(
+        default_q=right_arm_target,
+        control_dt=simulation_dt,
+    )
 
     # 预先找到 torso_link、torso IMU 和任务末端 grasp site 的 ID，方便后续读取和可视化
     torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
@@ -198,7 +202,7 @@ if __name__ == "__main__":
     right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_qpos_indices, imu_site_name="imu_in_torso")
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
-        print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
+        print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
         while viewer.is_running() and counter * simulation_dt < eval_duration:
             step_start = time.time()
             
@@ -328,7 +332,7 @@ if __name__ == "__main__":
                 time.sleep(time_until_next_step)
 
         walk_distance = float(np.linalg.norm(d.xpos[torso_id][:2] - torso_xy_start)) if torso_xy_start is not None else 0.0
-        stats = save_eval(eval_prefix, eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period)
+        stats = save_eval(eval_prefix, eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
         print(f"评估已保存到: {eval_prefix}.[npz/csv/png]")
         for side in ["left", "right"]:
             print(f"{side} | acc mean/std/rms = {stats[f'{side}_acc_mean']:.4f}/{stats[f'{side}_acc_std']:.4f}/{stats[f'{side}_acc_rms']:.4f}")
