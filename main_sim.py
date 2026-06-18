@@ -1,6 +1,8 @@
 import csv
+import json
 import os
 import time
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import mujoco.viewer
@@ -8,6 +10,11 @@ import mujoco
 import numpy as np
 import torch
 import yaml
+
+try:
+    import imageio.v2 as imageio
+except ImportError:
+    imageio = None
 
 # --- 引入我们独立的策略 ---
 from arm_fixed import ArmFixedPolicy
@@ -61,7 +68,61 @@ def tilt_error_from_rot(rot):
     return (rot.T @ np.array([0.0, 0.0, -9.81]))[:2]
 
 
-def save_eval(prefix, data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name):
+def _to_serializable(value):
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, (np.floating, np.integer)):
+        return value.item()
+    if isinstance(value, dict):
+        return {k: _to_serializable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_serializable(v) for v in value]
+    return value
+
+
+def create_eval_run_dir(base_dir, experiment_name, run_metadata):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join(base_dir, experiment_name, timestamp)
+    os.makedirs(run_dir, exist_ok=False)
+    with open(os.path.join(run_dir, "run_metadata.json"), "w", encoding="utf-8") as f:
+        json.dump(_to_serializable(run_metadata), f, indent=2, ensure_ascii=False)
+    return run_dir
+
+
+def make_video_camera():
+    cam = mujoco.MjvCamera()
+    cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+    # 录像相机固定在更远的位置，并把注视点放到机器人行进路径中段，避免后半程走出画面。
+    cam.lookat[:] = np.array([2.2, 0.0, 0.9])
+    cam.distance = 5.2
+    cam.azimuth = 150.0
+    cam.elevation = -18.0
+    return cam
+
+
+def make_video_renderer(model, preferred_width=1280, preferred_height=720):
+    if imageio is None:
+        return None, None, None
+    vis_global = getattr(model.vis, "global_", None)
+    if vis_global is not None:
+        try:
+            vis_global.offwidth = max(int(vis_global.offwidth), preferred_width)
+            vis_global.offheight = max(int(vis_global.offheight), preferred_height)
+        except Exception:
+            pass
+    offwidth = int(getattr(vis_global, "offwidth", preferred_width))
+    offheight = int(getattr(vis_global, "offheight", preferred_height))
+    width = min(preferred_width, offwidth)
+    height = min(preferred_height, offheight)
+    try:
+        renderer = mujoco.Renderer(model, height=height, width=width)
+        return renderer, width, height
+    except Exception as exc:
+        print(f"[video] Renderer 初始化失败，已跳过视频保存: {exc}")
+        return None, width, height
+
+
+def save_eval(run_dir, data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name):
     def fmt3(v):
         return f"[{v[0]:.4f}, {v[1]:.4f}, {v[2]:.4f}]"
 
@@ -73,7 +134,11 @@ def save_eval(prefix, data, eval_start_time, eval_end_time, walk_distance, total
     stats = {"gait_period": gait_period, "total_cycles": total_cycles, "warmup_cycles": warmup_cycles, "evaluation_cycles": evaluation_cycles, "cooldown_cycles": cooldown_cycles, "eval_start_time": eval_start_time, "eval_end_time": eval_end_time, "walk_distance_xy": walk_distance}
     sides = ["left", "right"]
     fig, axes = plt.subplots(6, 2, figsize=(20, 12), sharex=True)
-    with open(prefix + "_preview.csv", "w", newline="") as f:
+    csv_path = os.path.join(run_dir, "metrics_preview.csv")
+    png_path = os.path.join(run_dir, "metrics.png")
+    npz_path = os.path.join(run_dir, "metrics.npz")
+    summary_path = os.path.join(run_dir, "summary.json")
+    with open(csv_path, "w", newline="") as f:
         w = csv.writer(f); w.writerow(["time","side","acc_x","acc_y","acc_z","acc_norm","alpha_x","alpha_y","alpha_z","alpha_norm","tilt_x","tilt_y","tilt_norm"])
         for c, side in enumerate(sides):
             acc = np.asarray(data[f"{side}_ee_lin_acc_world"]); alpha = np.asarray(data[f"{side}_ee_ang_acc_world"]); tilt = np.asarray(data[f"{side}_ee_tilt_error"])
@@ -84,10 +149,12 @@ def save_eval(prefix, data, eval_start_time, eval_end_time, walk_distance, total
             stats[f"{side}_acc_xyz_mean"] = acc[mask].mean(axis=0); stats[f"{side}_acc_xyz_std"] = acc[mask].std(axis=0); stats[f"{side}_acc_xyz_rms"] = np.sqrt(np.mean(acc[mask] ** 2, axis=0))
             stats[f"{side}_alpha_xyz_mean"] = alpha[mask].mean(axis=0); stats[f"{side}_alpha_xyz_std"] = alpha[mask].std(axis=0); stats[f"{side}_alpha_xyz_rms"] = np.sqrt(np.mean(alpha[mask] ** 2, axis=0))
             stats[f"{side}_tilt_xy_mean"] = tilt[mask].mean(axis=0); stats[f"{side}_tilt_xy_std"] = tilt[mask].std(axis=0); stats[f"{side}_tilt_xy_rms"] = np.sqrt(np.mean(tilt[mask] ** 2, axis=0))
-            cols = ["r", "g", "b"]; labels = ["x", "y", "z"]
+            cols = ["r", "g", "b"]; labels = ["x", "y", "z"]; styles = ["-", "--", ":"]
             for j in range(3):
-                axes[0,c].plot(t, acc[:,j], color=cols[j], lw=1.0, label=labels[j]); axes[2,c].plot(t, alpha[:,j], color=cols[j], lw=1.0, label=labels[j])
-            axes[4,c].plot(t, tilt[:,0], color="m", lw=1.0, label="tilt_x"); axes[4,c].plot(t, tilt[:,1], color="c", lw=1.0, label="tilt_y")
+                axes[0,c].plot(t, acc[:,j], color=cols[j], ls=styles[j], lw=1.2, alpha=0.9, label=labels[j])
+                axes[2,c].plot(t, alpha[:,j], color=cols[j], ls=styles[j], lw=1.2, alpha=0.9, label=labels[j])
+            axes[4,c].plot(t, tilt[:,0], color="m", ls="-", lw=1.2, alpha=0.9, label="tilt_x")
+            axes[4,c].plot(t, tilt[:,1], color="c", ls="--", lw=1.2, alpha=0.9, label="tilt_y")
             titles = [f"{side} acc xyz", f"{side} acc norm", f"{side} alpha xyz", f"{side} alpha norm", f"{side} tilt x/y", f"{side} tilt norm"]
             for r in [0,2,4]:
                 axes[r,c].axvline(eval_start_time, color="gray", ls="--"); axes[r,c].axvline(eval_end_time, color="gray", ls="--"); axes[r,c].legend(loc="upper left", fontsize=8); axes[r,c].grid(True, alpha=0.3)
@@ -101,9 +168,11 @@ def save_eval(prefix, data, eval_start_time, eval_end_time, walk_distance, total
             for r in range(6): axes[r,c].set_title(titles[r])
         axes[5,0].set_xlabel("time [s]"); axes[5,1].set_xlabel("time [s]")
         fig.suptitle(f"{experiment_name} | left/right palm grasp sites | {warmup_cycles}+{evaluation_cycles}+{cooldown_cycles} cycles\nwalk distance xy = {walk_distance:.3f} m")
-        fig.tight_layout(); fig.savefig(prefix + ".png", dpi=160); plt.close(fig)
-    np.savez(prefix + ".npz", **data, **stats)
-    return stats
+        fig.tight_layout(); fig.savefig(png_path, dpi=160); plt.close(fig)
+    np.savez(npz_path, **data, **stats)
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(_to_serializable(stats), f, indent=2, ensure_ascii=False)
+    return stats, {"run_dir": run_dir, "csv": csv_path, "png": png_path, "npz": npz_path, "summary": summary_path}
 
 
 if __name__ == "__main__":
@@ -158,7 +227,7 @@ if __name__ == "__main__":
     eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
     eval_duration = min(simulation_duration, total_cycles * gait_period)
     experiment_name = "left_fixed_right_pid"
-    eval_prefix = f"/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/{experiment_name}_metrics"
+    run_dir = None
     eval_data = {"time": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []}
     prev_left_lin_vel = np.zeros(3); prev_left_ang_vel = np.zeros(3)
     prev_right_lin_vel = np.zeros(3); prev_right_ang_vel = np.zeros(3); torso_xy_start = None
@@ -184,12 +253,53 @@ if __name__ == "__main__":
     # load policy
     policy = torch.jit.load(policy_path)
 
-    # --- 实例化右臂控制策略（只传入右臂 5 维默认目标） ---
+    # --- 实例化右臂控制策略（回到 20260618_225317 的 tuning_v7 参数） ---
     right_arm_target = arm_waist_target[6:11].copy()
     arm_policy = ArmPIDPolicy(
         default_q=right_arm_target,
+        kp_pose=np.array([1.20, 1.20], dtype=np.float64),
+        kd_pose=np.array([1.2, 1.2], dtype=np.float64),
+        ki_pose=0.0,
+        posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64),
         control_dt=simulation_dt,
+        damping=1.5e-1,
+        max_dq=0.48,
+        de_g_alpha=0.07,
     )
+    run_metadata = {
+        "config_file": config_file,
+        "experiment_name": experiment_name,
+        "policy_type": "ArmPIDPolicy",
+        "right_arm_joint_names": ["right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint", "right_elbow_joint", "right_wrist_roll_joint"],
+        "notes": "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small",
+        "cmd_nominal": cmd_nominal,
+        "simulation_dt": simulation_dt,
+        "gait_period": gait_period,
+        "warmup_cycles": warmup_cycles,
+        "evaluation_cycles": evaluation_cycles,
+        "cooldown_cycles": cooldown_cycles,
+        "pid_config": {
+            "default_q": right_arm_target,
+            "kp_pose_diag": np.diag(arm_policy.kp_pose),
+            "kd_pose_diag": np.diag(arm_policy.kd_pose),
+            "ki_pose_diag": np.diag(arm_policy.ki_pose),
+            "posture_gain_diag": np.diag(arm_policy.posture_gain),
+            "finite_diff_eps": arm_policy.finite_diff_eps,
+            "damping": arm_policy.damping,
+            "integral_limit": arm_policy.integral_limit,
+            "max_dq": arm_policy.max_dq,
+            "de_g_alpha": arm_policy.de_g_alpha,
+        },
+    }
+    run_dir = create_eval_run_dir("/home/fjk/g1_ws/hold-my-beer-mpc/evaluation", experiment_name, run_metadata)
+    trajectory_path = os.path.join(run_dir, "trajectory.npz")
+    video_path = os.path.join(run_dir, "rollout.mp4")
+    trajectory_data = {"time": [], "qpos": [], "qvel": [], "ctrl": []}
+    video_fps = 30
+    video_stride = max(1, int(round(1.0 / (simulation_dt * video_fps))))
+    video_frames = []
+    video_camera = make_video_camera()
+    renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
 
     # 预先找到 torso_link、torso IMU 和任务末端 grasp site 的 ID，方便后续读取和可视化
     torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
@@ -262,6 +372,13 @@ if __name__ == "__main__":
             right_ang_acc = np.zeros(3) if counter == 0 else (right_ang_vel - prev_right_ang_vel) / simulation_dt
             prev_left_lin_vel, prev_left_ang_vel = left_lin_vel.copy(), left_ang_vel.copy()
             prev_right_lin_vel, prev_right_ang_vel = right_lin_vel.copy(), right_ang_vel.copy()
+            trajectory_data["time"].append(counter * simulation_dt)
+            trajectory_data["qpos"].append(d.qpos.copy())
+            trajectory_data["qvel"].append(d.qvel.copy())
+            trajectory_data["ctrl"].append(d.ctrl.copy())
+            if renderer is not None and counter % video_stride == 0:
+                renderer.update_scene(d, camera=video_camera)
+                video_frames.append(renderer.render().copy())
             eval_data["time"].append(counter * simulation_dt)
             eval_data["left_ee_lin_acc_world"].append(left_lin_acc); eval_data["left_ee_ang_acc_world"].append(left_ang_acc); eval_data["left_ee_tilt_error"].append(tilt_error_from_rot(left_rot))
             eval_data["right_ee_lin_acc_world"].append(right_lin_acc); eval_data["right_ee_ang_acc_world"].append(right_ang_acc); eval_data["right_ee_tilt_error"].append(tilt_error_from_rot(right_rot))
@@ -331,9 +448,24 @@ if __name__ == "__main__":
             if time_until_next_step > 0:
                 time.sleep(time_until_next_step)
 
+        np.savez(
+            trajectory_path,
+            time=np.asarray(trajectory_data["time"]),
+            qpos=np.asarray(trajectory_data["qpos"]),
+            qvel=np.asarray(trajectory_data["qvel"]),
+            ctrl=np.asarray(trajectory_data["ctrl"]),
+            xml_path=np.array(xml_path),
+            simulation_dt=np.array(simulation_dt),
+        )
+        if renderer is not None and video_frames:
+            imageio.mimwrite(video_path, video_frames, fps=video_fps, quality=8, macro_block_size=None)
         walk_distance = float(np.linalg.norm(d.xpos[torso_id][:2] - torso_xy_start)) if torso_xy_start is not None else 0.0
-        stats = save_eval(eval_prefix, eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
-        print(f"评估已保存到: {eval_prefix}.[npz/csv/png]")
+        stats, saved_paths = save_eval(run_dir, eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
+        print(f"评估已保存到目录: {saved_paths['run_dir']}")
+        extra_video = video_path if renderer is not None and video_frames else "未保存（缺少 imageio、Renderer 初始化失败或无帧）"
+        print(f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | {saved_paths['summary']} | {trajectory_path} | {extra_video}")
+        if renderer is not None:
+            print(f"视频分辨率 = {video_width}x{video_height} (受 MuJoCo offscreen framebuffer 限制)")
         for side in ["left", "right"]:
             print(f"{side} | acc mean/std/rms = {stats[f'{side}_acc_mean']:.4f}/{stats[f'{side}_acc_std']:.4f}/{stats[f'{side}_acc_rms']:.4f}")
             print(f"{side} | alpha mean/std/rms = {stats[f'{side}_alpha_mean']:.4f}/{stats[f'{side}_alpha_std']:.4f}/{stats[f'{side}_alpha_rms']:.4f}")

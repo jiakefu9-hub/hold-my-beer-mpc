@@ -26,6 +26,7 @@ class ArmPIDPolicy:
         damping=1e-3,
         integral_limit=0.20,
         max_dq=2.0,
+        de_g_alpha=0.2,
     ):
         self.default_q = np.asarray(default_q, dtype=np.float64).copy()  # right arm only (5 DoF)
         self.n = self.default_q.shape[0]
@@ -43,9 +44,11 @@ class ArmPIDPolicy:
         self.damping = float(damping)
         self.integral_limit = float(integral_limit)
         self.max_dq = float(max_dq)
+        self.de_g_alpha = float(de_g_alpha)
 
         self.integral_error = np.zeros(2, dtype=np.float64)
         self.prev_e_g = None
+        self.filtered_de_g = np.zeros(2, dtype=np.float64)
         self.q_ref_state = None
         self._warned_missing_helper = False
 
@@ -79,11 +82,14 @@ class ArmPIDPolicy:
         # ------------------------------------------------------------------
         e_g = self._compute_gravity_error(q, W_R_I, helpers)
 
-        # e_g 的时间导数：第一版直接用差分近似
+        # e_g 的时间导数：先差分，再做一阶低通滤波，避免 walking 中差分噪声直接放大到 Kd 项
         if self.prev_e_g is None or dt <= 1e-9:
-            de_g = np.zeros_like(e_g)
+            de_g_raw = np.zeros_like(e_g)
         else:
-            de_g = (e_g - self.prev_e_g) / dt
+            de_g_raw = (e_g - self.prev_e_g) / dt
+        alpha = float(np.clip(self.de_g_alpha, 0.0, 1.0))
+        self.filtered_de_g = alpha * de_g_raw + (1.0 - alpha) * self.filtered_de_g
+        de_g = self.filtered_de_g.copy()
         self.prev_e_g = e_g.copy()
 
         # 积分项需要限幅，避免 walking 场景中 windup
