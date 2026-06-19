@@ -21,6 +21,7 @@
 """
 
 import argparse
+import sys
 import time
 
 import mujoco
@@ -38,6 +39,16 @@ def _load_scalar(payload, key, default=None):
     if getattr(value, "shape", ()) == ():
         return value.item()
     return value
+
+
+def _print_viewer_error(exc):
+    msg = str(exc)
+    print("[replay] Viewer 渲染失败，已提前结束回放。")
+    if "GLXBadDrawable" in msg or "SwapBuffers" in msg or "GLX" in msg:
+        print("[replay] 这通常是图形窗口/GLX 上下文失效，不是 trajectory.npz 损坏。")
+        print("[replay] 请重试一次；若仍复现，尽量在本地图形桌面运行，避免关闭/快速切换 viewer 窗口。")
+    else:
+        print(f"[replay] 具体异常: {msg}")
 
 
 def main():
@@ -74,29 +85,35 @@ def main():
 
     # launch_passive 会打开一个可交互 viewer。
     # 回放过程中你可以手动旋转、缩放、平移视角来看细节。
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        for i in range(len(qpos_traj)):
-            if not viewer.is_running():
-                break
+    try:
+        with mujoco.viewer.launch_passive(model, data) as viewer:
+            for i in range(len(qpos_traj)):
+                if not viewer.is_running():
+                    break
 
-            frame_start = time.time()
+                frame_start = time.time()
 
-            # 把第 i 帧保存的机器人状态写回 MuJoCo，然后做一次正运动学刷新显示。
-            data.qpos[:] = qpos_traj[i]
-            if qvel_traj is not None and qvel_traj.shape[0] > i:
-                data.qvel[:] = qvel_traj[i]
-            mujoco.mj_forward(model, data)
-            viewer.sync()
+                # 把第 i 帧保存的机器人状态写回 MuJoCo，然后做一次正运动学刷新显示。
+                data.qpos[:] = qpos_traj[i]
+                if qvel_traj is not None and qvel_traj.shape[0] > i:
+                    data.qvel[:] = qvel_traj[i]
+                mujoco.mj_forward(model, data)
+                viewer.sync()
 
-            # 如果轨迹里保存了 time，就按原始时间间隔回放；否则退回到固定 dt。
-            if time_traj is not None and i + 1 < len(time_traj):
-                dt = float(time_traj[i + 1] - time_traj[i]) / max(args.speed, 1e-6)
-            else:
-                dt = playback_dt
+                # 如果轨迹里保存了 time，就按原始时间间隔回放；否则退回到固定 dt。
+                if time_traj is not None and i + 1 < len(time_traj):
+                    dt = float(time_traj[i + 1] - time_traj[i]) / max(args.speed, 1e-6)
+                else:
+                    dt = playback_dt
 
-            remain = dt - (time.time() - frame_start)
-            if remain > 0:
-                time.sleep(remain)
+                remain = dt - (time.time() - frame_start)
+                if remain > 0:
+                    time.sleep(remain)
+    except KeyboardInterrupt:
+        print("[replay] 用户中断回放。")
+    except Exception as exc:
+        _print_viewer_error(exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
