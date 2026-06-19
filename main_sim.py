@@ -17,7 +17,7 @@ from arm_pid import ArmPIDPolicy
 # from arm_lqr import ArmLQRPolicy
 # from arm_mpc import ArmMPCPolicy
 from kinematics_helper import KinematicsHelper
-from sim_support import create_eval_run_dir, make_video_camera, make_video_renderer, save_eval
+from sim_support import create_eval_run_dir, make_video_camera, make_video_renderer, quat_to_yaw_wxyz, save_eval
 
 
 def get_gravity_orientation(quaternion):
@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
     counter = 0
     gait_period = 0.8
-    warmup_cycles = 2
+    warmup_cycles = 3
     evaluation_cycles = 8
     cooldown_cycles = 2
     total_cycles = warmup_cycles + evaluation_cycles + cooldown_cycles
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     eval_duration = min(simulation_duration, total_cycles * gait_period)
     experiment_name = "left_fixed_right_pid"
     run_dir = None
-    eval_data = {"time": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []}
+    eval_data = {"time": [], "torso_yaw": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []}
     prev_left_lin_vel = np.zeros(3); prev_left_ang_vel = np.zeros(3)
     prev_right_lin_vel = np.zeros(3); prev_right_ang_vel = np.zeros(3); torso_xy_start = None
 
@@ -255,6 +255,7 @@ if __name__ == "__main__":
                 torso_xy_start = d.xpos[torso_id][:2].copy()
             left_rot = d.site_xmat[left_grasp_site_id].reshape(3, 3).copy()
             right_rot = d.site_xmat[right_grasp_site_id].reshape(3, 3).copy()
+            torso_yaw = quat_to_yaw_wxyz(d.xquat[torso_id].copy())
             left_lin_vel, left_ang_vel = get_site_vel(m, d, left_grasp_site_id)
             right_lin_vel, right_ang_vel = get_site_vel(m, d, right_grasp_site_id)
             left_lin_acc = np.zeros(3) if counter == 0 else (left_lin_vel - prev_left_lin_vel) / simulation_dt
@@ -271,6 +272,7 @@ if __name__ == "__main__":
                 renderer.update_scene(d, camera=video_camera)
                 video_frames.append(renderer.render().copy())
             eval_data["time"].append(counter * simulation_dt)
+            eval_data["torso_yaw"].append(torso_yaw)
             eval_data["left_ee_lin_acc_world"].append(left_lin_acc); eval_data["left_ee_ang_acc_world"].append(left_ang_acc); eval_data["left_ee_tilt_error"].append(tilt_error_from_rot(left_rot))
             eval_data["right_ee_lin_acc_world"].append(right_lin_acc); eval_data["right_ee_ang_acc_world"].append(right_ang_acc); eval_data["right_ee_tilt_error"].append(tilt_error_from_rot(right_rot))
 
@@ -354,7 +356,8 @@ if __name__ == "__main__":
         stats, saved_paths = save_eval(run_dir, eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
         print(f"评估已保存到目录: {saved_paths['run_dir']}")
         extra_video = video_path if renderer is not None and video_frames else "未保存（缺少 imageio、Renderer 初始化失败或无帧）"
-        print(f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | {saved_paths['summary']} | {trajectory_path} | {extra_video}")
+        extra_yaw = saved_paths.get("yaw_png") if saved_paths.get("yaw_png") is not None else "未保存 yaw 图"
+        print(f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | {saved_paths['summary']} | {extra_yaw} | {trajectory_path} | {extra_video}")
         if renderer is not None:
             print(f"视频分辨率 = {video_width}x{video_height} (受 MuJoCo offscreen framebuffer 限制)")
         for side in ["left", "right"]:

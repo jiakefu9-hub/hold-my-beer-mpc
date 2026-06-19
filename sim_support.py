@@ -46,6 +46,11 @@ def tilt_error_from_rot(rot):
     return (rot.T @ np.array([0.0, 0.0, -9.81]))[:2]
 
 
+def quat_to_yaw_wxyz(quaternion):
+    qw, qx, qy, qz = quaternion
+    return np.arctan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+
+
 def print_model_mappings(model):
     print("=" * 50)
     print("关节 (Joints - 对应 qpos/qvel):")
@@ -226,6 +231,36 @@ def _fmt2(v):
     return f"[{v[0]:.4f}, {v[1]:.4f}]"
 
 
+def save_yaw_diagnostics(run_dir, time_values, yaw_values, eval_start_time, eval_end_time):
+    t = np.asarray(time_values)
+    yaw = np.asarray(yaw_values)
+    yaw_unwrapped = np.unwrap(yaw)
+    yaw_error = yaw_unwrapped - yaw_unwrapped[0]
+    mask = (t >= eval_start_time) & (t < eval_end_time)
+    if mask.sum() < 2:
+        mask = np.ones_like(t, dtype=bool)
+    slope, intercept = np.polyfit(t[mask], yaw_error[mask], 1)
+    stats = {
+        "yaw_mean": float(np.mean(yaw_error[mask])),
+        "yaw_slope": float(slope),
+        "yaw_final_drift": float(yaw_error[mask][-1]),
+        "max_abs_yaw_error": float(np.max(np.abs(yaw_error[mask]))),
+    }
+    yaw_png = os.path.join(run_dir, "yaw.png")
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+    for ax in axes:
+        ax.axvline(eval_start_time, color="gray", ls="--")
+        ax.axvline(eval_end_time, color="gray", ls="--")
+        ax.grid(True, alpha=0.3)
+    axes[0].plot(t, yaw, lw=1.2); axes[0].set_title("torso yaw [rad]")
+    axes[1].plot(t, yaw_error, lw=1.2); axes[1].plot(t, slope * t + intercept, ls="--", lw=1.0); axes[1].set_title("yaw error from first sample [rad]")
+    axes[2].plot(t, np.abs(yaw_error), lw=1.2); axes[2].set_title("|yaw error| [rad]")
+    axes[2].set_xlabel("time [s]")
+    axes[1].text(0.98, 0.95, f"mean={stats['yaw_mean']:.6f}\nslope={stats['yaw_slope']:.6f}\nfinal={stats['yaw_final_drift']:.6f}\nmax_abs={stats['max_abs_yaw_error']:.6f}", transform=axes[1].transAxes, ha="right", va="top", fontsize=8, bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"))
+    fig.tight_layout(); fig.savefig(yaw_png, dpi=160); plt.close(fig)
+    return stats, yaw_png
+
+
 def save_eval(
     run_dir,
     data,
@@ -252,6 +287,10 @@ def save_eval(
         "eval_end_time": eval_end_time,
         "walk_distance_xy": walk_distance,
     }
+    yaw_png_path = None
+    if "torso_yaw" in data and len(data["torso_yaw"]) > 0:
+        yaw_stats, yaw_png_path = save_yaw_diagnostics(run_dir, data["time"], data["torso_yaw"], eval_start_time, eval_end_time)
+        stats.update(yaw_stats)
 
     sides = ["left", "right"]
     fig, axes = plt.subplots(6, 2, figsize=(20, 12), sharex=True)
@@ -422,6 +461,7 @@ def save_eval(
         "run_dir": run_dir,
         "csv": csv_path,
         "png": png_path,
+        "yaw_png": yaw_png_path,
         "npz": npz_path,
         "summary": summary_path,
     }
