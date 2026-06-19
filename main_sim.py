@@ -1,10 +1,6 @@
-import csv
-import json
 import os
 import time
-from datetime import datetime
 
-import matplotlib.pyplot as plt
 import mujoco.viewer
 import mujoco
 import numpy as np
@@ -17,11 +13,11 @@ except ImportError:
     imageio = None
 
 # --- 引入我们独立的策略 ---
-from arm_fixed import ArmFixedPolicy
 from arm_pid import ArmPIDPolicy
 # from arm_lqr import ArmLQRPolicy
 # from arm_mpc import ArmMPCPolicy
 from kinematics_helper import KinematicsHelper
+from sim_support import create_eval_run_dir, make_video_camera, make_video_renderer, save_eval
 
 
 def get_gravity_orientation(quaternion):
@@ -68,111 +64,6 @@ def tilt_error_from_rot(rot):
     return (rot.T @ np.array([0.0, 0.0, -9.81]))[:2]
 
 
-def _to_serializable(value):
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, (np.floating, np.integer)):
-        return value.item()
-    if isinstance(value, dict):
-        return {k: _to_serializable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_to_serializable(v) for v in value]
-    return value
-
-
-def create_eval_run_dir(base_dir, experiment_name, run_metadata):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(base_dir, experiment_name, timestamp)
-    os.makedirs(run_dir, exist_ok=False)
-    with open(os.path.join(run_dir, "run_metadata.json"), "w", encoding="utf-8") as f:
-        json.dump(_to_serializable(run_metadata), f, indent=2, ensure_ascii=False)
-    return run_dir
-
-
-def make_video_camera():
-    cam = mujoco.MjvCamera()
-    cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-    # 录像相机固定在更远的位置，并把注视点放到机器人行进路径中段，避免后半程走出画面。
-    cam.lookat[:] = np.array([2.2, 0.0, 0.9])
-    cam.distance = 5.2
-    cam.azimuth = 150.0
-    cam.elevation = -18.0
-    return cam
-
-
-def make_video_renderer(model, preferred_width=1280, preferred_height=720):
-    if imageio is None:
-        return None, None, None
-    vis_global = getattr(model.vis, "global_", None)
-    if vis_global is not None:
-        try:
-            vis_global.offwidth = max(int(vis_global.offwidth), preferred_width)
-            vis_global.offheight = max(int(vis_global.offheight), preferred_height)
-        except Exception:
-            pass
-    offwidth = int(getattr(vis_global, "offwidth", preferred_width))
-    offheight = int(getattr(vis_global, "offheight", preferred_height))
-    width = min(preferred_width, offwidth)
-    height = min(preferred_height, offheight)
-    try:
-        renderer = mujoco.Renderer(model, height=height, width=width)
-        return renderer, width, height
-    except Exception as exc:
-        print(f"[video] Renderer 初始化失败，已跳过视频保存: {exc}")
-        return None, width, height
-
-
-def save_eval(run_dir, data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name):
-    def fmt3(v):
-        return f"[{v[0]:.4f}, {v[1]:.4f}, {v[2]:.4f}]"
-
-    def fmt2(v):
-        return f"[{v[0]:.4f}, {v[1]:.4f}]"
-
-    t = np.asarray(data["time"])
-    mask = (t >= eval_start_time) & (t < eval_end_time)
-    stats = {"gait_period": gait_period, "total_cycles": total_cycles, "warmup_cycles": warmup_cycles, "evaluation_cycles": evaluation_cycles, "cooldown_cycles": cooldown_cycles, "eval_start_time": eval_start_time, "eval_end_time": eval_end_time, "walk_distance_xy": walk_distance}
-    sides = ["left", "right"]
-    fig, axes = plt.subplots(6, 2, figsize=(20, 12), sharex=True)
-    csv_path = os.path.join(run_dir, "metrics_preview.csv")
-    png_path = os.path.join(run_dir, "metrics.png")
-    npz_path = os.path.join(run_dir, "metrics.npz")
-    summary_path = os.path.join(run_dir, "summary.json")
-    with open(csv_path, "w", newline="") as f:
-        w = csv.writer(f); w.writerow(["time","side","acc_x","acc_y","acc_z","acc_norm","alpha_x","alpha_y","alpha_z","alpha_norm","tilt_x","tilt_y","tilt_norm"])
-        for c, side in enumerate(sides):
-            acc = np.asarray(data[f"{side}_ee_lin_acc_world"]); alpha = np.asarray(data[f"{side}_ee_ang_acc_world"]); tilt = np.asarray(data[f"{side}_ee_tilt_error"])
-            acc_n, alpha_n, tilt_n = np.linalg.norm(acc, axis=1), np.linalg.norm(alpha, axis=1), np.linalg.norm(tilt, axis=1)
-            for i in range(len(t)): w.writerow([t[i], side, acc[i,0], acc[i,1], acc[i,2], acc_n[i], alpha[i,0], alpha[i,1], alpha[i,2], alpha_n[i], tilt[i,0], tilt[i,1], tilt_n[i]])
-            for key, arr in [("acc", acc_n), ("alpha", alpha_n), ("tilt", tilt_n)]:
-                stats[f"{side}_{key}_mean"] = arr[mask].mean(); stats[f"{side}_{key}_std"] = arr[mask].std(); stats[f"{side}_{key}_rms"] = np.sqrt(np.mean(arr[mask] ** 2))
-            stats[f"{side}_acc_xyz_mean"] = acc[mask].mean(axis=0); stats[f"{side}_acc_xyz_std"] = acc[mask].std(axis=0); stats[f"{side}_acc_xyz_rms"] = np.sqrt(np.mean(acc[mask] ** 2, axis=0))
-            stats[f"{side}_alpha_xyz_mean"] = alpha[mask].mean(axis=0); stats[f"{side}_alpha_xyz_std"] = alpha[mask].std(axis=0); stats[f"{side}_alpha_xyz_rms"] = np.sqrt(np.mean(alpha[mask] ** 2, axis=0))
-            stats[f"{side}_tilt_xy_mean"] = tilt[mask].mean(axis=0); stats[f"{side}_tilt_xy_std"] = tilt[mask].std(axis=0); stats[f"{side}_tilt_xy_rms"] = np.sqrt(np.mean(tilt[mask] ** 2, axis=0))
-            cols = ["r", "g", "b"]; labels = ["x", "y", "z"]; styles = ["-", "--", ":"]
-            for j in range(3):
-                axes[0,c].plot(t, acc[:,j], color=cols[j], ls=styles[j], lw=1.2, alpha=0.9, label=labels[j])
-                axes[2,c].plot(t, alpha[:,j], color=cols[j], ls=styles[j], lw=1.2, alpha=0.9, label=labels[j])
-            axes[4,c].plot(t, tilt[:,0], color="m", ls="-", lw=1.2, alpha=0.9, label="tilt_x")
-            axes[4,c].plot(t, tilt[:,1], color="c", ls="--", lw=1.2, alpha=0.9, label="tilt_y")
-            titles = [f"{side} acc xyz", f"{side} acc norm", f"{side} alpha xyz", f"{side} alpha norm", f"{side} tilt x/y", f"{side} tilt norm"]
-            for r in [0,2,4]:
-                axes[r,c].axvline(eval_start_time, color="gray", ls="--"); axes[r,c].axvline(eval_end_time, color="gray", ls="--"); axes[r,c].legend(loc="upper left", fontsize=8); axes[r,c].grid(True, alpha=0.3)
-            axes[0,c].text(0.98,0.95,f"mean={fmt3(stats[f'{side}_acc_xyz_mean'])}\nstd={fmt3(stats[f'{side}_acc_xyz_std'])}\nrms={fmt3(stats[f'{side}_acc_xyz_rms'])}", transform=axes[0,c].transAxes, ha="right", va="top", fontsize=8, bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"))
-            axes[2,c].text(0.98,0.95,f"mean={fmt3(stats[f'{side}_alpha_xyz_mean'])}\nstd={fmt3(stats[f'{side}_alpha_xyz_std'])}\nrms={fmt3(stats[f'{side}_alpha_xyz_rms'])}", transform=axes[2,c].transAxes, ha="right", va="top", fontsize=8, bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"))
-            axes[4,c].text(0.98,0.95,f"mean={fmt2(stats[f'{side}_tilt_xy_mean'])}\nstd={fmt2(stats[f'{side}_tilt_xy_std'])}\nrms={fmt2(stats[f'{side}_tilt_xy_rms'])}", transform=axes[4,c].transAxes, ha="right", va="top", fontsize=8, bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"))
-            norms = [(1, acc_n, "acc"), (3, alpha_n, "alpha"), (5, tilt_n, "tilt")]
-            for r, y, key in norms:
-                axes[r,c].plot(t, y, lw=1.2); axes[r,c].axvline(eval_start_time, color="gray", ls="--"); axes[r,c].axvline(eval_end_time, color="gray", ls="--"); axes[r,c].axhline(stats[f"{side}_{key}_mean"], color="r", ls="--"); axes[r,c].grid(True, alpha=0.3)
-                axes[r,c].text(0.98,0.95,f"mean={stats[f'{side}_{key}_mean']:.6f}\nstd={stats[f'{side}_{key}_std']:.6f}\nrms={stats[f'{side}_{key}_rms']:.6f}", transform=axes[r,c].transAxes, ha="right", va="top", fontsize=8, bbox=dict(facecolor="white", alpha=0.75, edgecolor="none"))
-            for r in range(6): axes[r,c].set_title(titles[r])
-        axes[5,0].set_xlabel("time [s]"); axes[5,1].set_xlabel("time [s]")
-        fig.suptitle(f"{experiment_name} | left/right palm grasp sites | {warmup_cycles}+{evaluation_cycles}+{cooldown_cycles} cycles\nwalk distance xy = {walk_distance:.3f} m")
-        fig.tight_layout(); fig.savefig(png_path, dpi=160); plt.close(fig)
-    np.savez(npz_path, **data, **stats)
-    with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(_to_serializable(stats), f, indent=2, ensure_ascii=False)
-    return stats, {"run_dir": run_dir, "csv": csv_path, "png": png_path, "npz": npz_path, "summary": summary_path}
 
 
 if __name__ == "__main__":
@@ -301,7 +192,7 @@ if __name__ == "__main__":
     video_camera = make_video_camera()
     renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
 
-    # 预先找到 torso_link、torso IMU 和任务末端 grasp site 的 ID，方便后续读取和可视化
+    # 预先找到主循环中会直接使用的 torso/IMU/左右手 grasp site ID，方便后续读取和可视化
     torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
     imu_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "imu_in_torso")
     left_grasp_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "left_grasp_site")
