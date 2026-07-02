@@ -7,63 +7,12 @@ import numpy as np
 import torch
 import yaml
 
-try:
-    import imageio.v2 as imageio
-except ImportError:
-    imageio = None
-
 # --- 引入我们独立的策略 ---
 from arm_pid import ArmPIDPolicy
-# from arm_lqr import ArmLQRPolicy
+from arm_lqr import ArmLQRPolicy
 # from arm_mpc import ArmMPCPolicy
 from kinematics_helper import KinematicsHelper
-from sim_support import create_eval_run_dir, make_video_camera, make_video_renderer, quat_to_yaw_wxyz, save_eval
-
-
-def get_gravity_orientation(quaternion):
-    qw = quaternion[0]
-    qx = quaternion[1]
-    qy = quaternion[2]
-    qz = quaternion[3]
-
-    gravity_orientation = np.zeros(3)
-
-    gravity_orientation[0] = 2 * (-qz * qx + qw * qy)
-    gravity_orientation[1] = -2 * (qz * qy + qw * qx)
-    gravity_orientation[2] = 1 - 2 * (qw * qw + qz * qz)
-
-    return gravity_orientation
-
-
-def pd_control(target_q, q, kp, target_dq, dq, kd):
-    """Calculates torques from position commands"""
-    return (target_q - q) * kp + (target_dq - dq) * kd
-
-
-def add_axis_visual(scene, pos, rot, sphere_radius=0.02, axis_length=0.20, axis_radius=0.008, origin_rgba=None):
-    """在 viewer.user_scn 中画出任意局部坐标轴。红=X, 绿=Y, 蓝=Z。"""
-    if origin_rgba is None:
-        origin_rgba = np.array([1.0, 1.0, 0.0, 0.9])
-    mujoco.mjv_initGeom(scene.geoms[scene.ngeom], mujoco.mjtGeom.mjGEOM_SPHERE, np.array([sphere_radius, 0.0, 0.0]), pos, np.eye(3).reshape(-1), origin_rgba)
-    scene.ngeom += 1
-    axis_colors = [np.array([1.0, 0.0, 0.0, 0.9]), np.array([0.0, 1.0, 0.0, 0.9]), np.array([0.0, 0.0, 1.0, 0.9])]
-    for i in range(3):
-        end = pos + rot[:, i] * axis_length
-        mujoco.mjv_initGeom(scene.geoms[scene.ngeom], mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3), np.eye(3).reshape(-1), axis_colors[i])
-        mujoco.mjv_connector(scene.geoms[scene.ngeom], mujoco.mjtGeom.mjGEOM_CAPSULE, axis_radius, pos, end)
-        scene.ngeom += 1
-
-
-def get_site_vel(m, d, site_id):
-    jacp, jacr = np.zeros((3, m.nv)), np.zeros((3, m.nv))
-    mujoco.mj_jacSite(m, d, jacp, jacr, site_id)
-    return jacp @ d.qvel, jacr @ d.qvel
-
-
-def tilt_error_from_rot(rot):
-    return (rot.T @ np.array([0.0, 0.0, -9.81]))[:2]
-
-
+from sim_support import build_run_metadata, create_eval_run_dir, draw_debug_axes, finalize_run, get_gravity_orientation, get_site_vel, init_eval_buffers, make_video_camera, make_video_renderer, pd_control, record_eval_step, resolve_scene_ids
 
 
 if __name__ == "__main__":
@@ -100,7 +49,7 @@ if __name__ == "__main__":
 
         num_actions = config["num_actions"]
         num_obs = config["num_obs"]
-        
+        arm_controller = config.get("arm_controller", "pid").lower()
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
 
     # define context variables
@@ -117,11 +66,8 @@ if __name__ == "__main__":
     eval_start_time = warmup_cycles * gait_period
     eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
     eval_duration = min(simulation_duration, total_cycles * gait_period)
-    experiment_name = "left_fixed_right_pid"
-    run_dir = None
-    eval_data = {"time": [], "torso_yaw": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []}
-    prev_left_lin_vel = np.zeros(3); prev_left_ang_vel = np.zeros(3)
-    prev_right_lin_vel = np.zeros(3); prev_right_ang_vel = np.zeros(3); torso_xy_start = None
+    experiment_name = f"left_fixed_right_{arm_controller}"
+    buffers = init_eval_buffers()
 
     # Load robot model
     m = mujoco.MjModel.from_xml_path(xml_path)
@@ -129,63 +75,36 @@ if __name__ == "__main__":
     m.opt.timestep = simulation_dt
 
     # --- 调试打印：输出关节和驱动器的映射关系 ---
-    print("="*50)
-    print("关节 (Joints - 对应 qpos/qvel):")
-    joint_names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, i) for i in range(m.njnt)]
-    for i, name in enumerate(joint_names):
-        print(f"  Joint ID: {i:2d}, Name: {name}")
+    # print("="*50)
+    # print("关节 (Joints - 对应 qpos/qvel):")
+    # joint_names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, i) for i in range(m.njnt)]
+    # for i, name in enumerate(joint_names):
+    #     print(f"  Joint ID: {i:2d}, Name: {name}")
     
-    print("\n驱动器 (Actuators - 对应 ctrl):")
-    actuator_names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(m.nu)]
-    for i, name in enumerate(actuator_names):
-        print(f"  Actuator ID: {i:2d}, Name: {name}")
-    print("="*50)
+    # print("\n驱动器 (Actuators - 对应 ctrl):")
+    # actuator_names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(m.nu)]
+    # for i, name in enumerate(actuator_names):
+    #     print(f"  Actuator ID: {i:2d}, Name: {name}")
+    # print("="*50)
     
     # load policy
     policy = torch.jit.load(policy_path)
 
-    # --- 实例化右臂控制策略（回到 20260618_225317 的 tuning_v7 参数） ---
+    # --- 实例化右臂控制策略 ---
     right_arm_target = arm_waist_target[6:11].copy()
-    arm_policy = ArmPIDPolicy(
-        default_q=right_arm_target,
-        kp_pose=np.array([1.20, 1.20], dtype=np.float64),
-        kd_pose=np.array([1.2, 1.2], dtype=np.float64),
-        ki_pose=0.0,
-        posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64),
-        control_dt=simulation_dt,
-        damping=1.5e-1,
-        max_dq=0.48,
-        de_g_alpha=0.07,
-    )
-    run_metadata = {
-        "config_file": config_file,
-        "experiment_name": experiment_name,
-        "policy_type": "ArmPIDPolicy",
-        "right_arm_joint_names": ["right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint", "right_elbow_joint", "right_wrist_roll_joint"],
-        "notes": "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small",
-        "cmd_nominal": cmd_nominal,
-        "simulation_dt": simulation_dt,
-        "gait_period": gait_period,
-        "warmup_cycles": warmup_cycles,
-        "evaluation_cycles": evaluation_cycles,
-        "cooldown_cycles": cooldown_cycles,
-        "pid_config": {
-            "default_q": right_arm_target,
-            "kp_pose_diag": np.diag(arm_policy.kp_pose),
-            "kd_pose_diag": np.diag(arm_policy.kd_pose),
-            "ki_pose_diag": np.diag(arm_policy.ki_pose),
-            "posture_gain_diag": np.diag(arm_policy.posture_gain),
-            "finite_diff_eps": arm_policy.finite_diff_eps,
-            "damping": arm_policy.damping,
-            "integral_limit": arm_policy.integral_limit,
-            "max_dq": arm_policy.max_dq,
-            "de_g_alpha": arm_policy.de_g_alpha,
-        },
-    }
+    if arm_controller == "lqr":
+        arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=simulation_dt, horizon=int(config.get("lqr_horizon", 12)))
+        policy_type = "ArmLQRPolicy"
+        controller_notes = "finite-horizon time-varying LQR baseline with local kinematic linearization and torso-disturbance feedforward terms"
+        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq}}
+    else:
+        arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=simulation_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
+        policy_type = "ArmPIDPolicy"
+        controller_notes = "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small"
+        controller_meta = {"pid_config": {"default_q": right_arm_target, "kp_pose_diag": np.diag(arm_policy.kp_pose), "kd_pose_diag": np.diag(arm_policy.kd_pose), "ki_pose_diag": np.diag(arm_policy.ki_pose), "posture_gain_diag": np.diag(arm_policy.posture_gain), "finite_diff_eps": arm_policy.finite_diff_eps, "damping": arm_policy.damping, "integral_limit": arm_policy.integral_limit, "max_dq": arm_policy.max_dq, "de_g_alpha": arm_policy.de_g_alpha}}
+    run_metadata = build_run_metadata(config_file, experiment_name, policy_type, controller_notes, controller_meta, cmd_nominal, simulation_dt, gait_period, warmup_cycles, evaluation_cycles, cooldown_cycles)
     run_dir = create_eval_run_dir("/home/fjk/g1_ws/hold-my-beer-mpc/evaluation", experiment_name, run_metadata)
-    trajectory_path = os.path.join(run_dir, "trajectory.npz")
     video_path = os.path.join(run_dir, "rollout.mp4")
-    trajectory_data = {"time": [], "qpos": [], "qvel": [], "ctrl": []}
     video_fps = 30
     video_stride = max(1, int(round(1.0 / (simulation_dt * video_fps))))
     video_frames = []
@@ -193,13 +112,11 @@ if __name__ == "__main__":
     renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
 
     # 预先找到主循环中会直接使用的 torso/IMU/左右手 grasp site ID，方便后续读取和可视化
-    torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
-    imu_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "imu_in_torso")
-    left_grasp_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "left_grasp_site")
-    right_grasp_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "right_grasp_site")
+    scene_ids = resolve_scene_ids(m)
 
     # 右臂 5 个关节在 qpos 中对应索引 25:30；helper 用它来“冻结当前整机，只扰动右臂”
     right_arm_qpos_indices = np.arange(25, 30, dtype=np.int32)
+    # 末端名字，5个关节索引，IMU名字
     right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_qpos_indices, imu_site_name="imu_in_torso")
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
@@ -216,27 +133,41 @@ if __name__ == "__main__":
 
             # --- 2. 腰部与手臂控制 (12~22) ---
             # 顺序: waist(1), left_arm(5), right_arm(5)
+            # 获取了上肢的目前关节位置和速度
             arm_waist_q = d.qpos[19:30]
             arm_waist_dq = d.qvel[18:29]
 
+            # 获取了腰部和左臂的target位置和速度
             waist_left_target_q = arm_waist_target[:6].copy()
             waist_left_target_dq = np.zeros(6, dtype=np.float32)
 
+            # 获取了右臂的目前关节位置和速度
             right_arm_q = arm_waist_q[6:11]
             right_arm_dq = arm_waist_dq[6:11]
 
-            torso_quat = d.xquat[torso_id]
-            torso_omega = d.cvel[torso_id][3:6] # cvel 前3位角速度，后3位线速度
+            # 获取了躯干的四元数和R
+            torso_quat = d.xquat[scene_ids.torso_id]
+            torso_rotmat = d.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy()
+            torso_lin_vel, torso_ang_vel = get_site_vel(m, d, scene_ids.imu_site_id)
+            torso_acc = np.zeros(3) if counter == 0 else (torso_lin_vel - buffers.prev_torso_lin_vel) / simulation_dt
+            torso_alpha = np.zeros(3) if counter == 0 else (torso_ang_vel - buffers.prev_torso_ang_vel) / simulation_dt
+            buffers.prev_torso_lin_vel, buffers.prev_torso_ang_vel = torso_lin_vel.copy(), torso_ang_vel.copy()
 
+            # 构建了扰动输入，扰动由躯干的线加速度、角速度、角加速度和R矩阵组成
+            disturbance = right_arm_helper.build_disturbance_input(acc_world=torso_acc, omega_world=torso_ang_vel, alpha_world=torso_alpha, rot_world_body=torso_rotmat)
+            
+            # 构建了右臂的观测
             arm_obs = {
                 "current_q": right_arm_q,
                 "current_dq": right_arm_dq,
                 "torso_quat": torso_quat,
-                "torso_omega": torso_omega,
-                "torso_rotmat": d.site_xmat[imu_site_id].reshape(3, 3).copy(),
+                "torso_omega": torso_ang_vel,
+                "torso_acc": torso_acc,
+                "torso_alpha": torso_alpha,
+                "torso_rotmat": torso_rotmat,
                 "dt": simulation_dt,
             }
-            helpers = right_arm_helper.build_helpers(d)
+            helpers = right_arm_helper.build_helpers(d, disturbance=disturbance)
             target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(arm_obs, helpers)
 
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
@@ -251,30 +182,10 @@ if __name__ == "__main__":
             # mj_step can be replaced with code that also evaluates
             # a policy and applies a control signal before stepping the physics.
             mujoco.mj_step(m, d)
-            if torso_xy_start is None:
-                torso_xy_start = d.xpos[torso_id][:2].copy()
-            left_rot = d.site_xmat[left_grasp_site_id].reshape(3, 3).copy()
-            right_rot = d.site_xmat[right_grasp_site_id].reshape(3, 3).copy()
-            torso_yaw = quat_to_yaw_wxyz(d.xquat[torso_id].copy())
-            left_lin_vel, left_ang_vel = get_site_vel(m, d, left_grasp_site_id)
-            right_lin_vel, right_ang_vel = get_site_vel(m, d, right_grasp_site_id)
-            left_lin_acc = np.zeros(3) if counter == 0 else (left_lin_vel - prev_left_lin_vel) / simulation_dt
-            left_ang_acc = np.zeros(3) if counter == 0 else (left_ang_vel - prev_left_ang_vel) / simulation_dt
-            right_lin_acc = np.zeros(3) if counter == 0 else (right_lin_vel - prev_right_lin_vel) / simulation_dt
-            right_ang_acc = np.zeros(3) if counter == 0 else (right_ang_vel - prev_right_ang_vel) / simulation_dt
-            prev_left_lin_vel, prev_left_ang_vel = left_lin_vel.copy(), left_ang_vel.copy()
-            prev_right_lin_vel, prev_right_ang_vel = right_lin_vel.copy(), right_ang_vel.copy()
-            trajectory_data["time"].append(counter * simulation_dt)
-            trajectory_data["qpos"].append(d.qpos.copy())
-            trajectory_data["qvel"].append(d.qvel.copy())
-            trajectory_data["ctrl"].append(d.ctrl.copy())
+            record_eval_step(m, d, counter, simulation_dt, scene_ids, buffers)
             if renderer is not None and counter % video_stride == 0:
                 renderer.update_scene(d, camera=video_camera)
                 video_frames.append(renderer.render().copy())
-            eval_data["time"].append(counter * simulation_dt)
-            eval_data["torso_yaw"].append(torso_yaw)
-            eval_data["left_ee_lin_acc_world"].append(left_lin_acc); eval_data["left_ee_ang_acc_world"].append(left_ang_acc); eval_data["left_ee_tilt_error"].append(tilt_error_from_rot(left_rot))
-            eval_data["right_ee_lin_acc_world"].append(right_lin_acc); eval_data["right_ee_ang_acc_world"].append(right_ang_acc); eval_data["right_ee_tilt_error"].append(tilt_error_from_rot(right_rot))
 
             counter += 1
             if counter % control_decimation == 0:
@@ -315,23 +226,7 @@ if __name__ == "__main__":
                 target_dof_pos = action * action_scale + default_angles
 
             # 在 viewer 中画出世界系、torso IMU、左手抓持点、右手抓持点的坐标轴
-            viewer.user_scn.ngeom = 0
-
-            world_pos = np.array([0.0, 0.0, 0.0])
-            world_rot = np.eye(3)
-            add_axis_visual(viewer.user_scn, world_pos, world_rot, sphere_radius=0.025, axis_length=0.25, axis_radius=0.010, origin_rgba=np.array([1.0, 1.0, 1.0, 0.95]))
-
-            imu_pos = d.site_xpos[imu_site_id].copy()
-            imu_rot = d.site_xmat[imu_site_id].reshape(3, 3).copy()
-            add_axis_visual(viewer.user_scn, imu_pos, imu_rot, sphere_radius=0.02, axis_length=0.20, axis_radius=0.008, origin_rgba=np.array([1.0, 1.0, 0.0, 0.9]))
-
-            left_grasp_pos = d.site_xpos[left_grasp_site_id].copy()
-            left_grasp_rot = d.site_xmat[left_grasp_site_id].reshape(3, 3).copy()
-            add_axis_visual(viewer.user_scn, left_grasp_pos, left_grasp_rot, sphere_radius=0.015, axis_length=0.08, axis_radius=0.006, origin_rgba=np.array([1.0, 0.5, 0.0, 0.9]))
-
-            right_grasp_pos = d.site_xpos[right_grasp_site_id].copy()
-            right_grasp_rot = d.site_xmat[right_grasp_site_id].reshape(3, 3).copy()
-            add_axis_visual(viewer.user_scn, right_grasp_pos, right_grasp_rot, sphere_radius=0.015, axis_length=0.08, axis_radius=0.006, origin_rgba=np.array([0.0, 1.0, 1.0, 0.9]))
+            draw_debug_axes(viewer.user_scn, d, scene_ids)
 
             # Pick up changes to the physics state, apply perturbations, update options from GUI.
             viewer.sync()
@@ -341,27 +236,4 @@ if __name__ == "__main__":
             if time_until_next_step > 0:
                 time.sleep(time_until_next_step)
 
-        np.savez(
-            trajectory_path,
-            time=np.asarray(trajectory_data["time"]),
-            qpos=np.asarray(trajectory_data["qpos"]),
-            qvel=np.asarray(trajectory_data["qvel"]),
-            ctrl=np.asarray(trajectory_data["ctrl"]),
-            xml_path=np.array(xml_path),
-            simulation_dt=np.array(simulation_dt),
-        )
-        if renderer is not None and video_frames:
-            imageio.mimwrite(video_path, video_frames, fps=video_fps, quality=8, macro_block_size=None)
-        walk_distance = float(np.linalg.norm(d.xpos[torso_id][:2] - torso_xy_start)) if torso_xy_start is not None else 0.0
-        stats, saved_paths = save_eval(run_dir, eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
-        print(f"评估已保存到目录: {saved_paths['run_dir']}")
-        extra_video = video_path if renderer is not None and video_frames else "未保存（缺少 imageio、Renderer 初始化失败或无帧）"
-        extra_yaw = saved_paths.get("yaw_png") if saved_paths.get("yaw_png") is not None else "未保存 yaw 图"
-        print(f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | {saved_paths['summary']} | {extra_yaw} | {trajectory_path} | {extra_video}")
-        if renderer is not None:
-            print(f"视频分辨率 = {video_width}x{video_height} (受 MuJoCo offscreen framebuffer 限制)")
-        for side in ["left", "right"]:
-            print(f"{side} | acc mean/std/rms = {stats[f'{side}_acc_mean']:.4f}/{stats[f'{side}_acc_std']:.4f}/{stats[f'{side}_acc_rms']:.4f}")
-            print(f"{side} | alpha mean/std/rms = {stats[f'{side}_alpha_mean']:.4f}/{stats[f'{side}_alpha_std']:.4f}/{stats[f'{side}_alpha_rms']:.4f}")
-            print(f"{side} | tilt mean/std/rms = {stats[f'{side}_tilt_mean']:.4f}/{stats[f'{side}_tilt_std']:.4f}/{stats[f'{side}_tilt_rms']:.4f}")
-        print(f"总周期数 = {total_cycles}, warm-up = {warmup_cycles}, evaluation = {evaluation_cycles}, cooldown = {cooldown_cycles}, 本次仿真 torso xy 行走距离 = {walk_distance:.3f} m")
+        finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)

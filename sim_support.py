@@ -3,6 +3,7 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import mujoco
@@ -20,6 +21,19 @@ class SceneIds:
     imu_site_id: int
     left_grasp_site_id: int
     right_grasp_site_id: int
+
+
+@dataclass
+class EvalBuffers:
+    eval_data: dict
+    trajectory_data: dict
+    prev_left_lin_vel: np.ndarray
+    prev_left_ang_vel: np.ndarray
+    prev_right_lin_vel: np.ndarray
+    prev_right_ang_vel: np.ndarray
+    prev_torso_lin_vel: np.ndarray
+    prev_torso_ang_vel: np.ndarray
+    torso_xy_start: Optional[np.ndarray] = None
 
 
 def get_gravity_orientation(quaternion):
@@ -170,13 +184,43 @@ def create_eval_run_dir(base_dir, experiment_name, run_metadata):
     return run_dir
 
 
+def build_run_metadata(config_file, experiment_name, policy_type, controller_notes, controller_meta, cmd_nominal, simulation_dt, gait_period, warmup_cycles, evaluation_cycles, cooldown_cycles):
+    return {
+        "config_file": config_file,
+        "experiment_name": experiment_name,
+        "policy_type": policy_type,
+        "right_arm_joint_names": ["right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint", "right_elbow_joint", "right_wrist_roll_joint"],
+        "notes": controller_notes,
+        "cmd_nominal": cmd_nominal,
+        "simulation_dt": simulation_dt,
+        "gait_period": gait_period,
+        "warmup_cycles": warmup_cycles,
+        "evaluation_cycles": evaluation_cycles,
+        "cooldown_cycles": cooldown_cycles,
+        **controller_meta,
+    }
+
+
+def init_eval_buffers():
+    return EvalBuffers(
+        eval_data={"time": [], "torso_yaw": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []},
+        trajectory_data={"time": [], "qpos": [], "qvel": [], "ctrl": []},
+        prev_left_lin_vel=np.zeros(3),
+        prev_left_ang_vel=np.zeros(3),
+        prev_right_lin_vel=np.zeros(3),
+        prev_right_ang_vel=np.zeros(3),
+        prev_torso_lin_vel=np.zeros(3),
+        prev_torso_ang_vel=np.zeros(3),
+    )
+
+
 def make_video_camera():
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_FREE
     cam.lookat[:] = np.array([2.2, 0.0, 0.9])
     cam.distance = 5.2
-    cam.azimuth = 150.0
-    cam.elevation = -18.0
+    cam.azimuth = 120.0
+    cam.elevation = -25.0
     return cam
 
 
@@ -221,6 +265,44 @@ def write_video(video_path, video_frames, video_fps):
     if imageio is None or not video_frames:
         return
     imageio.mimwrite(video_path, video_frames, fps=video_fps, quality=8, macro_block_size=None)
+
+
+def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers):
+    if buffers.torso_xy_start is None:
+        buffers.torso_xy_start = data.xpos[scene_ids.torso_id][:2].copy()
+    left_rot = data.site_xmat[scene_ids.left_grasp_site_id].reshape(3, 3).copy()
+    right_rot = data.site_xmat[scene_ids.right_grasp_site_id].reshape(3, 3).copy()
+    torso_yaw = quat_to_yaw_wxyz(data.xquat[scene_ids.torso_id].copy())
+    left_lin_vel, left_ang_vel = get_site_vel(model, data, scene_ids.left_grasp_site_id)
+    right_lin_vel, right_ang_vel = get_site_vel(model, data, scene_ids.right_grasp_site_id)
+    left_lin_acc = np.zeros(3) if counter == 0 else (left_lin_vel - buffers.prev_left_lin_vel) / simulation_dt
+    left_ang_acc = np.zeros(3) if counter == 0 else (left_ang_vel - buffers.prev_left_ang_vel) / simulation_dt
+    right_lin_acc = np.zeros(3) if counter == 0 else (right_lin_vel - buffers.prev_right_lin_vel) / simulation_dt
+    right_ang_acc = np.zeros(3) if counter == 0 else (right_ang_vel - buffers.prev_right_ang_vel) / simulation_dt
+    buffers.prev_left_lin_vel, buffers.prev_left_ang_vel = left_lin_vel.copy(), left_ang_vel.copy()
+    buffers.prev_right_lin_vel, buffers.prev_right_ang_vel = right_lin_vel.copy(), right_ang_vel.copy()
+    t = counter * simulation_dt
+    buffers.trajectory_data["time"].append(t)
+    buffers.trajectory_data["qpos"].append(data.qpos.copy())
+    buffers.trajectory_data["qvel"].append(data.qvel.copy())
+    buffers.trajectory_data["ctrl"].append(data.ctrl.copy())
+    buffers.eval_data["time"].append(t)
+    buffers.eval_data["torso_yaw"].append(torso_yaw)
+    buffers.eval_data["left_ee_lin_acc_world"].append(left_lin_acc)
+    buffers.eval_data["left_ee_ang_acc_world"].append(left_ang_acc)
+    buffers.eval_data["left_ee_tilt_error"].append(tilt_error_from_rot(left_rot))
+    buffers.eval_data["right_ee_lin_acc_world"].append(right_lin_acc)
+    buffers.eval_data["right_ee_ang_acc_world"].append(right_ang_acc)
+    buffers.eval_data["right_ee_tilt_error"].append(tilt_error_from_rot(right_rot))
+
+
+def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name):
+    trajectory_path = os.path.join(run_dir, "trajectory.npz")
+    save_trajectory(trajectory_path, buffers.trajectory_data, xml_path, simulation_dt)
+    write_video(video_path, video_frames, video_fps)
+    walk_distance = float(np.linalg.norm(data.xpos[scene_ids.torso_id][:2] - buffers.torso_xy_start)) if buffers.torso_xy_start is not None else 0.0
+    stats, saved_paths = save_eval(run_dir, buffers.eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
+    print_run_summary(stats, saved_paths, trajectory_path, video_path, renderer, video_frames, video_width, video_height, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles)
 
 
 def _fmt3(v):

@@ -41,6 +41,7 @@ class ControllerHelpers:
     disturbance: Optional[DisturbanceInput] = None
     kinematics: Optional[KinematicsCache] = None
     compute_gravity_error: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None
+    compute_lqr_terms: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, Optional[DisturbanceInput]], dict]] = None
 
 
 class KinematicsHelper:
@@ -51,8 +52,10 @@ class KinematicsHelper:
         self.ee_site_name = ee_site_name
         self.imu_site_name = imu_site_name
         self.joint_indices = np.array(joint_indices, dtype=np.int32)
+        self.qvel_indices = self.joint_indices - 1
         self.ee_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, ee_site_name)
         self.imu_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, imu_site_name)
+        # 初始化 MuJoCo 数据结构 data，用于临时计算雅可比矩阵
         self._scratch = mujoco.MjData(model)
 
     def build_observation(
@@ -80,7 +83,13 @@ class KinematicsHelper:
         )
 
     def compute_kinematics_cache(self, data: Any) -> KinematicsCache:
-        return KinematicsCache()
+        qpos_reference = np.asarray(data.qpos, dtype=np.float64).copy()
+        q_right_arm = qpos_reference[self.joint_indices].copy()
+        dq_right_arm = np.asarray(data.qvel, dtype=np.float64)[self.qvel_indices].copy()
+        self._set_scratch_state(qpos_reference, q_right_arm, dq_right_arm)
+        J_v, J_w = self._site_jacobians_world()
+        dJ_v, dJ_w = self._site_jacobian_dots_world(qpos_reference, q_right_arm, dq_right_arm)
+        return KinematicsCache(J_v=J_v, dJ_v=dJ_v, J_w=J_w, dJ_w=dJ_w)
 
     def build_disturbance_input(
         self,
@@ -97,27 +106,84 @@ class KinematicsHelper:
         disturbance: Optional[DisturbanceInput] = None,
     ) -> ControllerHelpers:
         qpos_ref = np.asarray(data.qpos, dtype=np.float64).copy()
+        # 打包传给 ArmLQRPolicy / ArmPIDPolicy 的辅助对象；各字段对应 main_sim.py 主循环里的实时量
         return ControllerHelpers(
-            model=self.model,
-            data=data,
-            disturbance=disturbance,
-            kinematics=self.compute_kinematics_cache(data),
-            compute_gravity_error=lambda q, W_R_I: self.compute_gravity_error(q, W_R_I, qpos_ref),
+            model=self.model,  # right_arm_helper 初始化时的 MuJoCo 模型 m
+            data=data,  # 当前仿真步的机器人状态 d（qpos/qvel 等）
+            disturbance=disturbance,  # main_sim 中由躯干 acc/omega/alpha/rotmat 构建的扰动
+            kinematics=self.compute_kinematics_cache(data),  # 当前姿态下末端雅可比 J_v/J_w 及其导数
+            compute_gravity_error=lambda q, W_R_I: self.compute_gravity_error(q, W_R_I, qpos_ref),  # 重力方向误差 e_g
+            compute_lqr_terms=lambda q, dq, W_R_I, dist=None: self.compute_lqr_terms(q, dq, W_R_I, qpos_ref, dist),  # LQR 代价里加速度/重力项的 C、B、D、G 矩阵
         )
 
-    def compute_gravity_error(self, q_right_arm: np.ndarray, W_R_I: np.ndarray, qpos_reference: np.ndarray) -> np.ndarray:
-        # 1) 冻结当前整机姿态：把当前仿真 qpos 拷贝到 scratch data 中
-        self._scratch.qpos[:] = qpos_reference
-        # 2) 仅替换右臂 5 个关节，模拟“在当前躯干姿态不变条件下扰动右臂”
-        self._scratch.qpos[self.joint_indices] = np.asarray(q_right_arm, dtype=np.float64)
-        mujoco.mj_forward(self.model, self._scratch)
-
-        # 3) 从正运动学结果读取末端姿态：site_xmat 给的是 ^W R_E
+    def compute_gravity_error(self, q_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray) -> np.ndarray:
+        self._set_scratch_state(qpos_reference, q_right_arm, np.zeros(len(self.qvel_indices), dtype=np.float64))
         W_R_E = self._scratch.site_xmat[self.ee_site_id].reshape(3, 3).copy()
-
-        # 4) 任务空间重力误差定义：e_g = P_xy(^E R_W g^W)
-        #    这里 ^E R_W = (^W R_E)^T，g^W = [0, 0, -9.81]^T
-        g_W = np.array([0.0, 0.0, -9.81], dtype=np.float64)
-        E_R_W = W_R_E.T
-        g_E = E_R_W @ g_W
+        g_E = W_R_E.T @ np.array([0.0, 0.0, -9.81], dtype=np.float64)
         return g_E[:2].copy()
+
+    def compute_gravity_error_jacobian(self, q_right_arm: np.ndarray, W_R_I: np.ndarray, qpos_reference: np.ndarray, eps: float = 1e-4) -> np.ndarray:
+        J_g = np.zeros((2, len(q_right_arm)), dtype=np.float64)
+        for i in range(len(q_right_arm)):
+            q_plus = np.asarray(q_right_arm, dtype=np.float64).copy(); q_plus[i] += eps
+            q_minus = np.asarray(q_right_arm, dtype=np.float64).copy(); q_minus[i] -= eps
+            e_plus = self.compute_gravity_error(q_plus, W_R_I, qpos_reference)
+            e_minus = self.compute_gravity_error(q_minus, W_R_I, qpos_reference)
+            J_g[:, i] = (e_plus - e_minus) / (2.0 * eps)
+        return J_g
+
+    def _set_scratch_state(self, qpos_reference: np.ndarray, q_right_arm: np.ndarray, dq_right_arm: np.ndarray):
+        self._scratch.qpos[:] = np.asarray(qpos_reference, dtype=np.float64)
+        self._scratch.qvel[:] = 0.0
+        self._scratch.qpos[self.joint_indices] = np.asarray(q_right_arm, dtype=np.float64)
+        self._scratch.qvel[self.qvel_indices] = np.asarray(dq_right_arm, dtype=np.float64)
+        mujoco.mj_forward(self.model, self._scratch) # MuJoCo 会把 _scratch 里的派生量更新好
+
+    def _site_jacobians_world(self):
+        jacp = np.zeros((3, self.model.nv), dtype=np.float64)
+        jacr = np.zeros((3, self.model.nv), dtype=np.float64)
+        mujoco.mj_jacSite(self.model, self._scratch, jacp, jacr, self.ee_site_id)
+        return jacp[:, self.qvel_indices].copy(), jacr[:, self.qvel_indices].copy()
+
+    def _site_jacobian_dots_world(self, qpos_reference: np.ndarray, q_right_arm: np.ndarray, dq_right_arm: np.ndarray, eps: float = 1e-3):
+        dq = np.asarray(dq_right_arm, dtype=np.float64)
+        if np.linalg.norm(dq) < 1e-10:
+            n = len(q_right_arm)
+            return np.zeros((3, n), dtype=np.float64), np.zeros((3, n), dtype=np.float64)
+        q_plus = np.asarray(q_right_arm, dtype=np.float64) + dq * eps
+        q_minus = np.asarray(q_right_arm, dtype=np.float64) - dq * eps
+        self._set_scratch_state(qpos_reference, q_plus, dq)
+        Jv_p, Jw_p = self._site_jacobians_world()
+        self._set_scratch_state(qpos_reference, q_minus, dq)
+        Jv_m, Jw_m = self._site_jacobians_world()
+        return (Jv_p - Jv_m) / (2.0 * eps), (Jw_p - Jw_m) / (2.0 * eps)
+
+    def compute_lqr_terms(self, q_right_arm: np.ndarray, dq_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray, disturbance: Optional[DisturbanceInput] = None) -> dict:
+        q = np.asarray(q_right_arm, dtype=np.float64)
+        dq = np.asarray(dq_right_arm, dtype=np.float64)
+        self._set_scratch_state(qpos_reference, q, dq)
+        J_v, J_w = self._site_jacobians_world()
+        dJ_v, dJ_w = self._site_jacobian_dots_world(qpos_reference, q, dq)
+        p_E = self._scratch.site_xpos[self.ee_site_id].copy()
+        p_B = self._scratch.site_xpos[self.imu_site_id].copy()
+        omega_B = np.zeros(3, dtype=np.float64) if disturbance is None or disturbance.omega_world is None else np.asarray(disturbance.omega_world, dtype=np.float64)
+        a_B = np.zeros(3, dtype=np.float64) if disturbance is None or disturbance.acc_world is None else np.asarray(disturbance.acc_world, dtype=np.float64)
+        alpha_B = np.zeros(3, dtype=np.float64) if disturbance is None or disturbance.alpha_world is None else np.asarray(disturbance.alpha_world, dtype=np.float64)
+        r_BE = p_E - p_B
+        J_g = self.compute_gravity_error_jacobian(q, np.eye(3), qpos_reference)
+        e_g = self.compute_gravity_error(q, np.eye(3), qpos_reference)
+        return {
+            "D_acc": a_B + np.cross(alpha_B, r_BE) + np.cross(omega_B, np.cross(omega_B, r_BE)),
+            "C_acc": 2.0 * self._skew(omega_B) @ J_v + dJ_v,
+            "B_acc": J_v,
+            "D_alpha": alpha_B,
+            "C_alpha": self._skew(omega_B) @ J_w + dJ_w,
+            "B_alpha": J_w,
+            "d_g": e_g - J_g @ q,
+            "G_g": np.hstack([J_g, np.zeros_like(J_g)]),
+        }
+
+    @staticmethod
+    def _skew(v: np.ndarray) -> np.ndarray:
+        x, y, z = np.asarray(v, dtype=np.float64)
+        return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]], dtype=np.float64)
