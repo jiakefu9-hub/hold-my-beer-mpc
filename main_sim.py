@@ -1,5 +1,4 @@
 import os
-import time
 
 import mujoco.viewer
 import mujoco
@@ -12,7 +11,7 @@ from arm_pid import ArmPIDPolicy
 from arm_lqr import ArmLQRPolicy
 # from arm_mpc import ArmMPCPolicy
 from kinematics_helper import KinematicsHelper
-from sim_support import build_run_metadata, create_eval_run_dir, draw_debug_axes, finalize_run, get_gravity_orientation, get_site_vel, init_eval_buffers, make_video_camera, make_video_renderer, pd_control, record_eval_step, resolve_scene_ids
+from sim_support import PerformanceMonitor, build_run_metadata, close_renderer, create_eval_run_dir, draw_debug_axes, finalize_run, get_gravity_orientation, get_site_vel, init_eval_buffers, make_video_camera, make_video_renderer, pd_control, record_eval_step, resolve_scene_ids
 
 
 if __name__ == "__main__":
@@ -119,10 +118,12 @@ if __name__ == "__main__":
     # 末端名字，5个关节索引，IMU名字
     right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_qpos_indices, imu_site_name="imu_in_torso")
 
+    perf_monitor = PerformanceMonitor(simulation_dt)
+
     with mujoco.viewer.launch_passive(m, d) as viewer:
         print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
         while viewer.is_running() and counter * simulation_dt < eval_duration:
-            step_start = time.time()
+            perf_monitor.start_step()
             
             # --- 1. 腿部控制 (0~11) ---
             # qpos[7:19] 为腿部的 12 个关节，qvel[6:18] 为对应的速度
@@ -167,8 +168,10 @@ if __name__ == "__main__":
                 "torso_rotmat": torso_rotmat,
                 "dt": simulation_dt,
             }
+            perf_monitor.start_arm_control()
             helpers = right_arm_helper.build_helpers(d, disturbance=disturbance)
             target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(arm_obs, helpers)
+            perf_monitor.finish_arm_control()
 
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
             target_arm_waist_dq = np.concatenate([waist_left_target_dq, target_right_arm_dq])
@@ -232,8 +235,10 @@ if __name__ == "__main__":
             viewer.sync()
 
             # Rudimentary time keeping, will drift relative to wall clock.
-            time_until_next_step = m.opt.timestep - (time.time() - step_start)
-            if time_until_next_step > 0:
-                time.sleep(time_until_next_step)
+            perf_monitor.finish_step(counter)
 
-        finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
+        perf_monitor.print_summary()
+
+    finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer is not None, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=perf_monitor)
+    close_renderer(renderer)
+    renderer = None

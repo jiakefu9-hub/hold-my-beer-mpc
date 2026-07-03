@@ -117,6 +117,7 @@ class KinematicsHelper:
         )
 
     def compute_gravity_error(self, q_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray) -> np.ndarray:
+        # q_right_arm: shape=(5,), right arm qpos[25:30]; qpos_reference: shape=(model.nq,), full robot qpos.
         self._set_scratch_state(qpos_reference, q_right_arm, np.zeros(len(self.qvel_indices), dtype=np.float64))
         W_R_E = self._scratch.site_xmat[self.ee_site_id].reshape(3, 3).copy()
         g_E = W_R_E.T @ np.array([0.0, 0.0, -9.81], dtype=np.float64)
@@ -143,6 +144,8 @@ class KinematicsHelper:
         jacp = np.zeros((3, self.model.nv), dtype=np.float64)
         jacr = np.zeros((3, self.model.nv), dtype=np.float64)
         mujoco.mj_jacSite(self.model, self._scratch, jacp, jacr, self.ee_site_id)
+        # 这个模型里：floating base: nv = 6，23 个 hinge 关节: nv = 23，所以：model.nv = 6 + 23 = 29
+        # jacp/jacr 原本是整机雅可比 shape=(3, model.nv)；这里只取右臂 qvel 列，变成 shape=(3, 5)。
         return jacp[:, self.qvel_indices].copy(), jacr[:, self.qvel_indices].copy()
 
     def _site_jacobian_dots_world(self, qpos_reference: np.ndarray, q_right_arm: np.ndarray, dq_right_arm: np.ndarray, eps: float = 1e-3):

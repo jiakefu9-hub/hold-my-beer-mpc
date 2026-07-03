@@ -1,7 +1,8 @@
 import csv
 import json
 import os
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
@@ -34,6 +35,133 @@ class EvalBuffers:
     prev_torso_lin_vel: np.ndarray
     prev_torso_ang_vel: np.ndarray
     torso_xy_start: Optional[np.ndarray] = None
+
+
+@dataclass
+class PerformanceMonitor:
+    step_budget: float
+    warn_interval: Optional[int] = None
+    step_start: float = 0.0
+    arm_control_start: float = 0.0
+    arm_control_elapsed: float = 0.0
+    total_steps: int = 0
+    total_arm_elapsed: float = 0.0
+    total_loop_elapsed: float = 0.0
+    max_arm_elapsed: float = 0.0
+    max_loop_elapsed: float = 0.0
+    arm_overruns: int = 0
+    loop_overruns: int = 0
+    window_steps: int = 0
+    window_arm_elapsed: float = 0.0
+    window_loop_elapsed: float = 0.0
+    window_max_arm_elapsed: float = 0.0
+    window_max_loop_elapsed: float = 0.0
+    window_arm_overruns: int = 0
+    window_loop_overruns: int = 0
+    window_reports: list = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.warn_interval is None:
+            self.warn_interval = max(1, int(round(1.0 / self.step_budget)))
+
+    def start_step(self):
+        self.step_start = time.perf_counter()
+
+    def start_arm_control(self):
+        self.arm_control_start = time.perf_counter()
+
+    def finish_arm_control(self):
+        self.arm_control_elapsed = time.perf_counter() - self.arm_control_start
+
+    def finish_step(self, counter, sleep=True):
+        loop_elapsed = time.perf_counter() - self.step_start
+        self.record_step(loop_elapsed)
+        self.print_window_summary_if_needed(counter)
+        if sleep:
+            time_until_next_step = self.step_budget - loop_elapsed
+            if time_until_next_step > 0.0:
+                time.sleep(time_until_next_step)
+        return loop_elapsed
+
+    def record_step(self, loop_elapsed):
+        self.total_steps += 1
+        self.total_arm_elapsed += self.arm_control_elapsed
+        self.total_loop_elapsed += loop_elapsed
+        self.max_arm_elapsed = max(self.max_arm_elapsed, self.arm_control_elapsed)
+        self.max_loop_elapsed = max(self.max_loop_elapsed, loop_elapsed)
+        if self.arm_control_elapsed > self.step_budget:
+            self.arm_overruns += 1
+        if loop_elapsed > self.step_budget:
+            self.loop_overruns += 1
+
+        self.window_steps += 1
+        self.window_arm_elapsed += self.arm_control_elapsed
+        self.window_loop_elapsed += loop_elapsed
+        self.window_max_arm_elapsed = max(self.window_max_arm_elapsed, self.arm_control_elapsed)
+        self.window_max_loop_elapsed = max(self.window_max_loop_elapsed, loop_elapsed)
+        if self.arm_control_elapsed > self.step_budget:
+            self.window_arm_overruns += 1
+        if loop_elapsed > self.step_budget:
+            self.window_loop_overruns += 1
+
+    def print_window_summary_if_needed(self, counter):
+        if counter % self.warn_interval != 0 or self.window_steps == 0:
+            return
+
+        report = self._build_report("perf", self.window_steps, self.window_arm_elapsed, self.window_loop_elapsed, self.window_max_arm_elapsed, self.window_max_loop_elapsed, self.window_arm_overruns, self.window_loop_overruns)
+        report["end_step"] = int(counter)
+        self.window_reports.append(report)
+        self._print_report(report)
+        self.window_steps = 0
+        self.window_arm_elapsed = 0.0
+        self.window_loop_elapsed = 0.0
+        self.window_max_arm_elapsed = 0.0
+        self.window_max_loop_elapsed = 0.0
+        self.window_arm_overruns = 0
+        self.window_loop_overruns = 0
+
+    def print_summary(self):
+        if self.total_steps == 0:
+            return
+        self._print_report(self.build_total_report())
+
+    def build_total_report(self):
+        return self._build_report("perf total", self.total_steps, self.total_arm_elapsed, self.total_loop_elapsed, self.max_arm_elapsed, self.max_loop_elapsed, self.arm_overruns, self.loop_overruns)
+
+    def save_report(self, run_dir):
+        total_report = self.build_total_report()
+        summary_path = os.path.join(run_dir, "perf_summary.json")
+        windows_path = os.path.join(run_dir, "perf_windows.csv")
+        with open(summary_path, "w", encoding="utf-8") as f:
+            json.dump({"total": total_report, "warn_interval": self.warn_interval, "window_count": len(self.window_reports)}, f, indent=2, ensure_ascii=False)
+        if self.window_reports:
+            with open(windows_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=list(self.window_reports[0].keys()))
+                writer.writeheader()
+                writer.writerows(self.window_reports)
+        return summary_path, windows_path if self.window_reports else None
+
+    def _build_report(self, label, steps, arm_elapsed, loop_elapsed, max_arm_elapsed, max_loop_elapsed, arm_overruns, loop_overruns):
+        budget_ms = self.step_budget * 1000.0
+        return {
+            "label": label,
+            "steps": int(steps),
+            "budget_ms": float(budget_ms),
+            "arm_avg_ms": float(arm_elapsed / steps * 1000.0),
+            "arm_max_ms": float(max_arm_elapsed * 1000.0),
+            "arm_overruns": int(arm_overruns),
+            "loop_avg_ms": float(loop_elapsed / steps * 1000.0),
+            "loop_max_ms": float(max_loop_elapsed * 1000.0),
+            "loop_overruns": int(loop_overruns),
+        }
+
+    def _print_report(self, report):
+        level = "WARN" if report["arm_overruns"] or report["loop_overruns"] else "INFO"
+        print(
+            f"[{level}] {report['label']}: steps={report['steps']}, budget={report['budget_ms']:.2f} ms, "
+            f"arm avg/max={report['arm_avg_ms']:.2f}/{report['arm_max_ms']:.2f} ms, arm overruns={report['arm_overruns']}, "
+            f"loop avg/max={report['loop_avg_ms']:.2f}/{report['loop_max_ms']:.2f} ms, loop overruns={report['loop_overruns']}"
+        )
 
 
 def get_gravity_orientation(quaternion):
@@ -267,6 +395,17 @@ def write_video(video_path, video_frames, video_fps):
     imageio.mimwrite(video_path, video_frames, fps=video_fps, quality=8, macro_block_size=None)
 
 
+def close_renderer(renderer):
+    if renderer is None:
+        return
+    close_fn = getattr(renderer, "close", None)
+    if callable(close_fn):
+        try:
+            close_fn()
+        except Exception:
+            pass
+
+
 def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers):
     if buffers.torso_xy_start is None:
         buffers.torso_xy_start = data.xpos[scene_ids.torso_id][:2].copy()
@@ -296,13 +435,16 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers):
     buffers.eval_data["right_ee_tilt_error"].append(tilt_error_from_rot(right_rot))
 
 
-def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name):
+def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None):
     trajectory_path = os.path.join(run_dir, "trajectory.npz")
     save_trajectory(trajectory_path, buffers.trajectory_data, xml_path, simulation_dt)
     write_video(video_path, video_frames, video_fps)
+    perf_summary_path, perf_windows_path = (None, None) if perf_monitor is None else perf_monitor.save_report(run_dir)
     walk_distance = float(np.linalg.norm(data.xpos[scene_ids.torso_id][:2] - buffers.torso_xy_start)) if buffers.torso_xy_start is not None else 0.0
     stats, saved_paths = save_eval(run_dir, buffers.eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
-    print_run_summary(stats, saved_paths, trajectory_path, video_path, renderer, video_frames, video_width, video_height, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles)
+    saved_paths["perf_summary"] = perf_summary_path
+    saved_paths["perf_windows"] = perf_windows_path
+    print_run_summary(stats, saved_paths, trajectory_path, video_path, has_renderer, video_frames, video_width, video_height, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles)
 
 
 def _fmt3(v):
@@ -554,7 +696,7 @@ def print_run_summary(
     saved_paths,
     trajectory_path,
     video_path,
-    renderer,
+    has_renderer,
     video_frames,
     video_width,
     video_height,
@@ -566,12 +708,13 @@ def print_run_summary(
 ):
     print(f"评估已保存到目录: {saved_paths['run_dir']}")
     extra_video = video_path if video_frames else "未保存（缺少 imageio、Renderer 初始化失败或无帧）"
+    extra_perf = saved_paths.get("perf_summary") if saved_paths.get("perf_summary") is not None else "未保存 perf 概览"
     print(
         f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | "
-        f"{saved_paths['summary']} | {trajectory_path} | {extra_video}"
+        f"{saved_paths['summary']} | {extra_perf} | {trajectory_path} | {extra_video}"
     )
 
-    if renderer is not None:
+    if has_renderer:
         print(f"视频分辨率 = {video_width}x{video_height} (受 MuJoCo offscreen framebuffer 限制)")
 
     for side in ["left", "right"]:
