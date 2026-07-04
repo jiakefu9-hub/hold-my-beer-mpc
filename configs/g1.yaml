@@ -6,8 +6,10 @@ xml_path: "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml"
 simulation_duration: 60.0
 # Simulation time step
 simulation_dt: 0.002
-# Controller update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
+# Locomotion policy update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
 control_decimation: 10
+# Arm controller update frequency: simulation_dt * arm_control_decimation = 0.004; 250Hz
+arm_control_decimation: 3
 
 kps: [100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40]
 kds: [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2]

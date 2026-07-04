@@ -40,27 +40,43 @@ class EvalBuffers:
 @dataclass
 class PerformanceMonitor:
     step_budget: float
+    arm_budget: Optional[float] = None
     warn_interval: Optional[int] = None
     step_start: float = 0.0
     arm_control_start: float = 0.0
     arm_control_elapsed: float = 0.0
+    mj_step_start: float = 0.0
+    mj_step_elapsed: float = 0.0
+    arm_control_ran: bool = False
     total_steps: int = 0
+    total_arm_updates: int = 0
     total_arm_elapsed: float = 0.0
+    total_mj_step_elapsed: float = 0.0
+    total_other_elapsed: float = 0.0
     total_loop_elapsed: float = 0.0
     max_arm_elapsed: float = 0.0
+    max_mj_step_elapsed: float = 0.0
+    max_other_elapsed: float = 0.0
     max_loop_elapsed: float = 0.0
     arm_overruns: int = 0
     loop_overruns: int = 0
     window_steps: int = 0
     window_arm_elapsed: float = 0.0
+    window_mj_step_elapsed: float = 0.0
+    window_other_elapsed: float = 0.0
     window_loop_elapsed: float = 0.0
     window_max_arm_elapsed: float = 0.0
+    window_max_mj_step_elapsed: float = 0.0
+    window_max_other_elapsed: float = 0.0
     window_max_loop_elapsed: float = 0.0
     window_arm_overruns: int = 0
     window_loop_overruns: int = 0
+    window_arm_updates: int = 0
     window_reports: list = field(default_factory=list)
 
     def __post_init__(self):
+        if self.arm_budget is None:
+            self.arm_budget = self.step_budget
         if self.warn_interval is None:
             self.warn_interval = max(1, int(round(1.0 / self.step_budget)))
 
@@ -69,9 +85,16 @@ class PerformanceMonitor:
 
     def start_arm_control(self):
         self.arm_control_start = time.perf_counter()
+        self.arm_control_ran = True
 
     def finish_arm_control(self):
         self.arm_control_elapsed = time.perf_counter() - self.arm_control_start
+
+    def start_mj_step(self):
+        self.mj_step_start = time.perf_counter()
+
+    def finish_mj_step(self):
+        self.mj_step_elapsed = time.perf_counter() - self.mj_step_start
 
     def finish_step(self, counter, sleep=True):
         loop_elapsed = time.perf_counter() - self.step_start
@@ -84,38 +107,59 @@ class PerformanceMonitor:
         return loop_elapsed
 
     def record_step(self, loop_elapsed):
+        other_elapsed = max(0.0, loop_elapsed - self.arm_control_elapsed - self.mj_step_elapsed)
         self.total_steps += 1
-        self.total_arm_elapsed += self.arm_control_elapsed
+        self.total_mj_step_elapsed += self.mj_step_elapsed
+        self.total_other_elapsed += other_elapsed
         self.total_loop_elapsed += loop_elapsed
-        self.max_arm_elapsed = max(self.max_arm_elapsed, self.arm_control_elapsed)
+        self.max_mj_step_elapsed = max(self.max_mj_step_elapsed, self.mj_step_elapsed)
+        self.max_other_elapsed = max(self.max_other_elapsed, other_elapsed)
         self.max_loop_elapsed = max(self.max_loop_elapsed, loop_elapsed)
-        if self.arm_control_elapsed > self.step_budget:
-            self.arm_overruns += 1
         if loop_elapsed > self.step_budget:
             self.loop_overruns += 1
 
         self.window_steps += 1
-        self.window_arm_elapsed += self.arm_control_elapsed
+        self.window_mj_step_elapsed += self.mj_step_elapsed
+        self.window_other_elapsed += other_elapsed
         self.window_loop_elapsed += loop_elapsed
-        self.window_max_arm_elapsed = max(self.window_max_arm_elapsed, self.arm_control_elapsed)
+        self.window_max_mj_step_elapsed = max(self.window_max_mj_step_elapsed, self.mj_step_elapsed)
+        self.window_max_other_elapsed = max(self.window_max_other_elapsed, other_elapsed)
         self.window_max_loop_elapsed = max(self.window_max_loop_elapsed, loop_elapsed)
-        if self.arm_control_elapsed > self.step_budget:
-            self.window_arm_overruns += 1
         if loop_elapsed > self.step_budget:
             self.window_loop_overruns += 1
+
+        if self.arm_control_ran:
+            self.total_arm_updates += 1
+            self.total_arm_elapsed += self.arm_control_elapsed
+            self.max_arm_elapsed = max(self.max_arm_elapsed, self.arm_control_elapsed)
+            self.window_arm_updates += 1
+            self.window_arm_elapsed += self.arm_control_elapsed
+            self.window_max_arm_elapsed = max(self.window_max_arm_elapsed, self.arm_control_elapsed)
+            if self.arm_control_elapsed > self.arm_budget:
+                self.arm_overruns += 1
+                self.window_arm_overruns += 1
+
+        self.arm_control_ran = False
+        self.arm_control_elapsed = 0.0
+        self.mj_step_elapsed = 0.0
 
     def print_window_summary_if_needed(self, counter):
         if counter % self.warn_interval != 0 or self.window_steps == 0:
             return
 
-        report = self._build_report("perf", self.window_steps, self.window_arm_elapsed, self.window_loop_elapsed, self.window_max_arm_elapsed, self.window_max_loop_elapsed, self.window_arm_overruns, self.window_loop_overruns)
+        report = self._build_report("perf", self.window_steps, self.window_arm_updates, self.window_arm_elapsed, self.window_mj_step_elapsed, self.window_other_elapsed, self.window_loop_elapsed, self.window_max_arm_elapsed, self.window_max_mj_step_elapsed, self.window_max_other_elapsed, self.window_max_loop_elapsed, self.window_arm_overruns, self.window_loop_overruns)
         report["end_step"] = int(counter)
         self.window_reports.append(report)
         self._print_report(report)
         self.window_steps = 0
         self.window_arm_elapsed = 0.0
+        self.window_mj_step_elapsed = 0.0
+        self.window_other_elapsed = 0.0
         self.window_loop_elapsed = 0.0
+        self.window_arm_updates = 0
         self.window_max_arm_elapsed = 0.0
+        self.window_max_mj_step_elapsed = 0.0
+        self.window_max_other_elapsed = 0.0
         self.window_max_loop_elapsed = 0.0
         self.window_arm_overruns = 0
         self.window_loop_overruns = 0
@@ -126,7 +170,7 @@ class PerformanceMonitor:
         self._print_report(self.build_total_report())
 
     def build_total_report(self):
-        return self._build_report("perf total", self.total_steps, self.total_arm_elapsed, self.total_loop_elapsed, self.max_arm_elapsed, self.max_loop_elapsed, self.arm_overruns, self.loop_overruns)
+        return self._build_report("perf total", self.total_steps, self.total_arm_updates, self.total_arm_elapsed, self.total_mj_step_elapsed, self.total_other_elapsed, self.total_loop_elapsed, self.max_arm_elapsed, self.max_mj_step_elapsed, self.max_other_elapsed, self.max_loop_elapsed, self.arm_overruns, self.loop_overruns)
 
     def save_report(self, run_dir):
         total_report = self.build_total_report()
@@ -141,15 +185,23 @@ class PerformanceMonitor:
                 writer.writerows(self.window_reports)
         return summary_path, windows_path if self.window_reports else None
 
-    def _build_report(self, label, steps, arm_elapsed, loop_elapsed, max_arm_elapsed, max_loop_elapsed, arm_overruns, loop_overruns):
+    def _build_report(self, label, steps, arm_updates, arm_elapsed, mj_step_elapsed, other_elapsed, loop_elapsed, max_arm_elapsed, max_mj_step_elapsed, max_other_elapsed, max_loop_elapsed, arm_overruns, loop_overruns):
         budget_ms = self.step_budget * 1000.0
+        arm_budget_ms = self.arm_budget * 1000.0
+        arm_avg_ms = 0.0 if arm_updates == 0 else arm_elapsed / arm_updates * 1000.0
         return {
             "label": label,
             "steps": int(steps),
+            "arm_updates": int(arm_updates),
             "budget_ms": float(budget_ms),
-            "arm_avg_ms": float(arm_elapsed / steps * 1000.0),
+            "arm_budget_ms": float(arm_budget_ms),
+            "arm_avg_ms": float(arm_avg_ms),
             "arm_max_ms": float(max_arm_elapsed * 1000.0),
             "arm_overruns": int(arm_overruns),
+            "mj_step_avg_ms": float(mj_step_elapsed / steps * 1000.0),
+            "mj_step_max_ms": float(max_mj_step_elapsed * 1000.0),
+            "other_avg_ms": float(other_elapsed / steps * 1000.0),
+            "other_max_ms": float(max_other_elapsed * 1000.0),
             "loop_avg_ms": float(loop_elapsed / steps * 1000.0),
             "loop_max_ms": float(max_loop_elapsed * 1000.0),
             "loop_overruns": int(loop_overruns),
@@ -158,8 +210,9 @@ class PerformanceMonitor:
     def _print_report(self, report):
         level = "WARN" if report["arm_overruns"] or report["loop_overruns"] else "INFO"
         print(
-            f"[{level}] {report['label']}: steps={report['steps']}, budget={report['budget_ms']:.2f} ms, "
+            f"[{level}] {report['label']}: steps={report['steps']}, budget={report['budget_ms']:.2f} ms, arm_budget={report['arm_budget_ms']:.2f} ms, arm_updates={report['arm_updates']}, "
             f"arm avg/max={report['arm_avg_ms']:.2f}/{report['arm_max_ms']:.2f} ms, arm overruns={report['arm_overruns']}, "
+            f"mj_step avg/max={report['mj_step_avg_ms']:.2f}/{report['mj_step_max_ms']:.2f} ms, other avg/max={report['other_avg_ms']:.2f}/{report['other_max_ms']:.2f} ms, "
             f"loop avg/max={report['loop_avg_ms']:.2f}/{report['loop_max_ms']:.2f} ms, loop overruns={report['loop_overruns']}"
         )
 

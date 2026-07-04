@@ -9,13 +9,13 @@ import yaml
 # --- 引入我们独立的策略 ---
 from arm_pid import ArmPIDPolicy
 from arm_lqr import ArmLQRPolicy
-# from arm_mpc import ArmMPCPolicy
+# 可选：导入手臂模型预测控制策略
 from kinematics_helper import KinematicsHelper
 from sim_support import PerformanceMonitor, build_run_metadata, close_renderer, create_eval_run_dir, draw_debug_axes, finalize_run, get_gravity_orientation, get_site_vel, init_eval_buffers, make_video_camera, make_video_renderer, pd_control, record_eval_step, resolve_scene_ids
 
 
 if __name__ == "__main__":
-    # get config file name from command line
+    # 从命令行读取配置文件名
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -49,9 +49,10 @@ if __name__ == "__main__":
         num_actions = config["num_actions"]
         num_obs = config["num_obs"]
         arm_controller = config.get("arm_controller", "pid").lower()
+        arm_control_decimation = int(config.get("arm_control_decimation", 2))
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
 
-    # define context variables
+    # 定义上下文变量
     action = np.zeros(num_actions, dtype=np.float32)
     target_dof_pos = default_angles.copy()
     obs = np.zeros(num_obs, dtype=np.float32)
@@ -68,36 +69,28 @@ if __name__ == "__main__":
     experiment_name = f"left_fixed_right_{arm_controller}"
     buffers = init_eval_buffers()
 
-    # Load robot model
+    # 加载机器人模型
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
 
-    # --- 调试打印：输出关节和驱动器的映射关系 ---
-    # print("="*50)
-    # print("关节 (Joints - 对应 qpos/qvel):")
-    # joint_names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, i) for i in range(m.njnt)]
-    # for i, name in enumerate(joint_names):
-    #     print(f"  Joint ID: {i:2d}, Name: {name}")
+    # --- 调试打印：如需检查关节、速度和驱动器的索引映射，可在这里临时添加打印 ---
     
-    # print("\n驱动器 (Actuators - 对应 ctrl):")
-    # actuator_names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(m.nu)]
-    # for i, name in enumerate(actuator_names):
-    #     print(f"  Actuator ID: {i:2d}, Name: {name}")
-    # print("="*50)
-    
-    # load policy
+    # 加载策略
     policy = torch.jit.load(policy_path)
 
     # --- 实例化右臂控制策略 ---
     right_arm_target = arm_waist_target[6:11].copy()
+    arm_control_dt = simulation_dt * arm_control_decimation
+    target_right_arm_q = right_arm_target.copy()
+    target_right_arm_dq = np.zeros(5, dtype=np.float32)
     if arm_controller == "lqr":
-        arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=simulation_dt, horizon=int(config.get("lqr_horizon", 12)))
+        arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, horizon=int(config.get("lqr_horizon", 12)))
         policy_type = "ArmLQRPolicy"
         controller_notes = "finite-horizon time-varying LQR baseline with local kinematic linearization and torso-disturbance feedforward terms"
         controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq}}
     else:
-        arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=simulation_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
+        arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=arm_control_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
         policy_type = "ArmPIDPolicy"
         controller_notes = "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small"
         controller_meta = {"pid_config": {"default_q": right_arm_target, "kp_pose_diag": np.diag(arm_policy.kp_pose), "kd_pose_diag": np.diag(arm_policy.kd_pose), "ki_pose_diag": np.diag(arm_policy.ki_pose), "posture_gain_diag": np.diag(arm_policy.posture_gain), "finite_diff_eps": arm_policy.finite_diff_eps, "damping": arm_policy.damping, "integral_limit": arm_policy.integral_limit, "max_dq": arm_policy.max_dq, "de_g_alpha": arm_policy.de_g_alpha}}
@@ -110,15 +103,15 @@ if __name__ == "__main__":
     video_camera = make_video_camera()
     renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
 
-    # 预先找到主循环中会直接使用的 torso/IMU/左右手 grasp site ID，方便后续读取和可视化
+    # 预先找到主循环中会直接使用的躯干、惯性测量单元、左右手抓持点编号，方便后续读取和可视化
     scene_ids = resolve_scene_ids(m)
 
-    # 右臂 5 个关节在 qpos 中对应索引 25:30；helper 用它来“冻结当前整机，只扰动右臂”
+    # 右臂 5 个关节在位置向量中对应索引 25 到 29；辅助器用它来“冻结当前整机，只扰动右臂”
     right_arm_qpos_indices = np.arange(25, 30, dtype=np.int32)
-    # 末端名字，5个关节索引，IMU名字
+    # 末端名字、5 个关节索引、惯性测量单元名字
     right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_qpos_indices, imu_site_name="imu_in_torso")
 
-    perf_monitor = PerformanceMonitor(simulation_dt)
+    perf_monitor = PerformanceMonitor(step_budget=simulation_dt, arm_budget=arm_control_dt)
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
@@ -126,19 +119,19 @@ if __name__ == "__main__":
             perf_monitor.start_step()
             
             # --- 1. 腿部控制 (0~11) ---
-            # qpos[7:19] 为腿部的 12 个关节，qvel[6:18] 为对应的速度
+            # 位置向量第 7 到 18 项为腿部的 12 个关节，速度向量第 6 到 17 项为对应的速度
             leg_q = d.qpos[7:19]
             leg_dq = d.qvel[6:18]
             tau_leg = pd_control(target_dof_pos, leg_q, kps, np.zeros_like(kds), leg_dq, kds)
             d.ctrl[:12] = tau_leg
 
             # --- 2. 腰部与手臂控制 (12~22) ---
-            # 顺序: waist(1), left_arm(5), right_arm(5)
+            # 顺序: 腰部(1)、左臂(5)、右臂(5)
             # 获取了上肢的目前关节位置和速度
             arm_waist_q = d.qpos[19:30]
             arm_waist_dq = d.qvel[18:29]
 
-            # 获取了腰部和左臂的target位置和速度
+            # 获取了腰部和左臂的目标位置和速度
             waist_left_target_q = arm_waist_target[:6].copy()
             waist_left_target_dq = np.zeros(6, dtype=np.float32)
 
@@ -146,7 +139,7 @@ if __name__ == "__main__":
             right_arm_q = arm_waist_q[6:11]
             right_arm_dq = arm_waist_dq[6:11]
 
-            # 获取了躯干的四元数和R
+            # 获取了躯干的四元数和旋转矩阵
             torso_quat = d.xquat[scene_ids.torso_id]
             torso_rotmat = d.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy()
             torso_lin_vel, torso_ang_vel = get_site_vel(m, d, scene_ids.imu_site_id)
@@ -154,7 +147,7 @@ if __name__ == "__main__":
             torso_alpha = np.zeros(3) if counter == 0 else (torso_ang_vel - buffers.prev_torso_ang_vel) / simulation_dt
             buffers.prev_torso_lin_vel, buffers.prev_torso_ang_vel = torso_lin_vel.copy(), torso_ang_vel.copy()
 
-            # 构建了扰动输入，扰动由躯干的线加速度、角速度、角加速度和R矩阵组成
+            # 构建扰动输入，扰动由躯干的线加速度、角速度、角加速度和旋转矩阵组成
             disturbance = right_arm_helper.build_disturbance_input(acc_world=torso_acc, omega_world=torso_ang_vel, alpha_world=torso_alpha, rot_world_body=torso_rotmat)
             
             # 构建了右臂的观测
@@ -168,10 +161,11 @@ if __name__ == "__main__":
                 "torso_rotmat": torso_rotmat,
                 "dt": simulation_dt,
             }
-            perf_monitor.start_arm_control()
-            helpers = right_arm_helper.build_helpers(d, disturbance=disturbance)
-            target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(arm_obs, helpers)
-            perf_monitor.finish_arm_control()
+            if counter % arm_control_decimation == 0:
+                perf_monitor.start_arm_control()
+                helpers = right_arm_helper.build_helpers(d, disturbance=disturbance)
+                target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(arm_obs, helpers)
+                perf_monitor.finish_arm_control()
 
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
             target_arm_waist_dq = np.concatenate([waist_left_target_dq, target_right_arm_dq])
@@ -182,9 +176,11 @@ if __name__ == "__main__":
             )
             d.ctrl[12:23] = tau_arm_waist
 
-            # mj_step can be replaced with code that also evaluates
-            # a policy and applies a control signal before stepping the physics.
+            # 物理步进函数可以替换为其他代码，用来在推进物理仿真前
+            # 同时计算策略并施加控制信号。
+            perf_monitor.start_mj_step()
             mujoco.mj_step(m, d)
+            perf_monitor.finish_mj_step()
             record_eval_step(m, d, counter, simulation_dt, scene_ids, buffers)
             if renderer is not None and counter % video_stride == 0:
                 renderer.update_scene(d, camera=video_camera)
@@ -192,9 +188,9 @@ if __name__ == "__main__":
 
             counter += 1
             if counter % control_decimation == 0:
-                # Apply control signal here.
+                # 在这里施加控制信号。
 
-                # create observation (RL策略只观测腿部状态，需要截取前12个关节)
+                # 创建观测（强化学习策略只观测腿部状态，需要截取前 12 个关节）
                 qj = d.qpos[7:19]
                 dqj = d.qvel[6:18]
                 quat = d.qpos[3:7]
@@ -223,18 +219,18 @@ if __name__ == "__main__":
                 obs[9 + 2 * num_actions : 9 + 3 * num_actions] = action
                 obs[9 + 3 * num_actions : 9 + 3 * num_actions + 2] = np.array([sin_phase, cos_phase])
                 obs_tensor = torch.from_numpy(obs).unsqueeze(0)
-                # policy inference
+                # 策略推理
                 action = policy(obs_tensor).detach().numpy().squeeze()
-                # transform action to target_dof_pos
+                # 将动作转换为目标关节位置
                 target_dof_pos = action * action_scale + default_angles
 
-            # 在 viewer 中画出世界系、torso IMU、左手抓持点、右手抓持点的坐标轴
+            # 在可视化窗口中画出世界系、躯干惯性测量单元、左手抓持点、右手抓持点的坐标轴
             draw_debug_axes(viewer.user_scn, d, scene_ids)
 
-            # Pick up changes to the physics state, apply perturbations, update options from GUI.
+            # 同步物理状态变化，应用扰动，并更新界面中的选项。
             viewer.sync()
 
-            # Rudimentary time keeping, will drift relative to wall clock.
+            # 简单的计时控制，相对于真实墙钟时间可能会有漂移。
             perf_monitor.finish_step(counter)
 
         perf_monitor.print_summary()
