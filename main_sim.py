@@ -88,7 +88,7 @@ if __name__ == "__main__":
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, horizon=int(config.get("lqr_horizon", 12)))
         policy_type = "ArmLQRPolicy"
         controller_notes = "finite-horizon time-varying LQR baseline with local kinematic linearization and torso-disturbance feedforward terms"
-        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq}}
+        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq, "max_q_ref_error": arm_policy.max_q_ref_error}}
     else:
         arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=arm_control_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
         policy_type = "ArmPIDPolicy"
@@ -159,7 +159,7 @@ if __name__ == "__main__":
                 "torso_acc": torso_acc,
                 "torso_alpha": torso_alpha,
                 "torso_rotmat": torso_rotmat,
-                "dt": simulation_dt,
+                "dt": arm_control_dt,
             }
             if counter % arm_control_decimation == 0:
                 perf_monitor.start_arm_control()
