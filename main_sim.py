@@ -27,7 +27,6 @@ if __name__ == "__main__":
         policy_path = config["policy_path"]
         xml_path = config["xml_path"]
 
-        simulation_duration = config["simulation_duration"]
         simulation_dt = config["simulation_dt"]
         control_decimation = config["control_decimation"]
 
@@ -65,7 +64,7 @@ if __name__ == "__main__":
     total_cycles = warmup_cycles + evaluation_cycles + cooldown_cycles
     eval_start_time = warmup_cycles * gait_period
     eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
-    eval_duration = min(simulation_duration, total_cycles * gait_period)
+    eval_duration = total_cycles * gait_period
     experiment_name = f"left_fixed_right_{arm_controller}"
     buffers = init_eval_buffers()
 
@@ -88,7 +87,7 @@ if __name__ == "__main__":
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, horizon=int(config.get("lqr_horizon", 12)))
         policy_type = "ArmLQRPolicy"
         controller_notes = "finite-horizon time-varying LQR baseline with local kinematic linearization and torso-disturbance feedforward terms"
-        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq, "max_q_ref_error": arm_policy.max_q_ref_error}}
+        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq}}
     else:
         arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=arm_control_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
         policy_type = "ArmPIDPolicy"

@@ -4,23 +4,7 @@ import numpy as np
 class ArmLQRPolicy:
     """有限时域时变 LQR。统一输出右臂 5 维 q_ref / dq_ref。"""
 
-    def __init__(
-        self,
-        default_q,
-        control_dt=0.02,
-        horizon=12,
-        q_acc=1.0,
-        q_alpha=0.05,
-        q_gravity=30.0,
-        q_posture=0.4,
-        q_vel=0.02,
-        r_ddq=1e-2,
-        terminal_scale=2.0,
-        reg=1e-6,
-        max_ddq=8.0,
-        max_dq=2.0,
-        max_q_ref_error=0.25,
-    ):
+    def __init__(self, default_q, control_dt=0.02, horizon=12, q_acc=1.0, q_alpha=0.05, q_gravity=30.0, q_posture=0.4, q_vel=0.02, r_ddq=1e-2, terminal_scale=2.0, reg=1e-6, max_ddq=8.0, max_dq=2.0):
         # 右臂标称关节角 q_nom（5 维），用作姿态正则参考位形
         self.default_q = np.asarray(default_q, dtype=np.float64).copy()  # right arm only (5 DoF)
         self.n = self.default_q.shape[0]
@@ -40,9 +24,6 @@ class ArmLQRPolicy:
         self.reg = float(reg)
         self.max_ddq = float(max_ddq)
         self.max_dq = float(max_dq)
-        self.max_q_ref_error = None if max_q_ref_error is None else float(max_q_ref_error)
-        self.q_ref_state = None
-        self.dq_ref_state = None
 
     def compute_action(self, arm_obs, helpers=None):
         q = np.asarray(self._obs_get(arm_obs, "current_q"), dtype=np.float64)
@@ -92,19 +73,8 @@ class ArmLQRPolicy:
             p = h - M @ kk
             K0, k0 = K, kk
         u = np.clip(-(K0 @ x0 + k0), -self.max_ddq, self.max_ddq)  # 第一拍最优控制量 u=ddq，并限制最大关节加速度。
-        if self.q_ref_state is None or self.q_ref_state.shape != q.shape:
-            self.q_ref_state = q.copy()
-            self.dq_ref_state = np.zeros_like(dq)
-
-        # LQR 给的是加速度命令；底层执行器仍是 PD，所以参考轨迹必须跨控制周期保留。
-        # 如果每拍都从当前 q/dq 重新生成 q_ref，PD 误差会接近 0，手臂会像被卸力一样下垂。
-        self.dq_ref_state = np.clip(self.dq_ref_state + u * dt, -self.max_dq, self.max_dq)
-        self.q_ref_state = self.q_ref_state + self.dq_ref_state * dt
-        if self.max_q_ref_error is not None:
-            self.q_ref_state = np.clip(self.q_ref_state, q - self.max_q_ref_error, q + self.max_q_ref_error)
-
-        dq_ref = self.dq_ref_state.copy()
-        q_ref = self.q_ref_state.copy()
+        dq_ref = np.clip(dq + u * dt, -self.max_dq, self.max_dq)  # 用 ddq 积分一步得到目标关节速度，并限速。
+        q_ref = q + dq * dt + 0.5 * u * dt * dt  # 匀加速积分一步得到目标关节位置。
         return q_ref.astype(np.float32), dq_ref.astype(np.float32)
 
     @staticmethod
