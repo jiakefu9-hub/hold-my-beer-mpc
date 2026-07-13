@@ -2,7 +2,7 @@ import numpy as np
 
 
 class ArmLQRPolicy:
-    """有限时域时变 LQR。统一输出右臂 5 维 q_ref / dq_ref。"""
+    """有限时域时变 LQR。输出右臂 5 维 q_ref / dq_ref / ddq_des。"""
 
     def __init__(self, default_q, control_dt=0.02, horizon=12, q_acc=1.0, q_alpha=0.05, q_gravity=30.0, q_posture=0.4, q_vel=0.02, r_ddq=1e-2, terminal_scale=2.0, reg=1e-6, max_ddq=8.0, max_dq=2.0):
         # 右臂标称关节角 q_nom（5 维），用作姿态正则参考位形
@@ -75,7 +75,7 @@ class ArmLQRPolicy:
         u = np.clip(-(K0 @ x0 + k0), -self.max_ddq, self.max_ddq)  # 第一拍最优控制量 u=ddq，并限制最大关节加速度。
         dq_ref = np.clip(dq + u * dt, -self.max_dq, self.max_dq)  # 用 ddq 积分一步得到目标关节速度，并限速。
         q_ref = q + dq * dt + 0.5 * u * dt * dt  # 匀加速积分一步得到目标关节位置。
-        return q_ref.astype(np.float32), dq_ref.astype(np.float32)
+        return q_ref.astype(np.float32), dq_ref.astype(np.float32), u.astype(np.float32)
 
     @staticmethod
     def _blk(a, b):

@@ -25,6 +25,28 @@ class SceneIds:
 
 
 @dataclass
+class TorsoMotionState:
+    quat: np.ndarray
+    rotmat: np.ndarray
+    lin_vel: np.ndarray
+    ang_vel: np.ndarray
+    lin_acc: np.ndarray
+    ang_acc: np.ndarray
+
+
+@dataclass
+class DirectDriveJointGroup:
+    joint_names: tuple
+    qpos_indices: np.ndarray
+    qvel_indices: np.ndarray
+    ctrl_indices: np.ndarray
+    joint_ids: np.ndarray
+    actuator_ids: np.ndarray
+    torque_limits: np.ndarray
+    inverse_dynamics_data: mujoco.MjData
+
+
+@dataclass
 class EvalBuffers:
     eval_data: dict
     trajectory_data: dict
@@ -37,6 +59,177 @@ class EvalBuffers:
     torso_xy_start: Optional[np.ndarray] = None
 
 
+# ==============================
+# 核心代码：主控制链直接依赖的支持函数
+# 这部分最值得优先阅读，主要服务 main_sim.py 的右臂控制与状态构建。
+# ==============================
+def pd_control(target_q, q, kp, target_dq, dq, kd):
+    return (target_q - q) * kp + (target_dq - dq) * kd
+
+
+def get_site_vel(model, data, site_id):
+    jacp = np.zeros((3, model.nv))
+    jacr = np.zeros((3, model.nv))
+    mujoco.mj_jacSite(model, data, jacp, jacr, site_id)
+    return jacp @ data.qvel, jacr @ data.qvel
+
+
+def update_torso_motion_state(model, data, scene_ids, buffers, counter, simulation_dt):
+    lin_vel, ang_vel = get_site_vel(model, data, scene_ids.imu_site_id)
+    lin_acc = np.zeros(3) if counter == 0 else (lin_vel - buffers.prev_torso_lin_vel) / simulation_dt
+    ang_acc = np.zeros(3) if counter == 0 else (ang_vel - buffers.prev_torso_ang_vel) / simulation_dt
+    buffers.prev_torso_lin_vel, buffers.prev_torso_ang_vel = lin_vel.copy(), ang_vel.copy()
+    return TorsoMotionState(
+        quat=data.xquat[scene_ids.torso_id].copy(),
+        rotmat=data.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy(),
+        lin_vel=lin_vel.copy(),
+        ang_vel=ang_vel.copy(),
+        lin_acc=lin_acc,
+        ang_acc=ang_acc,
+    )
+
+
+def build_right_arm_observation(current_q, current_dq, torso_state, dt):
+    return {
+        "current_q": current_q,
+        "current_dq": current_dq,
+        "torso_quat": torso_state.quat,
+        "torso_omega": torso_state.ang_vel,
+        "torso_acc": torso_state.lin_acc,
+        "torso_alpha": torso_state.ang_acc,
+        "torso_rotmat": torso_state.rotmat,
+        "dt": dt,
+    }
+
+
+def get_gravity_orientation(quaternion):
+    qw, qx, qy, qz = quaternion
+    gravity_orientation = np.zeros(3)
+    gravity_orientation[0] = 2 * (-qz * qx + qw * qy)
+    gravity_orientation[1] = -2 * (qz * qy + qw * qx)
+    gravity_orientation[2] = 1 - 2 * (qw * qw + qz * qz)
+    return gravity_orientation
+
+
+# ==============================
+# 核心代码：右臂执行层与逆动力学前馈（这一整段是 sim_support.py 最值得优先阅读的部分）
+# 这部分负责把 right_arm 的索引上下文、ddq_des 和 tau_pd 变成最终执行力矩。
+# ==============================
+def resolve_direct_drive_joint_group(
+    model,
+    joint_names,
+    expected_qpos_indices,
+    expected_qvel_indices,
+    expected_ctrl_indices,
+    group_label="关节组",
+):
+    joint_names = tuple(joint_names)
+    qpos_indices = np.asarray(expected_qpos_indices, dtype=np.int32)
+    qvel_indices = np.asarray(expected_qvel_indices, dtype=np.int32)
+    ctrl_indices = np.asarray(expected_ctrl_indices, dtype=np.int32)
+
+    joint_ids = np.array(
+        [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in joint_names],
+        dtype=np.int32,
+    )
+    actuator_ids = np.array(
+        [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name) for name in joint_names],
+        dtype=np.int32,
+    )
+    if len(joint_names) != len(qpos_indices) or len(joint_names) != len(qvel_indices) or len(joint_names) != len(ctrl_indices):
+        raise ValueError(f"{group_label} joint/qpos/qvel/ctrl 数量不一致。")
+    if np.any(joint_ids < 0) or np.any(actuator_ids < 0):
+        missing_joints = [name for name, joint_id in zip(joint_names, joint_ids) if joint_id < 0]
+        missing_actuators = [name for name, actuator_id in zip(joint_names, actuator_ids) if actuator_id < 0]
+        raise ValueError(f"{group_label} 找不到 joint/actuator: joints={missing_joints}, actuators={missing_actuators}")
+    if not np.array_equal(model.jnt_qposadr[joint_ids], qpos_indices):
+        raise ValueError(f"{group_label} qpos 索引与预期不一致。")
+    if not np.array_equal(model.jnt_dofadr[joint_ids], qvel_indices):
+        raise ValueError(f"{group_label} qvel 索引与预期不一致。")
+    if not np.array_equal(actuator_ids, ctrl_indices):
+        raise ValueError(f"{group_label} ctrl 索引与预期不一致。")
+    if not np.array_equal(model.actuator_trnid[actuator_ids, 0], joint_ids):
+        raise ValueError(f"{group_label} actuator 没有一一驱动对应 joint。")
+    if not np.allclose(model.actuator_gear[actuator_ids, 0], 1.0):
+        raise ValueError(f"{group_label} actuator 不是 gear=1 的 direct-drive 映射。")
+
+    torque_limits = model.jnt_actfrcrange[joint_ids].copy()
+    if not np.all(torque_limits[:, 0] < torque_limits[:, 1]):
+        raise ValueError(f"{group_label} 必须在 XML 中配置有效的 actuatorfrcrange。")
+
+    return DirectDriveJointGroup(
+        joint_names=joint_names,
+        qpos_indices=qpos_indices,
+        qvel_indices=qvel_indices,
+        ctrl_indices=ctrl_indices,
+        joint_ids=joint_ids,
+        actuator_ids=actuator_ids,
+        torque_limits=torque_limits,
+        inverse_dynamics_data=mujoco.MjData(model),
+    )
+
+
+def resolve_right_arm_control_context(model, joint_names):
+    return resolve_direct_drive_joint_group(
+        model,
+        joint_names,
+        expected_qpos_indices=np.arange(25, 30, dtype=np.int32),
+        expected_qvel_indices=np.arange(24, 29, dtype=np.int32),
+        expected_ctrl_indices=np.arange(18, 23, dtype=np.int32),
+        group_label="右臂逆动力学",
+    )
+
+
+def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indices):
+    """计算指定自由度期望加速度对应的 MuJoCo 逆动力学广义力。"""
+    qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
+    desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
+    if desired_qacc.shape != qvel_indices.shape:
+        raise ValueError(
+            f"desired_qacc shape {desired_qacc.shape} 与 qvel_indices shape "
+            f"{qvel_indices.shape} 不一致。"
+        )
+
+    scratch.time = data.time
+    scratch.qpos[:] = data.qpos
+    scratch.qvel[:] = data.qvel
+    scratch.qacc[:] = 0.0
+    scratch.qacc[qvel_indices] = desired_qacc
+    if model.nmocap:
+        scratch.mocap_pos[:] = data.mocap_pos
+        scratch.mocap_quat[:] = data.mocap_quat
+
+    mujoco.mj_inverse(model, scratch)
+    return scratch.qfrc_inverse[qvel_indices].copy()
+
+
+def apply_computed_torque_control(model, data, id_index_scratch, desired_qacc, tau_pd):
+    tau_pd = np.asarray(tau_pd, dtype=np.float64)
+    desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
+    if tau_pd.shape != id_index_scratch.qvel_indices.shape:
+        raise ValueError(f"tau_pd shape {tau_pd.shape} 与控制关节数量 {id_index_scratch.qvel_indices.shape} 不一致。")
+
+    tau_ff = inverse_dynamics_feedforward(
+        model,
+        data,
+        id_index_scratch.inverse_dynamics_data,
+        desired_qacc,
+        id_index_scratch.qvel_indices,
+    )
+    tau_cmd = np.clip(
+        tau_ff + tau_pd,
+        id_index_scratch.torque_limits[:, 0],
+        id_index_scratch.torque_limits[:, 1],
+    )
+    return tau_cmd, tau_ff
+
+
+# ==============================
+# 非核心代码：性能统计与实验辅助（建议放在文件后半部分）
+# 这部分主要服务调试、测速和结果保存，不是控制数学核心。
+# 如果继续做第二轮整理，应将整个 PerformanceMonitor 区块后移，
+# 让 right_arm 执行层与逆动力学前馈整体进入文件前半部分。
+# ==============================
 @dataclass
 class PerformanceMonitor:
     step_budget: float
@@ -217,26 +410,6 @@ class PerformanceMonitor:
         )
 
 
-def get_gravity_orientation(quaternion):
-    qw, qx, qy, qz = quaternion
-    gravity_orientation = np.zeros(3)
-    gravity_orientation[0] = 2 * (-qz * qx + qw * qy)
-    gravity_orientation[1] = -2 * (qz * qy + qw * qx)
-    gravity_orientation[2] = 1 - 2 * (qw * qw + qz * qz)
-    return gravity_orientation
-
-
-def pd_control(target_q, q, kp, target_dq, dq, kd):
-    return (target_q - q) * kp + (target_dq - dq) * kd
-
-
-def get_site_vel(model, data, site_id):
-    jacp = np.zeros((3, model.nv))
-    jacr = np.zeros((3, model.nv))
-    mujoco.mj_jacSite(model, data, jacp, jacr, site_id)
-    return jacp @ data.qvel, jacr @ data.qvel
-
-
 def tilt_error_from_rot(rot):
     return (rot.T @ np.array([0.0, 0.0, -9.81]))[:2]
 
@@ -246,6 +419,10 @@ def quat_to_yaw_wxyz(quaternion):
     return np.arctan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
 
 
+# ==============================
+# 非核心代码：调试可视化、评估与实验保存
+# 这部分对复现实验很重要，但不属于控制器本体逻辑。
+# ==============================
 def print_model_mappings(model):
     print("=" * 50)
     print("关节 (Joints - 对应 qpos/qvel):")
@@ -385,7 +562,16 @@ def build_run_metadata(config_file, experiment_name, policy_type, controller_not
 def init_eval_buffers():
     return EvalBuffers(
         eval_data={"time": [], "torso_yaw": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []},
-        trajectory_data={"time": [], "qpos": [], "qvel": [], "ctrl": []},
+        trajectory_data={
+            "time": [],
+            "qpos": [],
+            "qvel": [],
+            "qacc": [],
+            "ctrl": [],
+            "right_arm_ddq_des": [],
+            "right_arm_tau_ff": [],
+            "right_arm_tau_pd": [],
+        },
         prev_left_lin_vel=np.zeros(3),
         prev_left_ang_vel=np.zeros(3),
         prev_right_lin_vel=np.zeros(3),
@@ -436,7 +622,11 @@ def save_trajectory(trajectory_path, trajectory_data, xml_path, simulation_dt):
         time=np.asarray(trajectory_data["time"]),
         qpos=np.asarray(trajectory_data["qpos"]),
         qvel=np.asarray(trajectory_data["qvel"]),
+        qacc=np.asarray(trajectory_data["qacc"]),
         ctrl=np.asarray(trajectory_data["ctrl"]),
+        right_arm_ddq_des=np.asarray(trajectory_data["right_arm_ddq_des"]),
+        right_arm_tau_ff=np.asarray(trajectory_data["right_arm_tau_ff"]),
+        right_arm_tau_pd=np.asarray(trajectory_data["right_arm_tau_pd"]),
         xml_path=np.array(xml_path),
         simulation_dt=np.array(simulation_dt),
     )
@@ -459,7 +649,7 @@ def close_renderer(renderer):
             pass
 
 
-def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers):
+def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, right_arm_control=None):
     if buffers.torso_xy_start is None:
         buffers.torso_xy_start = data.xpos[scene_ids.torso_id][:2].copy()
     left_rot = data.site_xmat[scene_ids.left_grasp_site_id].reshape(3, 3).copy()
@@ -477,7 +667,19 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers):
     buffers.trajectory_data["time"].append(t)
     buffers.trajectory_data["qpos"].append(data.qpos.copy())
     buffers.trajectory_data["qvel"].append(data.qvel.copy())
+    buffers.trajectory_data["qacc"].append(data.qacc.copy())
     buffers.trajectory_data["ctrl"].append(data.ctrl.copy())
+    if right_arm_control is None:
+        right_arm_control = {}
+    buffers.trajectory_data["right_arm_ddq_des"].append(
+        np.asarray(right_arm_control.get("ddq_des", np.zeros(5)), dtype=np.float64).copy()
+    )
+    buffers.trajectory_data["right_arm_tau_ff"].append(
+        np.asarray(right_arm_control.get("tau_ff", np.zeros(5)), dtype=np.float64).copy()
+    )
+    buffers.trajectory_data["right_arm_tau_pd"].append(
+        np.asarray(right_arm_control.get("tau_pd", np.zeros(5)), dtype=np.float64).copy()
+    )
     buffers.eval_data["time"].append(t)
     buffers.eval_data["torso_yaw"].append(torso_yaw)
     buffers.eval_data["left_ee_lin_acc_world"].append(left_lin_acc)

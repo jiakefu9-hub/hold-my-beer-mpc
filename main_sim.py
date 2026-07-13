@@ -11,11 +11,33 @@ from arm_pid import ArmPIDPolicy
 from arm_lqr import ArmLQRPolicy
 # 可选：导入手臂模型预测控制策略
 from kinematics_helper import KinematicsHelper
-from sim_support import PerformanceMonitor, build_run_metadata, close_renderer, create_eval_run_dir, draw_debug_axes, finalize_run, get_gravity_orientation, get_site_vel, init_eval_buffers, make_video_camera, make_video_renderer, pd_control, record_eval_step, resolve_scene_ids
+from sim_support import (
+    PerformanceMonitor,
+    apply_computed_torque_control,
+    build_right_arm_observation,
+    build_run_metadata,
+    close_renderer,
+    create_eval_run_dir,
+    draw_debug_axes,
+    finalize_run,
+    get_gravity_orientation,
+    init_eval_buffers,
+    make_video_camera,
+    make_video_renderer,
+    pd_control,
+    record_eval_step,
+    resolve_right_arm_control_context,
+    resolve_scene_ids,
+    update_torso_motion_state,
+)
 
 
 if __name__ == "__main__":
-    # 从命令行读取配置文件名
+    # ==============================
+    # 1. 读取配置【非核心代码】
+    # 决定仿真模型、RL 行走策略、右臂控制器类型和控制频率。
+    # 这部分更像实验入口与参数装配；需要知道有哪些配置项，但不用逐行死记。
+    # ==============================
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -51,7 +73,11 @@ if __name__ == "__main__":
         arm_control_decimation = int(config.get("arm_control_decimation", 2))
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
 
-    # 定义上下文变量
+    # ==============================
+    # 2. 初始化主循环状态【非核心代码】
+    # RL 动作缓存、腿部目标、观测向量、实验时序参数。
+    # 这部分属于运行准备；知道变量用途即可，不是控制算法本身的核心。
+    # ==============================
     action = np.zeros(num_actions, dtype=np.float32)
     target_dof_pos = default_angles.copy()
     obs = np.zeros(num_obs, dtype=np.float32)
@@ -68,7 +94,11 @@ if __name__ == "__main__":
     experiment_name = f"left_fixed_right_{arm_controller}"
     buffers = init_eval_buffers()
 
-    # 加载机器人模型
+    # ==============================
+    # 3. 加载 MuJoCo 模型与 RL 行走策略【半核心】
+    # MuJoCo 负责整机物理推进；TorchScript policy 负责下肢 locomotion。
+    # 对论文/面试来说，需要知道“谁负责物理、谁负责走路”，但不用纠结加载语法细节。
+    # ==============================
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
@@ -78,21 +108,31 @@ if __name__ == "__main__":
     # 加载策略
     policy = torch.jit.load(policy_path)
 
-    # --- 实例化右臂控制策略 ---
+    # ==============================
+    # 4. 实例化右臂控制器【核心代码】
+    # 右臂可在 PID / LQR 之间切换；这里决定了本次实验到底在比较什么控制器。
+    # 这部分要重点理解：控制器输入输出是什么、控制周期是多少、PID 与 LQR 的执行链有什么区别。
+    # ==============================
     right_arm_target = arm_waist_target[6:11].copy()
     arm_control_dt = simulation_dt * arm_control_decimation
     target_right_arm_q = right_arm_target.copy()
     target_right_arm_dq = np.zeros(5, dtype=np.float32)
+    desired_right_arm_ddq = np.zeros(5, dtype=np.float32)
     if arm_controller == "lqr":
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, horizon=int(config.get("lqr_horizon", 12)))
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR baseline with local kinematic linearization and torso-disturbance feedforward terms"
-        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq}}
+        controller_notes = "finite-horizon time-varying LQR with MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
+        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq, "torque_control": "mujoco_inverse_dynamics_plus_pd", "uncontrolled_qacc_assumption": 0.0}}
     else:
         arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=arm_control_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
         policy_type = "ArmPIDPolicy"
         controller_notes = "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small"
         controller_meta = {"pid_config": {"default_q": right_arm_target, "kp_pose_diag": np.diag(arm_policy.kp_pose), "kd_pose_diag": np.diag(arm_policy.kd_pose), "ki_pose_diag": np.diag(arm_policy.ki_pose), "posture_gain_diag": np.diag(arm_policy.posture_gain), "finite_diff_eps": arm_policy.finite_diff_eps, "damping": arm_policy.damping, "integral_limit": arm_policy.integral_limit, "max_dq": arm_policy.max_dq, "de_g_alpha": arm_policy.de_g_alpha}}
+    # ==============================
+    # 5. 创建实验输出目录与视频录制器【非核心代码】
+    # 每次 run 都单独保存 metadata、轨迹、评估图和视频，方便横向对比。
+    # 这是实验管理与结果保存，不是控制数学核心。
+    # ==============================
     run_metadata = build_run_metadata(config_file, experiment_name, policy_type, controller_notes, controller_meta, cmd_nominal, simulation_dt, gait_period, warmup_cycles, evaluation_cycles, cooldown_cycles)
     run_dir = create_eval_run_dir("/home/fjk/g1_ws/hold-my-beer-mpc/evaluation", experiment_name, run_metadata)
     video_path = os.path.join(run_dir, "rollout.mp4")
@@ -102,89 +142,157 @@ if __name__ == "__main__":
     video_camera = make_video_camera()
     renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
 
-    # 预先找到主循环中会直接使用的躯干、惯性测量单元、左右手抓持点编号，方便后续读取和可视化
+    # ==============================
+    # 6. 解析主循环要用到的模型上下文【半核心代码】
+    # resolve 这里可理解为“按名字/约定查出来并整理好”。
+    # 这一节本身主要是在装配上下文，不是控制公式本体；但它会把后面要用到的核心支持模块接进主循环。
+    # 这几类对象的区别是：
+    # scene_ids：只负责“场景对象 id”；它是一个轻量 id 容器，里面包含 torso body、IMU site、左手抓持点 site、右手抓持点 site 的 MuJoCo id。
+    #            主循环后面会反复用这些 id 读取姿态/速度/位置，并在 viewer 里画调试坐标轴。
+    # right_arm_id_index_scratch：只负责“右臂 ids / indices / scratch 上下文”；它关注的是右臂 5 个关节和执行器在 MuJoCo 里的索引、力矩约束，以及逆动力学 scratch data，里面包含：
+    #            - qpos_indices / qvel_indices / ctrl_indices：右臂 5 个关节在 qpos / qvel / ctrl 中的索引
+    #            - joint_ids / actuator_ids：按名字查到的 MuJoCo joint / actuator id
+    #            - torque_limits：从 XML 读取的右臂力矩上下限
+    #            - inverse_dynamics_data：专门给 mj_inverse() 做逆动力学前馈计算用的 scratch MjData
+    # right_arm_helper：只负责“右臂运动学/建模辅助”；它知道右臂末端 site、右臂关节索引、IMU site，
+    #            后面用它来构建 torso_disturbance、Jacobian、重力误差和 LQR 线性化所需接口。
+    # perf_monitor：记录每拍的时间统计，当前会分别跟踪 arm_control、mj_step、other_overhead 和 loop_total。
+    # ==============================
     scene_ids = resolve_scene_ids(m)
 
-    # 右臂 5 个关节在位置向量中对应索引 25 到 29；辅助器用它来“冻结当前整机，只扰动右臂”
-    right_arm_qpos_indices = np.arange(25, 30, dtype=np.int32)
-    # 末端名字、5 个关节索引、惯性测量单元名字
-    right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_qpos_indices, imu_site_name="imu_in_torso")
+    right_arm_id_index_scratch = resolve_right_arm_control_context(m, run_metadata["right_arm_joint_names"])
+    right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_id_index_scratch.qpos_indices, imu_site_name="imu_in_torso")
 
     perf_monitor = PerformanceMonitor(step_budget=simulation_dt, arm_budget=arm_control_dt)
 
+    # ==============================
+    # 7. 主仿真循环【核心代码】
+    # 每一拍的总体顺序是：
+    #   腿部控制 -> 上肢状态读取与右臂控制 -> 写入力矩 -> mj_step 推进物理 -> 记录评估 -> RL 更新 -> 可视化与计时
+    # 这里是整个文件最需要看懂的部分，因为真正的控制数据流都发生在这里。
+    # ==============================
     with mujoco.viewer.launch_passive(m, d) as viewer:
         print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
         while viewer.is_running() and counter * simulation_dt < eval_duration:
             perf_monitor.start_step()
             
-            # --- 1. 腿部控制 (0~11) ---
+            # --- 7.1 腿部控制【半核心】---
+            # 这部分是已有 locomotion 执行链；需要知道它负责下肢，不需要像右臂控制那样细抠每个细节。
             # 位置向量第 7 到 18 项为腿部的 12 个关节，速度向量第 6 到 17 项为对应的速度
             leg_q = d.qpos[7:19]
             leg_dq = d.qvel[6:18]
             tau_leg = pd_control(target_dof_pos, leg_q, kps, np.zeros_like(kds), leg_dq, kds)
             d.ctrl[:12] = tau_leg
 
-            # --- 2. 腰部与手臂控制 (12~22) ---
+            # --- 7.2 上肢状态读取与右臂控制【核心代码】---
             # 顺序: 腰部(1)、左臂(5)、右臂(5)
-            # 获取了上肢的目前关节位置和速度
+            # 这一段分成两层：
+            # 1) 上层控制器（PID / LQR）根据当前右臂状态和 torso 扰动，生成右臂参考。
+            #    - PID 路径：直接输出 right_arm 的 q_ref / dq_ref
+            #    - LQR 路径：除了输出 q_ref / dq_ref，还会额外输出期望关节加速度 ddq_des
+            # 2) 下层执行层把参考转成真正施加到 MuJoCo 的力矩：
+            #    - 基础项：所有上肢统一先经过 joint-space PD，得到 tau_pd
+            #    - LQR 额外项：再根据 ddq_des 调用 mj_inverse() 计算前馈力矩 tau_ff，
+            #      最终右臂实际执行的是 tau = tau_ff + tau_pd
+
+            # 当前上肢的真实状态（腰 + 左臂 + 右臂），后面 PD 会用它和目标状态做误差反馈
             arm_waist_q = d.qpos[19:30]
             arm_waist_dq = d.qvel[18:29]
 
-            # 获取了腰部和左臂的目标位置和速度
+            # 腰和左臂在本实验里不做在线优化，始终保持固定目标位形
             waist_left_target_q = arm_waist_target[:6].copy()
             waist_left_target_dq = np.zeros(6, dtype=np.float32)
 
-            # 获取了右臂的目前关节位置和速度
+            # 从上肢状态里切出右臂 5 个关节，作为右臂控制器的当前状态输入
             right_arm_q = arm_waist_q[6:11]
             right_arm_dq = arm_waist_dq[6:11]
 
-            # 获取了躯干的四元数和旋转矩阵
-            torso_quat = d.xquat[scene_ids.torso_id]
-            torso_rotmat = d.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy()
-            torso_lin_vel, torso_ang_vel = get_site_vel(m, d, scene_ids.imu_site_id)
-            torso_acc = np.zeros(3) if counter == 0 else (torso_lin_vel - buffers.prev_torso_lin_vel) / simulation_dt
-            torso_alpha = np.zeros(3) if counter == 0 else (torso_ang_vel - buffers.prev_torso_ang_vel) / simulation_dt
-            buffers.prev_torso_lin_vel, buffers.prev_torso_ang_vel = torso_lin_vel.copy(), torso_ang_vel.copy()
+            # 读取 torso 的姿态、角速度、线速度，并用有限差分得到 torso 的线加速度和角加速度。
+            # 这些量一方面用于构建扰动输入，另一方面也会进入 right_arm_obs 给右臂控制器使用。
+            torso_state = update_torso_motion_state(m, d, scene_ids, buffers, counter, simulation_dt)
 
-            # 构建扰动输入，扰动由躯干的线加速度、角速度、角加速度和旋转矩阵组成
-            disturbance = right_arm_helper.build_disturbance_input(acc_world=torso_acc, omega_world=torso_ang_vel, alpha_world=torso_alpha, rot_world_body=torso_rotmat)
+            # 把 torso 的世界系运动量打包成 torso_disturbance，供 KinematicsHelper / LQR 局部线性化使用。
+            torso_disturbance = right_arm_helper.build_disturbance_input(
+                acc_world=torso_state.lin_acc,
+                omega_world=torso_state.ang_vel,
+                alpha_world=torso_state.ang_acc,
+                rot_world_body=torso_state.rotmat,
+            )
             
-            # 构建了右臂的观测
-            arm_obs = {
-                "current_q": right_arm_q,
-                "current_dq": right_arm_dq,
-                "torso_quat": torso_quat,
-                "torso_omega": torso_ang_vel,
-                "torso_acc": torso_acc,
-                "torso_alpha": torso_alpha,
-                "torso_rotmat": torso_rotmat,
-                "dt": arm_control_dt,
-            }
+            # right_arm_obs 是上层右臂控制器看到的“当前观测”；其中包含右臂状态、torso 姿态与运动信息，以及右臂控制周期。
+            right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
             if counter % arm_control_decimation == 0:
                 perf_monitor.start_arm_control()
-                helpers = right_arm_helper.build_helpers(d, disturbance=disturbance)
-                target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(arm_obs, helpers)
+                # right_arm_helpers 里封装了当前步右臂控制要用到的运动学量、重力误差计算和 LQR 线性化接口
+                right_arm_helpers = right_arm_helper.build_helpers(d, disturbance=torso_disturbance)
+                if arm_controller == "lqr":
+                    # LQR 先在上层求解：
+                    # - target_right_arm_q / dq：给下层 PD 跟踪的参考轨迹
+                    # - desired_right_arm_ddq：期望关节加速度，后面用于 computed torque 前馈
+                    target_right_arm_q, target_right_arm_dq, desired_right_arm_ddq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
+                else:
+                    # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
+                    target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
                 perf_monitor.finish_arm_control()
 
+            # 把“固定的腰/左臂目标”和“在线计算的右臂目标”拼回完整上肢目标
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
             target_arm_waist_dq = np.concatenate([waist_left_target_dq, target_right_arm_dq])
 
+            # 第一层执行：统一用 joint-space PD 把目标状态转成上肢控制力矩 tau_pd
             tau_arm_waist = pd_control(
                 target_arm_waist_q, arm_waist_q, arm_waist_kps,
                 target_arm_waist_dq, arm_waist_dq, arm_waist_kds
             )
+            # 只切出右臂 5 维的 PD 力矩；如果是 LQR，后面还要和逆动力学前馈叠加
+            right_arm_tau_pd = tau_arm_waist[6:11].copy()
+            right_arm_tau_ff = np.zeros(5, dtype=np.float64)
+            if arm_controller == "lqr":
+                # 第二层执行（仅 LQR）：
+                # 用 desired_right_arm_ddq 作为右臂的期望关节加速度，调用 mj_inverse() 计算 tau_ff。
+                # apply_computed_torque_control() 内部会：
+                # 1) 复制当前整机 qpos / qvel 到 scratch data
+                # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
+                # 3) 调用 mujoco.mj_inverse() 得到对应的广义力
+                # 4) 取出右臂 5 维的前馈力矩 tau_ff，并与 tau_pd 相加、再做力矩限幅
+                right_arm_tau, right_arm_tau_ff = apply_computed_torque_control(
+                    m,
+                    d,
+                    right_arm_id_index_scratch,
+                    desired_right_arm_ddq,
+                    right_arm_tau_pd,
+                )
+                # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
+                tau_arm_waist[6:11] = right_arm_tau
+            # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
             d.ctrl[12:23] = tau_arm_waist
 
-            # 物理步进函数可以替换为其他代码，用来在推进物理仿真前
-            # 同时计算策略并施加控制信号。
+            # --- 7.3 写入力矩并推进物理【核心代码】---
+            # 到这里 d.ctrl 已经准备好；mj_step 会真正让整机往前走一拍。
+            # 这一小段很重要，因为它定义了“控制输出最终如何进入仿真执行层”。
             perf_monitor.start_mj_step()
             mujoco.mj_step(m, d)
             perf_monitor.finish_mj_step()
-            record_eval_step(m, d, counter, simulation_dt, scene_ids, buffers)
+            record_eval_step(
+                m,
+                d,
+                counter,
+                simulation_dt,
+                scene_ids,
+                buffers,
+                right_arm_control={
+                    "ddq_des": desired_right_arm_ddq,
+                    "tau_ff": right_arm_tau_ff,
+                    "tau_pd": right_arm_tau_pd,
+                },
+            )
             if renderer is not None and counter % video_stride == 0:
                 renderer.update_scene(d, camera=video_camera)
                 video_frames.append(renderer.render().copy())
 
+            # --- 7.4 locomotion policy 更新【半核心】---
+            # 下肢 RL 不需要每个 physics step 都更新，而是按 control_decimation 低频更新一次。
+            # 需要知道它和右臂控制是并行存在的两条链，但不必像右臂那样细看实现细节。
             counter += 1
             if counter % control_decimation == 0:
                 # 在这里施加控制信号。
@@ -223,17 +331,18 @@ if __name__ == "__main__":
                 # 将动作转换为目标关节位置
                 target_dof_pos = action * action_scale + default_angles
 
-            # 在可视化窗口中画出世界系、躯干惯性测量单元、左手抓持点、右手抓持点的坐标轴
+            # --- 7.5 调试可视化与步时统计【非核心代码】---
             draw_debug_axes(viewer.user_scn, d, scene_ids)
-
-            # 同步物理状态变化，应用扰动，并更新界面中的选项。
             viewer.sync()
-
-            # 简单的计时控制，相对于真实墙钟时间可能会有漂移。
             perf_monitor.finish_step(counter)
 
         perf_monitor.print_summary()
 
+    # ==============================
+    # 8. 收尾保存【非核心代码】
+    # 退出 viewer 后统一保存轨迹、评估指标、视频和性能统计，再释放 renderer。
+    # 这是实验收尾，不是控制逻辑核心。
+    # ==============================
     finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer is not None, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=perf_monitor)
     close_renderer(renderer)
     renderer = None

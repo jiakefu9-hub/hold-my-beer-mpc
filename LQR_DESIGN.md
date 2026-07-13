@@ -9,7 +9,7 @@ LQR 作为当前项目中 MPC 的简化版，用于在**不显式处理硬约束
 - 下肢：沿用现有 RL locomotion
 - 上肢：右臂用有限时域、时变 LQR 控制
 - 扰动前馈：使用预测得到的 base 扰动进入每个时刻的局部模型
-- 输出：LQR 优化关节加速度 `u_k = ddq_k`，再转换成底层 PD 跟踪的 `q_ref, dq_ref`
+- 输出：LQR 优化关节加速度 `u_k = ddq_k`，由 MuJoCo 逆动力学转换为前馈力矩，并叠加 `q_ref, dq_ref` 的 PD 修正
 
 ---
 
@@ -486,7 +486,7 @@ u_0^\star = -K_0 x_0 - k_0
 $
 
 9. 将 `u_0^\star` 作为当前控制周期真正执行的最优关节加速度命令
-10. 把它转换成底层 PD 所需的 `q_ref, dq_ref`
+10. 用逆动力学把它转换成前馈力矩，同时生成 PD 修正所需的 `q_ref, dq_ref`
 11. 只执行这一拍；下一个控制周期重新感知、重新线性化、重新预测、重新递推
 
 这就是 receding-horizon LQR 的核心思想：虽然为未来 `N` 步都算出了策略，但每次只执行第 `0` 步，然后立刻滚动到下一拍重新求解。
@@ -541,17 +541,17 @@ return u_star
 
 ### 9.5 输出如何接到当前项目
 
-对当前项目而言，第 9.4 节返回的 `u_star` 就是右臂 `ddq` 命令。接下来不直接把它发给执行器，而是先转换成短时参考：
+对当前项目而言，第 9.4 节返回的 `u_star` 就是右臂 `ddq_des`。控制层同时执行两条路径：
 
-- 用 `ddq` 更新 `dq_ref`
-- 再积分得到 `q_ref`
-- 最后送入现有上肢 PD 跟踪链路
+- 逆动力学路径：用当前整机 `q, dq` 和右臂 `ddq_des` 计算 `tau_ff`
+- 反馈路径：对 `ddq_des` 积分一拍得到 `q_ref, dq_ref`，计算小幅 PD 修正 `tau_pd`
+- 执行器命令：`tau = clip(tau_ff + tau_pd, tau_min, tau_max)`
 
-这样做的好处是：LQR 层只负责给出局部最优的加速度决策，而底层仍然复用你当前项目里已经稳定工作的 PD 执行接口。
+这样 `tau_ff` 负责实现 LQR 要求的加速度并补偿重力、科氏力等动力学项，PD 只修正模型误差、离散延迟和扰动。
 
 ---
 
-## 10. 与底层 PD 接口的对应
+## 10. 与底层力矩接口的对应
 
 LQR 输出为关节加速度：
 
@@ -559,7 +559,24 @@ $
 u_0^\star = \ddot q^\star
 $
 
-将其转换为给底层 PD 的短时参考：
+理想的逆动力学前馈为：
+
+$
+\tau_{ff} = M(q)\ddot q^\star + h(q,\dot q)
+$
+
+当前 MuJoCo 实现构造完整的整机期望加速度向量，暂时令非右臂自由度的期望加速度为零：
+
+```python
+scratch.qpos[:] = data.qpos
+scratch.qvel[:] = data.qvel
+scratch.qacc[:] = 0.0
+scratch.qacc[right_arm_qvel_indices] = ddq_des
+mujoco.mj_inverse(model, scratch)
+tau_ff = scratch.qfrc_inverse[right_arm_qvel_indices]
+```
+
+同时将 `ddq_des` 转换为反馈项所需的短时参考：
 
 $
 \dot q_{ref} = \dot q + \ddot q^\star \Delta t
@@ -569,7 +586,13 @@ $
 q_{ref} = q + \dot q \Delta t + \frac{1}{2}\ddot q^\star \Delta t^2
 $
 
-然后把 `q_ref, dq_ref` 送入现有 `main_sim.py` 中上肢控制链路，替换 PID 产生的目标关节位置和速度。
+最终命令为：
+
+$
+\tau = \tau_{ff} + K_p(q_{ref}-q) + K_d(\dot q_{ref}-\dot q)
+$
+
+`main_sim.py` 中 LQR 每 `0.006 s` 更新一次，`ddq_des/q_ref/dq_ref` 在更新间隔内保持；逆动力学使用最新整机状态，每个 `0.002 s` 仿真步重算一次。当前 XML 的右臂 motor 为 `gear=1` 的直接驱动，因此右臂 `qfrc_inverse` 可直接对应 `ctrl[18:23]`，最后按关节 `actuatorfrcrange` 限幅。
 
 ---
 
@@ -580,7 +603,7 @@ LQR 与 `MPC_DESIGN.md` 的关系：
 - 使用相同的状态定义 `x=[q; dq]`
 - 使用相同的物理目标：末端线加速度、角加速度、重力方向误差、姿态正则、速度正则
 - 使用相同的 base 扰动前馈建模方式
-- 使用相同的输出接口：先求 `ddq`，再转 `q_ref, dq_ref`
+- 使用相同的输出接口：先求 `ddq`，再由逆动力学转为前馈力矩
 
 LQR 相比 MPC 的简化点：
 
@@ -624,24 +647,18 @@ $
 
 ## 13. 程序接口建议
 
-后续代码建议统一接口为：
+当前代码接口为：
 
 ```python
-u_cmd, debug = arm_policy.compute_action(arm_obs, helpers, disturbance_prediction)
+target_q, target_dq, ddq_des = arm_policy.compute_action(arm_obs, helpers)
 ```
 
 其中：
 
-- `u_cmd`：右臂最优关节加速度 `ddq`
-- `debug`：保存 `K_0, k_0, Q_xx, Q_xu, Q_uu, f_x, f_u` 等调试量
+- `target_q, target_dq`：用于小/中等增益 PD 反馈的短时参考
+- `ddq_des`：送入逆动力学的右臂最优关节加速度
 
-或者直接输出底层参考：
-
-```python
-target_q, target_dq, debug = arm_policy.compute_action(arm_obs, helpers, disturbance_prediction)
-```
-
-两种都可以，但从算法实现清晰性看，建议**内部先统一算 `ddq`**，再在策略类内部转成 `target_q, target_dq`。
+轨迹文件额外保存 `qacc`、`right_arm_ddq_des`、`right_arm_tau_ff` 和 `right_arm_tau_pd`，用于检查实际加速度跟踪和两部分力矩占比。
 
 ---
 
