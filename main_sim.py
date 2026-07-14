@@ -247,6 +247,9 @@ if __name__ == "__main__":
             # 只切出右臂 5 维的 PD 力矩；如果是 LQR，后面还要和逆动力学前馈叠加
             right_arm_tau_pd = tau_arm_waist[6:11].copy()
             right_arm_tau_ff = np.zeros(5, dtype=np.float64)
+            right_arm_tau_cmd_raw = right_arm_tau_pd.copy()
+            right_arm_tau_limit_lower = right_arm_id_index_scratch.torque_limits[:, 0].copy()
+            right_arm_tau_limit_upper = right_arm_id_index_scratch.torque_limits[:, 1].copy()
             if arm_controller == "lqr":
                 # 第二层执行（仅 LQR）：
                 # 用 desired_right_arm_ddq 作为右臂的期望关节加速度，调用 mj_inverse() 计算 tau_ff。
@@ -255,6 +258,7 @@ if __name__ == "__main__":
                 # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
                 # 3) 调用 mujoco.mj_inverse() 得到对应的广义力
                 # 4) 取出右臂 5 维的前馈力矩 tau_ff，并与 tau_pd 相加、再做力矩限幅
+                perf_monitor.start_computed_torque_control()
                 right_arm_tau, right_arm_tau_ff = apply_computed_torque_control(
                     m,
                     d,
@@ -262,6 +266,8 @@ if __name__ == "__main__":
                     desired_right_arm_ddq,
                     right_arm_tau_pd,
                 )
+                perf_monitor.finish_computed_torque_control()
+                right_arm_tau_cmd_raw = right_arm_tau_ff + right_arm_tau_pd
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
             # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
@@ -282,8 +288,12 @@ if __name__ == "__main__":
                 buffers,
                 right_arm_control={
                     "ddq_des": desired_right_arm_ddq,
+                    "ddq_saturation_limit": getattr(arm_policy, "max_ddq", np.inf),
                     "tau_ff": right_arm_tau_ff,
                     "tau_pd": right_arm_tau_pd,
+                    "tau_cmd_raw": right_arm_tau_cmd_raw,
+                    "tau_limit_lower": right_arm_tau_limit_lower,
+                    "tau_limit_upper": right_arm_tau_limit_upper,
                 },
             )
             if renderer is not None and counter % video_stride == 0:

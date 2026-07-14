@@ -16,6 +16,20 @@ except ImportError:
     imageio = None
 
 
+RIGHT_ARM_JOINT_NAMES = (
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint",
+)
+RIGHT_ARM_QPOS_SLICE = slice(25, 30)
+RIGHT_ARM_QVEL_SLICE = slice(24, 29)
+RIGHT_ARM_CTRL_SLICE = slice(18, 23)
+RIGHT_ARM_DDQ_SATURATION_EPS = 1e-2
+RIGHT_ARM_TAU_SATURATION_EPS = 1e-6
+
+
 @dataclass
 class SceneIds:
     torso_id: int
@@ -173,9 +187,9 @@ def resolve_right_arm_control_context(model, joint_names):
     return resolve_direct_drive_joint_group(
         model,
         joint_names,
-        expected_qpos_indices=np.arange(25, 30, dtype=np.int32),
-        expected_qvel_indices=np.arange(24, 29, dtype=np.int32),
-        expected_ctrl_indices=np.arange(18, 23, dtype=np.int32),
+        expected_qpos_indices=np.arange(RIGHT_ARM_QPOS_SLICE.start, RIGHT_ARM_QPOS_SLICE.stop, dtype=np.int32),
+        expected_qvel_indices=np.arange(RIGHT_ARM_QVEL_SLICE.start, RIGHT_ARM_QVEL_SLICE.stop, dtype=np.int32),
+        expected_ctrl_indices=np.arange(RIGHT_ARM_CTRL_SLICE.start, RIGHT_ARM_CTRL_SLICE.stop, dtype=np.int32),
         group_label="右臂逆动力学",
     )
 
@@ -238,33 +252,50 @@ class PerformanceMonitor:
     step_start: float = 0.0
     arm_control_start: float = 0.0
     arm_control_elapsed: float = 0.0
+    computed_torque_start: float = 0.0
+    computed_torque_elapsed: float = 0.0
     mj_step_start: float = 0.0
     mj_step_elapsed: float = 0.0
     arm_control_ran: bool = False
+    computed_torque_ran: bool = False
     total_steps: int = 0
     total_arm_updates: int = 0
     total_arm_elapsed: float = 0.0
+    total_arm_total_elapsed: float = 0.0
+    total_computed_torque_updates: int = 0
+    total_computed_torque_elapsed: float = 0.0
     total_mj_step_elapsed: float = 0.0
     total_other_elapsed: float = 0.0
     total_loop_elapsed: float = 0.0
     max_arm_elapsed: float = 0.0
+    max_arm_total_elapsed: float = 0.0
+    max_computed_torque_elapsed: float = 0.0
     max_mj_step_elapsed: float = 0.0
     max_other_elapsed: float = 0.0
     max_loop_elapsed: float = 0.0
     arm_overruns: int = 0
+    arm_total_overruns: int = 0
+    computed_torque_overruns: int = 0
     loop_overruns: int = 0
     window_steps: int = 0
     window_arm_elapsed: float = 0.0
+    window_arm_total_elapsed: float = 0.0
+    window_computed_torque_elapsed: float = 0.0
     window_mj_step_elapsed: float = 0.0
     window_other_elapsed: float = 0.0
     window_loop_elapsed: float = 0.0
     window_max_arm_elapsed: float = 0.0
+    window_max_arm_total_elapsed: float = 0.0
+    window_max_computed_torque_elapsed: float = 0.0
     window_max_mj_step_elapsed: float = 0.0
     window_max_other_elapsed: float = 0.0
     window_max_loop_elapsed: float = 0.0
     window_arm_overruns: int = 0
+    window_arm_total_overruns: int = 0
+    window_computed_torque_overruns: int = 0
     window_loop_overruns: int = 0
     window_arm_updates: int = 0
+    window_computed_torque_updates: int = 0
     window_reports: list = field(default_factory=list)
 
     def __post_init__(self):
@@ -283,6 +314,13 @@ class PerformanceMonitor:
     def finish_arm_control(self):
         self.arm_control_elapsed = time.perf_counter() - self.arm_control_start
 
+    def start_computed_torque_control(self):
+        self.computed_torque_start = time.perf_counter()
+        self.computed_torque_ran = True
+
+    def finish_computed_torque_control(self):
+        self.computed_torque_elapsed += time.perf_counter() - self.computed_torque_start
+
     def start_mj_step(self):
         self.mj_step_start = time.perf_counter()
 
@@ -300,7 +338,7 @@ class PerformanceMonitor:
         return loop_elapsed
 
     def record_step(self, loop_elapsed):
-        other_elapsed = max(0.0, loop_elapsed - self.arm_control_elapsed - self.mj_step_elapsed)
+        other_elapsed = max(0.0, loop_elapsed - self.arm_control_elapsed - self.computed_torque_elapsed - self.mj_step_elapsed)
         self.total_steps += 1
         self.total_mj_step_elapsed += self.mj_step_elapsed
         self.total_other_elapsed += other_elapsed
@@ -322,39 +360,88 @@ class PerformanceMonitor:
             self.window_loop_overruns += 1
 
         if self.arm_control_ran:
+            arm_total_elapsed = self.arm_control_elapsed + self.computed_torque_elapsed
             self.total_arm_updates += 1
             self.total_arm_elapsed += self.arm_control_elapsed
+            self.total_arm_total_elapsed += arm_total_elapsed
             self.max_arm_elapsed = max(self.max_arm_elapsed, self.arm_control_elapsed)
+            self.max_arm_total_elapsed = max(self.max_arm_total_elapsed, arm_total_elapsed)
             self.window_arm_updates += 1
             self.window_arm_elapsed += self.arm_control_elapsed
+            self.window_arm_total_elapsed += arm_total_elapsed
             self.window_max_arm_elapsed = max(self.window_max_arm_elapsed, self.arm_control_elapsed)
+            self.window_max_arm_total_elapsed = max(self.window_max_arm_total_elapsed, arm_total_elapsed)
             if self.arm_control_elapsed > self.arm_budget:
                 self.arm_overruns += 1
                 self.window_arm_overruns += 1
+            if arm_total_elapsed > self.arm_budget:
+                self.arm_total_overruns += 1
+                self.window_arm_total_overruns += 1
+
+        if self.computed_torque_ran:
+            self.total_computed_torque_updates += 1
+            self.total_computed_torque_elapsed += self.computed_torque_elapsed
+            self.max_computed_torque_elapsed = max(self.max_computed_torque_elapsed, self.computed_torque_elapsed)
+            self.window_computed_torque_updates += 1
+            self.window_computed_torque_elapsed += self.computed_torque_elapsed
+            self.window_max_computed_torque_elapsed = max(self.window_max_computed_torque_elapsed, self.computed_torque_elapsed)
+            if self.computed_torque_elapsed > self.step_budget:
+                self.computed_torque_overruns += 1
+                self.window_computed_torque_overruns += 1
 
         self.arm_control_ran = False
+        self.computed_torque_ran = False
         self.arm_control_elapsed = 0.0
+        self.computed_torque_elapsed = 0.0
         self.mj_step_elapsed = 0.0
 
     def print_window_summary_if_needed(self, counter):
         if counter % self.warn_interval != 0 or self.window_steps == 0:
             return
 
-        report = self._build_report("perf", self.window_steps, self.window_arm_updates, self.window_arm_elapsed, self.window_mj_step_elapsed, self.window_other_elapsed, self.window_loop_elapsed, self.window_max_arm_elapsed, self.window_max_mj_step_elapsed, self.window_max_other_elapsed, self.window_max_loop_elapsed, self.window_arm_overruns, self.window_loop_overruns)
+        report = self._build_report(
+            "perf",
+            self.window_steps,
+            self.window_arm_updates,
+            self.window_arm_elapsed,
+            self.window_arm_total_elapsed,
+            self.window_computed_torque_updates,
+            self.window_computed_torque_elapsed,
+            self.window_mj_step_elapsed,
+            self.window_other_elapsed,
+            self.window_loop_elapsed,
+            self.window_max_arm_elapsed,
+            self.window_max_arm_total_elapsed,
+            self.window_max_computed_torque_elapsed,
+            self.window_max_mj_step_elapsed,
+            self.window_max_other_elapsed,
+            self.window_max_loop_elapsed,
+            self.window_arm_overruns,
+            self.window_arm_total_overruns,
+            self.window_computed_torque_overruns,
+            self.window_loop_overruns,
+        )
         report["end_step"] = int(counter)
         self.window_reports.append(report)
         self._print_report(report)
         self.window_steps = 0
         self.window_arm_elapsed = 0.0
+        self.window_arm_total_elapsed = 0.0
+        self.window_computed_torque_elapsed = 0.0
         self.window_mj_step_elapsed = 0.0
         self.window_other_elapsed = 0.0
         self.window_loop_elapsed = 0.0
         self.window_arm_updates = 0
+        self.window_computed_torque_updates = 0
         self.window_max_arm_elapsed = 0.0
+        self.window_max_arm_total_elapsed = 0.0
+        self.window_max_computed_torque_elapsed = 0.0
         self.window_max_mj_step_elapsed = 0.0
         self.window_max_other_elapsed = 0.0
         self.window_max_loop_elapsed = 0.0
         self.window_arm_overruns = 0
+        self.window_arm_total_overruns = 0
+        self.window_computed_torque_overruns = 0
         self.window_loop_overruns = 0
 
     def print_summary(self):
@@ -363,7 +450,28 @@ class PerformanceMonitor:
         self._print_report(self.build_total_report())
 
     def build_total_report(self):
-        return self._build_report("perf total", self.total_steps, self.total_arm_updates, self.total_arm_elapsed, self.total_mj_step_elapsed, self.total_other_elapsed, self.total_loop_elapsed, self.max_arm_elapsed, self.max_mj_step_elapsed, self.max_other_elapsed, self.max_loop_elapsed, self.arm_overruns, self.loop_overruns)
+        return self._build_report(
+            "perf total",
+            self.total_steps,
+            self.total_arm_updates,
+            self.total_arm_elapsed,
+            self.total_arm_total_elapsed,
+            self.total_computed_torque_updates,
+            self.total_computed_torque_elapsed,
+            self.total_mj_step_elapsed,
+            self.total_other_elapsed,
+            self.total_loop_elapsed,
+            self.max_arm_elapsed,
+            self.max_arm_total_elapsed,
+            self.max_computed_torque_elapsed,
+            self.max_mj_step_elapsed,
+            self.max_other_elapsed,
+            self.max_loop_elapsed,
+            self.arm_overruns,
+            self.arm_total_overruns,
+            self.computed_torque_overruns,
+            self.loop_overruns,
+        )
 
     def save_report(self, run_dir):
         total_report = self.build_total_report()
@@ -378,19 +486,50 @@ class PerformanceMonitor:
                 writer.writerows(self.window_reports)
         return summary_path, windows_path if self.window_reports else None
 
-    def _build_report(self, label, steps, arm_updates, arm_elapsed, mj_step_elapsed, other_elapsed, loop_elapsed, max_arm_elapsed, max_mj_step_elapsed, max_other_elapsed, max_loop_elapsed, arm_overruns, loop_overruns):
+    def _build_report(
+        self,
+        label,
+        steps,
+        arm_updates,
+        arm_elapsed,
+        arm_total_elapsed,
+        computed_torque_updates,
+        computed_torque_elapsed,
+        mj_step_elapsed,
+        other_elapsed,
+        loop_elapsed,
+        max_arm_elapsed,
+        max_arm_total_elapsed,
+        max_computed_torque_elapsed,
+        max_mj_step_elapsed,
+        max_other_elapsed,
+        max_loop_elapsed,
+        arm_overruns,
+        arm_total_overruns,
+        computed_torque_overruns,
+        loop_overruns,
+    ):
         budget_ms = self.step_budget * 1000.0
         arm_budget_ms = self.arm_budget * 1000.0
         arm_avg_ms = 0.0 if arm_updates == 0 else arm_elapsed / arm_updates * 1000.0
+        arm_total_avg_ms = 0.0 if arm_updates == 0 else arm_total_elapsed / arm_updates * 1000.0
+        computed_torque_avg_ms = 0.0 if computed_torque_updates == 0 else computed_torque_elapsed / computed_torque_updates * 1000.0
         return {
             "label": label,
             "steps": int(steps),
             "arm_updates": int(arm_updates),
+            "computed_torque_updates": int(computed_torque_updates),
             "budget_ms": float(budget_ms),
             "arm_budget_ms": float(arm_budget_ms),
             "arm_avg_ms": float(arm_avg_ms),
             "arm_max_ms": float(max_arm_elapsed * 1000.0),
             "arm_overruns": int(arm_overruns),
+            "arm_total_avg_ms": float(arm_total_avg_ms),
+            "arm_total_max_ms": float(max_arm_total_elapsed * 1000.0),
+            "arm_total_overruns": int(arm_total_overruns),
+            "computed_torque_avg_ms": float(computed_torque_avg_ms),
+            "computed_torque_max_ms": float(max_computed_torque_elapsed * 1000.0),
+            "computed_torque_overruns": int(computed_torque_overruns),
             "mj_step_avg_ms": float(mj_step_elapsed / steps * 1000.0),
             "mj_step_max_ms": float(max_mj_step_elapsed * 1000.0),
             "other_avg_ms": float(other_elapsed / steps * 1000.0),
@@ -401,10 +540,12 @@ class PerformanceMonitor:
         }
 
     def _print_report(self, report):
-        level = "WARN" if report["arm_overruns"] or report["loop_overruns"] else "INFO"
+        level = "WARN" if report["arm_overruns"] or report["arm_total_overruns"] or report["computed_torque_overruns"] or report["loop_overruns"] else "INFO"
         print(
             f"[{level}] {report['label']}: steps={report['steps']}, budget={report['budget_ms']:.2f} ms, arm_budget={report['arm_budget_ms']:.2f} ms, arm_updates={report['arm_updates']}, "
-            f"arm avg/max={report['arm_avg_ms']:.2f}/{report['arm_max_ms']:.2f} ms, arm overruns={report['arm_overruns']}, "
+            f"arm policy avg/max={report['arm_avg_ms']:.2f}/{report['arm_max_ms']:.2f} ms, arm policy overruns={report['arm_overruns']}, "
+            f"arm total avg/max={report['arm_total_avg_ms']:.2f}/{report['arm_total_max_ms']:.2f} ms, arm total overruns={report['arm_total_overruns']}, "
+            f"computed torque updates={report['computed_torque_updates']}, avg/max={report['computed_torque_avg_ms']:.3f}/{report['computed_torque_max_ms']:.3f} ms, overruns={report['computed_torque_overruns']}, "
             f"mj_step avg/max={report['mj_step_avg_ms']:.2f}/{report['mj_step_max_ms']:.2f} ms, other avg/max={report['other_avg_ms']:.2f}/{report['other_max_ms']:.2f} ms, "
             f"loop avg/max={report['loop_avg_ms']:.2f}/{report['loop_max_ms']:.2f} ms, loop overruns={report['loop_overruns']}"
         )
@@ -547,7 +688,7 @@ def build_run_metadata(config_file, experiment_name, policy_type, controller_not
         "config_file": config_file,
         "experiment_name": experiment_name,
         "policy_type": policy_type,
-        "right_arm_joint_names": ["right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint", "right_elbow_joint", "right_wrist_roll_joint"],
+        "right_arm_joint_names": list(RIGHT_ARM_JOINT_NAMES),
         "notes": controller_notes,
         "cmd_nominal": cmd_nominal,
         "simulation_dt": simulation_dt,
@@ -568,9 +709,19 @@ def init_eval_buffers():
             "qvel": [],
             "qacc": [],
             "ctrl": [],
+            "right_arm_q": [],
+            "right_arm_dq": [],
+            "right_arm_qacc": [],
+            "right_arm_ctrl": [],
             "right_arm_ddq_des": [],
+            "right_arm_ddq_saturation_limit": [],
+            "right_arm_ddq_saturation_mask": [],
             "right_arm_tau_ff": [],
             "right_arm_tau_pd": [],
+            "right_arm_tau_cmd_raw": [],
+            "right_arm_tau_limit_lower": [],
+            "right_arm_tau_limit_upper": [],
+            "right_arm_tau_saturation_mask": [],
         },
         prev_left_lin_vel=np.zeros(3),
         prev_left_ang_vel=np.zeros(3),
@@ -616,7 +767,52 @@ def make_video_renderer(model, preferred_width=1280, preferred_height=720):
         return None, width, height
 
 
+def compute_right_arm_trajectory_diagnostics(trajectory_data):
+    n = len(RIGHT_ARM_JOINT_NAMES)
+    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
+    ddq_mask = np.asarray(trajectory_data.get("right_arm_ddq_saturation_mask", []), dtype=bool)
+    qacc = np.asarray(trajectory_data.get("right_arm_qacc", []), dtype=np.float64)
+    ctrl = np.asarray(trajectory_data.get("right_arm_ctrl", []), dtype=np.float64)
+    ddq_limits = np.asarray(trajectory_data.get("right_arm_ddq_saturation_limit", []), dtype=np.float64)
+    tau_raw = np.asarray(trajectory_data.get("right_arm_tau_cmd_raw", []), dtype=np.float64)
+    tau_low = np.asarray(trajectory_data.get("right_arm_tau_limit_lower", []), dtype=np.float64)
+    tau_high = np.asarray(trajectory_data.get("right_arm_tau_limit_upper", []), dtype=np.float64)
+    tau_mask = np.asarray(trajectory_data.get("right_arm_tau_saturation_mask", []), dtype=bool)
+    if ddq_des.ndim != 2 or ddq_des.shape[1] != n: ddq_des = np.zeros((0, n), dtype=np.float64)
+    if ddq_mask.shape != ddq_des.shape: ddq_mask = np.zeros_like(ddq_des, dtype=bool)
+    if ctrl.ndim != 2 or ctrl.shape[1] != n: ctrl = np.zeros((0, n), dtype=np.float64)
+    if tau_raw.shape != ctrl.shape: tau_raw = np.zeros_like(ctrl)
+    if tau_low.shape != ctrl.shape: tau_low = np.full_like(ctrl, -np.inf)
+    if tau_high.shape != ctrl.shape: tau_high = np.full_like(ctrl, np.inf)
+    if tau_mask.shape != ctrl.shape: tau_mask = (tau_raw < (tau_low + RIGHT_ARM_TAU_SATURATION_EPS)) | (tau_raw > (tau_high - RIGHT_ARM_TAU_SATURATION_EPS))
+    ddq_n = int(ddq_des.shape[0]); tau_n = int(ctrl.shape[0])
+    ddq_count = ddq_mask.sum(axis=0).astype(np.int64)
+    ddq_frac = np.zeros(n, dtype=np.float64) if ddq_n == 0 else ddq_count / float(ddq_n)
+    tau_count = tau_mask.sum(axis=0).astype(np.int64)
+    tau_frac = np.zeros(n, dtype=np.float64) if tau_n == 0 else tau_count / float(tau_n)
+    finite_limits = ddq_limits[np.isfinite(ddq_limits)]
+    ddq_limit = float(finite_limits[-1]) if finite_limits.size else np.inf
+    ddq_thr = ddq_limit - RIGHT_ARM_DDQ_SATURATION_EPS if np.isfinite(ddq_limit) else np.inf
+    tau_low_last = tau_low[-1].copy() if tau_n > 0 else np.full(n, -np.inf)
+    tau_high_last = tau_high[-1].copy() if tau_n > 0 else np.full(n, np.inf)
+    return {
+        "right_arm_joint_names": np.asarray(RIGHT_ARM_JOINT_NAMES),
+        "right_arm_ddq_saturation_limit": np.array(ddq_limit), "right_arm_ddq_saturation_threshold": np.array(ddq_thr),
+        "right_arm_ddq_saturation_count": ddq_count, "right_arm_ddq_saturation_fraction": ddq_frac, "right_arm_ddq_saturation_percent": ddq_frac * 100.0,
+        "right_arm_ddq_saturation_any_fraction": np.array(float(np.mean(np.any(ddq_mask, axis=1))) if ddq_n > 0 else 0.0),
+        "right_arm_ddq_abs_max": np.max(np.abs(ddq_des), axis=0) if ddq_n > 0 else np.zeros(n), "right_arm_ddq_rms": np.sqrt(np.mean(ddq_des ** 2, axis=0)) if ddq_n > 0 else np.zeros(n),
+        "right_arm_tau_limit_lower": tau_low_last, "right_arm_tau_limit_upper": tau_high_last,
+        "right_arm_tau_saturation_count": tau_count, "right_arm_tau_saturation_fraction": tau_frac, "right_arm_tau_saturation_percent": tau_frac * 100.0,
+        "right_arm_tau_saturation_any_fraction": np.array(float(np.mean(np.any(tau_mask, axis=1))) if tau_n > 0 else 0.0),
+        "right_arm_tau_raw_abs_max": np.max(np.abs(tau_raw), axis=0) if tau_n > 0 else np.zeros(n), "right_arm_tau_raw_rms": np.sqrt(np.mean(tau_raw ** 2, axis=0)) if tau_n > 0 else np.zeros(n),
+        "right_arm_tau_clip_delta_abs_max": np.max(np.abs(ctrl - tau_raw), axis=0) if tau_n > 0 else np.zeros(n),
+        "right_arm_qacc_rms": np.sqrt(np.mean(qacc ** 2, axis=0)) if qacc.ndim == 2 and qacc.shape[0] > 0 else np.zeros(n),
+        "right_arm_ctrl_abs_max": np.max(np.abs(ctrl), axis=0) if tau_n > 0 else np.zeros(n),
+    }
+
+
 def save_trajectory(trajectory_path, trajectory_data, xml_path, simulation_dt):
+    right_arm_diagnostics = compute_right_arm_trajectory_diagnostics(trajectory_data)
     np.savez(
         trajectory_path,
         time=np.asarray(trajectory_data["time"]),
@@ -624,12 +820,31 @@ def save_trajectory(trajectory_path, trajectory_data, xml_path, simulation_dt):
         qvel=np.asarray(trajectory_data["qvel"]),
         qacc=np.asarray(trajectory_data["qacc"]),
         ctrl=np.asarray(trajectory_data["ctrl"]),
+        right_arm_q=np.asarray(trajectory_data["right_arm_q"]),
+        right_arm_dq=np.asarray(trajectory_data["right_arm_dq"]),
+        right_arm_qacc=np.asarray(trajectory_data["right_arm_qacc"]),
+        right_arm_ctrl=np.asarray(trajectory_data["right_arm_ctrl"]),
         right_arm_ddq_des=np.asarray(trajectory_data["right_arm_ddq_des"]),
+        right_arm_ddq_saturation_limit_history=np.asarray(trajectory_data["right_arm_ddq_saturation_limit"]),
+        right_arm_ddq_saturation_mask=np.asarray(trajectory_data["right_arm_ddq_saturation_mask"]),
         right_arm_tau_ff=np.asarray(trajectory_data["right_arm_tau_ff"]),
         right_arm_tau_pd=np.asarray(trajectory_data["right_arm_tau_pd"]),
+        right_arm_tau_cmd_raw=np.asarray(trajectory_data["right_arm_tau_cmd_raw"]),
+        right_arm_tau_limit_lower_history=np.asarray(trajectory_data["right_arm_tau_limit_lower"]),
+        right_arm_tau_limit_upper_history=np.asarray(trajectory_data["right_arm_tau_limit_upper"]),
+        right_arm_tau_saturation_mask=np.asarray(trajectory_data["right_arm_tau_saturation_mask"]),
+        **right_arm_diagnostics,
         xml_path=np.array(xml_path),
         simulation_dt=np.array(simulation_dt),
     )
+    return right_arm_diagnostics
+
+
+def save_right_arm_diagnostics(run_dir, diagnostics):
+    diagnostics_path = os.path.join(run_dir, "right_arm_diagnostics.json")
+    with open(diagnostics_path, "w", encoding="utf-8") as f:
+        json.dump(_to_serializable(diagnostics), f, indent=2, ensure_ascii=False)
+    return diagnostics_path
 
 
 def write_video(video_path, video_frames, video_fps):
@@ -671,15 +886,35 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["ctrl"].append(data.ctrl.copy())
     if right_arm_control is None:
         right_arm_control = {}
-    buffers.trajectory_data["right_arm_ddq_des"].append(
-        np.asarray(right_arm_control.get("ddq_des", np.zeros(5)), dtype=np.float64).copy()
-    )
-    buffers.trajectory_data["right_arm_tau_ff"].append(
-        np.asarray(right_arm_control.get("tau_ff", np.zeros(5)), dtype=np.float64).copy()
-    )
-    buffers.trajectory_data["right_arm_tau_pd"].append(
-        np.asarray(right_arm_control.get("tau_pd", np.zeros(5)), dtype=np.float64).copy()
-    )
+    ddq_des = np.asarray(right_arm_control.get("ddq_des", np.zeros(5)), dtype=np.float64).copy()
+    ddq_saturation_limit = float(right_arm_control.get("ddq_saturation_limit", np.inf))
+    ddq_saturation_threshold = ddq_saturation_limit - RIGHT_ARM_DDQ_SATURATION_EPS
+    ddq_saturation_mask = np.zeros_like(ddq_des, dtype=bool) if (not np.isfinite(ddq_saturation_threshold) or ddq_saturation_threshold <= 0.0) else (np.abs(ddq_des) >= ddq_saturation_threshold)
+    tau_ff = np.asarray(right_arm_control.get("tau_ff", np.zeros(5)), dtype=np.float64).copy()
+    tau_pd = np.asarray(right_arm_control.get("tau_pd", np.zeros(5)), dtype=np.float64).copy()
+    tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
+    tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
+    tau_limit_upper = np.asarray(right_arm_control.get("tau_limit_upper", np.full(5, np.inf)), dtype=np.float64).copy()
+    if tau_cmd_raw.shape != tau_ff.shape:
+        tau_cmd_raw = tau_ff + tau_pd
+    if tau_limit_lower.shape != tau_ff.shape:
+        tau_limit_lower = np.full_like(tau_ff, -np.inf)
+    if tau_limit_upper.shape != tau_ff.shape:
+        tau_limit_upper = np.full_like(tau_ff, np.inf)
+    tau_saturation_mask = (tau_cmd_raw < (tau_limit_lower + RIGHT_ARM_TAU_SATURATION_EPS)) | (tau_cmd_raw > (tau_limit_upper - RIGHT_ARM_TAU_SATURATION_EPS))
+    buffers.trajectory_data["right_arm_q"].append(data.qpos[RIGHT_ARM_QPOS_SLICE].copy())
+    buffers.trajectory_data["right_arm_dq"].append(data.qvel[RIGHT_ARM_QVEL_SLICE].copy())
+    buffers.trajectory_data["right_arm_qacc"].append(data.qacc[RIGHT_ARM_QVEL_SLICE].copy())
+    buffers.trajectory_data["right_arm_ctrl"].append(data.ctrl[RIGHT_ARM_CTRL_SLICE].copy())
+    buffers.trajectory_data["right_arm_ddq_des"].append(ddq_des)
+    buffers.trajectory_data["right_arm_ddq_saturation_limit"].append(ddq_saturation_limit)
+    buffers.trajectory_data["right_arm_ddq_saturation_mask"].append(ddq_saturation_mask)
+    buffers.trajectory_data["right_arm_tau_ff"].append(tau_ff)
+    buffers.trajectory_data["right_arm_tau_pd"].append(tau_pd)
+    buffers.trajectory_data["right_arm_tau_cmd_raw"].append(tau_cmd_raw)
+    buffers.trajectory_data["right_arm_tau_limit_lower"].append(tau_limit_lower)
+    buffers.trajectory_data["right_arm_tau_limit_upper"].append(tau_limit_upper)
+    buffers.trajectory_data["right_arm_tau_saturation_mask"].append(tau_saturation_mask)
     buffers.eval_data["time"].append(t)
     buffers.eval_data["torso_yaw"].append(torso_yaw)
     buffers.eval_data["left_ee_lin_acc_world"].append(left_lin_acc)
@@ -692,13 +927,15 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
 
 def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None):
     trajectory_path = os.path.join(run_dir, "trajectory.npz")
-    save_trajectory(trajectory_path, buffers.trajectory_data, xml_path, simulation_dt)
+    right_arm_diagnostics = save_trajectory(trajectory_path, buffers.trajectory_data, xml_path, simulation_dt)
+    right_arm_diagnostics_path = save_right_arm_diagnostics(run_dir, right_arm_diagnostics)
     write_video(video_path, video_frames, video_fps)
     perf_summary_path, perf_windows_path = (None, None) if perf_monitor is None else perf_monitor.save_report(run_dir)
     walk_distance = float(np.linalg.norm(data.xpos[scene_ids.torso_id][:2] - buffers.torso_xy_start)) if buffers.torso_xy_start is not None else 0.0
     stats, saved_paths = save_eval(run_dir, buffers.eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
     saved_paths["perf_summary"] = perf_summary_path
     saved_paths["perf_windows"] = perf_windows_path
+    saved_paths["right_arm_diagnostics"] = right_arm_diagnostics_path
     print_run_summary(stats, saved_paths, trajectory_path, video_path, has_renderer, video_frames, video_width, video_height, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles)
 
 
@@ -964,9 +1201,10 @@ def print_run_summary(
     print(f"评估已保存到目录: {saved_paths['run_dir']}")
     extra_video = video_path if video_frames else "未保存（缺少 imageio、Renderer 初始化失败或无帧）"
     extra_perf = saved_paths.get("perf_summary") if saved_paths.get("perf_summary") is not None else "未保存 perf 概览"
+    extra_right_arm = saved_paths.get("right_arm_diagnostics") if saved_paths.get("right_arm_diagnostics") is not None else "未保存右臂诊断"
     print(
         f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | "
-        f"{saved_paths['summary']} | {extra_perf} | {trajectory_path} | {extra_video}"
+        f"{saved_paths['summary']} | {extra_perf} | {extra_right_arm} | {trajectory_path} | {extra_video}"
     )
 
     if has_renderer:

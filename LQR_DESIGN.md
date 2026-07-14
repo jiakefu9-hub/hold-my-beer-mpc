@@ -594,6 +594,15 @@ $
 
 `main_sim.py` 中 LQR 每 `0.006 s` 更新一次，`ddq_des/q_ref/dq_ref` 在更新间隔内保持；逆动力学使用最新整机状态，每个 `0.002 s` 仿真步重算一次。当前 XML 的右臂 motor 为 `gear=1` 的直接驱动，因此右臂 `qfrc_inverse` 可直接对应 `ctrl[18:23]`，最后按关节 `actuatorfrcrange` 限幅。
 
+当前实现里，力矩上下限的来源也需要明确写死：
+
+- 模型根来源：`resources/g1_description/g1_29dof_with_hand.xml` 中右臂 5 个被控 joint 的 `actuatorfrcrange`
+- MuJoCo 读取结果：`sim_support.py` 在 `resolve_direct_drive_joint_group(...)` 中通过 `model.jnt_actfrcrange[joint_ids].copy()` 读取为 `torque_limits`
+- 实际执行位置：`apply_computed_torque_control(...)` 中
+  `tau_cmd = np.clip(tau_ff + tau_pd, torque_limits[:, 0], torque_limits[:, 1])`
+- 当前右臂 5 个受控关节的上下限均为 `[-25, 25] N·m`：`right_shoulder_pitch_joint`、`right_shoulder_roll_joint`、`right_shoulder_yaw_joint`、`right_elbow_joint`、`right_wrist_roll_joint`
+- 记录用途：这个限幅属于“底层执行器/模型层硬限幅”，用于保证最终写入 `d.ctrl` 的力矩不超过 XML 定义的可用力矩范围
+
 ---
 
 ## 11. 与 MPC 的关系和区别
@@ -640,6 +649,14 @@ $
 $
 u_0^\star \leftarrow \text{clip}(u_0^\star, u_{min}, u_{max})
 $
+
+当前实现里，这里的 `u = ddq_des` 限幅来源需要特别记住：
+
+- 代码根来源：`arm_lqr.py` 的 `ArmLQRPolicy.__init__(..., max_ddq=8.0)` 默认参数
+- 实际执行位置：`arm_lqr.py` 中 `u = np.clip(-(K0 @ x0 + k0), -self.max_ddq, self.max_ddq)`
+- 当前默认值：`max_ddq = 8.0 rad/s^2`
+- 当前工程状态：`main_sim.py` 创建 `ArmLQRPolicy(...)` 时只显式传入了 `control_dt` 和 `horizon`，没有从 `g1.yaml` 覆盖 `max_ddq`，因此现在的 `[-8, 8]` 是实现默认值，不是 YAML 配置值
+- 记录用途：这个限幅属于“LQR 输出层安全裁剪”，用于防止无约束 LQR 直接给出过激的关节加速度命令
 
 必要时也可对生成的 `q_ref, dq_ref` 再做一次限幅。
 
