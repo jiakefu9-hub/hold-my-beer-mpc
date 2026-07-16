@@ -34,6 +34,7 @@ RIGHT_ARM_TAU_SATURATION_EPS = 1e-6
 class SceneIds:
     torso_id: int
     imu_site_id: int
+    torso_acc_sensor_id: int
     left_grasp_site_id: int
     right_grasp_site_id: int
 
@@ -90,12 +91,19 @@ def get_site_vel(model, data, site_id):
 
 def update_torso_motion_state(model, data, scene_ids, buffers, counter, simulation_dt):
     lin_vel, ang_vel = get_site_vel(model, data, scene_ids.imu_site_id)
-    lin_acc = np.zeros(3) if counter == 0 else (lin_vel - buffers.prev_torso_lin_vel) / simulation_dt
+    imu_rot_world = data.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy()
+    accel_adr = int(model.sensor_adr[scene_ids.torso_acc_sensor_id])
+    accel_dim = int(model.sensor_dim[scene_ids.torso_acc_sensor_id])
+    if accel_dim != 3:
+        raise ValueError(f"torso accelerometer 维度应为 3，实际为 {accel_dim}。")
+    specific_force_imu = data.sensordata[accel_adr:accel_adr + accel_dim].copy()
+    # MuJoCo accelerometer 输出 IMU 局部系比力；旋转到世界系并加回世界系重力，得到平动加速度。
+    lin_acc = np.zeros(3) if counter == 0 else imu_rot_world @ specific_force_imu + model.opt.gravity
     ang_acc = np.zeros(3) if counter == 0 else (ang_vel - buffers.prev_torso_ang_vel) / simulation_dt
     buffers.prev_torso_lin_vel, buffers.prev_torso_ang_vel = lin_vel.copy(), ang_vel.copy()
     return TorsoMotionState(
         quat=data.xquat[scene_ids.torso_id].copy(),
-        rotmat=data.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy(),
+        rotmat=imu_rot_world,
         lin_vel=lin_vel.copy(),
         ang_vel=ang_vel.copy(),
         lin_acc=lin_acc,
@@ -582,6 +590,7 @@ def resolve_scene_ids(model):
     return SceneIds(
         torso_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso_link"),
         imu_site_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "imu_in_torso"),
+        torso_acc_sensor_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, "imu-torso-linear-acceleration"),
         left_grasp_site_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "left_grasp_site"),
         right_grasp_site_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "right_grasp_site"),
     )

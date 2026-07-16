@@ -644,21 +644,21 @@ $
 
 其中 $\lambda > 0$ 为很小正数，例如 `1e-6 ~ 1e-4`
 
-执行前再做输出裁剪：
+对于有界执行器，通常需要在执行前处理输出约束：
 
 $
 u_0^\star \leftarrow \text{clip}(u_0^\star, u_{min}, u_{max})
 $
 
-当前实现里，这里的 `u = ddq_des` 限幅来源需要特别记住：
+当前实验暂时旁路 `u = ddq_des` 的后处理，以便直接验证 LQR 原始输出：
 
-- 代码根来源：`arm_lqr.py` 的 `ArmLQRPolicy.__init__(..., max_ddq=8.0)` 默认参数
-- 实际执行位置：`arm_lqr.py` 中 `u = np.clip(-(K0 @ x0 + k0), -self.max_ddq, self.max_ddq)`
-- 当前默认值：`max_ddq = 8.0 rad/s^2`
-- 当前工程状态：`main_sim.py` 创建 `ArmLQRPolicy(...)` 时只显式传入了 `control_dt` 和 `horizon`，没有从 `g1.yaml` 覆盖 `max_ddq`，因此现在的 `[-8, 8]` 是实现默认值，不是 YAML 配置值
-- 记录用途：这个限幅属于“LQR 输出层安全裁剪”，用于防止无约束 LQR 直接给出过激的关节加速度命令
+- 配置来源：`configs/g1.yaml` 中的 `lqr_max_ddq`、`lqr_max_dq`、`lqr_r_ddq`、`lqr_ddq_rate_limit`、`lqr_ddq_smoothing_alpha`
+- 代码根来源：`arm_lqr.py` 的 `ArmLQRPolicy.__init__(...)`
+- 当前执行路径：Riccati 得到的 `u_raw` 直接作为 `ddq_des`，不调用 `_post_process_ddq(...)`
+- `max_ddq`、ddq 变化率限制、ddq 平滑和 ddq joint-limit guard 当前均不生效
+- `max_dq = 1.0 rad/s` 仍用于一拍积分后的 `dq_ref` 限幅；`r_ddq = 0.25` 仍属于 LQR 代价函数并正常生效
 
-必要时也可对生成的 `q_ref, dq_ref` 再做一次限幅。
+此外，当前代码仍读取 MuJoCo 的右臂 `jnt_range` 并传给 `ArmLQRPolicy.set_joint_limits(...)`，用于裁剪一拍积分得到的 `q_ref`。由于 `_post_process_ddq(...)` 已旁路，基于 `ddq_des` 的轻量 joint-limit guard 当前不生效。
 
 ---
 

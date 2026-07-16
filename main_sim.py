@@ -71,6 +71,10 @@ if __name__ == "__main__":
         num_obs = config["num_obs"]
         arm_controller = config.get("arm_controller", "pid").lower()
         arm_control_decimation = int(config.get("arm_control_decimation", 2))
+        lqr_torso_acc_filter_alpha = float(config.get("lqr_torso_acc_filter_alpha", 0.20))
+        lqr_torso_alpha_filter_alpha = float(config.get("lqr_torso_alpha_filter_alpha", 0.20))
+        lqr_torso_acc_limit = float(config.get("lqr_torso_acc_limit", 30.0))
+        lqr_torso_alpha_limit = float(config.get("lqr_torso_alpha_limit", 40.0))
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
 
     # ==============================
@@ -118,11 +122,46 @@ if __name__ == "__main__":
     target_right_arm_q = right_arm_target.copy()
     target_right_arm_dq = np.zeros(5, dtype=np.float32)
     desired_right_arm_ddq = np.zeros(5, dtype=np.float32)
+    filtered_torso_acc = np.zeros(3, dtype=np.float64)
+    filtered_torso_alpha = np.zeros(3, dtype=np.float64)
     if arm_controller == "lqr":
-        arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, horizon=int(config.get("lqr_horizon", 12)))
+        lqr_kwargs = {
+            "horizon": int(config.get("lqr_horizon", 12)),
+            "q_acc": float(config.get("lqr_q_acc", 1.0)),
+            "q_alpha": float(config.get("lqr_q_alpha", 0.05)),
+            "q_gravity": float(config.get("lqr_q_gravity", 30.0)),
+            "q_posture": float(config.get("lqr_q_posture", 0.4)),
+            "q_vel": float(config.get("lqr_q_vel", 0.02)),
+            "r_ddq": float(config.get("lqr_r_ddq", 0.25)),
+            "terminal_scale": float(config.get("lqr_terminal_scale", 2.0)),
+            "reg": float(config.get("lqr_reg", 1e-6)),
+            "max_ddq": float(config.get("lqr_max_ddq", 3.0)),
+            "max_dq": float(config.get("lqr_max_dq", 1.0)),
+            "ddq_rate_limit": float(config.get("lqr_ddq_rate_limit", 350.0)),
+            "ddq_smoothing_alpha": float(config.get("lqr_ddq_smoothing_alpha", 0.45)),
+            "joint_limit_margin": float(config.get("lqr_joint_limit_margin", 0.25)),
+            "joint_limit_stiffness": float(config.get("lqr_joint_limit_stiffness", 8.0)),
+            "joint_limit_damping": float(config.get("lqr_joint_limit_damping", 2.0)),
+        }
+        arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
-        controller_meta = {"lqr_config": {"horizon": arm_policy.horizon, "control_dt": arm_policy.control_dt, "max_ddq": arm_policy.max_ddq, "max_dq": arm_policy.max_dq, "torque_control": "mujoco_inverse_dynamics_plus_pd", "uncontrolled_qacc_assumption": 0.0}}
+        controller_notes = "finite-horizon time-varying LQR with raw ddq output, MuJoCo IMU accelerometer input, protected finite-difference torso angular acceleration, and MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
+        controller_meta = {
+            "lqr_config": {
+                **lqr_kwargs,
+                "control_dt": arm_policy.control_dt,
+                "torque_control": "mujoco_inverse_dynamics_plus_pd",
+                "uncontrolled_qacc_assumption": 0.0,
+                "torso_acc_filter_alpha": lqr_torso_acc_filter_alpha,
+                "torso_alpha_filter_alpha": lqr_torso_alpha_filter_alpha,
+                "torso_acc_limit": lqr_torso_acc_limit,
+                "torso_alpha_limit": lqr_torso_alpha_limit,
+                "torso_acc_source": "mujoco_imu_accelerometer_world_without_gravity",
+                "torso_alpha_source": "finite_difference_world_angular_velocity",
+                "ddq_post_process": "disabled_raw_lqr_output",
+                "joint_limit_guard": "disabled_with_ddq_post_process",
+            }
+        }
     else:
         arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=arm_control_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
         policy_type = "ArmPIDPolicy"
@@ -161,6 +200,8 @@ if __name__ == "__main__":
     scene_ids = resolve_scene_ids(m)
 
     right_arm_id_index_scratch = resolve_right_arm_control_context(m, run_metadata["right_arm_joint_names"])
+    if arm_controller == "lqr":
+        arm_policy.set_joint_limits(m.jnt_range[right_arm_id_index_scratch.joint_ids])
     right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_id_index_scratch.qpos_indices, imu_site_name="imu_in_torso")
 
     perf_monitor = PerformanceMonitor(step_budget=simulation_dt, arm_budget=arm_control_dt)
@@ -207,9 +248,19 @@ if __name__ == "__main__":
             right_arm_q = arm_waist_q[6:11]
             right_arm_dq = arm_waist_dq[6:11]
 
-            # 读取 torso 的姿态、角速度、线速度，并用有限差分得到 torso 的线加速度和角加速度。
+            # torso 线加速度直接读取 MuJoCo IMU accelerometer，并转换到去重力后的世界系；
+            # torso 角加速度仍由世界系角速度有限差分得到。
             # 这些量一方面用于构建扰动输入，另一方面也会进入 right_arm_obs 给右臂控制器使用。
             torso_state = update_torso_motion_state(m, d, scene_ids, buffers, counter, simulation_dt)
+            if arm_controller == "lqr":
+                acc_alpha = float(np.clip(lqr_torso_acc_filter_alpha, 0.0, 1.0))
+                alpha_alpha = float(np.clip(lqr_torso_alpha_filter_alpha, 0.0, 1.0))
+                torso_acc_limited = np.clip(torso_state.lin_acc, -lqr_torso_acc_limit, lqr_torso_acc_limit)
+                torso_alpha_limited = np.clip(torso_state.ang_acc, -lqr_torso_alpha_limit, lqr_torso_alpha_limit)
+                filtered_torso_acc = acc_alpha * torso_acc_limited + (1.0 - acc_alpha) * filtered_torso_acc
+                filtered_torso_alpha = alpha_alpha * torso_alpha_limited + (1.0 - alpha_alpha) * filtered_torso_alpha
+                torso_state.lin_acc = filtered_torso_acc.copy()
+                torso_state.ang_acc = filtered_torso_alpha.copy()
 
             # 把 torso 的世界系运动量打包成 torso_disturbance，供 KinematicsHelper / LQR 局部线性化使用。
             torso_disturbance = right_arm_helper.build_disturbance_input(
@@ -288,7 +339,8 @@ if __name__ == "__main__":
                 buffers,
                 right_arm_control={
                     "ddq_des": desired_right_arm_ddq,
-                    "ddq_saturation_limit": getattr(arm_policy, "max_ddq", np.inf),
+                    # ddq 后处理已旁路，当前不存在 ddq 硬限幅。
+                    "ddq_saturation_limit": np.inf,
                     "tau_ff": right_arm_tau_ff,
                     "tau_pd": right_arm_tau_pd,
                     "tau_cmd_raw": right_arm_tau_cmd_raw,
