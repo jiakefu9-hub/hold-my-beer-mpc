@@ -109,8 +109,8 @@ class ArmLQRPolicy:
             p = h - M @ kk
             K0, k0 = K, kk
         u_raw = -(K0 @ x0 + k0)  # 第一拍最优控制量 u=ddq。
-        # 当前实验直接执行 LQR 原始输出；_post_process_ddq 暂时旁路，便于单独验证 Q/R 调参效果。
-        u = u_raw.copy()
+        # 只启用 ddq 硬限幅和 joint-limit guard；rate limit 与 smoothing 保持旁路。
+        u = self._apply_ddq_safety(q, dq, u_raw)
         dq_ref = np.clip(dq + u * dt, -self.max_dq, self.max_dq)  # 用 ddq 积分一步得到目标关节速度，并限速。
         q_ref = q + dq * dt + 0.5 * u * dt * dt  # 匀加速积分一步得到目标关节位置。
         if self.joint_limits is not None:
@@ -126,8 +126,14 @@ class ArmLQRPolicy:
             raise ValueError(f"joint_limits shape {joint_limits.shape} 与右臂维度 {(self.n, 2)} 不一致。")
         self.joint_limits = joint_limits.copy()
 
+    def _apply_ddq_safety(self, q, dq, u_raw):
+        """应用最小 ddq 安全层，不包含变化率限制或平滑。"""
+        u = np.clip(u_raw, -self.max_ddq, self.max_ddq)
+        u = self._apply_joint_limit_guard(q, dq, u)
+        return np.clip(u, -self.max_ddq, self.max_ddq)
+
     def _post_process_ddq(self, q, dq, u_raw, dt):
-        # 该函数暂时保留用于后续对比实验；当前 compute_action() 不调用它。
+        # 完整后处理暂时保留用于后续对比实验；当前 compute_action() 不调用它。
         # 第 1 层保护：先对 LQR 原始输出 u_raw 做硬限幅，避免 ddq_des 一上来就超过 self.max_ddq。
         u = np.clip(u_raw, -self.max_ddq, self.max_ddq)
 

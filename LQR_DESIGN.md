@@ -650,15 +650,15 @@ $
 u_0^\star \leftarrow \text{clip}(u_0^\star, u_{min}, u_{max})
 $
 
-当前实验暂时旁路 `u = ddq_des` 的后处理，以便直接验证 LQR 原始输出：
+当前实验只启用最小 `u = ddq_des` 安全层：
 
 - 配置来源：`configs/g1.yaml` 中的 `lqr_max_ddq`、`lqr_max_dq`、`lqr_r_ddq`、`lqr_ddq_rate_limit`、`lqr_ddq_smoothing_alpha`
 - 代码根来源：`arm_lqr.py` 的 `ArmLQRPolicy.__init__(...)`
-- 当前执行路径：Riccati 得到的 `u_raw` 直接作为 `ddq_des`，不调用 `_post_process_ddq(...)`
-- `max_ddq`、ddq 变化率限制、ddq 平滑和 ddq joint-limit guard 当前均不生效
+- 当前执行路径：Riccati 得到 `u_raw` 后，依次经过 `max_ddq` 硬限幅、ddq joint-limit guard 和第二次 `max_ddq` 硬限幅
+- 完整 `_post_process_ddq(...)` 仍未调用，因此 ddq 变化率限制和 ddq 平滑不生效
 - `max_dq = 1.0 rad/s` 仍用于一拍积分后的 `dq_ref` 限幅；`r_ddq = 0.25` 仍属于 LQR 代价函数并正常生效
 
-此外，当前代码仍读取 MuJoCo 的右臂 `jnt_range` 并传给 `ArmLQRPolicy.set_joint_limits(...)`，用于裁剪一拍积分得到的 `q_ref`。由于 `_post_process_ddq(...)` 已旁路，基于 `ddq_des` 的轻量 joint-limit guard 当前不生效。
+此外，当前代码读取 MuJoCo 的右臂 `jnt_range` 并传给 `ArmLQRPolicy.set_joint_limits(...)`：它既用于裁剪一拍积分得到的 `q_ref`，也用于在接近上下限时修正 `ddq_des` 的方向。这个 guard 是后置安全修正，不是 LQR 内部的硬约束优化。
 
 ---
 

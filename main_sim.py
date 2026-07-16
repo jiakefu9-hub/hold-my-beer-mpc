@@ -145,7 +145,7 @@ if __name__ == "__main__":
         }
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with raw ddq output, MuJoCo IMU accelerometer input, protected finite-difference torso angular acceleration, and MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
+        controller_notes = "finite-horizon time-varying LQR with ddq hard clipping and joint-limit guard only, no ddq rate limiting or smoothing, MuJoCo IMU accelerometer input, protected finite-difference torso angular acceleration, and MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
         controller_meta = {
             "lqr_config": {
                 **lqr_kwargs,
@@ -158,8 +158,11 @@ if __name__ == "__main__":
                 "torso_alpha_limit": lqr_torso_alpha_limit,
                 "torso_acc_source": "mujoco_imu_accelerometer_world_without_gravity",
                 "torso_alpha_source": "finite_difference_world_angular_velocity",
-                "ddq_post_process": "disabled_raw_lqr_output",
-                "joint_limit_guard": "disabled_with_ddq_post_process",
+                "ddq_post_process": "hard_clip_and_joint_limit_guard_only",
+                "ddq_hard_clip_enabled": True,
+                "joint_limit_guard": "enabled",
+                "ddq_rate_limit_enabled": False,
+                "ddq_smoothing_enabled": False,
             }
         }
     else:
@@ -339,8 +342,7 @@ if __name__ == "__main__":
                 buffers,
                 right_arm_control={
                     "ddq_des": desired_right_arm_ddq,
-                    # ddq 后处理已旁路，当前不存在 ddq 硬限幅。
-                    "ddq_saturation_limit": np.inf,
+                    "ddq_saturation_limit": arm_policy.max_ddq if arm_controller == "lqr" else np.inf,
                     "tau_ff": right_arm_tau_ff,
                     "tau_pd": right_arm_tau_pd,
                     "tau_cmd_raw": right_arm_tau_cmd_raw,

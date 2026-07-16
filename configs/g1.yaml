@@ -11,11 +11,11 @@ arm_control_decimation: 3
 # Right arm controller: "pid" or "lqr"
 arm_controller: lqr
 lqr_horizon: 12
-# LQR cost tuning. ddq post-processing is currently bypassed in arm_lqr.py.
+# LQR cost tuning and minimal ddq safety layer.
 lqr_r_ddq: 0.25
 lqr_max_ddq: 3.0
 lqr_max_dq: 1.0
-# Retained for later experiments; rate limit, smoothing, and ddq joint guard are currently inactive.
+# Only hard clipping and joint-limit guard are active. Rate limiting and smoothing remain inactive.
 lqr_ddq_rate_limit: 350.0
 lqr_ddq_smoothing_alpha: 0.45
 lqr_joint_limit_margin: 0.25
