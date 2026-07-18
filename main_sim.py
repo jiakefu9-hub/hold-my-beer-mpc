@@ -122,13 +122,18 @@ if __name__ == "__main__":
     target_right_arm_q = right_arm_target.copy()
     target_right_arm_dq = np.zeros(5, dtype=np.float32)
     desired_right_arm_ddq = np.zeros(5, dtype=np.float32)
+    raw_right_arm_ddq = np.zeros(5, dtype=np.float64)
+    right_ee_position_reference_torso = np.zeros(3, dtype=np.float64)
     filtered_torso_acc = np.zeros(3, dtype=np.float64)
     filtered_torso_alpha = np.zeros(3, dtype=np.float64)
+    lqr_one_step_prediction = None
+    lqr_cost_definition = None
     if arm_controller == "lqr":
         lqr_kwargs = {
             "horizon": int(config.get("lqr_horizon", 12)),
             "q_acc": float(config.get("lqr_q_acc", 1.0)),
             "q_alpha": float(config.get("lqr_q_alpha", 0.05)),
+            "q_position": float(config.get("lqr_q_position", 20.0)),
             "q_gravity": float(config.get("lqr_q_gravity", 30.0)),
             "q_posture": float(config.get("lqr_q_posture", 0.4)),
             "q_vel": float(config.get("lqr_q_vel", 0.02)),
@@ -144,23 +149,32 @@ if __name__ == "__main__":
             "joint_limit_damping": float(config.get("lqr_joint_limit_damping", 2.0)),
         }
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
+        lqr_cost_definition = arm_policy.get_cost_definition()
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with ddq hard clipping and joint-limit guard only, no ddq rate limiting or smoothing, MuJoCo IMU accelerometer input, protected finite-difference torso angular acceleration, and MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
+        controller_notes = "finite-horizon time-varying LQR with torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and contact-aware MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
         controller_meta = {
             "lqr_config": {
                 **lqr_kwargs,
                 "control_dt": arm_policy.control_dt,
-                "torque_control": "mujoco_inverse_dynamics_plus_pd",
+                "torque_control": "mujoco_contact_aware_inverse_dynamics_plus_pd",
+                "contact_aware_tau_formula": "qfrc_inverse + qfrc_contact_only",
+                "noncontact_constraint_compensation": "retained_in_qfrc_inverse",
                 "uncontrolled_qacc_assumption": 0.0,
+                "ddq_tracking": "6ms_velocity_difference_aligned_between_consecutive_arm_updates",
+                "cost_tracking": "one_step_model_vs_realized_next_arm_update",
                 "torso_acc_filter_alpha": lqr_torso_acc_filter_alpha,
                 "torso_alpha_filter_alpha": lqr_torso_alpha_filter_alpha,
                 "torso_acc_limit": lqr_torso_acc_limit,
                 "torso_alpha_limit": lqr_torso_alpha_limit,
                 "torso_acc_source": "mujoco_imu_accelerometer_world_without_gravity",
                 "torso_alpha_source": "finite_difference_world_angular_velocity",
-                "ddq_post_process": "hard_clip_and_joint_limit_guard_only",
-                "ddq_hard_clip_enabled": True,
-                "joint_limit_guard": "enabled",
+                "position_reference_frame": "torso_imu",
+                "position_reference_q": right_arm_target.copy(),
+                "end_effector_velocity_cost_enabled": False,
+                "gravity_error": "directed_3d",
+                "ddq_post_process": "fully_bypassed",
+                "ddq_hard_clip_enabled": False,
+                "joint_limit_guard": "disabled",
                 "ddq_rate_limit_enabled": False,
                 "ddq_smoothing_enabled": False,
             }
@@ -205,7 +219,13 @@ if __name__ == "__main__":
     right_arm_id_index_scratch = resolve_right_arm_control_context(m, run_metadata["right_arm_joint_names"])
     if arm_controller == "lqr":
         arm_policy.set_joint_limits(m.jnt_range[right_arm_id_index_scratch.joint_ids])
-    right_arm_helper = KinematicsHelper(m, ee_site_name="right_grasp_site", joint_indices=right_arm_id_index_scratch.qpos_indices, imu_site_name="imu_in_torso")
+    right_arm_helper = KinematicsHelper(
+        m,
+        ee_site_name="right_grasp_site",
+        joint_indices=right_arm_id_index_scratch.qpos_indices,
+        imu_site_name="imu_in_torso",
+        position_reference_q=right_arm_target,
+    )
 
     perf_monitor = PerformanceMonitor(step_budget=simulation_dt, arm_budget=arm_control_dt)
 
@@ -236,7 +256,7 @@ if __name__ == "__main__":
             #    - LQR 路径：除了输出 q_ref / dq_ref，还会额外输出期望关节加速度 ddq_des
             # 2) 下层执行层把参考转成真正施加到 MuJoCo 的力矩：
             #    - 基础项：所有上肢统一先经过 joint-space PD，得到 tau_pd
-            #    - LQR 额外项：再根据 ddq_des 调用 mj_inverse() 计算前馈力矩 tau_ff，
+            #    - LQR 额外项：根据 ddq_des 调用 mj_inverse()，并消去接触约束反力项得到 tau_ff，
             #      最终右臂实际执行的是 tau = tau_ff + tau_pd
 
             # 当前上肢的真实状态（腰 + 左臂 + 右臂），后面 PD 会用它和目标状态做误差反馈
@@ -255,6 +275,8 @@ if __name__ == "__main__":
             # torso 角加速度仍由世界系角速度有限差分得到。
             # 这些量一方面用于构建扰动输入，另一方面也会进入 right_arm_obs 给右臂控制器使用。
             torso_state = update_torso_motion_state(m, d, scene_ids, buffers, counter, simulation_dt)
+            raw_torso_acc = torso_state.lin_acc.copy()
+            raw_torso_alpha = torso_state.ang_acc.copy()
             if arm_controller == "lqr":
                 acc_alpha = float(np.clip(lqr_torso_acc_filter_alpha, 0.0, 1.0))
                 alpha_alpha = float(np.clip(lqr_torso_alpha_filter_alpha, 0.0, 1.0))
@@ -279,11 +301,15 @@ if __name__ == "__main__":
                 perf_monitor.start_arm_control()
                 # right_arm_helpers 里封装了当前步右臂控制要用到的运动学量、重力误差计算和 LQR 线性化接口
                 right_arm_helpers = right_arm_helper.build_helpers(d, disturbance=torso_disturbance)
+                right_ee_position_reference_torso = right_arm_helpers.torso_relative_position_reference.copy()
                 if arm_controller == "lqr":
                     # LQR 先在上层求解：
                     # - target_right_arm_q / dq：给下层 PD 跟踪的参考轨迹
                     # - desired_right_arm_ddq：期望关节加速度，后面用于 computed torque 前馈
                     target_right_arm_q, target_right_arm_dq, desired_right_arm_ddq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
+                    lqr_diagnostics = arm_policy.get_last_diagnostics()
+                    raw_right_arm_ddq = lqr_diagnostics["ddq_raw"]
+                    lqr_one_step_prediction = lqr_diagnostics["one_step_prediction"]
                 else:
                     # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
                     target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
@@ -301,6 +327,10 @@ if __name__ == "__main__":
             # 只切出右臂 5 维的 PD 力矩；如果是 LQR，后面还要和逆动力学前馈叠加
             right_arm_tau_pd = tau_arm_waist[6:11].copy()
             right_arm_tau_ff = np.zeros(5, dtype=np.float64)
+            right_arm_tau_inverse = np.zeros(5, dtype=np.float64)
+            right_arm_tau_contact = np.zeros(5, dtype=np.float64)
+            right_arm_tau_constraint_total = np.zeros(5, dtype=np.float64)
+            right_arm_tau_constraint_noncontact = np.zeros(5, dtype=np.float64)
             right_arm_tau_cmd_raw = right_arm_tau_pd.copy()
             right_arm_tau_limit_lower = right_arm_id_index_scratch.torque_limits[:, 0].copy()
             right_arm_tau_limit_upper = right_arm_id_index_scratch.torque_limits[:, 1].copy()
@@ -310,10 +340,10 @@ if __name__ == "__main__":
                 # apply_computed_torque_control() 内部会：
                 # 1) 复制当前整机 qpos / qvel 到 scratch data
                 # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
-                # 3) 调用 mujoco.mj_inverse() 得到对应的广义力
-                # 4) 取出右臂 5 维的前馈力矩 tau_ff，并与 tau_pd 相加、再做力矩限幅
+                # 3) 调用 mj_inverse()，从全部约束中只重建 contact 广义力
+                # 4) qfrc_inverse 只加 contact，保留 frictionloss 等非接触约束补偿
                 perf_monitor.start_computed_torque_control()
-                right_arm_tau, right_arm_tau_ff = apply_computed_torque_control(
+                right_arm_tau, inverse_result = apply_computed_torque_control(
                     m,
                     d,
                     right_arm_id_index_scratch,
@@ -321,6 +351,11 @@ if __name__ == "__main__":
                     right_arm_tau_pd,
                 )
                 perf_monitor.finish_computed_torque_control()
+                right_arm_tau_ff = inverse_result.tau_ff
+                right_arm_tau_inverse = inverse_result.tau_inverse
+                right_arm_tau_contact = inverse_result.tau_contact
+                right_arm_tau_constraint_total = inverse_result.tau_constraint_total
+                right_arm_tau_constraint_noncontact = inverse_result.tau_constraint_noncontact
                 right_arm_tau_cmd_raw = right_arm_tau_ff + right_arm_tau_pd
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
@@ -341,13 +376,33 @@ if __name__ == "__main__":
                 scene_ids,
                 buffers,
                 right_arm_control={
+                    "arm_policy_updated": counter % arm_control_decimation == 0,
+                    "target_q": target_right_arm_q,
+                    "target_dq": target_right_arm_dq,
+                    "ddq_raw": raw_right_arm_ddq,
                     "ddq_des": desired_right_arm_ddq,
-                    "ddq_saturation_limit": arm_policy.max_ddq if arm_controller == "lqr" else np.inf,
+                    "ddq_saturation_limit": np.inf,
+                    "tau_inverse": right_arm_tau_inverse,
+                    "tau_contact": right_arm_tau_contact,
+                    "tau_constraint_total": right_arm_tau_constraint_total,
+                    "tau_constraint_noncontact": right_arm_tau_constraint_noncontact,
                     "tau_ff": right_arm_tau_ff,
                     "tau_pd": right_arm_tau_pd,
                     "tau_cmd_raw": right_arm_tau_cmd_raw,
                     "tau_limit_lower": right_arm_tau_limit_lower,
                     "tau_limit_upper": right_arm_tau_limit_upper,
+                    "torso_lin_vel_world": torso_state.lin_vel,
+                    "torso_ang_vel_world": torso_state.ang_vel,
+                    "torso_acc_world_raw": raw_torso_acc,
+                    "torso_acc_world_used": torso_state.lin_acc,
+                    "torso_alpha_world_raw": raw_torso_alpha,
+                    "torso_alpha_world_used": torso_state.ang_acc,
+                    "ee_position_reference_torso": right_ee_position_reference_torso,
+                    "lqr_one_step_prediction": (
+                        lqr_one_step_prediction
+                        if arm_controller == "lqr" and counter % arm_control_decimation == 0
+                        else None
+                    ),
                 },
             )
             if renderer is not None and counter % video_stride == 0:
@@ -407,6 +462,6 @@ if __name__ == "__main__":
     # 退出 viewer 后统一保存轨迹、评估指标、视频和性能统计，再释放 renderer。
     # 这是实验收尾，不是控制逻辑核心。
     # ==============================
-    finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer is not None, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=perf_monitor)
+        finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer is not None, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=perf_monitor, lqr_cost_definition=lqr_cost_definition)
     close_renderer(renderer)
     renderer = None

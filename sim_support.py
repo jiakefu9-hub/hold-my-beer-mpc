@@ -28,6 +28,23 @@ RIGHT_ARM_QVEL_SLICE = slice(24, 29)
 RIGHT_ARM_CTRL_SLICE = slice(18, 23)
 RIGHT_ARM_DDQ_SATURATION_EPS = 1e-2
 RIGHT_ARM_TAU_SATURATION_EPS = 1e-6
+LQR_COST_TERM_NAMES = (
+    "linear_acceleration",
+    "angular_acceleration",
+    "position",
+    "gravity",
+    "posture",
+    "velocity",
+    "control",
+)
+CONTACT_CONSTRAINT_TYPES = np.array(
+    [
+        int(mujoco.mjtConstraint.mjCNSTR_CONTACT_FRICTIONLESS),
+        int(mujoco.mjtConstraint.mjCNSTR_CONTACT_PYRAMIDAL),
+        int(mujoco.mjtConstraint.mjCNSTR_CONTACT_ELLIPTIC),
+    ],
+    dtype=np.int32,
+)
 
 
 @dataclass
@@ -59,6 +76,15 @@ class DirectDriveJointGroup:
     actuator_ids: np.ndarray
     torque_limits: np.ndarray
     inverse_dynamics_data: mujoco.MjData
+
+
+@dataclass
+class InverseDynamicsResult:
+    tau_ff: np.ndarray
+    tau_inverse: np.ndarray
+    tau_contact: np.ndarray
+    tau_constraint_total: np.ndarray
+    tau_constraint_noncontact: np.ndarray
 
 
 @dataclass
@@ -202,8 +228,23 @@ def resolve_right_arm_control_context(model, joint_names):
     )
 
 
+def _contact_generalized_force(model, scratch):
+    """从 MuJoCo 全部约束中只重建 contact 对应的广义力。"""
+    if scratch.nefc == 0:
+        return np.zeros(model.nv, dtype=np.float64)
+    # 取完整约束雅可比
+    efc_jacobian = np.asarray(scratch.efc_J, dtype=np.float64).reshape(-1, model.nv)[:scratch.nefc]
+    # 判断每一行是什么约束
+    efc_type = np.asarray(scratch.efc_type[:scratch.nefc], dtype=np.int32)
+    # 只选择 contact 行
+    contact_rows = np.isin(efc_type, CONTACT_CONSTRAINT_TYPES)
+    if not np.any(contact_rows):
+        return np.zeros(model.nv, dtype=np.float64)
+    return efc_jacobian[contact_rows].T @ scratch.efc_force[:scratch.nefc][contact_rows]
+
+
 def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indices):
-    """计算指定自由度期望加速度对应的 MuJoCo 逆动力学广义力。"""
+    """计算只消去 contact 反力、保留摩擦补偿的 MuJoCo 逆动力学前馈。"""
     qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     if desired_qacc.shape != qvel_indices.shape:
@@ -217,12 +258,26 @@ def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indice
     scratch.qvel[:] = data.qvel
     scratch.qacc[:] = 0.0
     scratch.qacc[qvel_indices] = desired_qacc
+    scratch.qfrc_applied[:] = data.qfrc_applied
+    scratch.xfrc_applied[:] = data.xfrc_applied
     if model.nmocap:
         scratch.mocap_pos[:] = data.mocap_pos
         scratch.mocap_quat[:] = data.mocap_quat
 
     mujoco.mj_inverse(model, scratch)
-    return scratch.qfrc_inverse[qvel_indices].copy()
+    tau_inverse = scratch.qfrc_inverse[qvel_indices].copy()
+    tau_constraint_total = scratch.qfrc_constraint[qvel_indices].copy()
+    tau_contact = _contact_generalized_force(model, scratch)[qvel_indices]
+    tau_constraint_noncontact = tau_constraint_total - tau_contact
+    # 只加回 contact，避免主动对抗碰撞；frictionloss 等非接触约束仍由执行器补偿。
+    tau_ff = tau_inverse + tau_contact
+    return InverseDynamicsResult(
+        tau_ff=tau_ff,
+        tau_inverse=tau_inverse,
+        tau_contact=tau_contact,
+        tau_constraint_total=tau_constraint_total,
+        tau_constraint_noncontact=tau_constraint_noncontact,
+    )
 
 
 def apply_computed_torque_control(model, data, id_index_scratch, desired_qacc, tau_pd):
@@ -231,7 +286,7 @@ def apply_computed_torque_control(model, data, id_index_scratch, desired_qacc, t
     if tau_pd.shape != id_index_scratch.qvel_indices.shape:
         raise ValueError(f"tau_pd shape {tau_pd.shape} 与控制关节数量 {id_index_scratch.qvel_indices.shape} 不一致。")
 
-    tau_ff = inverse_dynamics_feedforward(
+    inverse_result = inverse_dynamics_feedforward(
         model,
         data,
         id_index_scratch.inverse_dynamics_data,
@@ -239,11 +294,11 @@ def apply_computed_torque_control(model, data, id_index_scratch, desired_qacc, t
         id_index_scratch.qvel_indices,
     )
     tau_cmd = np.clip(
-        tau_ff + tau_pd,
+        inverse_result.tau_ff + tau_pd,
         id_index_scratch.torque_limits[:, 0],
         id_index_scratch.torque_limits[:, 1],
     )
-    return tau_cmd, tau_ff
+    return tau_cmd, inverse_result
 
 
 # ==============================
@@ -559,8 +614,18 @@ class PerformanceMonitor:
         )
 
 
-def tilt_error_from_rot(rot):
-    return (rot.T @ np.array([0.0, 0.0, -9.81]))[:2]
+def tilt_error_from_rot(rot, gravity_world=None):
+    """兼容旧字段名，实际返回有方向的三维末端重力误差。"""
+    gravity_world = np.array([0.0, 0.0, -9.81]) if gravity_world is None else np.asarray(gravity_world, dtype=np.float64)
+    gravity_reference_end = np.array([0.0, 0.0, -np.linalg.norm(gravity_world)], dtype=np.float64)
+    return np.asarray(rot, dtype=np.float64).T @ gravity_world - gravity_reference_end
+
+
+def upright_alignment_from_rot(rot, gravity_world=None):
+    """1 表示末端 z 轴正立，0 表示水平，-1 表示倒立。"""
+    gravity_world = np.array([0.0, 0.0, -9.81]) if gravity_world is None else np.asarray(gravity_world, dtype=np.float64)
+    world_up = -gravity_world / max(np.linalg.norm(gravity_world), 1e-12)
+    return float(np.dot(np.asarray(rot, dtype=np.float64)[:, 2], world_up))
 
 
 def quat_to_yaw_wxyz(quaternion):
@@ -711,7 +776,18 @@ def build_run_metadata(config_file, experiment_name, policy_type, controller_not
 
 def init_eval_buffers():
     return EvalBuffers(
-        eval_data={"time": [], "torso_yaw": [], "left_ee_lin_acc_world": [], "left_ee_ang_acc_world": [], "left_ee_tilt_error": [], "right_ee_lin_acc_world": [], "right_ee_ang_acc_world": [], "right_ee_tilt_error": []},
+        eval_data={
+            "time": [],
+            "torso_yaw": [],
+            "left_ee_lin_acc_world": [],
+            "left_ee_ang_acc_world": [],
+            "left_ee_tilt_error": [],
+            "left_ee_upright_alignment": [],
+            "right_ee_lin_acc_world": [],
+            "right_ee_ang_acc_world": [],
+            "right_ee_tilt_error": [],
+            "right_ee_upright_alignment": [],
+        },
         trajectory_data={
             "time": [],
             "qpos": [],
@@ -722,15 +798,50 @@ def init_eval_buffers():
             "right_arm_dq": [],
             "right_arm_qacc": [],
             "right_arm_ctrl": [],
+            "right_arm_target_q": [],
+            "right_arm_target_dq": [],
+            "right_arm_ddq_raw": [],
             "right_arm_ddq_des": [],
             "right_arm_ddq_saturation_limit": [],
             "right_arm_ddq_saturation_mask": [],
+            "right_arm_tau_inverse": [],
+            # 兼容旧字段：从本版开始 tau_constraint 与 tau_contact 含义相同，均仅表示 contact 分量。
+            "right_arm_tau_constraint": [],
+            "right_arm_tau_contact": [],
+            "right_arm_tau_constraint_total": [],
+            "right_arm_tau_constraint_noncontact": [],
             "right_arm_tau_ff": [],
             "right_arm_tau_pd": [],
             "right_arm_tau_cmd_raw": [],
             "right_arm_tau_limit_lower": [],
             "right_arm_tau_limit_upper": [],
             "right_arm_tau_saturation_mask": [],
+            "right_arm_actual_qfrc_bias": [],
+            "right_arm_actual_qfrc_passive": [],
+            "right_arm_actual_qfrc_constraint": [],
+            "torso_lin_vel_world": [],
+            "torso_ang_vel_world": [],
+            "torso_acc_world_raw": [],
+            "torso_acc_world_used": [],
+            "torso_alpha_world_raw": [],
+            "torso_alpha_world_used": [],
+            "right_ee_lin_vel_world": [],
+            "right_ee_ang_vel_world": [],
+            "right_ee_position_torso": [],
+            "right_ee_position_reference_torso": [],
+            "right_ee_position_error_torso": [],
+            "right_ee_gravity_error_end": [],
+            "right_ee_upright_alignment": [],
+            "right_lqr_one_step_q_model": [],
+            "right_lqr_one_step_dq_model": [],
+            "right_lqr_one_step_ee_lin_acc_model": [],
+            "right_lqr_one_step_ee_ang_acc_model": [],
+            "right_lqr_one_step_position_error_model": [],
+            "right_lqr_one_step_gravity_error_model": [],
+            "right_lqr_one_step_cost_model": [],
+            "right_lqr_one_step_prediction_valid": [],
+            "arm_policy_updated": [],
+            "contact_count": [],
         },
         prev_left_lin_vel=np.zeros(3),
         prev_left_ang_vel=np.zeros(3),
@@ -776,25 +887,249 @@ def make_video_renderer(model, preferred_width=1280, preferred_height=720):
         return None, width, height
 
 
+def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_definition):
+    """把相邻两次手臂更新之间的真实响应与一步预测对齐到前一次更新时间。"""
+    time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
+    sample_count = len(time_values)
+    joint_count = len(RIGHT_ARM_JOINT_NAMES)
+    cost_count = len(LQR_COST_TERM_NAMES)
+
+    def empty(width):
+        return np.full((sample_count, width), np.nan, dtype=np.float64)
+
+    derived = {
+        "right_arm_ddq_real": empty(joint_count),
+        "right_arm_ddq_tracking_error": empty(joint_count),
+        "right_lqr_one_step_q_actual": empty(joint_count),
+        "right_lqr_one_step_dq_actual": empty(joint_count),
+        "right_lqr_one_step_ee_lin_acc_actual": empty(3),
+        "right_lqr_one_step_ee_ang_acc_actual": empty(3),
+        "right_lqr_one_step_position_error_actual": empty(3),
+        "right_lqr_one_step_gravity_error_actual": empty(3),
+        "right_lqr_one_step_cost_actual": empty(cost_count),
+        "right_lqr_one_step_cost_error": empty(cost_count),
+        "right_lqr_tracking_interval_dt": np.full(sample_count, np.nan, dtype=np.float64),
+        "right_lqr_tracking_valid": np.zeros(sample_count, dtype=bool),
+    }
+    if sample_count == 0 or cost_definition is None:
+        trajectory_data.update(derived)
+        return
+
+    prediction_valid = np.asarray(
+        trajectory_data.get("right_lqr_one_step_prediction_valid", []),
+        dtype=bool,
+    )
+    right_dq = np.asarray(trajectory_data.get("right_arm_dq", []), dtype=np.float64)
+    right_q = np.asarray(trajectory_data.get("right_arm_q", []), dtype=np.float64)
+    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
+    ee_lin_vel = np.asarray(trajectory_data.get("right_ee_lin_vel_world", []), dtype=np.float64)
+    ee_ang_vel = np.asarray(trajectory_data.get("right_ee_ang_vel_world", []), dtype=np.float64)
+    position_error = np.asarray(trajectory_data.get("right_ee_position_error_torso", []), dtype=np.float64)
+    gravity_error = np.asarray(trajectory_data.get("right_ee_gravity_error_end", []), dtype=np.float64)
+    model_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_model", []), dtype=np.float64)
+    expected_shapes = (
+        prediction_valid.shape == (sample_count,),
+        right_dq.shape == (sample_count, joint_count),
+        right_q.shape == (sample_count, joint_count),
+        ddq_des.shape == (sample_count, joint_count),
+        ee_lin_vel.shape == (sample_count, 3),
+        ee_ang_vel.shape == (sample_count, 3),
+        position_error.shape == (sample_count, 3),
+        gravity_error.shape == (sample_count, 3),
+        model_cost.shape == (sample_count, cost_count),
+    )
+    if not all(expected_shapes):
+        trajectory_data.update(derived)
+        return
+
+    Qa = np.asarray(cost_definition["Qa"], dtype=np.float64)
+    Qalpha = np.asarray(cost_definition["Qalpha"], dtype=np.float64)
+    Qp = np.asarray(cost_definition["Qp"], dtype=np.float64)
+    Qg = np.asarray(cost_definition["Qg"], dtype=np.float64)
+    Qq = np.asarray(cost_definition["Qq"], dtype=np.float64)
+    Qv = np.asarray(cost_definition["Qv"], dtype=np.float64)
+    R = np.asarray(cost_definition["R"], dtype=np.float64)
+    posture_reference = np.asarray(cost_definition["posture_reference"], dtype=np.float64)
+
+    update_indices = np.flatnonzero(prediction_valid)
+    for start_index, next_index in zip(update_indices[:-1], update_indices[1:]):
+        before_index = start_index - 1
+        end_index = next_index - 1
+        interval_dt = (next_index - start_index) * float(simulation_dt)
+        if before_index < 0 or end_index <= before_index or interval_dt <= 0.0:
+            continue
+
+        ddq_real = (right_dq[end_index] - right_dq[before_index]) / interval_dt
+        ee_lin_acc_real = (ee_lin_vel[end_index] - ee_lin_vel[before_index]) / interval_dt
+        ee_ang_acc_real = (ee_ang_vel[end_index] - ee_ang_vel[before_index]) / interval_dt
+        q_actual = right_q[end_index]
+        dq_actual = right_dq[end_index]
+        position_actual = position_error[end_index]
+        gravity_actual = gravity_error[end_index]
+        posture_error = q_actual - posture_reference
+        control = ddq_des[start_index]
+        actual_cost = np.array(
+            [
+                ee_lin_acc_real @ Qa @ ee_lin_acc_real,
+                ee_ang_acc_real @ Qalpha @ ee_ang_acc_real,
+                position_actual @ Qp @ position_actual,
+                gravity_actual @ Qg @ gravity_actual,
+                posture_error @ Qq @ posture_error,
+                dq_actual @ Qv @ dq_actual,
+                control @ R @ control,
+            ],
+            dtype=np.float64,
+        )
+
+        derived["right_arm_ddq_real"][start_index] = ddq_real
+        derived["right_arm_ddq_tracking_error"][start_index] = ddq_real - control
+        derived["right_lqr_one_step_q_actual"][start_index] = q_actual
+        derived["right_lqr_one_step_dq_actual"][start_index] = dq_actual
+        derived["right_lqr_one_step_ee_lin_acc_actual"][start_index] = ee_lin_acc_real
+        derived["right_lqr_one_step_ee_ang_acc_actual"][start_index] = ee_ang_acc_real
+        derived["right_lqr_one_step_position_error_actual"][start_index] = position_actual
+        derived["right_lqr_one_step_gravity_error_actual"][start_index] = gravity_actual
+        derived["right_lqr_one_step_cost_actual"][start_index] = actual_cost
+        derived["right_lqr_one_step_cost_error"][start_index] = actual_cost - model_cost[start_index]
+        derived["right_lqr_tracking_interval_dt"][start_index] = interval_dt
+        derived["right_lqr_tracking_valid"][start_index] = (
+            np.all(np.isfinite(model_cost[start_index]))
+            and np.all(np.isfinite(actual_cost))
+            and np.all(np.isfinite(ddq_real))
+        )
+
+    trajectory_data.update(derived)
+
+
+def _component_tracking_metrics(reference, actual):
+    reference = np.asarray(reference, dtype=np.float64)
+    actual = np.asarray(actual, dtype=np.float64)
+    if reference.ndim != 2 or actual.shape != reference.shape or reference.shape[0] == 0:
+        width = reference.shape[1] if reference.ndim == 2 else 0
+        return {name: np.zeros(width).tolist() for name in (
+            "reference_rms", "actual_rms", "rmse", "mae", "abs_max", "normalized_rmse", "correlation", "gain"
+        )}
+    error = actual - reference
+    reference_rms = np.sqrt(np.mean(reference ** 2, axis=0))
+    actual_rms = np.sqrt(np.mean(actual ** 2, axis=0))
+    rmse = np.sqrt(np.mean(error ** 2, axis=0))
+    correlation = np.zeros(reference.shape[1], dtype=np.float64)
+    gain = np.zeros(reference.shape[1], dtype=np.float64)
+    for component in range(reference.shape[1]):
+        ref_component = reference[:, component]
+        actual_component = actual[:, component]
+        if np.std(ref_component) > 1e-12 and np.std(actual_component) > 1e-12:
+            correlation[component] = np.corrcoef(ref_component, actual_component)[0, 1]
+        denominator = ref_component @ ref_component
+        if denominator > 1e-12:
+            gain[component] = (ref_component @ actual_component) / denominator
+    return {
+        "reference_rms": reference_rms.tolist(),
+        "actual_rms": actual_rms.tolist(),
+        "rmse": rmse.tolist(),
+        "mae": np.mean(np.abs(error), axis=0).tolist(),
+        "abs_max": np.max(np.abs(error), axis=0).tolist(),
+        "normalized_rmse": (rmse / np.maximum(reference_rms, 1e-12)).tolist(),
+        "correlation": correlation.tolist(),
+        "gain": gain.tolist(),
+    }
+
+
+def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_time):
+    time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
+    valid = np.asarray(trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool).copy()
+    if valid.shape != time_values.shape:
+        valid = np.zeros_like(time_values, dtype=bool)
+    interval_dt = np.asarray(trajectory_data.get("right_lqr_tracking_interval_dt", []), dtype=np.float64)
+    if interval_dt.shape != time_values.shape:
+        valid = np.zeros_like(time_values, dtype=bool)
+        interval_dt = np.full_like(time_values, np.nan)
+    valid &= (time_values >= eval_start_time) & (time_values + interval_dt <= eval_end_time + 1e-12)
+    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
+    ddq_real = np.asarray(trajectory_data.get("right_arm_ddq_real", []), dtype=np.float64)
+    model_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_model", []), dtype=np.float64)
+    actual_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_actual", []), dtype=np.float64)
+    sample_count = int(np.sum(valid))
+    diagnostics = {
+        "definition": {
+            "alignment": "one arm-control interval: prediction at update k versus response immediately before update k+1",
+            "ddq_real": "(dq[k+1] - dq[k]) / arm_control_interval",
+            "model_cost": "one-step model acceleration and predicted end-of-interval state",
+            "actual_cost": "interval-average end-effector acceleration, measured end-of-interval state, and commanded ddq control cost",
+            "cost_error": "actual_cost - one_step_model_cost",
+            "evaluation_window": [float(eval_start_time), float(eval_end_time)],
+        },
+        "sample_count": sample_count,
+        "joint_names": list(RIGHT_ARM_JOINT_NAMES),
+        "cost_term_names": list(LQR_COST_TERM_NAMES),
+        "interval_dt_mean": float(np.mean(interval_dt[valid])) if sample_count else 0.0,
+    }
+    if (
+        sample_count == 0
+        or ddq_des.shape != ddq_real.shape
+        or ddq_des.shape[0] != len(time_values)
+        or model_cost.shape != actual_cost.shape
+        or model_cost.shape[0] != len(time_values)
+    ):
+        diagnostics["ddq_tracking"] = _component_tracking_metrics(np.zeros((0, 5)), np.zeros((0, 5)))
+        diagnostics["cost_tracking"] = _component_tracking_metrics(np.zeros((0, 7)), np.zeros((0, 7)))
+        return diagnostics
+
+    ddq_metrics = _component_tracking_metrics(ddq_des[valid], ddq_real[valid])
+    ddq_error_norm = np.linalg.norm(ddq_real[valid] - ddq_des[valid], axis=1)
+    ddq_metrics["error_norm_rms"] = float(np.sqrt(np.mean(ddq_error_norm ** 2)))
+    ddq_metrics["error_norm_p95"] = float(np.percentile(ddq_error_norm, 95.0))
+    ddq_metrics["error_norm_max"] = float(np.max(ddq_error_norm))
+    diagnostics["ddq_tracking"] = ddq_metrics
+
+    cost_metrics = _component_tracking_metrics(model_cost[valid], actual_cost[valid])
+    model_total = np.sum(model_cost[valid], axis=1, keepdims=True)
+    actual_total = np.sum(actual_cost[valid], axis=1, keepdims=True)
+    cost_metrics["total"] = _component_tracking_metrics(model_total, actual_total)
+    diagnostics["cost_tracking"] = cost_metrics
+    return diagnostics
+
+
 def compute_right_arm_trajectory_diagnostics(trajectory_data):
     n = len(RIGHT_ARM_JOINT_NAMES)
-    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
+    def matrix(name, width):
+        value = np.asarray(trajectory_data.get(name, []), dtype=np.float64)
+        return value if value.ndim == 2 and value.shape[1] == width else np.zeros((0, width), dtype=np.float64)
+
+    def component_stats(result, prefix, value, width):
+        valid = value.ndim == 2 and value.shape[0] > 0 and value.shape[1] == width
+        result[f"{prefix}_rms"] = np.sqrt(np.mean(value ** 2, axis=0)) if valid else np.zeros(width)
+        result[f"{prefix}_abs_max"] = np.max(np.abs(value), axis=0) if valid else np.zeros(width)
+
+    ddq_raw = matrix("right_arm_ddq_raw", n)
+    ddq_des = matrix("right_arm_ddq_des", n)
     ddq_mask = np.asarray(trajectory_data.get("right_arm_ddq_saturation_mask", []), dtype=bool)
-    qacc = np.asarray(trajectory_data.get("right_arm_qacc", []), dtype=np.float64)
-    ctrl = np.asarray(trajectory_data.get("right_arm_ctrl", []), dtype=np.float64)
+    qacc = matrix("right_arm_qacc", n)
+    ctrl = matrix("right_arm_ctrl", n)
     ddq_limits = np.asarray(trajectory_data.get("right_arm_ddq_saturation_limit", []), dtype=np.float64)
-    tau_raw = np.asarray(trajectory_data.get("right_arm_tau_cmd_raw", []), dtype=np.float64)
-    tau_low = np.asarray(trajectory_data.get("right_arm_tau_limit_lower", []), dtype=np.float64)
-    tau_high = np.asarray(trajectory_data.get("right_arm_tau_limit_upper", []), dtype=np.float64)
+    tau_inverse = matrix("right_arm_tau_inverse", n)
+    tau_constraint = matrix("right_arm_tau_constraint", n)
+    tau_contact = matrix("right_arm_tau_contact", n)
+    tau_constraint_total = matrix("right_arm_tau_constraint_total", n)
+    tau_constraint_noncontact = matrix("right_arm_tau_constraint_noncontact", n)
+    tau_ff = matrix("right_arm_tau_ff", n)
+    tau_pd = matrix("right_arm_tau_pd", n)
+    tau_raw = matrix("right_arm_tau_cmd_raw", n)
+    tau_low = matrix("right_arm_tau_limit_lower", n)
+    tau_high = matrix("right_arm_tau_limit_upper", n)
     tau_mask = np.asarray(trajectory_data.get("right_arm_tau_saturation_mask", []), dtype=bool)
-    if ddq_des.ndim != 2 or ddq_des.shape[1] != n: ddq_des = np.zeros((0, n), dtype=np.float64)
-    if ddq_mask.shape != ddq_des.shape: ddq_mask = np.zeros_like(ddq_des, dtype=bool)
-    if ctrl.ndim != 2 or ctrl.shape[1] != n: ctrl = np.zeros((0, n), dtype=np.float64)
-    if tau_raw.shape != ctrl.shape: tau_raw = np.zeros_like(ctrl)
-    if tau_low.shape != ctrl.shape: tau_low = np.full_like(ctrl, -np.inf)
-    if tau_high.shape != ctrl.shape: tau_high = np.full_like(ctrl, np.inf)
-    if tau_mask.shape != ctrl.shape: tau_mask = (tau_raw < (tau_low + RIGHT_ARM_TAU_SATURATION_EPS)) | (tau_raw > (tau_high - RIGHT_ARM_TAU_SATURATION_EPS))
-    ddq_n = int(ddq_des.shape[0]); tau_n = int(ctrl.shape[0])
+    if ddq_mask.shape != ddq_des.shape:
+        ddq_mask = np.zeros_like(ddq_des, dtype=bool)
+    if tau_raw.shape != ctrl.shape:
+        tau_raw = np.zeros_like(ctrl)
+    if tau_low.shape != ctrl.shape:
+        tau_low = np.full_like(ctrl, -np.inf)
+    if tau_high.shape != ctrl.shape:
+        tau_high = np.full_like(ctrl, np.inf)
+    if tau_mask.shape != ctrl.shape:
+        tau_mask = (tau_raw < (tau_low + RIGHT_ARM_TAU_SATURATION_EPS)) | (tau_raw > (tau_high - RIGHT_ARM_TAU_SATURATION_EPS))
+    ddq_n = int(ddq_des.shape[0])
+    tau_n = int(ctrl.shape[0])
     ddq_count = ddq_mask.sum(axis=0).astype(np.int64)
     ddq_frac = np.zeros(n, dtype=np.float64) if ddq_n == 0 else ddq_count / float(ddq_n)
     tau_count = tau_mask.sum(axis=0).astype(np.int64)
@@ -804,45 +1139,95 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     ddq_thr = ddq_limit - RIGHT_ARM_DDQ_SATURATION_EPS if np.isfinite(ddq_limit) else np.inf
     tau_low_last = tau_low[-1].copy() if tau_n > 0 else np.full(n, -np.inf)
     tau_high_last = tau_high[-1].copy() if tau_n > 0 else np.full(n, np.inf)
-    return {
+    diagnostics = {
         "right_arm_joint_names": np.asarray(RIGHT_ARM_JOINT_NAMES),
-        "right_arm_ddq_saturation_limit": np.array(ddq_limit), "right_arm_ddq_saturation_threshold": np.array(ddq_thr),
-        "right_arm_ddq_saturation_count": ddq_count, "right_arm_ddq_saturation_fraction": ddq_frac, "right_arm_ddq_saturation_percent": ddq_frac * 100.0,
+        "right_arm_ddq_saturation_limit": np.array(ddq_limit),
+        "right_arm_ddq_saturation_threshold": np.array(ddq_thr),
+        "right_arm_ddq_saturation_count": ddq_count,
+        "right_arm_ddq_saturation_fraction": ddq_frac,
+        "right_arm_ddq_saturation_percent": ddq_frac * 100.0,
         "right_arm_ddq_saturation_any_fraction": np.array(float(np.mean(np.any(ddq_mask, axis=1))) if ddq_n > 0 else 0.0),
-        "right_arm_ddq_abs_max": np.max(np.abs(ddq_des), axis=0) if ddq_n > 0 else np.zeros(n), "right_arm_ddq_rms": np.sqrt(np.mean(ddq_des ** 2, axis=0)) if ddq_n > 0 else np.zeros(n),
-        "right_arm_tau_limit_lower": tau_low_last, "right_arm_tau_limit_upper": tau_high_last,
-        "right_arm_tau_saturation_count": tau_count, "right_arm_tau_saturation_fraction": tau_frac, "right_arm_tau_saturation_percent": tau_frac * 100.0,
+        "right_arm_tau_limit_lower": tau_low_last,
+        "right_arm_tau_limit_upper": tau_high_last,
+        "right_arm_tau_saturation_count": tau_count,
+        "right_arm_tau_saturation_fraction": tau_frac,
+        "right_arm_tau_saturation_percent": tau_frac * 100.0,
         "right_arm_tau_saturation_any_fraction": np.array(float(np.mean(np.any(tau_mask, axis=1))) if tau_n > 0 else 0.0),
-        "right_arm_tau_raw_abs_max": np.max(np.abs(tau_raw), axis=0) if tau_n > 0 else np.zeros(n), "right_arm_tau_raw_rms": np.sqrt(np.mean(tau_raw ** 2, axis=0)) if tau_n > 0 else np.zeros(n),
         "right_arm_tau_clip_delta_abs_max": np.max(np.abs(ctrl - tau_raw), axis=0) if tau_n > 0 else np.zeros(n),
-        "right_arm_qacc_rms": np.sqrt(np.mean(qacc ** 2, axis=0)) if qacc.ndim == 2 and qacc.shape[0] > 0 else np.zeros(n),
-        "right_arm_ctrl_abs_max": np.max(np.abs(ctrl), axis=0) if tau_n > 0 else np.zeros(n),
     }
+    for prefix, value in [
+        ("right_arm_ddq_raw", ddq_raw),
+        ("right_arm_ddq", ddq_des),
+        ("right_arm_qacc", qacc),
+        ("right_arm_tau_inverse", tau_inverse),
+        ("right_arm_tau_constraint", tau_constraint),
+        ("right_arm_tau_contact", tau_contact),
+        ("right_arm_tau_constraint_total", tau_constraint_total),
+        ("right_arm_tau_constraint_noncontact", tau_constraint_noncontact),
+        ("right_arm_tau_ff", tau_ff),
+        ("right_arm_tau_pd", tau_pd),
+        ("right_arm_tau_raw", tau_raw),
+        ("right_arm_ctrl", ctrl),
+    ]:
+        component_stats(diagnostics, prefix, value, n)
+    ddq_postprocess_delta = ddq_des - ddq_raw if ddq_des.shape == ddq_raw.shape else np.zeros_like(ddq_des)
+    component_stats(diagnostics, "right_arm_ddq_postprocess_delta", ddq_postprocess_delta, n)
+
+    if qacc.shape == ddq_des.shape and qacc.shape[0] > 0:
+        tracking_error = qacc - ddq_des
+        diagnostics["right_arm_qacc_tracking_error_rms"] = np.sqrt(np.mean(tracking_error ** 2, axis=0))
+        diagnostics["right_arm_qacc_tracking_error_abs_max"] = np.max(np.abs(tracking_error), axis=0)
+        diagnostics["right_arm_qacc_instantaneous_tracking_error_rms"] = diagnostics["right_arm_qacc_tracking_error_rms"].copy()
+        diagnostics["right_arm_qacc_instantaneous_tracking_error_abs_max"] = diagnostics["right_arm_qacc_tracking_error_abs_max"].copy()
+    else:
+        diagnostics["right_arm_qacc_tracking_error_rms"] = np.zeros(n)
+        diagnostics["right_arm_qacc_tracking_error_abs_max"] = np.zeros(n)
+        diagnostics["right_arm_qacc_instantaneous_tracking_error_rms"] = np.zeros(n)
+        diagnostics["right_arm_qacc_instantaneous_tracking_error_abs_max"] = np.zeros(n)
+
+    for name in [
+        "torso_acc_world_raw",
+        "torso_acc_world_used",
+        "torso_alpha_world_raw",
+        "torso_alpha_world_used",
+        "right_ee_position_error_torso",
+        "right_ee_gravity_error_end",
+    ]:
+        value = matrix(name, 3)
+        component_stats(diagnostics, name, value, 3)
+        norm = np.linalg.norm(value, axis=1) if value.shape[0] else np.zeros(0)
+        diagnostics[f"{name}_norm_rms"] = np.array(np.sqrt(np.mean(norm ** 2)) if norm.size else 0.0)
+        diagnostics[f"{name}_norm_max"] = np.array(np.max(norm) if norm.size else 0.0)
+
+    alignment = np.asarray(trajectory_data.get("right_ee_upright_alignment", []), dtype=np.float64)
+    diagnostics["right_ee_upright_alignment_mean"] = np.array(float(np.mean(alignment)) if alignment.size else 0.0)
+    diagnostics["right_ee_upright_alignment_min"] = np.array(float(np.min(alignment)) if alignment.size else 0.0)
+    diagnostics["right_ee_inverted_fraction"] = np.array(float(np.mean(alignment < 0.0)) if alignment.size else 0.0)
+    contact_count = np.asarray(trajectory_data.get("contact_count", []), dtype=np.int64)
+    diagnostics["any_contact_fraction"] = np.array(float(np.mean(contact_count > 0)) if contact_count.size else 0.0)
+    constraint_norm = np.linalg.norm(tau_constraint, axis=1) if tau_constraint.shape[0] else np.zeros(0)
+    diagnostics["right_arm_constraint_active_fraction"] = np.array(float(np.mean(constraint_norm > 1e-6)) if constraint_norm.size else 0.0)
+    diagnostics["right_arm_contact_constraint_active_fraction"] = diagnostics["right_arm_constraint_active_fraction"].copy()
+    total_constraint_norm = np.linalg.norm(tau_constraint_total, axis=1) if tau_constraint_total.shape[0] else np.zeros(0)
+    diagnostics["right_arm_total_constraint_active_fraction"] = np.array(
+        float(np.mean(total_constraint_norm > 1e-6)) if total_constraint_norm.size else 0.0
+    )
+    return diagnostics
 
 
 def save_trajectory(trajectory_path, trajectory_data, xml_path, simulation_dt):
     right_arm_diagnostics = compute_right_arm_trajectory_diagnostics(trajectory_data)
+    arrays = {name: np.asarray(values) for name, values in trajectory_data.items()}
+    if arrays["right_arm_ddq_raw"].shape == arrays["right_arm_ddq_des"].shape:
+        arrays["right_arm_ddq_postprocess_delta"] = arrays["right_arm_ddq_des"] - arrays["right_arm_ddq_raw"]
+    arrays["right_arm_ddq_saturation_limit_history"] = arrays.pop("right_arm_ddq_saturation_limit")
+    arrays["right_arm_tau_limit_lower_history"] = arrays.pop("right_arm_tau_limit_lower")
+    arrays["right_arm_tau_limit_upper_history"] = arrays.pop("right_arm_tau_limit_upper")
     np.savez(
         trajectory_path,
-        time=np.asarray(trajectory_data["time"]),
-        qpos=np.asarray(trajectory_data["qpos"]),
-        qvel=np.asarray(trajectory_data["qvel"]),
-        qacc=np.asarray(trajectory_data["qacc"]),
-        ctrl=np.asarray(trajectory_data["ctrl"]),
-        right_arm_q=np.asarray(trajectory_data["right_arm_q"]),
-        right_arm_dq=np.asarray(trajectory_data["right_arm_dq"]),
-        right_arm_qacc=np.asarray(trajectory_data["right_arm_qacc"]),
-        right_arm_ctrl=np.asarray(trajectory_data["right_arm_ctrl"]),
-        right_arm_ddq_des=np.asarray(trajectory_data["right_arm_ddq_des"]),
-        right_arm_ddq_saturation_limit_history=np.asarray(trajectory_data["right_arm_ddq_saturation_limit"]),
-        right_arm_ddq_saturation_mask=np.asarray(trajectory_data["right_arm_ddq_saturation_mask"]),
-        right_arm_tau_ff=np.asarray(trajectory_data["right_arm_tau_ff"]),
-        right_arm_tau_pd=np.asarray(trajectory_data["right_arm_tau_pd"]),
-        right_arm_tau_cmd_raw=np.asarray(trajectory_data["right_arm_tau_cmd_raw"]),
-        right_arm_tau_limit_lower_history=np.asarray(trajectory_data["right_arm_tau_limit_lower"]),
-        right_arm_tau_limit_upper_history=np.asarray(trajectory_data["right_arm_tau_limit_upper"]),
-        right_arm_tau_saturation_mask=np.asarray(trajectory_data["right_arm_tau_saturation_mask"]),
+        **arrays,
         **right_arm_diagnostics,
+        lqr_cost_term_names=np.asarray(LQR_COST_TERM_NAMES),
         xml_path=np.array(xml_path),
         simulation_dt=np.array(simulation_dt),
     )
@@ -854,6 +1239,137 @@ def save_right_arm_diagnostics(run_dir, diagnostics):
     with open(diagnostics_path, "w", encoding="utf-8") as f:
         json.dump(_to_serializable(diagnostics), f, indent=2, ensure_ascii=False)
     return diagnostics_path
+
+
+def save_lqr_tracking_diagnostics(run_dir, diagnostics):
+    diagnostics_path = os.path.join(run_dir, "lqr_tracking_diagnostics.json")
+    with open(diagnostics_path, "w", encoding="utf-8") as f:
+        json.dump(_to_serializable(diagnostics), f, indent=2, ensure_ascii=False)
+    return diagnostics_path
+
+
+def save_lqr_tracking_preview(run_dir, trajectory_data, eval_start_time, eval_end_time):
+    """保存严格按相邻手臂控制更新对齐的 DDQ 与一步代价跟踪表。"""
+    preview_path = os.path.join(run_dir, "lqr_tracking_preview.csv")
+    time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
+    valid = np.asarray(trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool)
+    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
+    ddq_real = np.asarray(trajectory_data.get("right_arm_ddq_real", []), dtype=np.float64)
+    ddq_error = np.asarray(trajectory_data.get("right_arm_ddq_tracking_error", []), dtype=np.float64)
+    model_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_model", []), dtype=np.float64)
+    actual_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_actual", []), dtype=np.float64)
+    cost_error = np.asarray(trajectory_data.get("right_lqr_one_step_cost_error", []), dtype=np.float64)
+    interval_dt = np.asarray(trajectory_data.get("right_lqr_tracking_interval_dt", []), dtype=np.float64)
+    sample_count = len(time_values)
+    expected = (
+        valid.shape == (sample_count,),
+        ddq_des.shape == (sample_count, len(RIGHT_ARM_JOINT_NAMES)),
+        ddq_real.shape == ddq_des.shape,
+        ddq_error.shape == ddq_des.shape,
+        model_cost.shape == (sample_count, len(LQR_COST_TERM_NAMES)),
+        actual_cost.shape == model_cost.shape,
+        cost_error.shape == model_cost.shape,
+        interval_dt.shape == (sample_count,),
+    )
+    if not all(expected):
+        valid = np.zeros(sample_count, dtype=bool)
+
+    joint_labels = tuple(name.removeprefix("right_").removesuffix("_joint") for name in RIGHT_ARM_JOINT_NAMES)
+    headers = ["time", "interval_dt", "in_evaluation"]
+    for joint in joint_labels:
+        headers.extend((f"ddq_des_{joint}", f"ddq_real_{joint}", f"ddq_error_{joint}"))
+    for term in LQR_COST_TERM_NAMES:
+        headers.extend((f"cost_model_{term}", f"cost_actual_{term}", f"cost_error_{term}"))
+    headers.extend(("cost_model_total", "cost_actual_total", "cost_error_total"))
+
+    with open(preview_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for index in np.flatnonzero(valid):
+            row = [
+                time_values[index],
+                interval_dt[index],
+                bool(
+                    eval_start_time <= time_values[index]
+                    and time_values[index] + interval_dt[index] <= eval_end_time + 1e-12
+                ),
+            ]
+            for joint in range(len(joint_labels)):
+                row.extend((ddq_des[index, joint], ddq_real[index, joint], ddq_error[index, joint]))
+            for term in range(len(LQR_COST_TERM_NAMES)):
+                row.extend((model_cost[index, term], actual_cost[index, term], cost_error[index, term]))
+            model_total = float(np.sum(model_cost[index]))
+            actual_total = float(np.sum(actual_cost[index]))
+            row.extend((model_total, actual_total, actual_total - model_total))
+            writer.writerow(row)
+    return preview_path
+
+
+def save_control_preview(run_dir, trajectory_data):
+    """把最关键的高频控制信号另存为可直接查看的 CSV。"""
+    preview_path = os.path.join(run_dir, "control_preview.csv")
+    time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
+    joint_labels = tuple(name.removeprefix("right_").removesuffix("_joint") for name in RIGHT_ARM_JOINT_NAMES)
+    vector_signals = [
+        ("right_arm_q", joint_labels),
+        ("right_arm_dq", joint_labels),
+        ("right_arm_qacc", joint_labels),
+        ("right_arm_target_q", joint_labels),
+        ("right_arm_target_dq", joint_labels),
+        ("right_arm_ddq_raw", joint_labels),
+        ("right_arm_ddq_des", joint_labels),
+        ("right_arm_ddq_real", joint_labels),
+        ("right_arm_ddq_tracking_error", joint_labels),
+        ("right_arm_tau_inverse", joint_labels),
+        ("right_arm_tau_constraint", joint_labels),
+        ("right_arm_tau_contact", joint_labels),
+        ("right_arm_tau_constraint_total", joint_labels),
+        ("right_arm_tau_constraint_noncontact", joint_labels),
+        ("right_arm_tau_ff", joint_labels),
+        ("right_arm_tau_pd", joint_labels),
+        ("right_arm_tau_cmd_raw", joint_labels),
+        ("right_arm_ctrl", joint_labels),
+        ("right_arm_actual_qfrc_bias", joint_labels),
+        ("right_arm_actual_qfrc_passive", joint_labels),
+        ("right_arm_actual_qfrc_constraint", joint_labels),
+        ("torso_lin_vel_world", ("x", "y", "z")),
+        ("torso_ang_vel_world", ("x", "y", "z")),
+        ("torso_acc_world_raw", ("x", "y", "z")),
+        ("torso_acc_world_used", ("x", "y", "z")),
+        ("torso_alpha_world_raw", ("x", "y", "z")),
+        ("torso_alpha_world_used", ("x", "y", "z")),
+        ("right_ee_position_torso", ("x", "y", "z")),
+        ("right_ee_position_reference_torso", ("x", "y", "z")),
+        ("right_ee_position_error_torso", ("x", "y", "z")),
+        ("right_ee_gravity_error_end", ("x", "y", "z")),
+    ]
+    scalar_signals = ["right_ee_upright_alignment", "arm_policy_updated", "contact_count"]
+    arrays = []
+    headers = ["time"]
+    for name, labels in vector_signals:
+        value = np.asarray(trajectory_data.get(name, []), dtype=np.float64)
+        if value.shape != (len(time_values), len(labels)):
+            value = np.full((len(time_values), len(labels)), np.nan)
+        arrays.append(value)
+        headers.extend(f"{name}_{label}" for label in labels)
+    scalars = []
+    for name in scalar_signals:
+        value = np.asarray(trajectory_data.get(name, []), dtype=np.float64)
+        if value.shape != (len(time_values),):
+            value = np.full(len(time_values), np.nan)
+        scalars.append(value)
+        headers.append(name)
+
+    with open(preview_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for i, timestamp in enumerate(time_values):
+            row = [timestamp]
+            for value in arrays:
+                row.extend(value[i].tolist())
+            row.extend(value[i] for value in scalars)
+            writer.writerow(row)
+    return preview_path
 
 
 def write_video(video_path, video_frames, video_fps):
@@ -895,12 +1411,23 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["ctrl"].append(data.ctrl.copy())
     if right_arm_control is None:
         right_arm_control = {}
+    def control_vector(name, size, default=0.0):
+        value = np.asarray(right_arm_control.get(name, np.full(size, default)), dtype=np.float64)
+        return value.copy() if value.shape == (size,) else np.full(size, default, dtype=np.float64)
+
+    target_q = control_vector("target_q", 5)
+    target_dq = control_vector("target_dq", 5)
+    ddq_raw = control_vector("ddq_raw", 5)
     ddq_des = np.asarray(right_arm_control.get("ddq_des", np.zeros(5)), dtype=np.float64).copy()
     ddq_saturation_limit = float(right_arm_control.get("ddq_saturation_limit", np.inf))
     ddq_saturation_threshold = ddq_saturation_limit - RIGHT_ARM_DDQ_SATURATION_EPS
     ddq_saturation_mask = np.zeros_like(ddq_des, dtype=bool) if (not np.isfinite(ddq_saturation_threshold) or ddq_saturation_threshold <= 0.0) else (np.abs(ddq_des) >= ddq_saturation_threshold)
-    tau_ff = np.asarray(right_arm_control.get("tau_ff", np.zeros(5)), dtype=np.float64).copy()
-    tau_pd = np.asarray(right_arm_control.get("tau_pd", np.zeros(5)), dtype=np.float64).copy()
+    tau_inverse = control_vector("tau_inverse", 5)
+    tau_contact = control_vector("tau_contact", 5)
+    tau_constraint_total = control_vector("tau_constraint_total", 5)
+    tau_constraint_noncontact = control_vector("tau_constraint_noncontact", 5)
+    tau_ff = control_vector("tau_ff", 5)
+    tau_pd = control_vector("tau_pd", 5)
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
     tau_limit_upper = np.asarray(right_arm_control.get("tau_limit_upper", np.full(5, np.inf)), dtype=np.float64).copy()
@@ -911,33 +1438,112 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     if tau_limit_upper.shape != tau_ff.shape:
         tau_limit_upper = np.full_like(tau_ff, np.inf)
     tau_saturation_mask = (tau_cmd_raw < (tau_limit_lower + RIGHT_ARM_TAU_SATURATION_EPS)) | (tau_cmd_raw > (tau_limit_upper - RIGHT_ARM_TAU_SATURATION_EPS))
+    torso_lin_vel = control_vector("torso_lin_vel_world", 3)
+    torso_ang_vel = control_vector("torso_ang_vel_world", 3)
+    torso_acc_raw = control_vector("torso_acc_world_raw", 3)
+    torso_acc_used = control_vector("torso_acc_world_used", 3)
+    torso_alpha_raw = control_vector("torso_alpha_world_raw", 3)
+    torso_alpha_used = control_vector("torso_alpha_world_used", 3)
+    position_reference = control_vector("ee_position_reference_torso", 3)
+    lqr_prediction = right_arm_control.get("lqr_one_step_prediction")
+    lqr_prediction_valid = isinstance(lqr_prediction, dict)
+
+    def prediction_vector(name, size):
+        if not lqr_prediction_valid:
+            return np.full(size, np.nan, dtype=np.float64)
+        value = np.asarray(lqr_prediction.get(name, np.full(size, np.nan)), dtype=np.float64)
+        return value.copy() if value.shape == (size,) else np.full(size, np.nan, dtype=np.float64)
+
+    prediction_costs = {} if not lqr_prediction_valid else lqr_prediction.get("cost_terms", {})
+    lqr_cost_model = np.array(
+        [float(prediction_costs.get(name, np.nan)) for name in LQR_COST_TERM_NAMES],
+        dtype=np.float64,
+    )
+    torso_rot = data.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy()
+    position_torso = torso_rot.T @ (
+        data.site_xpos[scene_ids.right_grasp_site_id] - data.site_xpos[scene_ids.imu_site_id]
+    )
+    position_error = position_torso - position_reference
+    gravity_error = tilt_error_from_rot(right_rot, model.opt.gravity)
+    upright_alignment = upright_alignment_from_rot(right_rot, model.opt.gravity)
+    arm_policy_updated = bool(right_arm_control.get("arm_policy_updated", False))
     buffers.trajectory_data["right_arm_q"].append(data.qpos[RIGHT_ARM_QPOS_SLICE].copy())
     buffers.trajectory_data["right_arm_dq"].append(data.qvel[RIGHT_ARM_QVEL_SLICE].copy())
     buffers.trajectory_data["right_arm_qacc"].append(data.qacc[RIGHT_ARM_QVEL_SLICE].copy())
     buffers.trajectory_data["right_arm_ctrl"].append(data.ctrl[RIGHT_ARM_CTRL_SLICE].copy())
+    buffers.trajectory_data["right_arm_target_q"].append(target_q)
+    buffers.trajectory_data["right_arm_target_dq"].append(target_dq)
+    buffers.trajectory_data["right_arm_ddq_raw"].append(ddq_raw)
     buffers.trajectory_data["right_arm_ddq_des"].append(ddq_des)
     buffers.trajectory_data["right_arm_ddq_saturation_limit"].append(ddq_saturation_limit)
     buffers.trajectory_data["right_arm_ddq_saturation_mask"].append(ddq_saturation_mask)
+    buffers.trajectory_data["right_arm_tau_inverse"].append(tau_inverse)
+    buffers.trajectory_data["right_arm_tau_constraint"].append(tau_contact)
+    buffers.trajectory_data["right_arm_tau_contact"].append(tau_contact)
+    buffers.trajectory_data["right_arm_tau_constraint_total"].append(tau_constraint_total)
+    buffers.trajectory_data["right_arm_tau_constraint_noncontact"].append(tau_constraint_noncontact)
     buffers.trajectory_data["right_arm_tau_ff"].append(tau_ff)
     buffers.trajectory_data["right_arm_tau_pd"].append(tau_pd)
     buffers.trajectory_data["right_arm_tau_cmd_raw"].append(tau_cmd_raw)
     buffers.trajectory_data["right_arm_tau_limit_lower"].append(tau_limit_lower)
     buffers.trajectory_data["right_arm_tau_limit_upper"].append(tau_limit_upper)
     buffers.trajectory_data["right_arm_tau_saturation_mask"].append(tau_saturation_mask)
+    buffers.trajectory_data["right_arm_actual_qfrc_bias"].append(data.qfrc_bias[RIGHT_ARM_QVEL_SLICE].copy())
+    buffers.trajectory_data["right_arm_actual_qfrc_passive"].append(data.qfrc_passive[RIGHT_ARM_QVEL_SLICE].copy())
+    buffers.trajectory_data["right_arm_actual_qfrc_constraint"].append(data.qfrc_constraint[RIGHT_ARM_QVEL_SLICE].copy())
+    buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
+    buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)
+    buffers.trajectory_data["torso_acc_world_raw"].append(torso_acc_raw)
+    buffers.trajectory_data["torso_acc_world_used"].append(torso_acc_used)
+    buffers.trajectory_data["torso_alpha_world_raw"].append(torso_alpha_raw)
+    buffers.trajectory_data["torso_alpha_world_used"].append(torso_alpha_used)
+    buffers.trajectory_data["right_ee_lin_vel_world"].append(right_lin_vel.copy())
+    buffers.trajectory_data["right_ee_ang_vel_world"].append(right_ang_vel.copy())
+    buffers.trajectory_data["right_ee_position_torso"].append(position_torso.copy())
+    buffers.trajectory_data["right_ee_position_reference_torso"].append(position_reference)
+    buffers.trajectory_data["right_ee_position_error_torso"].append(position_error)
+    buffers.trajectory_data["right_ee_gravity_error_end"].append(gravity_error)
+    buffers.trajectory_data["right_ee_upright_alignment"].append(upright_alignment)
+    buffers.trajectory_data["right_lqr_one_step_q_model"].append(prediction_vector("q", 5))
+    buffers.trajectory_data["right_lqr_one_step_dq_model"].append(prediction_vector("dq", 5))
+    buffers.trajectory_data["right_lqr_one_step_ee_lin_acc_model"].append(prediction_vector("ee_lin_acc", 3))
+    buffers.trajectory_data["right_lqr_one_step_ee_ang_acc_model"].append(prediction_vector("ee_ang_acc", 3))
+    buffers.trajectory_data["right_lqr_one_step_position_error_model"].append(prediction_vector("position_error", 3))
+    buffers.trajectory_data["right_lqr_one_step_gravity_error_model"].append(prediction_vector("gravity_error", 3))
+    buffers.trajectory_data["right_lqr_one_step_cost_model"].append(lqr_cost_model)
+    buffers.trajectory_data["right_lqr_one_step_prediction_valid"].append(lqr_prediction_valid)
+    buffers.trajectory_data["arm_policy_updated"].append(arm_policy_updated)
+    buffers.trajectory_data["contact_count"].append(int(data.ncon))
     buffers.eval_data["time"].append(t)
     buffers.eval_data["torso_yaw"].append(torso_yaw)
     buffers.eval_data["left_ee_lin_acc_world"].append(left_lin_acc)
     buffers.eval_data["left_ee_ang_acc_world"].append(left_ang_acc)
-    buffers.eval_data["left_ee_tilt_error"].append(tilt_error_from_rot(left_rot))
+    buffers.eval_data["left_ee_tilt_error"].append(tilt_error_from_rot(left_rot, model.opt.gravity))
+    buffers.eval_data["left_ee_upright_alignment"].append(upright_alignment_from_rot(left_rot, model.opt.gravity))
     buffers.eval_data["right_ee_lin_acc_world"].append(right_lin_acc)
     buffers.eval_data["right_ee_ang_acc_world"].append(right_ang_acc)
-    buffers.eval_data["right_ee_tilt_error"].append(tilt_error_from_rot(right_rot))
+    buffers.eval_data["right_ee_tilt_error"].append(gravity_error)
+    buffers.eval_data["right_ee_upright_alignment"].append(upright_alignment)
 
 
-def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None):
+def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None, lqr_cost_definition=None):
     trajectory_path = os.path.join(run_dir, "trajectory.npz")
+    add_lqr_tracking_trajectory_data(buffers.trajectory_data, simulation_dt, lqr_cost_definition)
+    lqr_tracking_diagnostics = compute_lqr_tracking_diagnostics(
+        buffers.trajectory_data,
+        eval_start_time,
+        eval_end_time,
+    )
     right_arm_diagnostics = save_trajectory(trajectory_path, buffers.trajectory_data, xml_path, simulation_dt)
     right_arm_diagnostics_path = save_right_arm_diagnostics(run_dir, right_arm_diagnostics)
+    lqr_tracking_diagnostics_path = save_lqr_tracking_diagnostics(run_dir, lqr_tracking_diagnostics)
+    lqr_tracking_preview_path = save_lqr_tracking_preview(
+        run_dir,
+        buffers.trajectory_data,
+        eval_start_time,
+        eval_end_time,
+    )
+    control_preview_path = save_control_preview(run_dir, buffers.trajectory_data)
     write_video(video_path, video_frames, video_fps)
     perf_summary_path, perf_windows_path = (None, None) if perf_monitor is None else perf_monitor.save_report(run_dir)
     walk_distance = float(np.linalg.norm(data.xpos[scene_ids.torso_id][:2] - buffers.torso_xy_start)) if buffers.torso_xy_start is not None else 0.0
@@ -945,7 +1551,17 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     saved_paths["perf_summary"] = perf_summary_path
     saved_paths["perf_windows"] = perf_windows_path
     saved_paths["right_arm_diagnostics"] = right_arm_diagnostics_path
+    saved_paths["lqr_tracking_diagnostics"] = lqr_tracking_diagnostics_path
+    saved_paths["lqr_tracking_preview"] = lqr_tracking_preview_path
+    saved_paths["control_preview"] = control_preview_path
     print_run_summary(stats, saved_paths, trajectory_path, video_path, has_renderer, video_frames, video_width, video_height, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles)
+    if lqr_tracking_diagnostics["sample_count"]:
+        ddq_tracking = lqr_tracking_diagnostics["ddq_tracking"]
+        print(f"LQR DDQ tracking RMSE = {np.asarray(ddq_tracking['rmse']).round(4).tolist()}")
+        print(f"LQR DDQ tracking correlation = {np.asarray(ddq_tracking['correlation']).round(4).tolist()}")
+        print(f"LQR DDQ tracking gain = {np.asarray(ddq_tracking['gain']).round(4).tolist()}")
+        cost_rmse = lqr_tracking_diagnostics["cost_tracking"]["rmse"]
+        print(f"LQR one-step cost tracking RMSE = {dict(zip(LQR_COST_TERM_NAMES, np.asarray(cost_rmse).round(4).tolist()))}")
 
 
 def _fmt3(v):
@@ -1041,7 +1657,9 @@ def save_eval(
                 "alpha_norm",
                 "tilt_x",
                 "tilt_y",
+                "tilt_z",
                 "tilt_norm",
+                "upright_alignment",
             ]
         )
 
@@ -1049,6 +1667,7 @@ def save_eval(
             acc = np.asarray(data[f"{side}_ee_lin_acc_world"])
             alpha = np.asarray(data[f"{side}_ee_ang_acc_world"])
             tilt = np.asarray(data[f"{side}_ee_tilt_error"])
+            alignment = np.asarray(data[f"{side}_ee_upright_alignment"])
 
             acc_n = np.linalg.norm(acc, axis=1)
             alpha_n = np.linalg.norm(alpha, axis=1)
@@ -1069,7 +1688,9 @@ def save_eval(
                         alpha_n[i],
                         tilt[i, 0],
                         tilt[i, 1],
+                        tilt[i, 2],
                         tilt_n[i],
+                        alignment[i],
                     ]
                 )
 
@@ -1086,9 +1707,12 @@ def save_eval(
             stats[f"{side}_alpha_xyz_std"] = alpha[mask].std(axis=0)
             stats[f"{side}_alpha_xyz_rms"] = np.sqrt(np.mean(alpha[mask] ** 2, axis=0))
 
-            stats[f"{side}_tilt_xy_mean"] = tilt[mask].mean(axis=0)
-            stats[f"{side}_tilt_xy_std"] = tilt[mask].std(axis=0)
-            stats[f"{side}_tilt_xy_rms"] = np.sqrt(np.mean(tilt[mask] ** 2, axis=0))
+            stats[f"{side}_tilt_xyz_mean"] = tilt[mask].mean(axis=0)
+            stats[f"{side}_tilt_xyz_std"] = tilt[mask].std(axis=0)
+            stats[f"{side}_tilt_xyz_rms"] = np.sqrt(np.mean(tilt[mask] ** 2, axis=0))
+            stats[f"{side}_upright_alignment_mean"] = alignment[mask].mean()
+            stats[f"{side}_upright_alignment_min"] = alignment[mask].min()
+            stats[f"{side}_inverted_fraction"] = np.mean(alignment[mask] < 0.0)
 
             cols = ["r", "g", "b"]
             labels = ["x", "y", "z"]
@@ -1098,16 +1722,16 @@ def save_eval(
                 axes[0, c].plot(t, acc[:, j], color=cols[j], ls=styles[j], lw=1.2, alpha=0.9, label=labels[j])
                 axes[2, c].plot(t, alpha[:, j], color=cols[j], ls=styles[j], lw=1.2, alpha=0.9, label=labels[j])
 
-            axes[4, c].plot(t, tilt[:, 0], color="m", ls="-", lw=1.2, alpha=0.9, label="tilt_x")
-            axes[4, c].plot(t, tilt[:, 1], color="c", ls="--", lw=1.2, alpha=0.9, label="tilt_y")
+            for j in range(3):
+                axes[4, c].plot(t, tilt[:, j], color=cols[j], ls=styles[j], lw=1.2, alpha=0.9, label=f"gravity_error_{labels[j]}")
 
             titles = [
                 f"{side} acc xyz",
                 f"{side} acc norm",
                 f"{side} alpha xyz",
                 f"{side} alpha norm",
-                f"{side} tilt x/y",
-                f"{side} tilt norm",
+                f"{side} directed gravity error xyz",
+                f"{side} gravity error norm",
             ]
 
             for r in [0, 2, 4]:
@@ -1139,7 +1763,7 @@ def save_eval(
             axes[4, c].text(
                 0.98,
                 0.95,
-                f"mean={_fmt2(stats[f'{side}_tilt_xy_mean'])}\nstd={_fmt2(stats[f'{side}_tilt_xy_std'])}\nrms={_fmt2(stats[f'{side}_tilt_xy_rms'])}",
+                f"mean={_fmt3(stats[f'{side}_tilt_xyz_mean'])}\nstd={_fmt3(stats[f'{side}_tilt_xyz_std'])}\nrms={_fmt3(stats[f'{side}_tilt_xyz_rms'])}\nalign min={stats[f'{side}_upright_alignment_min']:.3f}",
                 transform=axes[4, c].transAxes,
                 ha="right",
                 va="top",
@@ -1211,9 +1835,13 @@ def print_run_summary(
     extra_video = video_path if video_frames else "未保存（缺少 imageio、Renderer 初始化失败或无帧）"
     extra_perf = saved_paths.get("perf_summary") if saved_paths.get("perf_summary") is not None else "未保存 perf 概览"
     extra_right_arm = saved_paths.get("right_arm_diagnostics") if saved_paths.get("right_arm_diagnostics") is not None else "未保存右臂诊断"
+    extra_control_preview = saved_paths.get("control_preview") if saved_paths.get("control_preview") is not None else "未保存控制 CSV"
+    extra_lqr_tracking = saved_paths.get("lqr_tracking_diagnostics") if saved_paths.get("lqr_tracking_diagnostics") is not None else "未保存 LQR tracking 诊断"
+    extra_lqr_tracking_preview = saved_paths.get("lqr_tracking_preview") if saved_paths.get("lqr_tracking_preview") is not None else "未保存 LQR tracking CSV"
     print(
         f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | "
-        f"{saved_paths['summary']} | {extra_perf} | {extra_right_arm} | {trajectory_path} | {extra_video}"
+        f"{saved_paths['summary']} | {extra_perf} | {extra_right_arm} | {extra_control_preview} | "
+        f"{extra_lqr_tracking} | {extra_lqr_tracking_preview} | {trajectory_path} | {extra_video}"
     )
 
     if has_renderer:
@@ -1222,7 +1850,11 @@ def print_run_summary(
     for side in ["left", "right"]:
         print(f"{side} | acc mean/std/rms = {stats[f'{side}_acc_mean']:.4f}/{stats[f'{side}_acc_std']:.4f}/{stats[f'{side}_acc_rms']:.4f}")
         print(f"{side} | alpha mean/std/rms = {stats[f'{side}_alpha_mean']:.4f}/{stats[f'{side}_alpha_std']:.4f}/{stats[f'{side}_alpha_rms']:.4f}")
-        print(f"{side} | tilt mean/std/rms = {stats[f'{side}_tilt_mean']:.4f}/{stats[f'{side}_tilt_std']:.4f}/{stats[f'{side}_tilt_rms']:.4f}")
+        print(
+            f"{side} | gravity error mean/std/rms = "
+            f"{stats[f'{side}_tilt_mean']:.4f}/{stats[f'{side}_tilt_std']:.4f}/{stats[f'{side}_tilt_rms']:.4f}, "
+            f"upright min/inverted = {stats[f'{side}_upright_alignment_min']:.4f}/{stats[f'{side}_inverted_fraction'] * 100.0:.2f}%"
+        )
 
     print(
         f"总周期数 = {total_cycles}, warm-up = {warmup_cycles}, evaluation = {evaluation_cycles}, "

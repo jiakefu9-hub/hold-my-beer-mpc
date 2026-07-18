@@ -11,11 +11,13 @@ arm_control_decimation: 3
 # Right arm controller: "pid" or "lqr"
 arm_controller: lqr
 lqr_horizon: 12
-# LQR cost tuning and minimal ddq safety layer.
+# LQR cost tuning. Position is measured in the torso IMU frame.
+lqr_q_position: 20.0
 lqr_r_ddq: 0.25
-lqr_max_ddq: 3.0
+# q_ref/dq_ref still use the physical joint limits and this velocity limit.
 lqr_max_dq: 1.0
-# Only hard clipping and joint-limit guard are active. Rate limiting and smoothing remain inactive.
+# These ddq safety parameters are retained for later comparison but are currently bypassed.
+lqr_max_ddq: 3.0
 lqr_ddq_rate_limit: 350.0
 lqr_ddq_smoothing_alpha: 0.45
 lqr_joint_limit_margin: 0.25

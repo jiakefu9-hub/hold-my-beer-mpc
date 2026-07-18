@@ -4,6 +4,16 @@ import numpy as np
 class ArmLQRPolicy:
     """有限时域时变 LQR。输出右臂 5 维 q_ref / dq_ref / ddq_des。"""
 
+    COST_TERM_NAMES = (
+        "linear_acceleration",
+        "angular_acceleration",
+        "position",
+        "gravity",
+        "posture",
+        "velocity",
+        "control",
+    )
+
     def __init__(
         self,
         default_q,
@@ -11,6 +21,7 @@ class ArmLQRPolicy:
         horizon=12,
         q_acc=1.0,
         q_alpha=0.05,
+        q_position=20.0,
         q_gravity=30.0,
         q_posture=0.4,
         q_vel=0.02,
@@ -35,13 +46,15 @@ class ArmLQRPolicy:
         self.horizon = int(horizon)
         self.q_acc = float(q_acc)
         self.q_alpha = float(q_alpha)
+        self.q_position = float(q_position)
         self.q_gravity = float(q_gravity)
         self.q_posture = float(q_posture)
         self.q_vel = float(q_vel)
         self.r_ddq = float(r_ddq)
         self.Qa = np.eye(3) * float(q_acc)
         self.Qalpha = np.eye(3) * float(q_alpha)
-        self.Qg = np.eye(2) * float(q_gravity)
+        self.Qp = np.eye(3) * float(q_position)
+        self.Qg = np.eye(3) * float(q_gravity)
         self.Qq = np.eye(self.n) * float(q_posture)
         self.Qv = np.eye(self.n) * float(q_vel)
         # 控制代价权重 R：惩罚关节加速度 u（ddq），u 越大代价越高，R 越大动作越平滑
@@ -60,6 +73,21 @@ class ArmLQRPolicy:
         self.prev_u = None
         self.joint_limits = None
         self.set_joint_limits(joint_limits)
+        self.last_u_raw = np.zeros(self.n, dtype=np.float64)
+        self.last_u_command = np.zeros(self.n, dtype=np.float64)
+        self.last_position = np.zeros(3, dtype=np.float64)
+        self.last_position_reference = np.zeros(3, dtype=np.float64)
+        self.last_position_error = np.zeros(3, dtype=np.float64)
+        self.last_gravity_error = np.zeros(3, dtype=np.float64)
+        self.last_one_step_prediction = {
+            "q": np.zeros(self.n, dtype=np.float64),
+            "dq": np.zeros(self.n, dtype=np.float64),
+            "ee_lin_acc": np.zeros(3, dtype=np.float64),
+            "ee_ang_acc": np.zeros(3, dtype=np.float64),
+            "position_error": np.zeros(3, dtype=np.float64),
+            "gravity_error": np.zeros(3, dtype=np.float64),
+            "cost_terms": {name: 0.0 for name in self.COST_TERM_NAMES},
+        }
 
     def compute_action(self, arm_obs, helpers=None):
         q = np.asarray(self._obs_get(arm_obs, "current_q"), dtype=np.float64)
@@ -79,7 +107,7 @@ class ArmLQRPolicy:
         for _ in range(self.horizon):
             step_terms.append(terms_fn(q_bar, dq_bar, torso_rotmat, disturbance))
             q_bar = q_bar + dq_bar * dt
-        # step_terms 最后是长度 horizon 的 list；每个元素是 dict，含 D_acc(3,), C_acc(3,5), B_acc(3,5), G_g(2,10) 等。
+        # 每步包含加速度、torso-relative 位置和三维重力误差的局部仿射系数。
         P = self.QN.copy()
         p = np.zeros(self.nx, dtype=np.float64)
         K0 = None
@@ -88,10 +116,10 @@ class ArmLQRPolicy:
         for k in range(self.horizon - 1, -1, -1):
             t = step_terms[k]
             # 先整理当前第 k 步的单步代价 l_k 参数：关于状态 x 和控制 u 的二次项 / 一次项。
-            Qxx = S_v.T @ t["C_acc"].T @ self.Qa @ t["C_acc"] @ S_v + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["C_alpha"] @ S_v + t["G_g"].T @ self.Qg @ t["G_g"] + S_q.T @ self.Qq @ S_q + S_v.T @ self.Qv @ S_v
+            Qxx = S_v.T @ t["C_acc"].T @ self.Qa @ t["C_acc"] @ S_v + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["C_alpha"] @ S_v + t["G_p"].T @ self.Qp @ t["G_p"] + t["G_g"].T @ self.Qg @ t["G_g"] + S_q.T @ self.Qq @ S_q + S_v.T @ self.Qv @ S_v
             Qxu = S_v.T @ t["C_acc"].T @ self.Qa @ t["B_acc"] + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["B_alpha"]
             Quu = t["B_acc"].T @ self.Qa @ t["B_acc"] + t["B_alpha"].T @ self.Qalpha @ t["B_alpha"] + self.R
-            fx = S_v.T @ t["C_acc"].T @ self.Qa @ t["D_acc"] + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["D_alpha"] + t["G_g"].T @ self.Qg @ t["d_g"] - S_q.T @ self.Qq @ self.default_q
+            fx = S_v.T @ t["C_acc"].T @ self.Qa @ t["D_acc"] + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["D_alpha"] + t["G_p"].T @ self.Qp @ t["d_p"] + t["G_g"].T @ self.Qg @ t["d_g"] - S_q.T @ self.Qq @ self.default_q
             fu = t["B_acc"].T @ self.Qa @ t["D_acc"] + t["B_alpha"].T @ self.Qalpha @ t["D_alpha"]
             # 这里进入第 k 步时，P/p 是值函数 V_{k+1} 的参数。
             # 把单步代价加上 V_{k+1}，得到当前 Q_k(x,u) 的参数。
@@ -109,13 +137,76 @@ class ArmLQRPolicy:
             p = h - M @ kk
             K0, k0 = K, kk
         u_raw = -(K0 @ x0 + k0)  # 第一拍最优控制量 u=ddq。
-        # 只启用 ddq 硬限幅和 joint-limit guard；rate limit 与 smoothing 保持旁路。
-        u = self._apply_ddq_safety(q, dq, u_raw)
+        # 当前对比实验完全旁路 ddq 后处理，直接把 Riccati 输出送入逆动力学。
+        u = u_raw.copy()
         dq_ref = np.clip(dq + u * dt, -self.max_dq, self.max_dq)  # 用 ddq 积分一步得到目标关节速度，并限速。
         q_ref = q + dq * dt + 0.5 * u * dt * dt  # 匀加速积分一步得到目标关节位置。
         if self.joint_limits is not None:
             q_ref = np.clip(q_ref, self.joint_limits[:, 0], self.joint_limits[:, 1])
+        first_terms = step_terms[0]
+        # 预测一个完整手臂控制周期后的状态，供离线与真实轨迹严格对齐比较。
+        x1_model = A @ x0 + B @ u
+        q1_model = x1_model[:self.n]
+        dq1_model = x1_model[self.n:]
+        ee_lin_acc_model = first_terms["C_acc"] @ dq + first_terms["B_acc"] @ u + first_terms["D_acc"]
+        ee_ang_acc_model = first_terms["C_alpha"] @ dq + first_terms["B_alpha"] @ u + first_terms["D_alpha"]
+        position_error_model = first_terms["G_p"] @ x1_model + first_terms["d_p"]
+        gravity_error_model = first_terms["G_g"] @ x1_model + first_terms["d_g"]
+        posture_error_model = q1_model - self.default_q
+        cost_terms = {
+            "linear_acceleration": float(ee_lin_acc_model @ self.Qa @ ee_lin_acc_model),
+            "angular_acceleration": float(ee_ang_acc_model @ self.Qalpha @ ee_ang_acc_model),
+            "position": float(position_error_model @ self.Qp @ position_error_model),
+            "gravity": float(gravity_error_model @ self.Qg @ gravity_error_model),
+            "posture": float(posture_error_model @ self.Qq @ posture_error_model),
+            "velocity": float(dq1_model @ self.Qv @ dq1_model),
+            "control": float(u @ self.R @ u),
+        }
+        self.last_u_raw = u_raw.copy()
+        self.last_u_command = u.copy()
+        self.last_position = first_terms["position"].copy()
+        self.last_position_reference = first_terms["position_reference"].copy()
+        self.last_position_error = first_terms["position_error"].copy()
+        self.last_gravity_error = first_terms["gravity_error"].copy()
+        self.last_one_step_prediction = {
+            "q": q1_model.copy(),
+            "dq": dq1_model.copy(),
+            "ee_lin_acc": ee_lin_acc_model.copy(),
+            "ee_ang_acc": ee_ang_acc_model.copy(),
+            "position_error": position_error_model.copy(),
+            "gravity_error": gravity_error_model.copy(),
+            "cost_terms": cost_terms,
+        }
         return q_ref.astype(np.float32), dq_ref.astype(np.float32), u.astype(np.float32)
+
+    def get_last_diagnostics(self):
+        """返回最近一次 LQR 更新的关键中间量，供主程序记录。"""
+        return {
+            "ddq_raw": self.last_u_raw.copy(),
+            "ddq_command": self.last_u_command.copy(),
+            "position": self.last_position.copy(),
+            "position_reference": self.last_position_reference.copy(),
+            "position_error": self.last_position_error.copy(),
+            "gravity_error": self.last_gravity_error.copy(),
+            "one_step_prediction": {
+                key: value.copy() if isinstance(value, np.ndarray) else dict(value)
+                for key, value in self.last_one_step_prediction.items()
+            },
+        }
+
+    def get_cost_definition(self):
+        """返回实际轨迹代价重算所需的权重和姿态参考。"""
+        return {
+            "term_names": self.COST_TERM_NAMES,
+            "Qa": self.Qa.copy(),
+            "Qalpha": self.Qalpha.copy(),
+            "Qp": self.Qp.copy(),
+            "Qg": self.Qg.copy(),
+            "Qq": self.Qq.copy(),
+            "Qv": self.Qv.copy(),
+            "R": self.R.copy(),
+            "posture_reference": self.default_q.copy(),
+        }
 
     def set_joint_limits(self, joint_limits):
         if joint_limits is None:
@@ -127,7 +218,7 @@ class ArmLQRPolicy:
         self.joint_limits = joint_limits.copy()
 
     def _apply_ddq_safety(self, q, dq, u_raw):
-        """应用最小 ddq 安全层，不包含变化率限制或平滑。"""
+        """保留供后续对比的可选安全层；当前 compute_action() 不调用。"""
         u = np.clip(u_raw, -self.max_ddq, self.max_ddq)
         u = self._apply_joint_limit_guard(q, dq, u)
         return np.clip(u, -self.max_ddq, self.max_ddq)

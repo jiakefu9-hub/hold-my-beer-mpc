@@ -7,7 +7,8 @@
 - **上肢控制**：采用模型预测控制 (MPC) 算法控制单侧手臂，确保末端执行器 (End-Effector, EE) 保持稳定。
 - **核心创新点（前馈补偿）**：基于死锁状态下采集的躯干震动数据，拟合/训练出一个机座（Base）的周期性扰动模型。将该扰动模型作为前馈补偿项（Feedforward Compensation）引入到 MPC 的预测时域中，从而在震动传导至末端前提前主动抵消，实现极致的稳定性。
 - **验证与评估**：在末端绑带装有水的瓶子作为直观的稳定性参考。然而，实际算法表现和性能评估将严格依赖末端的真实数据（线加速度、角加速度和基于重力方向的倾斜误差）。
-- **姿态参考的工程定义**：末端姿态项不再直接采用完整的旋转误差向量，而采用重力方向在末端坐标系下的 XY 投影作为主要“防洒水”指标；同时加入关节名义姿态正则项，将右臂维持在理论 `0` 度持杯姿态附近，避免手臂在水平面内漂移到不自然构型。
+- **位置参考的工程定义**：末端抓持点跟踪 torso/IMU 坐标系中的名义位置，而不是固定的世界坐标点，使手臂能随行走中的躯干一起平移。
+- **姿态参考的工程定义**：采用有方向的三维重力误差作为“防洒水”指标，使正立与倒立不再得到相同误差；同时保留关节名义姿态正则项，避免手臂漂移到不自然构型。
 
 ---
 
@@ -76,7 +77,7 @@ ${}^W \alpha_E = {}^W \alpha_B + {}^W \omega_B \times ({}^W R_B {}^B J_\omega \d
 
 ### 二、 状态空间模型的严格构建 (State-Space)
 
-由于当前代价函数中的姿态项改为“重力方向在末端坐标系下的 XY 投影误差”，其本质上是 $q_k$ 的非线性函数，而不再单独引入一个独立演化的姿态误差状态。因此这里采用更简洁的二阶关节空间状态：
+由于 torso-relative 末端位置和三维重力误差都可以作为 $q_k$ 的非线性观测量进行局部线性化，不需要把它们单独加入状态向量。因此这里采用更简洁的二阶关节空间状态：
 
 定义状态向量 $x_k \in \mathbb{R}^{2n}$ 以及控制输入 $u_k \in \mathbb{R}^n$：
 $x_k = \begin{bmatrix} q_k \\ \dot{q}_k \end{bmatrix}, \quad u_k = \ddot{q}_k$
@@ -111,15 +112,29 @@ $d_k = \begin{bmatrix} {}^W a_{B, k} \\ {}^W \omega_{B, k} \\ {}^W \alpha_{B, k}
 ### 目标：从物理代价函数映射到 OSQP 标准型
 
 我们在每一个控制步长 $k$ 下的局部代价函数为：
-$J_k = ||{}^W a_{EE, k}||_{Q_a}^2 + ||{}^W \alpha_{EE, k}||_{Q_\alpha}^2 + ||P_{xy}({}^E R_{W,k} g^W)||_{Q_g}^2 + ||q_k||_{Q_q}^2 + ||\dot{q}_k||_{Q_v}^2 + ||u_k||_R^2$
-其中，$g^W = [0, 0, -9.81]^T$ 为世界系重力向量，${}^E R_{W,k} = ({}^W R_{E,k})^T$，$P_{xy}$ 表示提取末端坐标系下前两个分量（即倾斜误差）。在当前 `main_sim.py` 的实验设定中，名义持杯姿态取为零位形，因此有 $q_{\text{nom}} = 0$，相应地 $||q_k - q_{\text{nom}}||_{Q_q}^2$ 直接化简为 $||q_k||_{Q_q}^2$。
+$J_k = ||{}^W a_{EE, k}||_{Q_a}^2 + ||{}^W \alpha_{EE, k}||_{Q_\alpha}^2 + ||r_{p,k}||_{Q_p}^2 + ||r_{g,k}||_{Q_g}^2 + ||q_k||_{Q_q}^2 + ||\dot{q}_k||_{Q_v}^2 + ||u_k||_R^2$
+
+其中：
+
+$
+r_p(q)={}^B p_E(q)-{}^B p_E(q_{nom}) \in \mathbb{R}^3
+$
+
+是 torso/IMU 相对末端位置误差。对于当前 IMU 与右肩固连的模型，${}^B p_E(q_{nom})$ 是只由名义右臂角决定的常量，可在控制器初始化时计算一次并缓存；它随 torso 的世界位置一起移动，因此不会妨碍整机行走。本版先不加入末端速度代价。
+
+$
+r_g(q)={}^E R_W(q)g^W-g^E_{ref}\in\mathbb{R}^3,
+\qquad g^E_{ref}=\begin{bmatrix}0&0&-\|g^W\|\end{bmatrix}^T
+$
+
+是有方向的三维重力误差。正立时为零，倒立时第三维约为 $2\|g\|$，修复旧二维 XY 投影无法区分正立与精确倒立的问题。在当前实验设定中 $q_{nom}=0$。
 
 这里我们将 MPC 的决策变量取为关节加速度 $u_k = \ddot q_k$，而不是直接取 $q$、$\dot q$ 或 $\tau$，主要有以下原因：
 
 - 末端线加速度和角加速度与 $\ddot q$ 的关系最直接，因此当前代价函数中的核心目标项可以更自然地写成二次型。
 - 在离散时间下，$q$ 和 $\dot q$ 可以由 $\ddot q$ 通过二阶积分器直接预测，状态更新形式规整，便于保持标准 QP / OSQP 结构。
 - 当前方案主要依赖运动学映射和离散积分模型，不必显式引入完整刚体动力学，因此建模和调试复杂度更低，更适合在线快速求解。
-- 工程实现上也更清晰：上层 MPC 优化 $\ddot q$，下层执行层再将其转换为短时的 $q_{ref}$、$\dot q_{ref}$ 供底层 SDK 的 PD 接口跟踪。
+- 工程实现上也更清晰：上层 MPC 优化 $\ddot q$，下层通过逆动力学生成前馈力矩，再叠加短时 $q_{ref}$、$\dot q_{ref}$ 的 PD 修正。
 
 如果直接把 $q$ 或 $\dot q$ 作为决策变量，则末端线加速度和角加速度无法由决策变量自然表示，为了把这些项写进代价函数，通常还需要间接引入 $\ddot q$，模型表达会更绕，约束设计也不如当前方案直观。
 
@@ -152,17 +167,37 @@ $Q_{state} = \text{block\_diag}(Q_q, \ Q_v)$
 $||q_k||_{Q_q}^2 + ||\dot{q}_k||_{Q_v}^2 = x_k^T Q_{state} x_k$
 因此在当前设定下，该部分只贡献二次项，不再产生由 $q_{\text{nom}}$ 引入的一次项。同时，控制输入项为 $||u_k||_R^2 = u_k^T R u_k$。
 
-另一方面，重力方向误差项 $||P_{xy}({}^E R_{W,k} g^W)||_{Q_g}^2$ 不是一个独立状态分量的二次型，而是通过当前关节构型 $q_k$ 决定的非线性观测项。为将其并入 QP，在每个控制步长都需要围绕当前工作点 $(q^\star, \dot q^\star)$ 对其进行局部线性化。记
-$r_g(q_k) = P_{xy}({}^E R_{W,k}(q_k) g^W) \in \mathbb{R}^2$
-则在当前工作点 $q^\star$ 附近做一阶泰勒展开：
-$r_g(q_k) \approx r_g(q^\star) + J_g(q^\star)(q_k - q^\star), \qquad J_g(q^\star) = \left. \frac{\partial r_g}{\partial q} \right|_{q=q^\star} \in \mathbb{R}^{2 \times n}$
-其中 $J_g(q^\star)$ 表示重力方向误差对关节构型的局部雅可比矩阵。由于 $q_k = S_q x_k$，可将其整理成关于状态 $x_k$ 的仿射形式：
-$r_g(x_k) \approx d_g + G_g x_k, \qquad G_g = J_g(q^\star) S_q, \qquad d_g = r_g(q^\star) - J_g(q^\star) q^\star$
-于是该项的平方代价就变为标准二次型：
-$||r_g(x_k)||_{Q_g}^2 \approx (d_g + G_g x_k)^T Q_g (d_g + G_g x_k)$
-展开后得到：
-$x_k^T G_g^T Q_g G_g x_k + 2 d_g^T Q_g G_g x_k + d_g^T Q_g d_g$
-其中最后一项为常数，可在优化中丢弃。因此，重力方向误差项在每个控制步长都可以通过“局部线性化 + 平方展开”的方式并入 QP 的二次项和一次项。
+torso-relative 位置误差与三维重力误差都不是独立状态，而是由 $q_k$ 决定的非线性观测项。二者在当前工作点 $q^\star$ 附近分别做一阶泰勒展开：
+
+$
+r_p(q_k)\approx r_p(q^\star)+J_p(q^\star)(q_k-q^\star)=d_p+G_p x_k
+$
+
+$
+r_g(q_k)\approx r_g(q^\star)+J_g(q^\star)(q_k-q^\star)=d_g+G_g x_k
+$
+
+其中：
+
+$
+J_p(q^\star)=({}^W R_B)^T{}^W J_v(q^\star)\in\mathbb{R}^{3\times n},
+\quad G_p=J_pS_q,
+\quad d_p=r_p(q^\star)-J_pq^\star
+$
+
+$
+J_g(q^\star)=\left.\frac{\partial r_g}{\partial q}\right|_{q=q^\star}\in\mathbb{R}^{3\times n},
+\quad G_g=J_gS_q,
+\quad d_g=r_g(q^\star)-J_gq^\star
+$
+
+因此两个平方代价都保持标准凸二次型，例如：
+
+$
+\|r_p(x_k)\|_{Q_p}^2\approx x_k^TG_p^TQ_pG_px_k+2d_p^TQ_pG_px_k+\text{const}
+$
+
+重力项同理得到 $G_g^TQ_gG_g$ 和 $G_g^TQ_gd_g$。只要每轮 QP 冻结 $J_p,J_g,d_p,d_g$，加入末端位置并不会把本轮 OSQP 问题变成非线性规划；下一控制周期再重新线性化即可。
 
 ---
 
@@ -193,13 +228,13 @@ $$y^T Q y = (D + C S_v x_k + B u_k)^T Q (D + C S_v x_k + B u_k)$$
 合并后，原始物理代价函数 $J_k$ 中各部分的系数如下：
 
 **1. 对应 $x_k^T [\dots] x_k$ 的系数总和：**
-$\text{Coef}_{xx} = \underbrace{S_v^T C_{acc}^T Q_a C_{acc} S_v}_{\text{线加速度的 } x \text{ 二次项}} + \underbrace{S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v}_{\text{角加速度的 } x \text{ 二次项}} + \underbrace{G_g^T Q_g G_g}_{\text{重力方向误差的 } x \text{ 二次项}} + \underbrace{Q_{state}}_{\text{状态自身惩罚}}$
+$\text{Coef}_{xx} = \underbrace{S_v^T C_{acc}^T Q_a C_{acc} S_v}_{\text{线加速度的 } x \text{ 二次项}} + \underbrace{S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v}_{\text{角加速度的 } x \text{ 二次项}} + \underbrace{G_p^T Q_p G_p}_{\text{torso-relative 位置误差}} + \underbrace{G_g^T Q_g G_g}_{\text{三维重力误差}} + \underbrace{Q_{state}}_{\text{状态自身惩罚}}$
 **2. 对应 $u_k^T [\dots] u_k$ 的系数总和：**
 $\text{Coef}_{uu} = \underbrace{B_{acc}^T Q_a B_{acc}}_{\text{线加速度的 } u \text{ 二次项}} + \underbrace{B_{\alpha}^T Q_\alpha B_{\alpha}}_{\text{角加速度的 } u \text{ 二次项}} + \underbrace{R}_{\text{控制量自身惩罚}}$
 **3. 对应 $x_k^T [\dots] u_k$ 的交叉系数总和：**
 $\text{Coef}_{xu} = \underbrace{2 S_v^T C_{acc}^T Q_a B_{acc}}_{\text{线加速度的 } x,u \text{ 交叉项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha B_{\alpha}}_{\text{角加速度的 } x,u \text{ 交叉项}}$
 **4. 对应 $x_k$ 一次项 $f_x$ 的系数总和：**
-$f_x = \underbrace{2 S_v^T C_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } x \text{ 线性项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } x \text{ 线性项}} + \underbrace{2 G_g^T Q_g d_g}_{\text{重力方向误差的 } x \text{ 线性项}}$
+$f_x = \underbrace{2 S_v^T C_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } x \text{ 线性项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } x \text{ 线性项}} + \underbrace{2 G_p^T Q_p d_p}_{\text{torso-relative 位置一次项}} + \underbrace{2 G_g^T Q_g d_g}_{\text{三维重力误差一次项}}$
 **5. 对应 $u_k$ 一次项 $f_u$ 的系数总和：**
 $f_u = \underbrace{2 B_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } u \text{ 线性项}} + \underbrace{2 B_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } u \text{ 线性项}}$
 
@@ -212,7 +247,7 @@ $f_u = \underbrace{2 B_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } u \text{ �
 回忆 OSQP 的公式：$\frac{1}{2} x_k^T H_{xx} x_k + \frac{1}{2} u_k^T H_{uu} u_k + x_k^T H_{xu} u_k + f_x^T x_k + f_u^T u_k$
 
 * **推导 $H_{xx}$：** 因为 OSQP 公式里有一个 $\frac{1}{2}$，所以 $H_{xx} = 2 \times \text{Coef}_{xx}$。
-    $H_{xx} = 2 \left( S_v^T C_{acc}^T Q_a C_{acc} S_v + S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v + G_g^T Q_g G_g + Q_{state} \right)$
+    $H_{xx} = 2 \left( S_v^T C_{acc}^T Q_a C_{acc} S_v + S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v + G_p^T Q_p G_p + G_g^T Q_g G_g + Q_{state} \right)$
 * **推导 $H_{uu}$：** 同理，因为有 $\frac{1}{2}$，所以 $H_{uu} = 2 \times \text{Coef}_{uu}$。
     $$H_{uu} = 2 \left( B_{acc}^T Q_a B_{acc} + B_{\alpha}^T Q_\alpha B_{\alpha} + R \right)$$
 * **推导 $H_{xu}$：** OSQP 交叉项公式里**没有** $\frac{1}{2}$，所以 $H_{xu}$ 直接等于 $\text{Coef}_{xu}$。
@@ -220,7 +255,7 @@ $f_u = \underbrace{2 B_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } u \text{ �
 * **推导 $H_{ux}$：** 为保证 Hessian 对称矩阵的性质：
     $$H_{ux} = H_{xu}^T = 2 \left( B_{acc}^T Q_a C_{acc} S_v + B_{\alpha}^T Q_\alpha C_{\alpha} S_v \right)$$
 * **推导 $f_x$ 和 $f_u$：** 一次项完全一一对应，无需乘以 2（因为前面的展开过程中已经产生了 2）。
-    $f_x = 2 \left( S_v^T C_{acc}^T Q_a D_{acc} + S_v^T C_{\alpha}^T Q_\alpha D_{\alpha} + G_g^T Q_g d_g \right)$
+    $f_x = 2 \left( S_v^T C_{acc}^T Q_a D_{acc} + S_v^T C_{\alpha}^T Q_\alpha D_{\alpha} + G_p^T Q_p d_p + G_g^T Q_g d_g \right)$
     $f_u = 2 \left( B_{acc}^T Q_a D_{acc} + B_{\alpha}^T Q_\alpha D_{\alpha} \right)$
 
 ---
@@ -360,6 +395,48 @@ $l = \begin{bmatrix} b_{dyn} \\ l_{ineq} \end{bmatrix}, \quad
 u = \begin{bmatrix} b_{dyn} \\ u_{ineq} \end{bmatrix}$
 
 ---
+
+## ⚙️ 从 MPC 的 ddq 到执行力矩
+
+MPC 仍以 $u_k=\ddot q_k$ 为决策变量，不把完整刚体动力学放入预测状态方程。在线只执行第一拍 $\ddot q_0^\star$，下层执行器使用 inverse dynamics 转成力矩：
+
+$
+\tau=\tau_{ff}+K_p(q_{ref}-q)+K_d(\dot q_{ref}-\dot q)
+$
+
+MuJoCo 仿真采用与 LQR 相同的 contact-aware 计算：
+
+```python
+scratch.qpos[:] = data.qpos
+scratch.qvel[:] = data.qvel
+scratch.qacc[:] = 0.0
+scratch.qacc[right_arm_qvel_indices] = ddq_des
+mujoco.mj_inverse(model, scratch)
+
+tau_inverse = scratch.qfrc_inverse[right_arm_qvel_indices]
+efc_J = np.asarray(scratch.efc_J).reshape(-1, model.nv)[:scratch.nefc]
+efc_type = scratch.efc_type[:scratch.nefc]
+contact_rows = np.isin(efc_type, CONTACT_CONSTRAINT_TYPES)
+qfrc_contact = efc_J[contact_rows].T @ scratch.efc_force[:scratch.nefc][contact_rows]
+tau_contact = qfrc_contact[right_arm_qvel_indices]
+tau_ff = tau_inverse + tau_contact
+```
+
+因为 MuJoCo 的 `qfrc_inverse` 已包含负号形式的约束反力，所以只加回 contact 类型约束对应的 `qfrc_contact`，避免在意外碰撞时主动对抗环境。不能直接加回完整 `qfrc_constraint`，否则会同时取消 `frictionloss`、joint limit 等非接触约束的补偿。它不是完整的接触力优化；主动接触任务仍需把接触力和摩擦锥纳入 MPC。
+
+真机可用 Pinocchio/RBDL/厂商动力学库计算相同的无接触项：
+
+$
+\tau_{ff}=M(q)\ddot q_{des}+h(q,\dot q)
+$
+
+如果后续希望 MPC 同时考虑力矩上限，又不想把力矩作为决策变量，可以在每轮工作点冻结动力学：
+
+$
+\tau_k\approx M(\bar q_k)u_k+h(\bar q_k,\dot{\bar q}_k)
+$
+
+这样 $\tau_{min}\le\tau_k\le\tau_{max}$ 仍是关于 $u_k$ 的线性不等式，可继续由 OSQP 求解。
 
 ## 💡 工程师落地 Check-List (代码实现防坑指南)
 

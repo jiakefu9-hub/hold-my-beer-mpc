@@ -9,7 +9,8 @@ LQR 作为当前项目中 MPC 的简化版，用于在**不显式处理硬约束
 - 下肢：沿用现有 RL locomotion
 - 上肢：右臂用有限时域、时变 LQR 控制
 - 扰动前馈：使用预测得到的 base 扰动进入每个时刻的局部模型
-- 输出：LQR 优化关节加速度 `u_k = ddq_k`，由 MuJoCo 逆动力学转换为前馈力矩，并叠加 `q_ref, dq_ref` 的 PD 修正
+- 位置目标：抓持点跟踪相对于 torso/IMU 的名义位置，避免机器人行走时把手固定在世界中的某一点
+- 输出：LQR 优化关节加速度 `u_k = ddq_k`，由 MuJoCo contact-aware 逆动力学转换为前馈力矩，并叠加 `q_ref, dq_ref` 的 PD 修正
 
 ---
 
@@ -144,13 +145,54 @@ $
 B_{\alpha,k} = {}^W R_{B,k} \, {}^B J_\omega(\bar q_k)
 $
 
-### 4.3 重力方向误差
+### 4.3 Torso-relative 末端位置误差
+
+末端位置不固定在世界坐标系中，而定义在 torso/IMU 坐标系 `{B}` 中：
+
+$
+{}^B p_E(q) = ({}^W R_B)^T\left({}^W p_E(q)-{}^W p_B\right)
+$
+
+参考位置只由名义右臂姿态 $q_{nom}$ 决定，并在 `KinematicsHelper` 初始化时计算一次、随后缓存：
+
+$
+{}^B p_{E,ref} = {}^B p_E(q_{nom})
+$
+
+因此位置误差为：
+
+$
+r_p(q) = {}^B p_E(q)-{}^B p_{E,ref} \in \mathbb{R}^3
+$
+
+因为该参考量表达在 torso/IMU 局部坐标系中，torso 在世界系中的平移和旋转都会被相对变换消去，所以无需每个控制周期重算。机器人向前行走时，位置参考会随 torso 一起移动，不会要求手臂反向伸展以维持一个固定的世界坐标点。当前实现使用完整 IMU 坐标系；如果以后发现 torso roll/pitch 使位置目标摆动过强，可以再单独评估“torso 原点 + yaw-only 朝向”的参考系，但本版不额外引入该处理。
+
+在工作点 $\bar q_k$ 附近线性化：
+
+$
+r_p(q) \approx r_p(\bar q_k)+J_{p,k}(q-\bar q_k)=d_{p,k}+G_{p,k}x_k
+$
+
+其中：
+
+$
+J_{p,k}=({}^W R_B)^T{}^W J_v(\bar q_k),\qquad
+G_{p,k}=J_{p,k}S_q,\qquad
+d_{p,k}=r_p(\bar q_k)-J_{p,k}\bar q_k
+$
+
+右臂关节不会改变上游 IMU site，因此上式中 torso 位姿对右臂 $q$ 的导数为零。末端速度暂时不加入代价函数，以便单独观察位置项的作用。
+
+### 4.4 有方向的三维重力误差
 
 定义末端防洒水误差：
 
 $
-r_g(q) = P_{xy}({}^E R_W(q) g^W) \in \mathbb{R}^2
+r_g(q) = {}^E R_W(q)g^W-g^E_{ref} \in \mathbb{R}^3,
+\qquad g^E_{ref}=\begin{bmatrix}0&0&-\|g^W\|\end{bmatrix}^T
 $
+
+旧版只取 $g_E$ 的前两个分量，正立和精确倒立时都可能得到零误差。新的三维差值保留方向：正立时 $r_g=0$，倒立时第三维约为 $2\|g\|$，因此评估指标能够明确区分正立和倒立。
 
 在工作点 `\bar q_k` 处做一阶线性化：
 
@@ -174,14 +216,14 @@ $
 d_{g,k} = r_g(\bar q_k) - J_{g,k} \bar q_k
 $
 
-### 4.4 程序实现对应关系
+### 4.5 程序实现对应关系
 
 后续程序里，每个预测步 `k` 的这些量应按下面方式构造：
 
 - base 预测器提供 `{}^W a_{B,k}, {}^W \omega_{B,k}, {}^W \alpha_{B,k}, {}^W R_{B,k}`
 - 运动学 helper 提供 `{}^B p_E(\bar q_k), {}^B J_v(\bar q_k), {}^B J_\omega(\bar q_k)`
 - `{}^B \dot J_v, {}^B \dot J_\omega, J_{g,k}` 可由解析法或有限差分法在工作点处计算
-- 然后严格按本节公式生成 `D_acc,k, C_acc,k, B_acc,k, D_alpha,k, C_alpha,k, B_alpha,k, d_g,k, G_g,k`
+- 然后严格按本节公式生成 `D_acc,k, C_acc,k, B_acc,k, D_alpha,k, C_alpha,k, B_alpha,k, d_p,k, G_p,k, d_g,k, G_g,k`
 
 后文第 5 节到第 9 节中的所有 `Q_xx,k, Q_xu,k, Q_uu,k, f_x,k, f_u,k, P_k, p_k` 都建立在这里这些系数之上。因此本节就是后续程序实现时最直接的“物理建模说明书”。
 
@@ -192,8 +234,10 @@ $
 每一步代价定义为：
 
 $
-\ell_k(x_k, u_k) = \|{}^W a_{E,k}\|_{Q_a}^2 + \|{}^W \alpha_{E,k}\|_{Q_\alpha}^2 + \|r_{g,k}\|_{Q_g}^2 + \|q_k - q_{nom}\|_{Q_q}^2 + \|\dot q_k\|_{Q_v}^2 + \|u_k\|_{R}^2
+\ell_k(x_k, u_k) = \|{}^W a_{E,k}\|_{Q_a}^2 + \|{}^W \alpha_{E,k}\|_{Q_\alpha}^2 + \|r_{p,k}\|_{Q_p}^2 + \|r_{g,k}\|_{Q_g}^2 + \|q_k - q_{nom}\|_{Q_q}^2 + \|\dot q_k\|_{Q_v}^2 + \|u_k\|_{R}^2
 $
+
+其中 $Q_p\succeq0$ 是 torso-relative 末端位置权重。本版不加入末端速度代价；末端加速度、关节速度和位置误差共同提供当前所需的动态约束与阻尼。
 
 当前项目里可直接取：
 
@@ -234,7 +278,7 @@ $
 ### 6.1 二次项矩阵
 
 $
-Q_{xx,k} = S_v^T C_{acc,k}^T Q_a C_{acc,k} S_v + S_v^T C_{\alpha,k}^T Q_\alpha C_{\alpha,k} S_v + G_{g,k}^T Q_g G_{g,k} + S_q^T Q_q S_q + S_v^T Q_v S_v
+Q_{xx,k} = S_v^T C_{acc,k}^T Q_a C_{acc,k} S_v + S_v^T C_{\alpha,k}^T Q_\alpha C_{\alpha,k} S_v + G_{p,k}^T Q_p G_{p,k} + G_{g,k}^T Q_g G_{g,k} + S_q^T Q_q S_q + S_v^T Q_v S_v
 $
 
 $
@@ -248,7 +292,7 @@ $
 ### 6.2 一次项向量
 
 $
-f_{x,k} = S_v^T C_{acc,k}^T Q_a D_{acc,k} + S_v^T C_{\alpha,k}^T Q_\alpha D_{\alpha,k} + G_{g,k}^T Q_g d_{g,k} - S_q^T Q_q q_{nom}
+f_{x,k} = S_v^T C_{acc,k}^T Q_a D_{acc,k} + S_v^T C_{\alpha,k}^T Q_\alpha D_{\alpha,k} + G_{p,k}^T Q_p d_{p,k} + G_{g,k}^T Q_g d_{g,k} - S_q^T Q_q q_{nom}
 $
 
 当前 $q_{nom} = 0$ 时，最后一项直接为 $0$。
@@ -513,10 +557,11 @@ for k in 0..N-1:
     choose operating point xbar_k = [qbar_k; dqbar_k]
     read predicted base terms aB_k, omegaB_k, alphaB_k, RWB_k
     compute pE(qbar_k), Jv(qbar_k), Jw(qbar_k)
-    compute Jvdot(qbar_k, dqbar_k), Jwdot(qbar_k, dqbar_k), Jg_k
+    compute Jvdot(qbar_k, dqbar_k), Jwdot(qbar_k, dqbar_k), Jp_k, Jg_k
     construct D_acc,k, C_acc,k, B_acc,k from Section 4.1
     construct D_alpha,k, C_alpha,k, B_alpha,k from Section 4.2
-    construct d_g,k, G_g,k from Section 4.3
+    construct d_p,k, G_p,k from Section 4.3
+    construct d_g,k, G_g,k from Section 4.4
     compute Q_xx,k, Q_xu,k, Q_uu,k, f_x,k, f_u,k
 
 P_N = Q_N
@@ -547,7 +592,7 @@ return u_star
 - 反馈路径：对 `ddq_des` 积分一拍得到 `q_ref, dq_ref`，计算小幅 PD 修正 `tau_pd`
 - 执行器命令：`tau = clip(tau_ff + tau_pd, tau_min, tau_max)`
 
-这样 `tau_ff` 负责实现 LQR 要求的加速度并补偿重力、科氏力等动力学项，PD 只修正模型误差、离散延迟和扰动。
+这样 `tau_ff` 负责实现 LQR 要求的加速度并补偿重力、科氏力等动力学项，PD 只修正模型误差、离散延迟和扰动。位置项采用 torso-relative 误差，因此它约束手相对躯干的工作位置，不会阻止整机向前行走。
 
 ---
 
@@ -559,7 +604,7 @@ $
 u_0^\star = \ddot q^\star
 $
 
-理想的逆动力学前馈为：
+无接触时，理想的逆动力学前馈为：
 
 $
 \tau_{ff} = M(q)\ddot q^\star + h(q,\dot q)
@@ -573,8 +618,28 @@ scratch.qvel[:] = data.qvel
 scratch.qacc[:] = 0.0
 scratch.qacc[right_arm_qvel_indices] = ddq_des
 mujoco.mj_inverse(model, scratch)
-tau_ff = scratch.qfrc_inverse[right_arm_qvel_indices]
+tau_inverse = scratch.qfrc_inverse[right_arm_qvel_indices]
+efc_J = np.asarray(scratch.efc_J).reshape(-1, model.nv)[:scratch.nefc]
+efc_type = scratch.efc_type[:scratch.nefc]
+contact_rows = np.isin(efc_type, CONTACT_CONSTRAINT_TYPES)
+qfrc_contact = efc_J[contact_rows].T @ scratch.efc_force[:scratch.nefc][contact_rows]
+tau_contact = qfrc_contact[right_arm_qvel_indices]
+tau_ff = tau_inverse + tau_contact
 ```
+
+MuJoCo 在当前符号约定下满足：
+
+$
+qfrc_{inverse}=M(q)\ddot q+h(q,\dot q)-qfrc_{passive}-qfrc_{constraint}
+$
+
+`qfrc_constraint` 同时包含 contact、`FRICTION_DOF`、joint limit 等约束，不能整项加回。当前实现只重建 contact 类型约束对应的广义力：
+
+$
+\tau_{ff}=qfrc_{inverse}+qfrc_{contact}
+$
+
+这样只从执行器前馈中消去 contact 反力，`frictionloss` 等非接触约束仍保留在 `qfrc_inverse` 中，由执行器正常补偿。这称为本项目中的 **contact-aware inverse dynamics**。当瓶子意外撞到 torso 时，控制器不会为了强行实现不可达的 `ddq_des` 而主动抵消接触约束力。该处理不等于完整的接触优化；若以后需要主动推压环境，仍需显式建模接触力与接触任务。
 
 同时将 `ddq_des` 转换为反馈项所需的短时参考：
 
@@ -592,7 +657,7 @@ $
 \tau = \tau_{ff} + K_p(q_{ref}-q) + K_d(\dot q_{ref}-\dot q)
 $
 
-`main_sim.py` 中 LQR 每 `0.006 s` 更新一次，`ddq_des/q_ref/dq_ref` 在更新间隔内保持；逆动力学使用最新整机状态，每个 `0.002 s` 仿真步重算一次。当前 XML 的右臂 motor 为 `gear=1` 的直接驱动，因此右臂 `qfrc_inverse` 可直接对应 `ctrl[18:23]`，最后按关节 `actuatorfrcrange` 限幅。
+`main_sim.py` 中 LQR 每 `0.006 s` 更新一次，`ddq_des/q_ref/dq_ref` 在更新间隔内保持；逆动力学使用最新整机状态，每个 `0.002 s` 仿真步重算一次。当前 XML 的右臂 motor 为 `gear=1` 的直接驱动，因此右臂广义力可直接对应 `ctrl[18:23]`，最后按关节 `actuatorfrcrange` 限幅。
 
 当前实现里，力矩上下限的来源也需要明确写死：
 
@@ -610,7 +675,7 @@ $
 LQR 与 `MPC_DESIGN.md` 的关系：
 
 - 使用相同的状态定义 `x=[q; dq]`
-- 使用相同的物理目标：末端线加速度、角加速度、重力方向误差、姿态正则、速度正则
+- 使用相同的物理目标：末端线加速度、角加速度、torso-relative 末端位置、有方向三维重力误差、姿态正则、速度正则
 - 使用相同的 base 扰动前馈建模方式
 - 使用相同的输出接口：先求 `ddq`，再由逆动力学转为前馈力矩
 
@@ -624,7 +689,7 @@ LQR 相比 MPC 的简化点：
 LQR 相比 MPC 的缺点：
 
 - 无法严格保证关节位置、速度、加速度约束
-- 需要依赖权重和输出裁剪来避免过激控制
+- 当前无 ddq 约束，需要依赖权重与最终执行器力矩上限避免过激控制；这也是后续切换到带硬约束 MPC 的主要原因
 
 ---
 
@@ -650,15 +715,14 @@ $
 u_0^\star \leftarrow \text{clip}(u_0^\star, u_{min}, u_{max})
 $
 
-当前实验只启用最小 `u = ddq_des` 安全层：
+当前实验完全旁路 `u = ddq_des` 后处理：
 
-- 配置来源：`configs/g1.yaml` 中的 `lqr_max_ddq`、`lqr_max_dq`、`lqr_r_ddq`、`lqr_ddq_rate_limit`、`lqr_ddq_smoothing_alpha`
-- 代码根来源：`arm_lqr.py` 的 `ArmLQRPolicy.__init__(...)`
-- 当前执行路径：Riccati 得到 `u_raw` 后，依次经过 `max_ddq` 硬限幅、ddq joint-limit guard 和第二次 `max_ddq` 硬限幅
-- 完整 `_post_process_ddq(...)` 仍未调用，因此 ddq 变化率限制和 ddq 平滑不生效
-- `max_dq = 1.0 rad/s` 仍用于一拍积分后的 `dq_ref` 限幅；`r_ddq = 0.25` 仍属于 LQR 代价函数并正常生效
-
-此外，当前代码读取 MuJoCo 的右臂 `jnt_range` 并传给 `ArmLQRPolicy.set_joint_limits(...)`：它既用于裁剪一拍积分得到的 `q_ref`，也用于在接近上下限时修正 `ddq_des` 的方向。这个 guard 是后置安全修正，不是 LQR 内部的硬约束优化。
+- torso-relative 位置权重由 `configs/g1.yaml` 的 `lqr_q_position` 配置，当前初值为 $Q_p=20I_3$
+- Riccati 得到的 `u_raw` 直接作为 `ddq_des`
+- 不启用 `max_ddq` 硬限幅、joint-limit guard、ddq 变化率限制或 ddq 平滑
+- `_apply_ddq_safety(...)` 和 `_post_process_ddq(...)` 暂时保留，只用于以后受控对比实验
+- `max_dq = 1.0 rad/s` 仍用于一拍积分后的 `dq_ref` 限幅；物理 `q_ref` 仍裁剪到 MuJoCo 关节范围；它们不修改送入逆动力学的 `ddq_des`
+- 最终力矩仍受 XML `actuatorfrcrange` 硬限幅，这是执行器层保护，不属于 ddq 后处理
 
 ---
 
@@ -675,7 +739,15 @@ target_q, target_dq, ddq_des = arm_policy.compute_action(arm_obs, helpers)
 - `target_q, target_dq`：用于小/中等增益 PD 反馈的短时参考
 - `ddq_des`：送入逆动力学的右臂最优关节加速度
 
-轨迹文件额外保存 `qacc`、`right_arm_ddq_des`、`right_arm_tau_ff` 和 `right_arm_tau_pd`，用于检查实际加速度跟踪和两部分力矩占比。
+完整高频数据保存在 `trajectory.npz`，至少包括：
+
+- LQR 原始/最终 `ddq`、一拍 `q_ref/dq_ref`、实际 `q/dq/qacc`
+- `qfrc_inverse`、contact/total/non-contact 约束分量、contact-aware `tau_ff`、`tau_pd`、限幅前后总力矩
+- torso 线加速度与角加速度的 raw/filtered 值、torso 角速度
+- torso-relative 末端位置/参考/误差、三维有方向重力误差、upright alignment 和接触数量
+- 以相邻两次 `0.006 s` 手臂更新严格对齐的 `ddq_des/ddq_real/error`，以及一步模型/真实七项代价/error
+
+同时生成 `control_preview.csv` 供直接打开查看，并在 `right_arm_diagnostics.json` 中保存各信号的 RMS、最大值、饱和率和倒立比例等汇总。专用的 `lqr_tracking_preview.csv` 保存逐控制区间跟踪值，`lqr_tracking_diagnostics.json` 保存每个关节和每个代价项的 RMSE、MAE、最大误差、归一化 RMSE、相关系数和增益。NPZ 是无损分析源，CSV/JSON 用于快速人工检查。
 
 ---
 

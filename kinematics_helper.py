@@ -40,6 +40,7 @@ class ControllerHelpers:
     data: Any = None
     disturbance: Optional[DisturbanceInput] = None
     kinematics: Optional[KinematicsCache] = None
+    torso_relative_position_reference: Optional[np.ndarray] = None
     compute_gravity_error: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None
     compute_lqr_terms: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, Optional[DisturbanceInput]], dict]] = None
 
@@ -47,16 +48,32 @@ class ControllerHelpers:
 class KinematicsHelper:
     """为上层控制器提供最基本的运动学辅助接口。"""
 
-    def __init__(self, model: Any, ee_site_name: str, joint_indices: np.ndarray, imu_site_name: str = "imu_in_torso"):
+    def __init__(
+        self,
+        model: Any,
+        ee_site_name: str,
+        joint_indices: np.ndarray,
+        imu_site_name: str = "imu_in_torso",
+        position_reference_q: Optional[np.ndarray] = None,
+    ):
         self.model = model
         self.ee_site_name = ee_site_name
         self.imu_site_name = imu_site_name
         self.joint_indices = np.array(joint_indices, dtype=np.int32)
         self.qvel_indices = self.joint_indices - 1
+        self.position_reference_q = None if position_reference_q is None else np.asarray(position_reference_q, dtype=np.float64).copy()
+        if self.position_reference_q is not None and self.position_reference_q.shape != self.joint_indices.shape:
+            raise ValueError("position_reference_q 必须与被控关节数量一致。")
         self.ee_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, ee_site_name)
         self.imu_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, imu_site_name)
         # 初始化 MuJoCo 数据结构 data，用于临时计算雅可比矩阵
         self._scratch = mujoco.MjData(model)
+        # 当前模型中 IMU 与右肩固连在同一运动链段，名义右臂角确定后该相对位置就是常量。
+        self.torso_relative_position_reference = (
+            None
+            if self.position_reference_q is None
+            else self.compute_torso_relative_position(self.position_reference_q)
+        )
 
     def build_observation(
         self,
@@ -106,25 +123,36 @@ class KinematicsHelper:
         disturbance: Optional[DisturbanceInput] = None,
     ) -> ControllerHelpers:
         qpos_ref = np.asarray(data.qpos, dtype=np.float64).copy()
+        position_reference = (
+            self.compute_torso_relative_position(qpos_ref[self.joint_indices])
+            if self.torso_relative_position_reference is None
+            else self.torso_relative_position_reference.copy()
+        )
         # 打包传给 ArmLQRPolicy / ArmPIDPolicy 的辅助对象；各字段对应 main_sim.py 主循环里的实时量
         return ControllerHelpers(
             model=self.model,  # right_arm_helper 初始化时的 MuJoCo 模型 m
             data=data,  # 当前仿真步的机器人状态 d（qpos/qvel 等）
             disturbance=disturbance,  # main_sim 中由躯干 acc/omega/alpha/rotmat 构建的扰动
             kinematics=self.compute_kinematics_cache(data),  # 当前姿态下末端雅可比 J_v/J_w 及其导数
+            torso_relative_position_reference=position_reference,
             compute_gravity_error=lambda q, W_R_I: self.compute_gravity_error(q, W_R_I, qpos_ref),  # 重力方向误差 e_g
-            compute_lqr_terms=lambda q, dq, W_R_I, dist=None: self.compute_lqr_terms(q, dq, W_R_I, qpos_ref, dist),  # LQR 代价里加速度/重力项的 C、B、D、G 矩阵
+            compute_lqr_terms=lambda q, dq, W_R_I, dist=None: self.compute_lqr_terms(
+                q, dq, W_R_I, qpos_ref, dist, position_reference
+            ),  # LQR 代价里加速度、位置和重力项的局部线性化系数
         )
 
     def compute_gravity_error(self, q_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray) -> np.ndarray:
         # q_right_arm: shape=(5,), right arm qpos[25:30]; qpos_reference: shape=(model.nq,), full robot qpos.
         self._set_scratch_state(qpos_reference, q_right_arm, np.zeros(len(self.qvel_indices), dtype=np.float64))
         W_R_E = self._scratch.site_xmat[self.ee_site_id].reshape(3, 3).copy()
-        g_E = W_R_E.T @ np.array([0.0, 0.0, -9.81], dtype=np.float64)
-        return g_E[:2].copy()
+        gravity_world = np.asarray(self.model.opt.gravity, dtype=np.float64)
+        gravity_reference_end = np.array([0.0, 0.0, -np.linalg.norm(gravity_world)], dtype=np.float64)
+        # 三维有方向误差：倒立时 z 误差约为 2g，不再与正立同为零。
+        return W_R_E.T @ gravity_world - gravity_reference_end
 
     def compute_gravity_error_jacobian(self, q_right_arm: np.ndarray, W_R_I: np.ndarray, qpos_reference: np.ndarray, eps: float = 1e-4) -> np.ndarray:
-        J_g = np.zeros((2, len(q_right_arm)), dtype=np.float64)
+        error_dim = self.compute_gravity_error(q_right_arm, W_R_I, qpos_reference).shape[0]
+        J_g = np.zeros((error_dim, len(q_right_arm)), dtype=np.float64)
         for i in range(len(q_right_arm)):
             q_plus = np.asarray(q_right_arm, dtype=np.float64).copy(); q_plus[i] += eps
             q_minus = np.asarray(q_right_arm, dtype=np.float64).copy(); q_minus[i] -= eps
@@ -132,6 +160,14 @@ class KinematicsHelper:
             e_minus = self.compute_gravity_error(q_minus, W_R_I, qpos_reference)
             J_g[:, i] = (e_plus - e_minus) / (2.0 * eps)
         return J_g
+
+    def compute_torso_relative_position(self, q_right_arm: np.ndarray) -> np.ndarray:
+        """仅由右臂关节角计算抓持点在 torso IMU 坐标系中的位置。"""
+        self._set_scratch_state(self.model.qpos0, q_right_arm, np.zeros(len(self.qvel_indices), dtype=np.float64))
+        W_R_B = self._scratch.site_xmat[self.imu_site_id].reshape(3, 3).copy()
+        p_E = self._scratch.site_xpos[self.ee_site_id].copy()
+        p_B = self._scratch.site_xpos[self.imu_site_id].copy()
+        return W_R_B.T @ (p_E - p_B)
 
     def _set_scratch_state(self, qpos_reference: np.ndarray, q_right_arm: np.ndarray, dq_right_arm: np.ndarray):
         self._scratch.qpos[:] = np.asarray(qpos_reference, dtype=np.float64)
@@ -161,18 +197,34 @@ class KinematicsHelper:
         Jv_m, Jw_m = self._site_jacobians_world()
         return (Jv_p - Jv_m) / (2.0 * eps), (Jw_p - Jw_m) / (2.0 * eps)
 
-    def compute_lqr_terms(self, q_right_arm: np.ndarray, dq_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray, disturbance: Optional[DisturbanceInput] = None) -> dict:
+    def compute_lqr_terms(
+        self,
+        q_right_arm: np.ndarray,
+        dq_right_arm: np.ndarray,
+        _W_R_I: np.ndarray,
+        qpos_reference: np.ndarray,
+        disturbance: Optional[DisturbanceInput] = None,
+        torso_relative_position_reference: Optional[np.ndarray] = None,
+    ) -> dict:
         q = np.asarray(q_right_arm, dtype=np.float64)
         dq = np.asarray(dq_right_arm, dtype=np.float64)
         self._set_scratch_state(qpos_reference, q, dq)
         J_v, J_w = self._site_jacobians_world()
         dJ_v, dJ_w = self._site_jacobian_dots_world(qpos_reference, q, dq)
+        # 有限差分会改变 scratch 状态；读取位姿前恢复到当前线性化工作点。
+        self._set_scratch_state(qpos_reference, q, dq)
         p_E = self._scratch.site_xpos[self.ee_site_id].copy()
         p_B = self._scratch.site_xpos[self.imu_site_id].copy()
+        W_R_B = self._scratch.site_xmat[self.imu_site_id].reshape(3, 3).copy()
         omega_B = np.zeros(3, dtype=np.float64) if disturbance is None or disturbance.omega_world is None else np.asarray(disturbance.omega_world, dtype=np.float64)
         a_B = np.zeros(3, dtype=np.float64) if disturbance is None or disturbance.acc_world is None else np.asarray(disturbance.acc_world, dtype=np.float64)
         alpha_B = np.zeros(3, dtype=np.float64) if disturbance is None or disturbance.alpha_world is None else np.asarray(disturbance.alpha_world, dtype=np.float64)
         r_BE = p_E - p_B
+        position = W_R_B.T @ r_BE
+        position_reference = position.copy() if torso_relative_position_reference is None else np.asarray(torso_relative_position_reference, dtype=np.float64)
+        position_error = position - position_reference
+        # torso site 位于右臂运动链上游，因此只需把世界系末端 Jacobian 旋转到 torso 系。
+        J_p = W_R_B.T @ J_v
         J_g = self.compute_gravity_error_jacobian(q, np.eye(3), qpos_reference)
         e_g = self.compute_gravity_error(q, np.eye(3), qpos_reference)
         return {
@@ -182,8 +234,14 @@ class KinematicsHelper:
             "D_alpha": alpha_B,
             "C_alpha": self._skew(omega_B) @ J_w + dJ_w,
             "B_alpha": J_w,
+            "d_p": position_error - J_p @ q,
+            "G_p": np.hstack([J_p, np.zeros_like(J_p)]),
             "d_g": e_g - J_g @ q,
             "G_g": np.hstack([J_g, np.zeros_like(J_g)]),
+            "position": position.copy(),
+            "position_reference": position_reference.copy(),
+            "position_error": position_error.copy(),
+            "gravity_error": e_g.copy(),
         }
 
     @staticmethod
