@@ -45,6 +45,13 @@ CONTACT_CONSTRAINT_TYPES = np.array(
     ],
     dtype=np.int32,
 )
+FRICTION_CONSTRAINT_TYPES = np.array(
+    [
+        int(mujoco.mjtConstraint.mjCNSTR_FRICTION_DOF),
+        int(mujoco.mjtConstraint.mjCNSTR_FRICTION_TENDON),
+    ],
+    dtype=np.int32,
+)
 
 
 @dataclass
@@ -85,6 +92,8 @@ class InverseDynamicsResult:
     tau_contact: np.ndarray
     tau_constraint_total: np.ndarray
     tau_constraint_noncontact: np.ndarray
+    tau_constraint_nonfriction: np.ndarray
+    tau_constraint_friction: np.ndarray
 
 
 @dataclass
@@ -228,23 +237,20 @@ def resolve_right_arm_control_context(model, joint_names):
     )
 
 
-def _contact_generalized_force(model, scratch):
-    """从 MuJoCo 全部约束中只重建 contact 对应的广义力。"""
+def _constraint_generalized_force(model, scratch, constraint_types):
+    """从 MuJoCo 约束行中重建指定类型的广义力。"""
     if scratch.nefc == 0:
         return np.zeros(model.nv, dtype=np.float64)
-    # 取完整约束雅可比
     efc_jacobian = np.asarray(scratch.efc_J, dtype=np.float64).reshape(-1, model.nv)[:scratch.nefc]
-    # 判断每一行是什么约束
     efc_type = np.asarray(scratch.efc_type[:scratch.nefc], dtype=np.int32)
-    # 只选择 contact 行
-    contact_rows = np.isin(efc_type, CONTACT_CONSTRAINT_TYPES)
-    if not np.any(contact_rows):
+    selected_rows = np.isin(efc_type, constraint_types)
+    if not np.any(selected_rows):
         return np.zeros(model.nv, dtype=np.float64)
-    return efc_jacobian[contact_rows].T @ scratch.efc_force[:scratch.nefc][contact_rows]
+    return efc_jacobian[selected_rows].T @ scratch.efc_force[:scratch.nefc][selected_rows]
 
 
 def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indices):
-    """计算只消去 contact 反力、保留摩擦补偿的 MuJoCo 逆动力学前馈。"""
+    """计算不对抗非摩擦约束、同时保留摩擦补偿的逆动力学前馈。"""
     qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     if desired_qacc.shape != qvel_indices.shape:
@@ -267,16 +273,25 @@ def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indice
     mujoco.mj_inverse(model, scratch)
     tau_inverse = scratch.qfrc_inverse[qvel_indices].copy()
     tau_constraint_total = scratch.qfrc_constraint[qvel_indices].copy()
-    tau_contact = _contact_generalized_force(model, scratch)[qvel_indices]
+    tau_contact = _constraint_generalized_force(model, scratch, CONTACT_CONSTRAINT_TYPES)[qvel_indices]
+    tau_constraint_friction = _constraint_generalized_force(
+        model,
+        scratch,
+        FRICTION_CONSTRAINT_TYPES,
+    )[qvel_indices]
     tau_constraint_noncontact = tau_constraint_total - tau_contact
-    # 只加回 contact，避免主动对抗碰撞；frictionloss 等非接触约束仍由执行器补偿。
-    tau_ff = tau_inverse + tau_contact
+    tau_constraint_nonfriction = tau_constraint_total - tau_constraint_friction
+    # 加回 contact、limit、equality 等非摩擦约束，不让执行器主动抵消它们。
+    # frictionloss 仍保留在 qfrc_inverse 中，由前馈力矩正常克服。
+    tau_ff = tau_inverse + tau_constraint_nonfriction
     return InverseDynamicsResult(
         tau_ff=tau_ff,
         tau_inverse=tau_inverse,
         tau_contact=tau_contact,
         tau_constraint_total=tau_constraint_total,
         tau_constraint_noncontact=tau_constraint_noncontact,
+        tau_constraint_nonfriction=tau_constraint_nonfriction,
+        tau_constraint_friction=tau_constraint_friction,
     )
 
 
@@ -810,6 +825,8 @@ def init_eval_buffers():
             "right_arm_tau_contact": [],
             "right_arm_tau_constraint_total": [],
             "right_arm_tau_constraint_noncontact": [],
+            "right_arm_tau_constraint_nonfriction": [],
+            "right_arm_tau_constraint_friction": [],
             "right_arm_tau_ff": [],
             "right_arm_tau_pd": [],
             "right_arm_tau_cmd_raw": [],
@@ -1112,6 +1129,8 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     tau_contact = matrix("right_arm_tau_contact", n)
     tau_constraint_total = matrix("right_arm_tau_constraint_total", n)
     tau_constraint_noncontact = matrix("right_arm_tau_constraint_noncontact", n)
+    tau_constraint_nonfriction = matrix("right_arm_tau_constraint_nonfriction", n)
+    tau_constraint_friction = matrix("right_arm_tau_constraint_friction", n)
     tau_ff = matrix("right_arm_tau_ff", n)
     tau_pd = matrix("right_arm_tau_pd", n)
     tau_raw = matrix("right_arm_tau_cmd_raw", n)
@@ -1164,6 +1183,8 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         ("right_arm_tau_contact", tau_contact),
         ("right_arm_tau_constraint_total", tau_constraint_total),
         ("right_arm_tau_constraint_noncontact", tau_constraint_noncontact),
+        ("right_arm_tau_constraint_nonfriction", tau_constraint_nonfriction),
+        ("right_arm_tau_constraint_friction", tau_constraint_friction),
         ("right_arm_tau_ff", tau_ff),
         ("right_arm_tau_pd", tau_pd),
         ("right_arm_tau_raw", tau_raw),
@@ -1325,6 +1346,8 @@ def save_control_preview(run_dir, trajectory_data):
         ("right_arm_tau_contact", joint_labels),
         ("right_arm_tau_constraint_total", joint_labels),
         ("right_arm_tau_constraint_noncontact", joint_labels),
+        ("right_arm_tau_constraint_nonfriction", joint_labels),
+        ("right_arm_tau_constraint_friction", joint_labels),
         ("right_arm_tau_ff", joint_labels),
         ("right_arm_tau_pd", joint_labels),
         ("right_arm_tau_cmd_raw", joint_labels),
@@ -1426,6 +1449,8 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     tau_contact = control_vector("tau_contact", 5)
     tau_constraint_total = control_vector("tau_constraint_total", 5)
     tau_constraint_noncontact = control_vector("tau_constraint_noncontact", 5)
+    tau_constraint_nonfriction = control_vector("tau_constraint_nonfriction", 5)
+    tau_constraint_friction = control_vector("tau_constraint_friction", 5)
     tau_ff = control_vector("tau_ff", 5)
     tau_pd = control_vector("tau_pd", 5)
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
@@ -1482,6 +1507,8 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_tau_contact"].append(tau_contact)
     buffers.trajectory_data["right_arm_tau_constraint_total"].append(tau_constraint_total)
     buffers.trajectory_data["right_arm_tau_constraint_noncontact"].append(tau_constraint_noncontact)
+    buffers.trajectory_data["right_arm_tau_constraint_nonfriction"].append(tau_constraint_nonfriction)
+    buffers.trajectory_data["right_arm_tau_constraint_friction"].append(tau_constraint_friction)
     buffers.trajectory_data["right_arm_tau_ff"].append(tau_ff)
     buffers.trajectory_data["right_arm_tau_pd"].append(tau_pd)
     buffers.trajectory_data["right_arm_tau_cmd_raw"].append(tau_cmd_raw)

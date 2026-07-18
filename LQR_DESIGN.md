@@ -621,10 +621,11 @@ mujoco.mj_inverse(model, scratch)
 tau_inverse = scratch.qfrc_inverse[right_arm_qvel_indices]
 efc_J = np.asarray(scratch.efc_J).reshape(-1, model.nv)[:scratch.nefc]
 efc_type = scratch.efc_type[:scratch.nefc]
-contact_rows = np.isin(efc_type, CONTACT_CONSTRAINT_TYPES)
-qfrc_contact = efc_J[contact_rows].T @ scratch.efc_force[:scratch.nefc][contact_rows]
-tau_contact = qfrc_contact[right_arm_qvel_indices]
-tau_ff = tau_inverse + tau_contact
+friction_rows = np.isin(efc_type, FRICTION_CONSTRAINT_TYPES)
+qfrc_friction = efc_J[friction_rows].T @ scratch.efc_force[:scratch.nefc][friction_rows]
+qfrc_nonfriction = scratch.qfrc_constraint - qfrc_friction
+tau_nonfriction = qfrc_nonfriction[right_arm_qvel_indices]
+tau_ff = tau_inverse + tau_nonfriction
 ```
 
 MuJoCo 在当前符号约定下满足：
@@ -633,13 +634,13 @@ $
 qfrc_{inverse}=M(q)\ddot q+h(q,\dot q)-qfrc_{passive}-qfrc_{constraint}
 $
 
-`qfrc_constraint` 同时包含 contact、`FRICTION_DOF`、joint limit 等约束，不能整项加回。当前实现只重建 contact 类型约束对应的广义力：
+`qfrc_constraint` 同时包含 contact、`FRICTION_DOF`、joint/tendon limit 和 equality 等约束。当前实现只从加回量中排除 `FRICTION_DOF` 和 `FRICTION_TENDON`：
 
 $
-\tau_{ff}=qfrc_{inverse}+qfrc_{contact}
+\tau_{ff}=qfrc_{inverse}+qfrc_{constraint}-qfrc_{friction}
 $
 
-这样只从执行器前馈中消去 contact 反力，`frictionloss` 等非接触约束仍保留在 `qfrc_inverse` 中，由执行器正常补偿。这称为本项目中的 **contact-aware inverse dynamics**。当瓶子意外撞到 torso 时，控制器不会为了强行实现不可达的 `ddq_des` 而主动抵消接触约束力。该处理不等于完整的接触优化；若以后需要主动推压环境，仍需显式建模接触力与接触任务。
+这样 contact、joint/tendon limit 和 equality 等约束不会被执行器主动抵消，而 `frictionloss` 仍保留在 `qfrc_inverse` 中，由执行器正常补偿。这称为本项目中的 **non-friction-constraint-aware inverse dynamics**。当瓶子撞到 torso 或关节进入限位时，控制器不再为强行实现不可达的 `ddq_des` 而对抗这些约束力。该处理不等于完整的接触优化；若以后需要主动推压环境，仍需显式建模接触力与接触任务。
 
 同时将 `ddq_des` 转换为反馈项所需的短时参考：
 

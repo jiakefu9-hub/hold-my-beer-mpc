@@ -1,7 +1,10 @@
 import os
 
-import mujoco.viewer
+# viewer 使用 GLFW，离屏视频渲染改用独立 EGL 上下文，避免退出时 GLFW 重复销毁。
+os.environ.setdefault("MUJOCO_GL", "egl")
+
 import mujoco
+import mujoco.viewer
 import numpy as np
 import torch
 import yaml
@@ -151,14 +154,15 @@ if __name__ == "__main__":
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
         lqr_cost_definition = arm_policy.get_cost_definition()
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and contact-aware MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
+        controller_notes = "finite-horizon time-varying LQR with torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and non-friction-constraint-aware MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
         controller_meta = {
             "lqr_config": {
                 **lqr_kwargs,
                 "control_dt": arm_policy.control_dt,
-                "torque_control": "mujoco_contact_aware_inverse_dynamics_plus_pd",
-                "contact_aware_tau_formula": "qfrc_inverse + qfrc_contact_only",
-                "noncontact_constraint_compensation": "retained_in_qfrc_inverse",
+                "torque_control": "mujoco_nonfriction_constraint_aware_inverse_dynamics_plus_pd",
+                "constraint_aware_tau_formula": "qfrc_inverse + qfrc_constraint_nonfriction",
+                "constraints_added_back": "contact + joint/tendon limit + equality",
+                "constraints_excluded_from_addback": "FRICTION_DOF + FRICTION_TENDON",
                 "uncontrolled_qacc_assumption": 0.0,
                 "ddq_tracking": "6ms_velocity_difference_aligned_between_consecutive_arm_updates",
                 "cost_tracking": "one_step_model_vs_realized_next_arm_update",
@@ -196,7 +200,10 @@ if __name__ == "__main__":
     video_stride = max(1, int(round(1.0 / (simulation_dt * video_fps))))
     video_frames = []
     video_camera = make_video_camera()
-    renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
+    renderer = None
+    video_width = None
+    video_height = None
+    video_renderer_available = False
 
     # ==============================
     # 6. 解析主循环要用到的模型上下文【半核心代码】
@@ -236,6 +243,10 @@ if __name__ == "__main__":
     # 这里是整个文件最需要看懂的部分，因为真正的控制数据流都发生在这里。
     # ==============================
     with mujoco.viewer.launch_passive(m, d) as viewer:
+        # viewer 和离屏 renderer 分别使用 GLFW/EGL。后创建 renderer，
+        # 并在退出 viewer 前先关闭它，保证两个 OpenGL 上下文按反序释放。
+        renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
+        video_renderer_available = renderer is not None
         print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
         while viewer.is_running() and counter * simulation_dt < eval_duration:
             perf_monitor.start_step()
@@ -256,7 +267,7 @@ if __name__ == "__main__":
             #    - LQR 路径：除了输出 q_ref / dq_ref，还会额外输出期望关节加速度 ddq_des
             # 2) 下层执行层把参考转成真正施加到 MuJoCo 的力矩：
             #    - 基础项：所有上肢统一先经过 joint-space PD，得到 tau_pd
-            #    - LQR 额外项：根据 ddq_des 调用 mj_inverse()，并消去接触约束反力项得到 tau_ff，
+            #    - LQR 额外项：根据 ddq_des 调用 mj_inverse()，并消去非摩擦约束反力项得到 tau_ff，
             #      最终右臂实际执行的是 tau = tau_ff + tau_pd
 
             # 当前上肢的真实状态（腰 + 左臂 + 右臂），后面 PD 会用它和目标状态做误差反馈
@@ -331,6 +342,8 @@ if __name__ == "__main__":
             right_arm_tau_contact = np.zeros(5, dtype=np.float64)
             right_arm_tau_constraint_total = np.zeros(5, dtype=np.float64)
             right_arm_tau_constraint_noncontact = np.zeros(5, dtype=np.float64)
+            right_arm_tau_constraint_nonfriction = np.zeros(5, dtype=np.float64)
+            right_arm_tau_constraint_friction = np.zeros(5, dtype=np.float64)
             right_arm_tau_cmd_raw = right_arm_tau_pd.copy()
             right_arm_tau_limit_lower = right_arm_id_index_scratch.torque_limits[:, 0].copy()
             right_arm_tau_limit_upper = right_arm_id_index_scratch.torque_limits[:, 1].copy()
@@ -340,8 +353,8 @@ if __name__ == "__main__":
                 # apply_computed_torque_control() 内部会：
                 # 1) 复制当前整机 qpos / qvel 到 scratch data
                 # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
-                # 3) 调用 mj_inverse()，从全部约束中只重建 contact 广义力
-                # 4) qfrc_inverse 只加 contact，保留 frictionloss 等非接触约束补偿
+                # 3) 调用 mj_inverse()，分离 friction 与其他约束的广义力
+                # 4) qfrc_inverse 加回所有非摩擦约束，仅保留 frictionloss 补偿
                 perf_monitor.start_computed_torque_control()
                 right_arm_tau, inverse_result = apply_computed_torque_control(
                     m,
@@ -356,6 +369,8 @@ if __name__ == "__main__":
                 right_arm_tau_contact = inverse_result.tau_contact
                 right_arm_tau_constraint_total = inverse_result.tau_constraint_total
                 right_arm_tau_constraint_noncontact = inverse_result.tau_constraint_noncontact
+                right_arm_tau_constraint_nonfriction = inverse_result.tau_constraint_nonfriction
+                right_arm_tau_constraint_friction = inverse_result.tau_constraint_friction
                 right_arm_tau_cmd_raw = right_arm_tau_ff + right_arm_tau_pd
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
@@ -386,6 +401,8 @@ if __name__ == "__main__":
                     "tau_contact": right_arm_tau_contact,
                     "tau_constraint_total": right_arm_tau_constraint_total,
                     "tau_constraint_noncontact": right_arm_tau_constraint_noncontact,
+                    "tau_constraint_nonfriction": right_arm_tau_constraint_nonfriction,
+                    "tau_constraint_friction": right_arm_tau_constraint_friction,
                     "tau_ff": right_arm_tau_ff,
                     "tau_pd": right_arm_tau_pd,
                     "tau_cmd_raw": right_arm_tau_cmd_raw,
@@ -456,12 +473,12 @@ if __name__ == "__main__":
             perf_monitor.finish_step(counter)
 
         perf_monitor.print_summary()
+        close_renderer(renderer)
+        renderer = None
 
     # ==============================
     # 8. 收尾保存【非核心代码】
-    # 退出 viewer 后统一保存轨迹、评估指标、视频和性能统计，再释放 renderer。
+    # renderer 和 viewer 都已按正确顺序释放，这里只做轨迹、评估指标、视频和性能统计的文件保存。
     # 这是实验收尾，不是控制逻辑核心。
     # ==============================
-        finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, renderer is not None, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=perf_monitor, lqr_cost_definition=lqr_cost_definition)
-    close_renderer(renderer)
-    renderer = None
+    finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, video_renderer_available, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=perf_monitor, lqr_cost_definition=lqr_cost_definition)
