@@ -115,6 +115,21 @@ class ForwardDynamicsMappingResult:
     validation_scale: float
     validation_attempts: int
     validation_improved: bool
+    first_pass_qacc_validated: np.ndarray
+    first_pass_qacc_validation_error: np.ndarray
+    second_pass_triggered: bool
+    second_pass_accepted: bool
+    second_pass_tau_correction_raw: np.ndarray
+    second_pass_tau_correction: np.ndarray
+    second_pass_qacc_predicted: np.ndarray
+    second_pass_qacc_validated: np.ndarray
+    second_pass_qacc_validation_error: np.ndarray
+    second_pass_qacc_linearization_error: np.ndarray
+    second_pass_gain_matrix: np.ndarray
+    second_pass_singular_values: np.ndarray
+    second_pass_condition_number: float
+    second_pass_validation_scale: float
+    second_pass_validation_attempts: int
 
 
 @dataclass
@@ -330,8 +345,9 @@ def local_forward_dynamics_torque_mapping(
     perturbation=0.1,
     regularization=5.0,
     validation_scales=(1.0, 0.5, 0.25, 0.125),
+    second_pass_error_threshold=5.0,
 ):
-    """局部线性求力矩，并用完整前向动力学验收候选结果。"""
+    """局部线性求力矩；高残差时在已验收力矩处重线性化一次。"""
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     tau_nominal = np.asarray(tau_nominal, dtype=np.float64)
     qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
@@ -343,8 +359,8 @@ def local_forward_dynamics_torque_mapping(
         raise ValueError("前向动力学映射的 desired_qacc/tau_nominal 维度不正确。")
     if fixed_ctrl.shape != (model.nu,) or torque_limits.shape != (joint_count, 2):
         raise ValueError("前向动力学映射的 ctrl/torque_limits 维度不正确。")
-    if perturbation <= 0.0 or regularization < 0.0:
-        raise ValueError("perturbation 必须大于 0，regularization 不能小于 0。")
+    if perturbation <= 0.0 or regularization < 0.0 or second_pass_error_threshold < 0.0:
+        raise ValueError("perturbation 必须大于 0，regularization 和二次修正阈值不能小于 0。")
     validation_scales = tuple(float(scale) for scale in validation_scales)
     if not validation_scales or any(scale <= 0.0 or scale > 1.0 for scale in validation_scales):
         raise ValueError("validation_scales 必须是位于 (0, 1] 的非空序列。")
@@ -358,65 +374,107 @@ def local_forward_dynamics_torque_mapping(
     scratch.qacc_warmstart[:] = qacc_warmstart
     mujoco.mj_forward(model, scratch)
     qacc_baseline = scratch.qacc[qvel_indices].copy()
-    baseline_error_norm = float(np.linalg.norm(qacc_baseline - desired_qacc))
 
-    # 每个右臂执行器只扰动一次，得到 G = d(ddq_right) / d(tau_right)。
-    gain_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
-    for column in range(joint_count):
-        signed_perturbation = float(perturbation)
-        if tau_nominal[column] + signed_perturbation > torque_limits[column, 1]:
-            signed_perturbation = -signed_perturbation
-        scratch.ctrl[:] = baseline_ctrl
-        scratch.ctrl[ctrl_indices[column]] += signed_perturbation
-        scratch.qacc_warmstart[:] = qacc_warmstart
-        mujoco.mj_forwardSkip(model, scratch, mujoco.mjtStage.mjSTAGE_VEL, 1)
-        gain_matrix[:, column] = (
-            scratch.qacc[qvel_indices] - qacc_baseline
-        ) / signed_perturbation
+    def solve_validated_pass(base_tau, base_qacc):
+        """在指定力矩工作点重线性化，并返回第一个优于该工作点的候选。"""
+        pass_ctrl = fixed_ctrl.copy()
+        pass_ctrl[ctrl_indices] = base_tau
+        gain_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
+        for column in range(joint_count):
+            signed_perturbation = float(perturbation)
+            if base_tau[column] + signed_perturbation > torque_limits[column, 1]:
+                signed_perturbation = -signed_perturbation
+            scratch.ctrl[:] = pass_ctrl
+            scratch.ctrl[ctrl_indices[column]] += signed_perturbation
+            scratch.qacc_warmstart[:] = qacc_warmstart
+            mujoco.mj_forwardSkip(model, scratch, mujoco.mjtStage.mjSTAGE_VEL, 1)
+            gain_matrix[:, column] = (
+                scratch.qacc[qvel_indices] - base_qacc
+            ) / signed_perturbation
 
-    # 阻尼 SVD 直接求一次局部力矩修正，不做反复迭代。
-    u_matrix, singular_values, vt_matrix = np.linalg.svd(gain_matrix, full_matrices=False)
-    acceleration_error = desired_qacc - qacc_baseline
-    damped_inverse = singular_values / (singular_values ** 2 + float(regularization))
-    tau_correction_raw = vt_matrix.T @ (damped_inverse * (u_matrix.T @ acceleration_error))
-    # 完整 mj_forward 会重新求约束。若局部导数跨过摩擦/接触切换点，逐级缩小修正量。
-    validation_scale = 0.0
-    validation_attempts = 0
-    qacc_validated = qacc_baseline.copy()
-    tau_cmd = tau_nominal.copy()
-    tau_cmd_raw = tau_nominal.copy()
-    for scale in validation_scales:
-        validation_attempts += 1
-        candidate_tau_raw = tau_nominal + scale * tau_correction_raw
-        candidate_tau = np.clip(candidate_tau_raw, torque_limits[:, 0], torque_limits[:, 1])
-        candidate_ctrl = baseline_ctrl.copy()
-        candidate_ctrl[ctrl_indices] = candidate_tau
-        scratch.ctrl[:] = candidate_ctrl
-        scratch.qacc_warmstart[:] = qacc_warmstart
-        mujoco.mj_forward(model, scratch)
-        candidate_qacc = scratch.qacc[qvel_indices].copy()
-        candidate_error_norm = float(np.linalg.norm(candidate_qacc - desired_qacc))
-        if candidate_error_norm < baseline_error_norm:
-            validation_scale = scale
-            qacc_validated = candidate_qacc
-            tau_cmd = candidate_tau
-            tau_cmd_raw = candidate_tau_raw
-            break
+        u_matrix, singular_values, vt_matrix = np.linalg.svd(gain_matrix, full_matrices=False)
+        acceleration_error = desired_qacc - base_qacc
+        damped_inverse = singular_values / (singular_values ** 2 + float(regularization))
+        correction_raw = vt_matrix.T @ (damped_inverse * (u_matrix.T @ acceleration_error))
+        base_error_norm = float(np.linalg.norm(base_qacc - desired_qacc))
+        validation_scale = 0.0
+        validation_attempts = 0
+        tau_cmd = base_tau.copy()
+        tau_cmd_raw = base_tau.copy()
+        qacc_validated = base_qacc.copy()
+        for scale in validation_scales:
+            validation_attempts += 1
+            candidate_tau_raw = base_tau + scale * correction_raw
+            candidate_tau = np.clip(candidate_tau_raw, torque_limits[:, 0], torque_limits[:, 1])
+            candidate_ctrl = pass_ctrl.copy()
+            candidate_ctrl[ctrl_indices] = candidate_tau
+            scratch.ctrl[:] = candidate_ctrl
+            scratch.qacc_warmstart[:] = qacc_warmstart
+            mujoco.mj_forward(model, scratch)
+            candidate_qacc = scratch.qacc[qvel_indices].copy()
+            if np.linalg.norm(candidate_qacc - desired_qacc) < base_error_norm:
+                validation_scale = scale
+                tau_cmd = candidate_tau
+                tau_cmd_raw = candidate_tau_raw
+                qacc_validated = candidate_qacc
+                break
 
+        correction = tau_cmd - base_tau
+        qacc_predicted = base_qacc + gain_matrix @ correction
+        if singular_values.size == 0 or singular_values[-1] <= np.finfo(np.float64).eps:
+            condition_number = np.inf
+        else:
+            condition_number = float(singular_values[0] / singular_values[-1])
+        return {
+            "tau_cmd": tau_cmd,
+            "tau_cmd_raw": tau_cmd_raw,
+            "correction_raw": correction_raw,
+            "correction": correction,
+            "qacc_predicted": qacc_predicted,
+            "qacc_validated": qacc_validated,
+            "qacc_validation_error": qacc_validated - desired_qacc,
+            "qacc_linearization_error": qacc_validated - qacc_predicted,
+            "gain_matrix": gain_matrix,
+            "singular_values": singular_values,
+            "condition_number": condition_number,
+            "validation_scale": validation_scale,
+            "validation_attempts": validation_attempts,
+            "improved": validation_scale > 0.0,
+        }
+
+    first_pass = solve_validated_pass(tau_nominal, qacc_baseline)
+    first_pass_residual_norm = float(np.linalg.norm(first_pass["qacc_validation_error"]))
+    second_pass_triggered = bool(
+        first_pass["improved"]
+        and first_pass_residual_norm > float(second_pass_error_threshold)
+    )
+    second_pass = None
+    if second_pass_triggered:
+        # 第一轮候选可能已经进入新的摩擦/接触模式；在该力矩处重算 G，再修正一次剩余残差。
+        second_pass = solve_validated_pass(
+            first_pass["tau_cmd"],
+            first_pass["qacc_validated"],
+        )
+
+    final_pass = second_pass if second_pass is not None and second_pass["improved"] else first_pass
+    second_pass_accepted = bool(second_pass is not None and second_pass["improved"])
+    zero_vector = np.zeros(joint_count, dtype=np.float64)
+    zero_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
+    tau_cmd = final_pass["tau_cmd"]
     tau_correction = tau_cmd - tau_nominal
-    qacc_predicted = qacc_baseline + gain_matrix @ tau_correction
+    qacc_predicted = final_pass["qacc_predicted"]
+    qacc_validated = final_pass["qacc_validated"]
     qacc_prediction_error = qacc_predicted - desired_qacc
     qacc_validation_error = qacc_validated - desired_qacc
-    qacc_linearization_error = qacc_validated - qacc_predicted
-    if singular_values.size == 0 or singular_values[-1] <= np.finfo(np.float64).eps:
-        condition_number = np.inf
-    else:
-        condition_number = float(singular_values[0] / singular_values[-1])
+    qacc_linearization_error = final_pass["qacc_linearization_error"]
+    gain_matrix = final_pass["gain_matrix"]
+    singular_values = final_pass["singular_values"]
+    condition_number = final_pass["condition_number"]
     return tau_cmd, ForwardDynamicsMappingResult(
         tau_nominal=tau_nominal,
-        tau_correction_raw=tau_correction_raw,
+        tau_correction_raw=first_pass["correction_raw"],
         tau_correction=tau_correction,
-        tau_cmd_raw=tau_cmd_raw,
+        tau_cmd_raw=final_pass["tau_cmd_raw"],
         qacc_baseline=qacc_baseline,
         qacc_predicted=qacc_predicted,
         qacc_prediction_error=qacc_prediction_error,
@@ -426,9 +484,46 @@ def local_forward_dynamics_torque_mapping(
         gain_matrix=gain_matrix,
         singular_values=singular_values,
         condition_number=condition_number,
-        validation_scale=validation_scale,
-        validation_attempts=validation_attempts,
-        validation_improved=validation_scale > 0.0,
+        validation_scale=first_pass["validation_scale"],
+        validation_attempts=first_pass["validation_attempts"],
+        validation_improved=first_pass["improved"],
+        first_pass_qacc_validated=first_pass["qacc_validated"],
+        first_pass_qacc_validation_error=first_pass["qacc_validation_error"],
+        second_pass_triggered=second_pass_triggered,
+        second_pass_accepted=second_pass_accepted,
+        second_pass_tau_correction_raw=(
+            second_pass["correction_raw"] if second_pass is not None else zero_vector
+        ),
+        second_pass_tau_correction=(
+            second_pass["correction"] if second_pass is not None else zero_vector
+        ),
+        second_pass_qacc_predicted=(
+            second_pass["qacc_predicted"] if second_pass is not None else zero_vector
+        ),
+        second_pass_qacc_validated=(
+            second_pass["qacc_validated"] if second_pass is not None else zero_vector
+        ),
+        second_pass_qacc_validation_error=(
+            second_pass["qacc_validation_error"] if second_pass is not None else zero_vector
+        ),
+        second_pass_qacc_linearization_error=(
+            second_pass["qacc_linearization_error"] if second_pass is not None else zero_vector
+        ),
+        second_pass_gain_matrix=(
+            second_pass["gain_matrix"] if second_pass is not None else zero_matrix
+        ),
+        second_pass_singular_values=(
+            second_pass["singular_values"] if second_pass is not None else zero_vector
+        ),
+        second_pass_condition_number=(
+            second_pass["condition_number"] if second_pass is not None else np.inf
+        ),
+        second_pass_validation_scale=(
+            second_pass["validation_scale"] if second_pass is not None else 0.0
+        ),
+        second_pass_validation_attempts=(
+            second_pass["validation_attempts"] if second_pass is not None else 0
+        ),
     )
 
 
@@ -441,6 +536,7 @@ def apply_computed_torque_control(
     fixed_ctrl,
     forward_dynamics_perturbation=0.1,
     forward_dynamics_regularization=5.0,
+    forward_dynamics_second_pass_error_threshold=5.0,
 ):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -471,6 +567,7 @@ def apply_computed_torque_control(
         id_index_scratch.torque_limits,
         perturbation=forward_dynamics_perturbation,
         regularization=forward_dynamics_regularization,
+        second_pass_error_threshold=forward_dynamics_second_pass_error_threshold,
     )
     return tau_cmd, inverse_result, mapping_result
 
@@ -1011,6 +1108,21 @@ def init_eval_buffers():
             "right_arm_forward_dynamics_validation_scale": [],
             "right_arm_forward_dynamics_validation_attempts": [],
             "right_arm_forward_dynamics_validation_improved": [],
+            "right_arm_first_pass_qacc_validated": [],
+            "right_arm_first_pass_qacc_validation_error": [],
+            "right_arm_forward_dynamics_second_pass_triggered": [],
+            "right_arm_forward_dynamics_second_pass_accepted": [],
+            "right_arm_second_pass_tau_correction_raw": [],
+            "right_arm_second_pass_tau_correction": [],
+            "right_arm_second_pass_qacc_predicted": [],
+            "right_arm_second_pass_qacc_validated": [],
+            "right_arm_second_pass_qacc_validation_error": [],
+            "right_arm_second_pass_qacc_linearization_error": [],
+            "right_arm_second_pass_forward_dynamics_gain": [],
+            "right_arm_second_pass_singular_values": [],
+            "right_arm_second_pass_condition_number": [],
+            "right_arm_second_pass_validation_scale": [],
+            "right_arm_second_pass_validation_attempts": [],
             "torso_lin_vel_world": [],
             "torso_ang_vel_world": [],
             "torso_acc_world_raw": [],
@@ -1227,6 +1339,46 @@ def _component_tracking_metrics(reference, actual):
     }
 
 
+def _validation_scale_summary(scale_values, selection_mask):
+    scale_values = np.asarray(scale_values, dtype=np.float64)
+    selection_mask = np.asarray(selection_mask, dtype=bool)
+    if scale_values.shape != selection_mask.shape:
+        scale_values = np.zeros_like(selection_mask, dtype=np.float64)
+        selection_mask = np.zeros_like(selection_mask, dtype=bool)
+    selected = scale_values[selection_mask]
+    labels = ("first", "second", "third", "fourth", "fallback")
+    scales = (1.0, 0.5, 0.25, 0.125, 0.0)
+    total = int(selected.size)
+    selections = []
+    for index, (label, scale) in enumerate(zip(labels, scales), start=1):
+        count = int(np.sum(np.isclose(selected, scale)))
+        selections.append({
+            "candidate_index": index if scale > 0.0 else 0,
+            "label": label,
+            "scale": scale,
+            "count": count,
+            "fraction": count / float(total) if total else 0.0,
+        })
+    return {"sample_count": total, "selections": selections}
+
+
+def _masked_vector_norm_stats(values, mask, width=5):
+    values = np.asarray(values, dtype=np.float64)
+    mask = np.asarray(mask, dtype=bool)
+    if values.shape != (len(mask), width):
+        return {"sample_count": 0, "mean": 0.0, "rms": 0.0, "p95": 0.0, "max": 0.0}
+    norms = np.linalg.norm(values[mask], axis=1)
+    if not norms.size:
+        return {"sample_count": 0, "mean": 0.0, "rms": 0.0, "p95": 0.0, "max": 0.0}
+    return {
+        "sample_count": int(norms.size),
+        "mean": float(np.mean(norms)),
+        "rms": float(np.sqrt(np.mean(norms ** 2))),
+        "p95": float(np.percentile(norms, 95.0)),
+        "max": float(np.max(norms)),
+    }
+
+
 def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_time):
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
     valid = np.asarray(trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool).copy()
@@ -1255,6 +1407,56 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
         "joint_names": list(RIGHT_ARM_JOINT_NAMES),
         "cost_term_names": list(LQR_COST_TERM_NAMES),
         "interval_dt_mean": float(np.mean(interval_dt[valid])) if sample_count else 0.0,
+    }
+    eval_step_mask = (time_values >= eval_start_time) & (time_values < eval_end_time)
+    first_scale = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_validation_scale", []),
+        dtype=np.float64,
+    )
+    second_triggered = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_second_pass_triggered", []),
+        dtype=bool,
+    )
+    second_accepted = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_second_pass_accepted", []),
+        dtype=bool,
+    )
+    second_scale = np.asarray(
+        trajectory_data.get("right_arm_second_pass_validation_scale", []),
+        dtype=np.float64,
+    )
+    if second_triggered.shape != time_values.shape:
+        second_triggered = np.zeros_like(time_values, dtype=bool)
+    if second_accepted.shape != time_values.shape:
+        second_accepted = np.zeros_like(time_values, dtype=bool)
+    second_eval_mask = eval_step_mask & second_triggered
+    first_pass_validation = _validation_scale_summary(first_scale, eval_step_mask)
+    second_pass_validation = _validation_scale_summary(second_scale, second_eval_mask)
+    eval_step_count = int(np.sum(eval_step_mask))
+    triggered_count = int(np.sum(second_eval_mask))
+    accepted_count = int(np.sum(eval_step_mask & second_accepted))
+    diagnostics["forward_dynamics_validation"] = {
+        "definition": "candidate scales are tested in order; the first scale that improves the current baseline is accepted",
+        "first_pass": first_pass_validation,
+        "second_pass": {
+            **second_pass_validation,
+            "triggered_count": triggered_count,
+            "triggered_fraction_of_evaluation_steps": (
+                triggered_count / float(eval_step_count) if eval_step_count else 0.0
+            ),
+            "accepted_count": accepted_count,
+            "accepted_fraction_given_triggered": (
+                accepted_count / float(triggered_count) if triggered_count else 0.0
+            ),
+        },
+        "first_pass_residual_norm": _masked_vector_norm_stats(
+            trajectory_data.get("right_arm_first_pass_qacc_validation_error", []),
+            eval_step_mask,
+        ),
+        "final_residual_norm": _masked_vector_norm_stats(
+            trajectory_data.get("right_arm_qacc_mapping_validation_error", []),
+            eval_step_mask,
+        ),
     }
     if (
         sample_count == 0
@@ -1537,6 +1739,61 @@ def save_lqr_tracking_diagnostics(run_dir, diagnostics):
     return diagnostics_path
 
 
+def save_lqr_ddq_tracking_plot(run_dir, trajectory_data, diagnostics, eval_start_time, eval_end_time):
+    """绘制评估区间内五关节 ddq_des 与 6 ms 速度差分 ddq_real。"""
+    plot_path = os.path.join(run_dir, "ddq_tracking.png")
+    time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
+    valid = np.asarray(trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool)
+    interval_dt = np.asarray(trajectory_data.get("right_lqr_tracking_interval_dt", []), dtype=np.float64)
+    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
+    ddq_real = np.asarray(trajectory_data.get("right_arm_ddq_real", []), dtype=np.float64)
+    expected_shape = (len(time_values), len(RIGHT_ARM_JOINT_NAMES))
+    if (
+        valid.shape != time_values.shape
+        or interval_dt.shape != time_values.shape
+        or ddq_des.shape != expected_shape
+        or ddq_real.shape != expected_shape
+    ):
+        return None
+    valid &= (time_values >= eval_start_time) & (
+        time_values + interval_dt <= eval_end_time + 1e-12
+    )
+    if not np.any(valid):
+        return None
+
+    metrics = diagnostics.get("ddq_tracking", {})
+    correlation = np.asarray(metrics.get("correlation", np.zeros(5)), dtype=np.float64)
+    gain = np.asarray(metrics.get("gain", np.zeros(5)), dtype=np.float64)
+    rmse = np.asarray(metrics.get("rmse", np.zeros(5)), dtype=np.float64)
+    labels = tuple(name.removeprefix("right_").removesuffix("_joint") for name in RIGHT_ARM_JOINT_NAMES)
+    fig, axes = plt.subplots(5, 1, figsize=(15, 14), sharex=True)
+    plot_time = time_values[valid]
+    for joint, (axis, label) in enumerate(zip(axes, labels)):
+        axis.plot(plot_time, ddq_des[valid, joint], color="tab:blue", lw=1.2, label="ddq_des")
+        axis.plot(plot_time, ddq_real[valid, joint], color="tab:orange", lw=1.0, alpha=0.9, label="ddq_real")
+        axis.axhline(0.0, color="black", lw=0.6, alpha=0.4)
+        axis.grid(True, alpha=0.3)
+        axis.set_ylabel("rad/s^2")
+        axis.set_title(label)
+        axis.text(
+            0.99,
+            0.95,
+            f"corr={correlation[joint]:.3f}\ngain={gain[joint]:.3f}\nRMSE={rmse[joint]:.3f}",
+            transform=axis.transAxes,
+            ha="right",
+            va="top",
+            fontsize=9,
+            bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
+        )
+    axes[0].legend(loc="upper left")
+    axes[-1].set_xlabel("time [s]")
+    fig.suptitle("LQR DDQ tracking: desired versus realized 6 ms average acceleration")
+    fig.tight_layout()
+    fig.savefig(plot_path, dpi=170)
+    plt.close(fig)
+    return plot_path
+
+
 def save_lqr_tracking_preview(run_dir, trajectory_data, eval_start_time, eval_end_time):
     """保存严格按相邻手臂控制更新对齐的 DDQ 与一步代价跟踪表。"""
     preview_path = os.path.join(run_dir, "lqr_tracking_preview.csv")
@@ -1631,6 +1888,15 @@ def save_control_preview(run_dir, trajectory_data):
         ("right_arm_qacc_mapping_linearization_error", joint_labels),
         ("right_arm_qacc_mapping_model_error", joint_labels),
         ("right_arm_forward_dynamics_singular_values", joint_labels),
+        ("right_arm_first_pass_qacc_validated", joint_labels),
+        ("right_arm_first_pass_qacc_validation_error", joint_labels),
+        ("right_arm_second_pass_tau_correction_raw", joint_labels),
+        ("right_arm_second_pass_tau_correction", joint_labels),
+        ("right_arm_second_pass_qacc_predicted", joint_labels),
+        ("right_arm_second_pass_qacc_validated", joint_labels),
+        ("right_arm_second_pass_qacc_validation_error", joint_labels),
+        ("right_arm_second_pass_qacc_linearization_error", joint_labels),
+        ("right_arm_second_pass_singular_values", joint_labels),
         ("right_arm_actual_qfrc_bias", joint_labels),
         ("right_arm_actual_qfrc_passive", joint_labels),
         ("right_arm_actual_qfrc_constraint", joint_labels),
@@ -1650,6 +1916,11 @@ def save_control_preview(run_dir, trajectory_data):
         "right_arm_forward_dynamics_validation_scale",
         "right_arm_forward_dynamics_validation_attempts",
         "right_arm_forward_dynamics_validation_improved",
+        "right_arm_forward_dynamics_second_pass_triggered",
+        "right_arm_forward_dynamics_second_pass_accepted",
+        "right_arm_second_pass_condition_number",
+        "right_arm_second_pass_validation_scale",
+        "right_arm_second_pass_validation_attempts",
         "right_ee_upright_alignment",
         "arm_policy_updated",
         "contact_count",
@@ -1770,6 +2041,36 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     forward_dynamics_validation_improved = bool(
         right_arm_control.get("forward_dynamics_validation_improved", False)
     )
+    first_pass_qacc_validated = control_vector("first_pass_qacc_validated", 5)
+    first_pass_qacc_validation_error = control_vector("first_pass_qacc_validation_error", 5)
+    forward_dynamics_second_pass_triggered = bool(
+        right_arm_control.get("forward_dynamics_second_pass_triggered", False)
+    )
+    forward_dynamics_second_pass_accepted = bool(
+        right_arm_control.get("forward_dynamics_second_pass_accepted", False)
+    )
+    second_pass_tau_correction_raw = control_vector("second_pass_tau_correction_raw", 5)
+    second_pass_tau_correction = control_vector("second_pass_tau_correction", 5)
+    second_pass_qacc_predicted = control_vector("second_pass_qacc_predicted", 5)
+    second_pass_qacc_validated = control_vector("second_pass_qacc_validated", 5)
+    second_pass_qacc_validation_error = control_vector("second_pass_qacc_validation_error", 5)
+    second_pass_qacc_linearization_error = control_vector("second_pass_qacc_linearization_error", 5)
+    second_pass_singular_values = control_vector("second_pass_singular_values", 5)
+    second_pass_forward_dynamics_gain = np.asarray(
+        right_arm_control.get("second_pass_forward_dynamics_gain", np.zeros((5, 5))),
+        dtype=np.float64,
+    )
+    if second_pass_forward_dynamics_gain.shape != (5, 5):
+        second_pass_forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
+    second_pass_condition_number = float(
+        right_arm_control.get("second_pass_condition_number", np.inf)
+    )
+    second_pass_validation_scale = float(
+        right_arm_control.get("second_pass_validation_scale", 0.0)
+    )
+    second_pass_validation_attempts = int(
+        right_arm_control.get("second_pass_validation_attempts", 0)
+    )
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
     tau_limit_upper = np.asarray(right_arm_control.get("tau_limit_upper", np.full(5, np.inf)), dtype=np.float64).copy()
@@ -1851,6 +2152,21 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_forward_dynamics_validation_scale"].append(forward_dynamics_validation_scale)
     buffers.trajectory_data["right_arm_forward_dynamics_validation_attempts"].append(forward_dynamics_validation_attempts)
     buffers.trajectory_data["right_arm_forward_dynamics_validation_improved"].append(forward_dynamics_validation_improved)
+    buffers.trajectory_data["right_arm_first_pass_qacc_validated"].append(first_pass_qacc_validated)
+    buffers.trajectory_data["right_arm_first_pass_qacc_validation_error"].append(first_pass_qacc_validation_error)
+    buffers.trajectory_data["right_arm_forward_dynamics_second_pass_triggered"].append(forward_dynamics_second_pass_triggered)
+    buffers.trajectory_data["right_arm_forward_dynamics_second_pass_accepted"].append(forward_dynamics_second_pass_accepted)
+    buffers.trajectory_data["right_arm_second_pass_tau_correction_raw"].append(second_pass_tau_correction_raw)
+    buffers.trajectory_data["right_arm_second_pass_tau_correction"].append(second_pass_tau_correction)
+    buffers.trajectory_data["right_arm_second_pass_qacc_predicted"].append(second_pass_qacc_predicted)
+    buffers.trajectory_data["right_arm_second_pass_qacc_validated"].append(second_pass_qacc_validated)
+    buffers.trajectory_data["right_arm_second_pass_qacc_validation_error"].append(second_pass_qacc_validation_error)
+    buffers.trajectory_data["right_arm_second_pass_qacc_linearization_error"].append(second_pass_qacc_linearization_error)
+    buffers.trajectory_data["right_arm_second_pass_forward_dynamics_gain"].append(second_pass_forward_dynamics_gain.copy())
+    buffers.trajectory_data["right_arm_second_pass_singular_values"].append(second_pass_singular_values)
+    buffers.trajectory_data["right_arm_second_pass_condition_number"].append(second_pass_condition_number)
+    buffers.trajectory_data["right_arm_second_pass_validation_scale"].append(second_pass_validation_scale)
+    buffers.trajectory_data["right_arm_second_pass_validation_attempts"].append(second_pass_validation_attempts)
     buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
     buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)
     buffers.trajectory_data["torso_acc_world_raw"].append(torso_acc_raw)
@@ -1897,6 +2213,13 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     right_arm_diagnostics = save_trajectory(trajectory_path, buffers.trajectory_data, xml_path, simulation_dt)
     right_arm_diagnostics_path = save_right_arm_diagnostics(run_dir, right_arm_diagnostics)
     lqr_tracking_diagnostics_path = save_lqr_tracking_diagnostics(run_dir, lqr_tracking_diagnostics)
+    lqr_ddq_tracking_plot_path = save_lqr_ddq_tracking_plot(
+        run_dir,
+        buffers.trajectory_data,
+        lqr_tracking_diagnostics,
+        eval_start_time,
+        eval_end_time,
+    )
     lqr_tracking_preview_path = save_lqr_tracking_preview(
         run_dir,
         buffers.trajectory_data,
@@ -1912,6 +2235,7 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     saved_paths["perf_windows"] = perf_windows_path
     saved_paths["right_arm_diagnostics"] = right_arm_diagnostics_path
     saved_paths["lqr_tracking_diagnostics"] = lqr_tracking_diagnostics_path
+    saved_paths["lqr_ddq_tracking_plot"] = lqr_ddq_tracking_plot_path
     saved_paths["lqr_tracking_preview"] = lqr_tracking_preview_path
     saved_paths["control_preview"] = control_preview_path
     print_run_summary(stats, saved_paths, trajectory_path, video_path, has_renderer, video_frames, video_width, video_height, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles)
@@ -1922,6 +2246,23 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
         print(f"LQR DDQ tracking gain = {np.asarray(ddq_tracking['gain']).round(4).tolist()}")
         cost_rmse = lqr_tracking_diagnostics["cost_tracking"]["rmse"]
         print(f"LQR one-step cost tracking RMSE = {dict(zip(LQR_COST_TERM_NAMES, np.asarray(cost_rmse).round(4).tolist()))}")
+        validation = lqr_tracking_diagnostics.get("forward_dynamics_validation", {})
+        first_selections = validation.get("first_pass", {}).get("selections", [])
+        if first_selections:
+            selection_text = ", ".join(
+                f"{item['label']}({item['scale']:g})={item['count']} ({item['fraction'] * 100.0:.2f}%)"
+                for item in first_selections
+            )
+            print(f"LQR forward-dynamics first-pass selections: {selection_text}")
+        second = validation.get("second_pass", {})
+        if second:
+            print(
+                "LQR forward-dynamics second pass: "
+                f"triggered={second.get('triggered_count', 0)} "
+                f"({second.get('triggered_fraction_of_evaluation_steps', 0.0) * 100.0:.2f}%), "
+                f"accepted={second.get('accepted_count', 0)} "
+                f"({second.get('accepted_fraction_given_triggered', 0.0) * 100.0:.2f}% of triggered)"
+            )
 
 
 def _fmt3(v):
@@ -2198,10 +2539,12 @@ def print_run_summary(
     extra_control_preview = saved_paths.get("control_preview") if saved_paths.get("control_preview") is not None else "未保存控制 CSV"
     extra_lqr_tracking = saved_paths.get("lqr_tracking_diagnostics") if saved_paths.get("lqr_tracking_diagnostics") is not None else "未保存 LQR tracking 诊断"
     extra_lqr_tracking_preview = saved_paths.get("lqr_tracking_preview") if saved_paths.get("lqr_tracking_preview") is not None else "未保存 LQR tracking CSV"
+    extra_lqr_tracking_plot = saved_paths.get("lqr_ddq_tracking_plot") if saved_paths.get("lqr_ddq_tracking_plot") is not None else "未保存 LQR tracking 图片"
     print(
         f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | "
         f"{saved_paths['summary']} | {extra_perf} | {extra_right_arm} | {extra_control_preview} | "
-        f"{extra_lqr_tracking} | {extra_lqr_tracking_preview} | {trajectory_path} | {extra_video}"
+        f"{extra_lqr_tracking} | {extra_lqr_tracking_preview} | {extra_lqr_tracking_plot} | "
+        f"{trajectory_path} | {extra_video}"
     )
 
     if has_renderer:

@@ -742,7 +742,41 @@ $
 
 这里的“完整验收”是完整求解当前 MuJoCo 接触、摩擦、限位等约束，而不是继续使用 $G_\tau$ 的线性预测。所有候选都只在临时 `MjData` 中计算，不改变真实 `data.qpos/qvel`，不推进仿真时间，也不会让机器人依次执行四个力矩。
 
-#### 第 9 步：只执行最终通过验收的力矩
+#### 第 9 步：高残差时在已接受力矩处重线性化一次
+
+设第一轮通过验收的力矩和完整前向动力学加速度为 $\tau_1,\ddot q_1$，第一轮残差为：
+
+$
+r_1=\ddot q_{des}-\ddot q_1
+$
+
+当且仅当第一轮确实接受了力矩修正，并且：
+
+$
+\|r_1\|_2>\rho,qquad \rho=5\ \mathrm{rad/s^2}
+$
+
+程序才触发第二轮。第二轮不是重复使用原来的 $G_\tau$，而是在 $\tau_1$ 处重新对五个右臂力矩做 `0.1 Nm` 扰动：
+
+$
+G_{\tau,1}[:,j]\approx
+\frac{\ddot q_{right}(\tau_1+0.1e_j)-\ddot q_1}{0.1}
+$
+
+然后求剩余残差对应的第二次修正：
+
+$
+\Delta\tau_1=
+\arg\min_{\Delta\tau}
+\|G_{\tau,1}\Delta\tau-r_1\|_2^2
++\lambda\|\Delta\tau\|_2^2
+$
+
+第二轮候选为 $\operatorname{clip}(\tau_1+s\Delta\tau_1)$，仍按 `1/0.5/0.25/0.125` 进行完整 `mj_forward` 验收，并且必须使误差小于第一轮残差。第二轮全部失败时继续使用 $\tau_1$。当前最多只重线性化一次，不会形成无界迭代。
+
+这样做的原因是：第一轮候选可能已经让系统进入新的 friction/contact/limit 约束模式，第一轮在 $\tau_{nom}$ 处计算的 $G_{\tau,0}$ 已经过时；在 $\tau_1$ 处重新计算 $G_{\tau,1}$ 才能描述新工作点附近的力矩到加速度关系。
+
+#### 第 10 步：只执行最终通过验收的力矩
 
 最终选择的右臂力矩写入：
 
@@ -752,7 +786,7 @@ d.ctrl[18:23] = tau_cmd
 
 然后整个程序只调用一次真实的 `mj_step`，让机器人向前推进 `0.002 s`。因此真实机器人在这一拍只看到一个最终力矩，不会看到验收过程中被拒绝的候选。
 
-#### 第 10 步：记录三类加速度，评估执行效果
+#### 第 11 步：记录加速度、验收分布并评估执行效果
 
 当前轨迹同时记录：
 
@@ -761,8 +795,13 @@ d.ctrl[18:23] = tau_cmd
 - `right_arm_qacc_mapping_validated`：完整 `mj_forward` 验收得到的瞬时加速度
 - `right_arm_qacc`：真实 `mj_step` 对应的 MuJoCo 瞬时加速度
 - `right_arm_ddq_real`：相邻两个 6 ms 手臂更新时刻之间，由速度差分得到的实际平均加速度
+- `right_arm_forward_dynamics_validation_scale`：第一轮采用的 `1/0.5/0.25/0.125/0` 比例
+- `right_arm_forward_dynamics_second_pass_triggered/accepted`：第二轮是否触发、是否找到更优候选
+- `right_arm_second_pass_validation_scale`：第二轮最终采用的候选比例
 
-最终打印的 DDQ `correlation/gain/RMSE` 比较的是同一 6 ms 区间内的 `ddq_des` 与 `right_arm_ddq_real`。完整验收主要负责避免局部线性映射在 friction/contact/limit 切换处生成错误力矩；它保证所选候选优于 `tau_nom`，但当前并不保证已经是四个比例中最优的候选，也不保证每个关节都单独达到零误差。
+最终打印的 DDQ `correlation/gain/RMSE` 比较的是同一 6 ms 区间内的 `ddq_des` 与 `right_arm_ddq_real`。每次实验还生成 `ddq_tracking.png`，在五个关节的时序图中叠加 `ddq_des/ddq_real` 并标注 correlation、gain 和 RMSE。`lqr_tracking_diagnostics.json` 记录评估区间内第一轮每个候选比例的 count/fraction，以及第二轮触发率、接受率和候选分布。
+
+完整验收主要负责避免局部线性映射在 friction/contact/limit 切换处生成错误力矩；它保证所选候选优于当前轮的基准力矩，但当前仍采用“第一个改善候选”，不保证已经是四个比例中误差最小的候选，也不保证每个关节都单独达到零误差。
 
 当前完整数据流可以概括为：
 
@@ -777,6 +816,7 @@ q, dq, torso motion
         -> finite-difference G_tau
         -> damped least-squares delta_tau
         -> full forward-dynamics validation/backtracking
+        -> if residual > 5 rad/s^2: re-linearize and correct once more
         -> tau_cmd
         -> d.ctrl[18:23]
         -> one real mj_step (每 2 ms)
@@ -872,7 +912,7 @@ $
 
 的候选才允许执行；若四个候选都没有改善，则取 $s=0$，退回 $\tau_{nom}$。这里的“验收”只在临时 `MjData` 中求值，不推进真实仿真时间，也不修改 LQR 的 `ddq_des`。
 
-因此每个仿真步包含 1 次基准前向动力学、5 次单关节扰动和 1 至 4 次完整候选验收，之后只求一次 $5\times5$ SVD，并不是让机器人反复执行到收敛。浮动基、腿部和接触在每次 `mj_forward` 中自然响应，因此不再需要人为指定它们的加速度。
+若第一轮已接受候选的残差范数超过 $5\ \mathrm{rad/s^2}$，则在该候选力矩处重新构建 $G_{\tau,1}$，对剩余残差再求一次阻尼最小二乘，并执行同样的完整候选验收。第一轮需要 1 次基准、5 次扰动和 1 至 4 次验收，即 7 至 10 次前向动力学；第二轮触发时额外需要 5 次扰动和 1 至 4 次验收，即 6 至 9 次。算法最多两轮，不会反复执行到收敛。浮动基、腿部和接触在每次 `mj_forward` 中自然响应，因此不需要人为指定它们的加速度。
 
 同时将 `ddq_des` 转换为反馈项所需的短时参考：
 
@@ -899,6 +939,17 @@ $
 - 实际执行位置：`apply_computed_torque_control(...)` 先计算 `tau_nominal=tau_ff+tau_pd`；`local_forward_dynamics_torque_mapping(...)` 再计算 `delta_tau`，并通过完整前向动力学验收 `1/0.5/0.25/0.125` 倍候选，最后只执行通过验收的 `tau_cmd`
 - 当前右臂 5 个受控关节的上下限均为 `[-25, 25] N·m`：`right_shoulder_pitch_joint`、`right_shoulder_roll_joint`、`right_shoulder_yaw_joint`、`right_elbow_joint`、`right_wrist_roll_joint`
 - 记录用途：这个限幅属于“底层执行器/模型层硬限幅”，用于保证最终写入 `d.ctrl` 的力矩不超过 XML 定义的可用力矩范围
+
+### 10.3 DDQ 跟踪何时可以进入下一阶段
+
+correlation 和 gain 没有适用于所有机器人的唯一标准，还必须同时检查 RMSE、P95/最大误差、力矩饱和与时序图。当前项目采用两级标准：
+
+- 工程放行门槛：每个关节 `correlation >= 0.8`，`gain` 位于 `[0.8, 1.2]`，同时不存在少量巨大尖峰或持续力矩饱和
+- 更严格目标：每个关节 `correlation >= 0.9`，`gain` 位于 `[0.9, 1.1]`，并继续降低 normalized RMSE
+
+达到工程门槛后，加速度到力矩映射不再是首要故障，应冻结该层并进入末端姿态、位置、碰撞和实时性等控制目标调整；严格目标可以在后续独立优化中继续追求。
+
+实验 `20260721_204908` 的五关节 correlation 为 `[0.838, 0.897, 0.881, 0.923, 0.878]`，gain 为 `[1.005, 1.011, 0.995, 1.014, 0.873]`，误差范数 RMS/P95/最大值为 `1.191/2.517/8.652 rad/s^2`。该结果已通过工程放行门槛，但 shoulder pitch/yaw 和 wrist roll 尚未全部达到严格 correlation/gain 目标。
 
 ---
 
@@ -979,8 +1030,9 @@ target_q, target_dq, ddq_des = arm_policy.compute_action(arm_obs, helpers)
 - torso 线加速度与角加速度的 raw/filtered 值、torso 角速度
 - torso-relative 末端位置/参考/误差、三维有方向重力误差、upright alignment 和接触数量
 - 以相邻两次 `0.006 s` 手臂更新严格对齐的 `ddq_des/ddq_real/error`，以及一步模型/真实七项代价/error
+- 第一轮 `1/0.5/0.25/0.125/0` 验收比例、第一轮残差、第二轮触发/接受状态、第二轮修正与最终残差
 
-同时生成 `control_preview.csv` 供直接打开查看，并在 `right_arm_diagnostics.json` 中保存各信号的 RMS、最大值、饱和率和倒立比例等汇总。专用的 `lqr_tracking_preview.csv` 保存逐控制区间跟踪值，`lqr_tracking_diagnostics.json` 保存每个关节和每个代价项的 RMSE、MAE、最大误差、归一化 RMSE、相关系数和增益。NPZ 是无损分析源，CSV/JSON 用于快速人工检查。
+同时生成 `control_preview.csv` 供直接打开查看，并在 `right_arm_diagnostics.json` 中保存各信号的 RMS、最大值、饱和率和倒立比例等汇总。专用的 `lqr_tracking_preview.csv` 保存逐控制区间跟踪值，`lqr_tracking_diagnostics.json` 保存每个关节和每个代价项的 RMSE、MAE、最大误差、归一化 RMSE、相关系数、增益以及两轮候选分布。`ddq_tracking.png` 用五个时序子图叠加 `ddq_des/ddq_real`，并直接标注各关节 correlation、gain 和 RMSE。NPZ 是无损分析源，CSV/JSON/PNG 用于快速人工检查。
 
 ---
 

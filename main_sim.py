@@ -80,6 +80,9 @@ if __name__ == "__main__":
         lqr_torso_alpha_limit = float(config.get("lqr_torso_alpha_limit", 40.0))
         lqr_forward_dynamics_perturbation = float(config.get("lqr_forward_dynamics_perturbation", 0.1))
         lqr_forward_dynamics_regularization = float(config.get("lqr_forward_dynamics_regularization", 5.0))
+        lqr_forward_dynamics_second_pass_error_threshold = float(
+            config.get("lqr_forward_dynamics_second_pass_error_threshold", 5.0)
+        )
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
 
     # ==============================
@@ -169,7 +172,8 @@ if __name__ == "__main__":
                 "forward_dynamics_perturbation_nm": lqr_forward_dynamics_perturbation,
                 "forward_dynamics_regularization": lqr_forward_dynamics_regularization,
                 "forward_dynamics_validation_scales": [1.0, 0.5, 0.25, 0.125],
-                "forward_dynamics_evaluations_per_step": "7 to 10",
+                "forward_dynamics_second_pass_error_threshold": lqr_forward_dynamics_second_pass_error_threshold,
+                "forward_dynamics_evaluations_per_step": "7 to 10; plus 6 to 9 when the second pass triggers",
                 "uncontrolled_qacc_assumption": 0.0,
                 "ddq_tracking": "6ms_velocity_difference_aligned_between_consecutive_arm_updates",
                 "cost_tracking": "one_step_model_vs_realized_next_arm_update",
@@ -366,6 +370,21 @@ if __name__ == "__main__":
             right_arm_forward_dynamics_validation_scale = 0.0
             right_arm_forward_dynamics_validation_attempts = 0
             right_arm_forward_dynamics_validation_improved = False
+            right_arm_first_pass_qacc_validated = np.zeros(5, dtype=np.float64)
+            right_arm_first_pass_qacc_validation_error = np.zeros(5, dtype=np.float64)
+            right_arm_forward_dynamics_second_pass_triggered = False
+            right_arm_forward_dynamics_second_pass_accepted = False
+            right_arm_second_pass_tau_correction_raw = np.zeros(5, dtype=np.float64)
+            right_arm_second_pass_tau_correction = np.zeros(5, dtype=np.float64)
+            right_arm_second_pass_qacc_predicted = np.zeros(5, dtype=np.float64)
+            right_arm_second_pass_qacc_validated = np.zeros(5, dtype=np.float64)
+            right_arm_second_pass_qacc_validation_error = np.zeros(5, dtype=np.float64)
+            right_arm_second_pass_qacc_linearization_error = np.zeros(5, dtype=np.float64)
+            right_arm_second_pass_forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
+            right_arm_second_pass_singular_values = np.zeros(5, dtype=np.float64)
+            right_arm_second_pass_condition_number = np.inf
+            right_arm_second_pass_validation_scale = 0.0
+            right_arm_second_pass_validation_attempts = 0
             right_arm_tau_cmd_raw = right_arm_tau_pd.copy()
             right_arm_tau_limit_lower = right_arm_id_index_scratch.torque_limits[:, 0].copy()
             right_arm_tau_limit_upper = right_arm_id_index_scratch.torque_limits[:, 1].copy()
@@ -379,6 +398,7 @@ if __name__ == "__main__":
                 # 4) 固定腿、腰和左臂力矩，用 1+5 次前向动力学构建 G_tau
                 # 5) 通过一次阻尼最小二乘求右臂力矩修正
                 # 6) 用完整 mj_forward 验收；失败时按 0.5/0.25/0.125 缩小修正，最后可退回名义力矩
+                # 7) 验收后残差仍大于阈值时，在已接受力矩处重算 G_tau，并做一次同样受验收的二次修正
                 fixed_ctrl_for_mapping = d.ctrl.copy()
                 fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
                 perf_monitor.start_computed_torque_control()
@@ -391,6 +411,9 @@ if __name__ == "__main__":
                     fixed_ctrl_for_mapping,
                     forward_dynamics_perturbation=lqr_forward_dynamics_perturbation,
                     forward_dynamics_regularization=lqr_forward_dynamics_regularization,
+                    forward_dynamics_second_pass_error_threshold=(
+                        lqr_forward_dynamics_second_pass_error_threshold
+                    ),
                 )
                 perf_monitor.finish_computed_torque_control()
                 right_arm_tau_ff = inverse_result.tau_ff
@@ -415,6 +438,21 @@ if __name__ == "__main__":
                 right_arm_forward_dynamics_validation_scale = mapping_result.validation_scale
                 right_arm_forward_dynamics_validation_attempts = mapping_result.validation_attempts
                 right_arm_forward_dynamics_validation_improved = mapping_result.validation_improved
+                right_arm_first_pass_qacc_validated = mapping_result.first_pass_qacc_validated
+                right_arm_first_pass_qacc_validation_error = mapping_result.first_pass_qacc_validation_error
+                right_arm_forward_dynamics_second_pass_triggered = mapping_result.second_pass_triggered
+                right_arm_forward_dynamics_second_pass_accepted = mapping_result.second_pass_accepted
+                right_arm_second_pass_tau_correction_raw = mapping_result.second_pass_tau_correction_raw
+                right_arm_second_pass_tau_correction = mapping_result.second_pass_tau_correction
+                right_arm_second_pass_qacc_predicted = mapping_result.second_pass_qacc_predicted
+                right_arm_second_pass_qacc_validated = mapping_result.second_pass_qacc_validated
+                right_arm_second_pass_qacc_validation_error = mapping_result.second_pass_qacc_validation_error
+                right_arm_second_pass_qacc_linearization_error = mapping_result.second_pass_qacc_linearization_error
+                right_arm_second_pass_forward_dynamics_gain = mapping_result.second_pass_gain_matrix
+                right_arm_second_pass_singular_values = mapping_result.second_pass_singular_values
+                right_arm_second_pass_condition_number = mapping_result.second_pass_condition_number
+                right_arm_second_pass_validation_scale = mapping_result.second_pass_validation_scale
+                right_arm_second_pass_validation_attempts = mapping_result.second_pass_validation_attempts
                 right_arm_tau_cmd_raw = mapping_result.tau_cmd_raw
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
@@ -467,6 +505,21 @@ if __name__ == "__main__":
                     "forward_dynamics_validation_scale": right_arm_forward_dynamics_validation_scale,
                     "forward_dynamics_validation_attempts": right_arm_forward_dynamics_validation_attempts,
                     "forward_dynamics_validation_improved": right_arm_forward_dynamics_validation_improved,
+                    "first_pass_qacc_validated": right_arm_first_pass_qacc_validated,
+                    "first_pass_qacc_validation_error": right_arm_first_pass_qacc_validation_error,
+                    "forward_dynamics_second_pass_triggered": right_arm_forward_dynamics_second_pass_triggered,
+                    "forward_dynamics_second_pass_accepted": right_arm_forward_dynamics_second_pass_accepted,
+                    "second_pass_tau_correction_raw": right_arm_second_pass_tau_correction_raw,
+                    "second_pass_tau_correction": right_arm_second_pass_tau_correction,
+                    "second_pass_qacc_predicted": right_arm_second_pass_qacc_predicted,
+                    "second_pass_qacc_validated": right_arm_second_pass_qacc_validated,
+                    "second_pass_qacc_validation_error": right_arm_second_pass_qacc_validation_error,
+                    "second_pass_qacc_linearization_error": right_arm_second_pass_qacc_linearization_error,
+                    "second_pass_forward_dynamics_gain": right_arm_second_pass_forward_dynamics_gain,
+                    "second_pass_singular_values": right_arm_second_pass_singular_values,
+                    "second_pass_condition_number": right_arm_second_pass_condition_number,
+                    "second_pass_validation_scale": right_arm_second_pass_validation_scale,
+                    "second_pass_validation_attempts": right_arm_second_pass_validation_attempts,
                     "torso_lin_vel_world": torso_state.lin_vel,
                     "torso_ang_vel_world": torso_state.ang_vel,
                     "torso_acc_world_raw": raw_torso_acc,
