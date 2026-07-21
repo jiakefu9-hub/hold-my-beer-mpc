@@ -404,7 +404,7 @@ $
 \tau=\tau_{ff}+K_p(q_{ref}-q)+K_d(\dot q_{ref}-\dot q)
 $
 
-MuJoCo 仿真采用与 LQR 相同的 contact-aware 计算：
+MuJoCo 仿真先采用与 LQR 相同的非摩擦约束感知逆动力学生成名义力矩：
 
 ```python
 scratch.qpos[:] = data.qpos
@@ -416,13 +416,13 @@ mujoco.mj_inverse(model, scratch)
 tau_inverse = scratch.qfrc_inverse[right_arm_qvel_indices]
 efc_J = np.asarray(scratch.efc_J).reshape(-1, model.nv)[:scratch.nefc]
 efc_type = scratch.efc_type[:scratch.nefc]
-contact_rows = np.isin(efc_type, CONTACT_CONSTRAINT_TYPES)
-qfrc_contact = efc_J[contact_rows].T @ scratch.efc_force[:scratch.nefc][contact_rows]
-tau_contact = qfrc_contact[right_arm_qvel_indices]
-tau_ff = tau_inverse + tau_contact
+friction_rows = np.isin(efc_type, FRICTION_CONSTRAINT_TYPES)
+qfrc_friction = efc_J[friction_rows].T @ scratch.efc_force[:scratch.nefc][friction_rows]
+qfrc_nonfriction = scratch.qfrc_constraint - qfrc_friction
+tau_ff = tau_inverse + qfrc_nonfriction[right_arm_qvel_indices]
 ```
 
-因为 MuJoCo 的 `qfrc_inverse` 已包含负号形式的约束反力，所以只加回 contact 类型约束对应的 `qfrc_contact`，避免在意外碰撞时主动对抗环境。不能直接加回完整 `qfrc_constraint`，否则会同时取消 `frictionloss`、joint limit 等非接触约束的补偿。它不是完整的接触力优化；主动接触任务仍需把接触力和摩擦锥纳入 MPC。
+`qfrc_inverse` 加回 contact、joint/tendon limit 和 equality 等非摩擦约束，仅保留 `FRICTION_DOF` 与 `FRICTION_TENDON` 的摩擦补偿。然后固定其他执行器力矩，使用一次基准和五次右臂力矩扰动的 MuJoCo 前向动力学构建 $G_\tau=\partial\ddot q_{right}/\partial\tau_{right}$，再用阻尼最小二乘一次求出力矩修正。该下层映射允许浮动基和腿部自然响应，不需要把完整刚体动力学放进 MPC 的 QP。它不是完整的接触力优化；主动接触任务仍需把接触力和摩擦锥纳入 MPC。
 
 真机可用 Pinocchio/RBDL/厂商动力学库计算相同的无接触项：
 

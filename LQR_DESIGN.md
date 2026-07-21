@@ -642,6 +642,35 @@ $
 
 这样 contact、joint/tendon limit 和 equality 等约束不会被执行器主动抵消，而 `frictionloss` 仍保留在 `qfrc_inverse` 中，由执行器正常补偿。这称为本项目中的 **non-friction-constraint-aware inverse dynamics**。当瓶子撞到 torso 或关节进入限位时，控制器不再为强行实现不可达的 `ddq_des` 而对抗这些约束力。该处理不等于完整的接触优化；若以后需要主动推压环境，仍需显式建模接触力与接触任务。
 
+但上述逆动力学仍把非右臂加速度假设为零，与浮动基行走不一致。因此当前实现只把它作为名义力矩：
+
+$
+\tau_{nom}=\tau_{ff}+K_p(q_{ref}-q)+K_d(\dot q_{ref}-\dot q)
+$
+
+保持腿、腰和左臂当前力矩不变，先用 MuJoCo 前向动力学计算 $\tau_{nom}$ 对应的右臂基准加速度 $\ddot q_b$。然后对右臂五个力矩分别增加小扰动 $\epsilon$，用有限差分构建：
+
+$
+G_{\tau}[:,j]\approx
+\frac{\ddot q_{right}(\tau_{nom}+\epsilon e_j)-\ddot q_b}{\epsilon}
+$
+
+局部映射为：
+
+$
+\ddot q_{right}\approx\ddot q_b+G_{\tau}\Delta\tau
+$
+
+一次阻尼最小二乘求解：
+
+$
+\Delta\tau=\arg\min_{\Delta\tau}
+\|G_{\tau}\Delta\tau-(\ddot q_{des}-\ddot q_b)\|^2
++\lambda\|\Delta\tau\|^2
+$
+
+最终力矩为 $\tau=\operatorname{clip}(\tau_{nom}+\Delta\tau)$。这是 1 次基准前向动力学加 5 次单关节扰动，之后直接求一次 $5\times5$ SVD，不是重复迭代到收敛。浮动基、腿部和接触在每次 `mj_forward` 中自然响应，因此不再需要人为指定它们的加速度。
+
 同时将 `ddq_des` 转换为反馈项所需的短时参考：
 
 $
@@ -652,10 +681,10 @@ $
 q_{ref} = q + \dot q \Delta t + \frac{1}{2}\ddot q^\star \Delta t^2
 $
 
-最终命令为：
+逆动力学和 PD 生成局部前向动力学映射的初始名义命令：
 
 $
-\tau = \tau_{ff} + K_p(q_{ref}-q) + K_d(\dot q_{ref}-\dot q)
+\tau_{nom} = \tau_{ff} + K_p(q_{ref}-q) + K_d(\dot q_{ref}-\dot q)
 $
 
 `main_sim.py` 中 LQR 每 `0.006 s` 更新一次，`ddq_des/q_ref/dq_ref` 在更新间隔内保持；逆动力学使用最新整机状态，每个 `0.002 s` 仿真步重算一次。当前 XML 的右臂 motor 为 `gear=1` 的直接驱动，因此右臂广义力可直接对应 `ctrl[18:23]`，最后按关节 `actuatorfrcrange` 限幅。
@@ -664,8 +693,7 @@ $
 
 - 模型根来源：`resources/g1_description/g1_29dof_with_hand.xml` 中右臂 5 个被控 joint 的 `actuatorfrcrange`
 - MuJoCo 读取结果：`sim_support.py` 在 `resolve_direct_drive_joint_group(...)` 中通过 `model.jnt_actfrcrange[joint_ids].copy()` 读取为 `torque_limits`
-- 实际执行位置：`apply_computed_torque_control(...)` 中
-  `tau_cmd = np.clip(tau_ff + tau_pd, torque_limits[:, 0], torque_limits[:, 1])`
+- 实际执行位置：`apply_computed_torque_control(...)` 先计算 `tau_nominal=tau_ff+tau_pd`，再由 `local_forward_dynamics_torque_mapping(...)` 计算 `delta_tau`，最后执行 `clip(tau_nominal + delta_tau)`
 - 当前右臂 5 个受控关节的上下限均为 `[-25, 25] N·m`：`right_shoulder_pitch_joint`、`right_shoulder_roll_joint`、`right_shoulder_yaw_joint`、`right_elbow_joint`、`right_wrist_roll_joint`
 - 记录用途：这个限幅属于“底层执行器/模型层硬限幅”，用于保证最终写入 `d.ctrl` 的力矩不超过 XML 定义的可用力矩范围
 

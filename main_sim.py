@@ -78,6 +78,8 @@ if __name__ == "__main__":
         lqr_torso_alpha_filter_alpha = float(config.get("lqr_torso_alpha_filter_alpha", 0.20))
         lqr_torso_acc_limit = float(config.get("lqr_torso_acc_limit", 30.0))
         lqr_torso_alpha_limit = float(config.get("lqr_torso_alpha_limit", 40.0))
+        lqr_forward_dynamics_perturbation = float(config.get("lqr_forward_dynamics_perturbation", 0.1))
+        lqr_forward_dynamics_regularization = float(config.get("lqr_forward_dynamics_regularization", 5.0))
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
 
     # ==============================
@@ -154,15 +156,19 @@ if __name__ == "__main__":
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
         lqr_cost_definition = arm_policy.get_cost_definition()
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and non-friction-constraint-aware MuJoCo inverse-dynamics feedforward plus joint-space PD feedback"
+        controller_notes = "finite-horizon time-varying LQR with torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and local MuJoCo forward-dynamics torque mapping initialized by non-friction-constraint-aware inverse dynamics plus joint-space PD"
         controller_meta = {
             "lqr_config": {
                 **lqr_kwargs,
                 "control_dt": arm_policy.control_dt,
-                "torque_control": "mujoco_nonfriction_constraint_aware_inverse_dynamics_plus_pd",
+                "torque_control": "mujoco_local_forward_dynamics_mapping_from_inverse_dynamics_nominal",
                 "constraint_aware_tau_formula": "qfrc_inverse + qfrc_constraint_nonfriction",
                 "constraints_added_back": "contact + joint/tendon limit + equality",
                 "constraints_excluded_from_addback": "FRICTION_DOF + FRICTION_TENDON",
+                "forward_dynamics_mapping": "ddq_right ~= ddq_baseline + G_tau * delta_tau",
+                "forward_dynamics_perturbation_nm": lqr_forward_dynamics_perturbation,
+                "forward_dynamics_regularization": lqr_forward_dynamics_regularization,
+                "forward_dynamics_evaluations_per_step": 6,
                 "uncontrolled_qacc_assumption": 0.0,
                 "ddq_tracking": "6ms_velocity_difference_aligned_between_consecutive_arm_updates",
                 "cost_tracking": "one_step_model_vs_realized_next_arm_update",
@@ -267,8 +273,8 @@ if __name__ == "__main__":
             #    - LQR 路径：除了输出 q_ref / dq_ref，还会额外输出期望关节加速度 ddq_des
             # 2) 下层执行层把参考转成真正施加到 MuJoCo 的力矩：
             #    - 基础项：所有上肢统一先经过 joint-space PD，得到 tau_pd
-            #    - LQR 额外项：根据 ddq_des 调用 mj_inverse()，并消去非摩擦约束反力项得到 tau_ff，
-            #      最终右臂实际执行的是 tau = tau_ff + tau_pd
+            #    - LQR 额外项：mj_inverse() 先生成名义力矩，再用局部前向动力学
+            #      映射反求使右臂实际加速度接近 ddq_des 的最终力矩。
 
             # 当前上肢的真实状态（腰 + 左臂 + 右臂），后面 PD 会用它和目标状态做误差反馈
             arm_waist_q = d.qpos[19:30]
@@ -344,6 +350,15 @@ if __name__ == "__main__":
             right_arm_tau_constraint_noncontact = np.zeros(5, dtype=np.float64)
             right_arm_tau_constraint_nonfriction = np.zeros(5, dtype=np.float64)
             right_arm_tau_constraint_friction = np.zeros(5, dtype=np.float64)
+            right_arm_tau_nominal = right_arm_tau_pd.copy()
+            right_arm_tau_mapping_correction_raw = np.zeros(5, dtype=np.float64)
+            right_arm_tau_mapping_correction = np.zeros(5, dtype=np.float64)
+            right_arm_qacc_mapping_baseline = np.zeros(5, dtype=np.float64)
+            right_arm_qacc_mapping_predicted = np.zeros(5, dtype=np.float64)
+            right_arm_qacc_mapping_prediction_error = np.zeros(5, dtype=np.float64)
+            right_arm_forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
+            right_arm_forward_dynamics_singular_values = np.zeros(5, dtype=np.float64)
+            right_arm_forward_dynamics_condition_number = np.inf
             right_arm_tau_cmd_raw = right_arm_tau_pd.copy()
             right_arm_tau_limit_lower = right_arm_id_index_scratch.torque_limits[:, 0].copy()
             right_arm_tau_limit_upper = right_arm_id_index_scratch.torque_limits[:, 1].copy()
@@ -353,15 +368,21 @@ if __name__ == "__main__":
                 # apply_computed_torque_control() 内部会：
                 # 1) 复制当前整机 qpos / qvel 到 scratch data
                 # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
-                # 3) 调用 mj_inverse()，分离 friction 与其他约束的广义力
-                # 4) qfrc_inverse 加回所有非摩擦约束，仅保留 frictionloss 补偿
+                # 3) 调用 mj_inverse()，生成“非摩擦约束不对抗”的名义力矩
+                # 4) 固定腿、腰和左臂力矩，用 1+5 次前向动力学构建 G_tau
+                # 5) 通过一次阻尼最小二乘求右臂力矩修正，不做迭代逼近
+                fixed_ctrl_for_mapping = d.ctrl.copy()
+                fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
                 perf_monitor.start_computed_torque_control()
-                right_arm_tau, inverse_result = apply_computed_torque_control(
+                right_arm_tau, inverse_result, mapping_result = apply_computed_torque_control(
                     m,
                     d,
                     right_arm_id_index_scratch,
                     desired_right_arm_ddq,
                     right_arm_tau_pd,
+                    fixed_ctrl_for_mapping,
+                    forward_dynamics_perturbation=lqr_forward_dynamics_perturbation,
+                    forward_dynamics_regularization=lqr_forward_dynamics_regularization,
                 )
                 perf_monitor.finish_computed_torque_control()
                 right_arm_tau_ff = inverse_result.tau_ff
@@ -371,7 +392,16 @@ if __name__ == "__main__":
                 right_arm_tau_constraint_noncontact = inverse_result.tau_constraint_noncontact
                 right_arm_tau_constraint_nonfriction = inverse_result.tau_constraint_nonfriction
                 right_arm_tau_constraint_friction = inverse_result.tau_constraint_friction
-                right_arm_tau_cmd_raw = right_arm_tau_ff + right_arm_tau_pd
+                right_arm_tau_nominal = mapping_result.tau_nominal
+                right_arm_tau_mapping_correction_raw = mapping_result.tau_correction_raw
+                right_arm_tau_mapping_correction = mapping_result.tau_correction
+                right_arm_qacc_mapping_baseline = mapping_result.qacc_baseline
+                right_arm_qacc_mapping_predicted = mapping_result.qacc_predicted
+                right_arm_qacc_mapping_prediction_error = mapping_result.qacc_prediction_error
+                right_arm_forward_dynamics_gain = mapping_result.gain_matrix
+                right_arm_forward_dynamics_singular_values = mapping_result.singular_values
+                right_arm_forward_dynamics_condition_number = mapping_result.condition_number
+                right_arm_tau_cmd_raw = mapping_result.tau_cmd_raw
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
             # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
@@ -405,9 +435,18 @@ if __name__ == "__main__":
                     "tau_constraint_friction": right_arm_tau_constraint_friction,
                     "tau_ff": right_arm_tau_ff,
                     "tau_pd": right_arm_tau_pd,
+                    "tau_nominal": right_arm_tau_nominal,
+                    "tau_mapping_correction_raw": right_arm_tau_mapping_correction_raw,
+                    "tau_mapping_correction": right_arm_tau_mapping_correction,
                     "tau_cmd_raw": right_arm_tau_cmd_raw,
                     "tau_limit_lower": right_arm_tau_limit_lower,
                     "tau_limit_upper": right_arm_tau_limit_upper,
+                    "qacc_mapping_baseline": right_arm_qacc_mapping_baseline,
+                    "qacc_mapping_predicted": right_arm_qacc_mapping_predicted,
+                    "qacc_mapping_prediction_error": right_arm_qacc_mapping_prediction_error,
+                    "forward_dynamics_gain": right_arm_forward_dynamics_gain,
+                    "forward_dynamics_singular_values": right_arm_forward_dynamics_singular_values,
+                    "forward_dynamics_condition_number": right_arm_forward_dynamics_condition_number,
                     "torso_lin_vel_world": torso_state.lin_vel,
                     "torso_ang_vel_world": torso_state.ang_vel,
                     "torso_acc_world_raw": raw_torso_acc,

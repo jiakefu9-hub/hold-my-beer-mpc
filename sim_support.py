@@ -83,6 +83,7 @@ class DirectDriveJointGroup:
     actuator_ids: np.ndarray
     torque_limits: np.ndarray
     inverse_dynamics_data: mujoco.MjData
+    forward_dynamics_data: mujoco.MjData
 
 
 @dataclass
@@ -94,6 +95,20 @@ class InverseDynamicsResult:
     tau_constraint_noncontact: np.ndarray
     tau_constraint_nonfriction: np.ndarray
     tau_constraint_friction: np.ndarray
+
+
+@dataclass
+class ForwardDynamicsMappingResult:
+    tau_nominal: np.ndarray
+    tau_correction_raw: np.ndarray
+    tau_correction: np.ndarray
+    tau_cmd_raw: np.ndarray
+    qacc_baseline: np.ndarray
+    qacc_predicted: np.ndarray
+    qacc_prediction_error: np.ndarray
+    gain_matrix: np.ndarray
+    singular_values: np.ndarray
+    condition_number: float
 
 
 @dataclass
@@ -223,6 +238,7 @@ def resolve_direct_drive_joint_group(
         actuator_ids=actuator_ids,
         torque_limits=torque_limits,
         inverse_dynamics_data=mujoco.MjData(model),
+        forward_dynamics_data=mujoco.MjData(model),
     )
 
 
@@ -295,7 +311,93 @@ def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indice
     )
 
 
-def apply_computed_torque_control(model, data, id_index_scratch, desired_qacc, tau_pd):
+def local_forward_dynamics_torque_mapping(
+    model,
+    data,
+    scratch,
+    fixed_ctrl,
+    desired_qacc,
+    tau_nominal,
+    qvel_indices,
+    ctrl_indices,
+    torque_limits,
+    perturbation=0.1,
+    regularization=5.0,
+):
+    """局部线性化前向动力学，一次求解使右臂加速度接近目标的力矩修正。"""
+    desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
+    tau_nominal = np.asarray(tau_nominal, dtype=np.float64)
+    qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
+    ctrl_indices = np.asarray(ctrl_indices, dtype=np.int32)
+    torque_limits = np.asarray(torque_limits, dtype=np.float64)
+    fixed_ctrl = np.asarray(fixed_ctrl, dtype=np.float64)
+    joint_count = len(qvel_indices)
+    if desired_qacc.shape != (joint_count,) or tau_nominal.shape != (joint_count,):
+        raise ValueError("前向动力学映射的 desired_qacc/tau_nominal 维度不正确。")
+    if fixed_ctrl.shape != (model.nu,) or torque_limits.shape != (joint_count, 2):
+        raise ValueError("前向动力学映射的 ctrl/torque_limits 维度不正确。")
+    if perturbation <= 0.0 or regularization < 0.0:
+        raise ValueError("perturbation 必须大于 0，regularization 不能小于 0。")
+
+    tau_nominal = np.clip(tau_nominal, torque_limits[:, 0], torque_limits[:, 1])
+    baseline_ctrl = fixed_ctrl.copy()
+    baseline_ctrl[ctrl_indices] = tau_nominal
+    mujoco.mj_copyData(scratch, model, data)
+    scratch.ctrl[:] = baseline_ctrl
+    mujoco.mj_forward(model, scratch)
+    qacc_baseline = scratch.qacc[qvel_indices].copy()
+
+    # 每个右臂执行器只扰动一次，得到 G = d(ddq_right) / d(tau_right)。
+    gain_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
+    for column in range(joint_count):
+        signed_perturbation = float(perturbation)
+        if tau_nominal[column] + signed_perturbation > torque_limits[column, 1]:
+            signed_perturbation = -signed_perturbation
+        scratch.ctrl[:] = baseline_ctrl
+        scratch.ctrl[ctrl_indices[column]] += signed_perturbation
+        mujoco.mj_forwardSkip(model, scratch, mujoco.mjtStage.mjSTAGE_VEL, 1)
+        gain_matrix[:, column] = (
+            scratch.qacc[qvel_indices] - qacc_baseline
+        ) / signed_perturbation
+
+    # 阻尼 SVD 直接求一次局部力矩修正，不做反复迭代。
+    u_matrix, singular_values, vt_matrix = np.linalg.svd(gain_matrix, full_matrices=False)
+    acceleration_error = desired_qacc - qacc_baseline
+    damped_inverse = singular_values / (singular_values ** 2 + float(regularization))
+    tau_correction_raw = vt_matrix.T @ (damped_inverse * (u_matrix.T @ acceleration_error))
+    tau_cmd_raw = tau_nominal + tau_correction_raw
+    tau_cmd = np.clip(tau_cmd_raw, torque_limits[:, 0], torque_limits[:, 1])
+    tau_correction = tau_cmd - tau_nominal
+    qacc_predicted = qacc_baseline + gain_matrix @ tau_correction
+    qacc_prediction_error = qacc_predicted - desired_qacc
+    if singular_values.size == 0 or singular_values[-1] <= np.finfo(np.float64).eps:
+        condition_number = np.inf
+    else:
+        condition_number = float(singular_values[0] / singular_values[-1])
+    return tau_cmd, ForwardDynamicsMappingResult(
+        tau_nominal=tau_nominal,
+        tau_correction_raw=tau_correction_raw,
+        tau_correction=tau_correction,
+        tau_cmd_raw=tau_cmd_raw,
+        qacc_baseline=qacc_baseline,
+        qacc_predicted=qacc_predicted,
+        qacc_prediction_error=qacc_prediction_error,
+        gain_matrix=gain_matrix,
+        singular_values=singular_values,
+        condition_number=condition_number,
+    )
+
+
+def apply_computed_torque_control(
+    model,
+    data,
+    id_index_scratch,
+    desired_qacc,
+    tau_pd,
+    fixed_ctrl,
+    forward_dynamics_perturbation=0.1,
+    forward_dynamics_regularization=5.0,
+):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     if tau_pd.shape != id_index_scratch.qvel_indices.shape:
@@ -308,12 +410,25 @@ def apply_computed_torque_control(model, data, id_index_scratch, desired_qacc, t
         desired_qacc,
         id_index_scratch.qvel_indices,
     )
-    tau_cmd = np.clip(
+    tau_nominal = np.clip(
         inverse_result.tau_ff + tau_pd,
         id_index_scratch.torque_limits[:, 0],
         id_index_scratch.torque_limits[:, 1],
     )
-    return tau_cmd, inverse_result
+    tau_cmd, mapping_result = local_forward_dynamics_torque_mapping(
+        model,
+        data,
+        id_index_scratch.forward_dynamics_data,
+        fixed_ctrl,
+        desired_qacc,
+        tau_nominal,
+        id_index_scratch.qvel_indices,
+        id_index_scratch.ctrl_indices,
+        id_index_scratch.torque_limits,
+        perturbation=forward_dynamics_perturbation,
+        regularization=forward_dynamics_regularization,
+    )
+    return tau_cmd, inverse_result, mapping_result
 
 
 # ==============================
@@ -829,6 +944,9 @@ def init_eval_buffers():
             "right_arm_tau_constraint_friction": [],
             "right_arm_tau_ff": [],
             "right_arm_tau_pd": [],
+            "right_arm_tau_nominal": [],
+            "right_arm_tau_mapping_correction_raw": [],
+            "right_arm_tau_mapping_correction": [],
             "right_arm_tau_cmd_raw": [],
             "right_arm_tau_limit_lower": [],
             "right_arm_tau_limit_upper": [],
@@ -836,6 +954,13 @@ def init_eval_buffers():
             "right_arm_actual_qfrc_bias": [],
             "right_arm_actual_qfrc_passive": [],
             "right_arm_actual_qfrc_constraint": [],
+            "right_arm_qacc_mapping_baseline": [],
+            "right_arm_qacc_mapping_predicted": [],
+            "right_arm_qacc_mapping_prediction_error": [],
+            "right_arm_qacc_mapping_model_error": [],
+            "right_arm_forward_dynamics_gain": [],
+            "right_arm_forward_dynamics_singular_values": [],
+            "right_arm_forward_dynamics_condition_number": [],
             "torso_lin_vel_world": [],
             "torso_ang_vel_world": [],
             "torso_acc_world_raw": [],
@@ -1133,6 +1258,14 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     tau_constraint_friction = matrix("right_arm_tau_constraint_friction", n)
     tau_ff = matrix("right_arm_tau_ff", n)
     tau_pd = matrix("right_arm_tau_pd", n)
+    tau_nominal = matrix("right_arm_tau_nominal", n)
+    tau_mapping_correction_raw = matrix("right_arm_tau_mapping_correction_raw", n)
+    tau_mapping_correction = matrix("right_arm_tau_mapping_correction", n)
+    qacc_mapping_baseline = matrix("right_arm_qacc_mapping_baseline", n)
+    qacc_mapping_predicted = matrix("right_arm_qacc_mapping_predicted", n)
+    qacc_mapping_prediction_error = matrix("right_arm_qacc_mapping_prediction_error", n)
+    qacc_mapping_model_error = matrix("right_arm_qacc_mapping_model_error", n)
+    forward_dynamics_singular_values = matrix("right_arm_forward_dynamics_singular_values", n)
     tau_raw = matrix("right_arm_tau_cmd_raw", n)
     tau_low = matrix("right_arm_tau_limit_lower", n)
     tau_high = matrix("right_arm_tau_limit_upper", n)
@@ -1187,12 +1320,48 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         ("right_arm_tau_constraint_friction", tau_constraint_friction),
         ("right_arm_tau_ff", tau_ff),
         ("right_arm_tau_pd", tau_pd),
+        ("right_arm_tau_nominal", tau_nominal),
+        ("right_arm_tau_mapping_correction_raw", tau_mapping_correction_raw),
+        ("right_arm_tau_mapping_correction", tau_mapping_correction),
         ("right_arm_tau_raw", tau_raw),
         ("right_arm_ctrl", ctrl),
+        ("right_arm_qacc_mapping_baseline", qacc_mapping_baseline),
+        ("right_arm_qacc_mapping_predicted", qacc_mapping_predicted),
+        ("right_arm_qacc_mapping_prediction_error", qacc_mapping_prediction_error),
+        ("right_arm_qacc_mapping_model_error", qacc_mapping_model_error),
+        ("right_arm_forward_dynamics_singular_values", forward_dynamics_singular_values),
     ]:
         component_stats(diagnostics, prefix, value, n)
     ddq_postprocess_delta = ddq_des - ddq_raw if ddq_des.shape == ddq_raw.shape else np.zeros_like(ddq_des)
     component_stats(diagnostics, "right_arm_ddq_postprocess_delta", ddq_postprocess_delta, n)
+    mapping_error_norm = np.linalg.norm(qacc_mapping_prediction_error, axis=1) if qacc_mapping_prediction_error.shape[0] else np.zeros(0)
+    diagnostics["right_arm_qacc_mapping_prediction_error_norm_rms"] = np.array(
+        np.sqrt(np.mean(mapping_error_norm ** 2)) if mapping_error_norm.size else 0.0
+    )
+    diagnostics["right_arm_qacc_mapping_prediction_error_norm_max"] = np.array(
+        np.max(mapping_error_norm) if mapping_error_norm.size else 0.0
+    )
+    mapping_model_error_norm = np.linalg.norm(qacc_mapping_model_error, axis=1) if qacc_mapping_model_error.shape[0] else np.zeros(0)
+    diagnostics["right_arm_qacc_mapping_model_error_norm_rms"] = np.array(
+        np.sqrt(np.mean(mapping_model_error_norm ** 2)) if mapping_model_error_norm.size else 0.0
+    )
+    diagnostics["right_arm_qacc_mapping_model_error_norm_max"] = np.array(
+        np.max(mapping_model_error_norm) if mapping_model_error_norm.size else 0.0
+    )
+    condition_number = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_condition_number", []),
+        dtype=np.float64,
+    )
+    finite_condition = condition_number[np.isfinite(condition_number)]
+    diagnostics["right_arm_forward_dynamics_condition_number_mean"] = np.array(
+        np.mean(finite_condition) if finite_condition.size else np.inf
+    )
+    diagnostics["right_arm_forward_dynamics_condition_number_p95"] = np.array(
+        np.percentile(finite_condition, 95.0) if finite_condition.size else np.inf
+    )
+    diagnostics["right_arm_forward_dynamics_condition_number_max"] = np.array(
+        np.max(finite_condition) if finite_condition.size else np.inf
+    )
 
     if qacc.shape == ddq_des.shape and qacc.shape[0] > 0:
         tracking_error = qacc - ddq_des
@@ -1350,8 +1519,16 @@ def save_control_preview(run_dir, trajectory_data):
         ("right_arm_tau_constraint_friction", joint_labels),
         ("right_arm_tau_ff", joint_labels),
         ("right_arm_tau_pd", joint_labels),
+        ("right_arm_tau_nominal", joint_labels),
+        ("right_arm_tau_mapping_correction_raw", joint_labels),
+        ("right_arm_tau_mapping_correction", joint_labels),
         ("right_arm_tau_cmd_raw", joint_labels),
         ("right_arm_ctrl", joint_labels),
+        ("right_arm_qacc_mapping_baseline", joint_labels),
+        ("right_arm_qacc_mapping_predicted", joint_labels),
+        ("right_arm_qacc_mapping_prediction_error", joint_labels),
+        ("right_arm_qacc_mapping_model_error", joint_labels),
+        ("right_arm_forward_dynamics_singular_values", joint_labels),
         ("right_arm_actual_qfrc_bias", joint_labels),
         ("right_arm_actual_qfrc_passive", joint_labels),
         ("right_arm_actual_qfrc_constraint", joint_labels),
@@ -1366,7 +1543,12 @@ def save_control_preview(run_dir, trajectory_data):
         ("right_ee_position_error_torso", ("x", "y", "z")),
         ("right_ee_gravity_error_end", ("x", "y", "z")),
     ]
-    scalar_signals = ["right_ee_upright_alignment", "arm_policy_updated", "contact_count"]
+    scalar_signals = [
+        "right_arm_forward_dynamics_condition_number",
+        "right_ee_upright_alignment",
+        "arm_policy_updated",
+        "contact_count",
+    ]
     arrays = []
     headers = ["time"]
     for name, labels in vector_signals:
@@ -1453,6 +1635,23 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     tau_constraint_friction = control_vector("tau_constraint_friction", 5)
     tau_ff = control_vector("tau_ff", 5)
     tau_pd = control_vector("tau_pd", 5)
+    tau_nominal = control_vector("tau_nominal", 5)
+    tau_mapping_correction_raw = control_vector("tau_mapping_correction_raw", 5)
+    tau_mapping_correction = control_vector("tau_mapping_correction", 5)
+    qacc_mapping_baseline = control_vector("qacc_mapping_baseline", 5)
+    qacc_mapping_predicted = control_vector("qacc_mapping_predicted", 5)
+    qacc_mapping_prediction_error = control_vector("qacc_mapping_prediction_error", 5)
+    qacc_mapping_model_error = data.qacc[RIGHT_ARM_QVEL_SLICE].copy() - qacc_mapping_predicted
+    forward_dynamics_singular_values = control_vector("forward_dynamics_singular_values", 5)
+    forward_dynamics_gain = np.asarray(
+        right_arm_control.get("forward_dynamics_gain", np.zeros((5, 5))),
+        dtype=np.float64,
+    )
+    if forward_dynamics_gain.shape != (5, 5):
+        forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
+    forward_dynamics_condition_number = float(
+        right_arm_control.get("forward_dynamics_condition_number", np.inf)
+    )
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
     tau_limit_upper = np.asarray(right_arm_control.get("tau_limit_upper", np.full(5, np.inf)), dtype=np.float64).copy()
@@ -1511,6 +1710,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_tau_constraint_friction"].append(tau_constraint_friction)
     buffers.trajectory_data["right_arm_tau_ff"].append(tau_ff)
     buffers.trajectory_data["right_arm_tau_pd"].append(tau_pd)
+    buffers.trajectory_data["right_arm_tau_nominal"].append(tau_nominal)
+    buffers.trajectory_data["right_arm_tau_mapping_correction_raw"].append(tau_mapping_correction_raw)
+    buffers.trajectory_data["right_arm_tau_mapping_correction"].append(tau_mapping_correction)
     buffers.trajectory_data["right_arm_tau_cmd_raw"].append(tau_cmd_raw)
     buffers.trajectory_data["right_arm_tau_limit_lower"].append(tau_limit_lower)
     buffers.trajectory_data["right_arm_tau_limit_upper"].append(tau_limit_upper)
@@ -1518,6 +1720,13 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_actual_qfrc_bias"].append(data.qfrc_bias[RIGHT_ARM_QVEL_SLICE].copy())
     buffers.trajectory_data["right_arm_actual_qfrc_passive"].append(data.qfrc_passive[RIGHT_ARM_QVEL_SLICE].copy())
     buffers.trajectory_data["right_arm_actual_qfrc_constraint"].append(data.qfrc_constraint[RIGHT_ARM_QVEL_SLICE].copy())
+    buffers.trajectory_data["right_arm_qacc_mapping_baseline"].append(qacc_mapping_baseline)
+    buffers.trajectory_data["right_arm_qacc_mapping_predicted"].append(qacc_mapping_predicted)
+    buffers.trajectory_data["right_arm_qacc_mapping_prediction_error"].append(qacc_mapping_prediction_error)
+    buffers.trajectory_data["right_arm_qacc_mapping_model_error"].append(qacc_mapping_model_error)
+    buffers.trajectory_data["right_arm_forward_dynamics_gain"].append(forward_dynamics_gain.copy())
+    buffers.trajectory_data["right_arm_forward_dynamics_singular_values"].append(forward_dynamics_singular_values)
+    buffers.trajectory_data["right_arm_forward_dynamics_condition_number"].append(forward_dynamics_condition_number)
     buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
     buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)
     buffers.trajectory_data["torso_acc_world_raw"].append(torso_acc_raw)

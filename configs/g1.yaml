@@ -28,6 +28,9 @@ lqr_torso_acc_filter_alpha: 0.20
 lqr_torso_alpha_filter_alpha: 0.20
 lqr_torso_acc_limit: 30.0
 lqr_torso_alpha_limit: 40.0
+# Local forward-dynamics torque mapping: one baseline + five right-arm perturbations.
+lqr_forward_dynamics_perturbation: 0.1
+lqr_forward_dynamics_regularization: 5.0
 
 kps: [100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40]
 kds: [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2]
