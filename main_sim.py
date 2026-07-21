@@ -140,7 +140,7 @@ if __name__ == "__main__":
             "q_alpha": float(config.get("lqr_q_alpha", 0.05)),
             "q_position": float(config.get("lqr_q_position", 20.0)),
             "q_gravity": float(config.get("lqr_q_gravity", 30.0)),
-            "q_posture": float(config.get("lqr_q_posture", 0.4)),
+            "q_posture": config.get("lqr_q_posture", 0.4),
             "q_vel": float(config.get("lqr_q_vel", 0.02)),
             "r_ddq": float(config.get("lqr_r_ddq", 0.25)),
             "terminal_scale": float(config.get("lqr_terminal_scale", 2.0)),
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
         lqr_cost_definition = arm_policy.get_cost_definition()
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and local MuJoCo forward-dynamics torque mapping initialized by non-friction-constraint-aware inverse dynamics plus joint-space PD"
+        controller_notes = "finite-horizon time-varying LQR with per-joint posture weights, torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and validated local MuJoCo forward-dynamics torque mapping initialized by non-friction-constraint-aware inverse dynamics plus joint-space PD"
         controller_meta = {
             "lqr_config": {
                 **lqr_kwargs,
@@ -165,10 +165,11 @@ if __name__ == "__main__":
                 "constraint_aware_tau_formula": "qfrc_inverse + qfrc_constraint_nonfriction",
                 "constraints_added_back": "contact + joint/tendon limit + equality",
                 "constraints_excluded_from_addback": "FRICTION_DOF + FRICTION_TENDON",
-                "forward_dynamics_mapping": "ddq_right ~= ddq_baseline + G_tau * delta_tau",
+                "forward_dynamics_mapping": "ddq_right ~= ddq_baseline + G_tau * delta_tau, then full mj_forward validation",
                 "forward_dynamics_perturbation_nm": lqr_forward_dynamics_perturbation,
                 "forward_dynamics_regularization": lqr_forward_dynamics_regularization,
-                "forward_dynamics_evaluations_per_step": 6,
+                "forward_dynamics_validation_scales": [1.0, 0.5, 0.25, 0.125],
+                "forward_dynamics_evaluations_per_step": "7 to 10",
                 "uncontrolled_qacc_assumption": 0.0,
                 "ddq_tracking": "6ms_velocity_difference_aligned_between_consecutive_arm_updates",
                 "cost_tracking": "one_step_model_vs_realized_next_arm_update",
@@ -356,9 +357,15 @@ if __name__ == "__main__":
             right_arm_qacc_mapping_baseline = np.zeros(5, dtype=np.float64)
             right_arm_qacc_mapping_predicted = np.zeros(5, dtype=np.float64)
             right_arm_qacc_mapping_prediction_error = np.zeros(5, dtype=np.float64)
+            right_arm_qacc_mapping_validated = np.zeros(5, dtype=np.float64)
+            right_arm_qacc_mapping_validation_error = np.zeros(5, dtype=np.float64)
+            right_arm_qacc_mapping_linearization_error = np.zeros(5, dtype=np.float64)
             right_arm_forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
             right_arm_forward_dynamics_singular_values = np.zeros(5, dtype=np.float64)
             right_arm_forward_dynamics_condition_number = np.inf
+            right_arm_forward_dynamics_validation_scale = 0.0
+            right_arm_forward_dynamics_validation_attempts = 0
+            right_arm_forward_dynamics_validation_improved = False
             right_arm_tau_cmd_raw = right_arm_tau_pd.copy()
             right_arm_tau_limit_lower = right_arm_id_index_scratch.torque_limits[:, 0].copy()
             right_arm_tau_limit_upper = right_arm_id_index_scratch.torque_limits[:, 1].copy()
@@ -370,7 +377,8 @@ if __name__ == "__main__":
                 # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
                 # 3) 调用 mj_inverse()，生成“非摩擦约束不对抗”的名义力矩
                 # 4) 固定腿、腰和左臂力矩，用 1+5 次前向动力学构建 G_tau
-                # 5) 通过一次阻尼最小二乘求右臂力矩修正，不做迭代逼近
+                # 5) 通过一次阻尼最小二乘求右臂力矩修正
+                # 6) 用完整 mj_forward 验收；失败时按 0.5/0.25/0.125 缩小修正，最后可退回名义力矩
                 fixed_ctrl_for_mapping = d.ctrl.copy()
                 fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
                 perf_monitor.start_computed_torque_control()
@@ -398,9 +406,15 @@ if __name__ == "__main__":
                 right_arm_qacc_mapping_baseline = mapping_result.qacc_baseline
                 right_arm_qacc_mapping_predicted = mapping_result.qacc_predicted
                 right_arm_qacc_mapping_prediction_error = mapping_result.qacc_prediction_error
+                right_arm_qacc_mapping_validated = mapping_result.qacc_validated
+                right_arm_qacc_mapping_validation_error = mapping_result.qacc_validation_error
+                right_arm_qacc_mapping_linearization_error = mapping_result.qacc_linearization_error
                 right_arm_forward_dynamics_gain = mapping_result.gain_matrix
                 right_arm_forward_dynamics_singular_values = mapping_result.singular_values
                 right_arm_forward_dynamics_condition_number = mapping_result.condition_number
+                right_arm_forward_dynamics_validation_scale = mapping_result.validation_scale
+                right_arm_forward_dynamics_validation_attempts = mapping_result.validation_attempts
+                right_arm_forward_dynamics_validation_improved = mapping_result.validation_improved
                 right_arm_tau_cmd_raw = mapping_result.tau_cmd_raw
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
@@ -444,9 +458,15 @@ if __name__ == "__main__":
                     "qacc_mapping_baseline": right_arm_qacc_mapping_baseline,
                     "qacc_mapping_predicted": right_arm_qacc_mapping_predicted,
                     "qacc_mapping_prediction_error": right_arm_qacc_mapping_prediction_error,
+                    "qacc_mapping_validated": right_arm_qacc_mapping_validated,
+                    "qacc_mapping_validation_error": right_arm_qacc_mapping_validation_error,
+                    "qacc_mapping_linearization_error": right_arm_qacc_mapping_linearization_error,
                     "forward_dynamics_gain": right_arm_forward_dynamics_gain,
                     "forward_dynamics_singular_values": right_arm_forward_dynamics_singular_values,
                     "forward_dynamics_condition_number": right_arm_forward_dynamics_condition_number,
+                    "forward_dynamics_validation_scale": right_arm_forward_dynamics_validation_scale,
+                    "forward_dynamics_validation_attempts": right_arm_forward_dynamics_validation_attempts,
+                    "forward_dynamics_validation_improved": right_arm_forward_dynamics_validation_improved,
                     "torso_lin_vel_world": torso_state.lin_vel,
                     "torso_ang_vel_world": torso_state.ang_vel,
                     "torso_acc_world_raw": raw_torso_acc,

@@ -422,7 +422,9 @@ qfrc_nonfriction = scratch.qfrc_constraint - qfrc_friction
 tau_ff = tau_inverse + qfrc_nonfriction[right_arm_qvel_indices]
 ```
 
-`qfrc_inverse` 加回 contact、joint/tendon limit 和 equality 等非摩擦约束，仅保留 `FRICTION_DOF` 与 `FRICTION_TENDON` 的摩擦补偿。然后固定其他执行器力矩，使用一次基准和五次右臂力矩扰动的 MuJoCo 前向动力学构建 $G_\tau=\partial\ddot q_{right}/\partial\tau_{right}$，再用阻尼最小二乘一次求出力矩修正。该下层映射允许浮动基和腿部自然响应，不需要把完整刚体动力学放进 MPC 的 QP。它不是完整的接触力优化；主动接触任务仍需把接触力和摩擦锥纳入 MPC。
+`qfrc_inverse` 加回 contact、joint/tendon limit 和 equality 等非摩擦约束，仅保留 `FRICTION_DOF` 与 `FRICTION_TENDON` 的摩擦补偿。然后固定其他执行器力矩，使用一次基准和五次右臂力矩扰动的 MuJoCo 前向动力学构建 $G_\tau=\partial\ddot q_{right}/\partial\tau_{right}$，再用阻尼最小二乘一次求出力矩修正。
+
+由于摩擦、接触和限位约束会发生离散切换，下层还必须用完整前向动力学依次验收 $1/0.5/0.25/0.125$ 倍力矩修正；只接受比名义力矩更接近 `ddq_des` 的候选，否则退回名义力矩。该验收不修改 MPC 输出，只负责防止局部力矩映射跨过约束切换点后产生错误加速度。该下层映射允许浮动基和腿部自然响应，不需要把完整刚体动力学放进 MPC 的 QP。它不是完整的接触力优化；主动接触任务仍需把接触力和摩擦锥纳入 MPC。
 
 真机可用 Pinocchio/RBDL/厂商动力学库计算相同的无接触项：
 

@@ -588,15 +588,201 @@ return u_star
 
 对当前项目而言，第 9.4 节返回的 `u_star` 就是右臂 `ddq_des`。控制层同时执行两条路径：
 
-- 逆动力学路径：用当前整机 `q, dq` 和右臂 `ddq_des` 计算 `tau_ff`
-- 反馈路径：对 `ddq_des` 积分一拍得到 `q_ref, dq_ref`，计算小幅 PD 修正 `tau_pd`
-- 执行器命令：`tau = clip(tau_ff + tau_pd, tau_min, tau_max)`
+- 名义力矩路径：用当前整机 `q, dq` 和右臂 `ddq_des` 计算 `tau_ff`，同时对 `ddq_des` 积分一拍得到 `q_ref, dq_ref` 并计算 `tau_pd`，两者组成 `tau_nom`
+- 前向动力学修正路径：固定其他执行器当前力矩，数值计算 `G_tau = d(ddq_right)/d(tau_right)`，求出右臂力矩修正 `delta_tau`
+- 完整验收路径：用完整 `mj_forward` 检查候选力矩是否真的让右臂加速度更接近 `ddq_des`，必要时缩小修正或退回 `tau_nom`
+- 执行器命令：只有通过验收的 `tau_cmd` 才写入 `ctrl[18:23]`
 
-这样 `tau_ff` 负责实现 LQR 要求的加速度并补偿重力、科氏力等动力学项，PD 只修正模型误差、离散延迟和扰动。位置项采用 torso-relative 误差，因此它约束手相对躯干的工作位置，不会阻止整机向前行走。
+因此当前的 `tau_ff + tau_pd` 只负责提供一个合理的起点，不再被当作最终力矩直接执行。位置项采用 torso-relative 误差，因此它约束手相对躯干的工作位置，不会阻止整机向前行走。
 
 ---
 
 ## 10. 与底层力矩接口的对应
+
+### 10.1 当前代码从观测到真实执行的完整流程
+
+下面描述的是 `main_sim.py`、`arm_lqr.py` 和 `sim_support.py` 当前实际运行的版本，不是早期的一拍积分 PD 版本。
+
+#### 第 1 步：读取当前状态和 torso 扰动
+
+每个 MuJoCo 仿真步长为 `0.002 s`。主程序读取：
+
+- 右臂五个关节的当前角度 `q` 和速度 `dq`
+- torso IMU 姿态和角速度
+- MuJoCo accelerometer 给出的局部比力，转换为世界系线加速度
+- 世界系角速度有限差分得到的 torso 角加速度
+
+torso 线加速度和角加速度经过当前配置的限幅及低通滤波，再交给运动学线性化。这里的 torso 信号用于预测躯干运动对手部线加速度和角加速度的影响。
+
+#### 第 2 步：LQR 每 0.006 s 计算一次 `ddq_des`
+
+右臂 LQR 控制周期为：
+
+$
+\Delta t_{arm}=3\times0.002=0.006\ \mathrm{s}
+$
+
+LQR 使用状态 $x=[q;\dot q]$，根据末端线加速度、角加速度、torso-relative 位置、三维重力方向、关节姿态、速度和控制量代价，求有限时域第一拍控制：
+
+$
+u_0^\star=\ddot q_{des}
+$
+
+当前 DDQ 后处理完全旁路，因此 `ddq_raw` 直接成为 `ddq_des`，不经过 DDQ 硬限幅、rate limit、smoothing 或 joint-limit guard。`ddq_des` 在接下来的三个 `0.002 s` 仿真步内保持不变。
+
+#### 第 3 步：一拍积分只为 PD 生成短时参考
+
+当前状态积分一拍：
+
+$
+\dot q_{ref}=\dot q+\ddot q_{des}\Delta t_{arm}
+$
+
+$
+q_{ref}=q+\dot q\Delta t_{arm}+\frac{1}{2}\ddot q_{des}\Delta t_{arm}^2
+$
+
+再计算：
+
+$
+\tau_{pd}=K_p(q_{ref}-q)+K_d(\dot q_{ref}-\dot q)
+$
+
+这条一拍积分路径只提供反馈修正，不再单独承担实现 `ddq_des` 的任务。
+
+#### 第 4 步：逆动力学生成名义前馈力矩
+
+在逆动力学临时数据 `inverse_dynamics_data` 中复制当前整机 `q, dq`，暂时设置：
+
+```text
+非右臂自由度期望加速度 = 0
+右臂五关节期望加速度 = ddq_des
+```
+
+调用 `mj_inverse` 得到右臂 `qfrc_inverse`。随后加回 contact、joint/tendon limit 和 equality 等非摩擦约束，只让前馈补偿 `FRICTION_DOF/FRICTION_TENDON` 摩擦，得到 `tau_ff`。
+
+最后形成并按执行器力矩范围裁剪：
+
+$
+\tau_{nom}=\operatorname{clip}(\tau_{ff}+\tau_{pd})
+$
+
+这里“其他自由度加速度为零”的近似只用于生成初始 `tau_nom`。最终加速度并不由这次逆动力学决定，后面的前向动力学映射允许浮动基和腿部根据当前力矩与接触自然运动。
+
+#### 第 5 步：固定其他执行器力矩，计算名义加速度
+
+构造完整控制向量：
+
+- 腿部保持当前 RL 控制力矩
+- 腰和左臂使用当前步 PD 力矩
+- 右臂使用 `tau_nom`
+
+将当前 `q, dq`、外力、接触状态和完整控制向量复制到另一个临时数据 `forward_dynamics_data`，调用完整 `mj_forward`：
+
+```text
+输入：当前整机 q、dq、全部执行器力矩、外力和当前约束
+输出：在这一状态和力矩下，MuJoCo 求得的整机 qacc
+```
+
+从整机 `qacc` 中取出右臂五维，记为 `ddq_baseline`。这一步是前向动力学，即“给定状态和力矩求加速度”，不是前向运动学。
+
+#### 第 6 步：数值计算力矩到右臂加速度的局部映射
+
+分别只给五个右臂执行器增加 `0.1 Nm`，每次重新计算前向动力学：
+
+$
+G_\tau[:,j]\approx
+\frac{\ddot q_{right}(\tau_{nom}+0.1e_j)-\ddot q_{baseline}}{0.1}
+$
+
+因此 $G_\tau$ 是 `5 x 5` 矩阵：第 `j` 列表示第 `j` 个右臂力矩变化会怎样同时影响五个右臂关节加速度。每次扰动前都会恢复相同的 `qacc_warmstart`，避免前一次 MuJoCo 约束求解污染下一列。
+
+#### 第 7 步：阻尼最小二乘求力矩修正
+
+在当前工作点附近使用局部模型：
+
+$
+\ddot q_{right}\approx\ddot q_{baseline}+G_\tau\Delta\tau
+$
+
+通过 SVD 求解：
+
+$
+\Delta\tau=\arg\min_{\Delta\tau}
+\|G_\tau\Delta\tau-(\ddot q_{des}-\ddot q_{baseline})\|_2^2
++\lambda\|\Delta\tau\|_2^2
+$
+
+当前 `lambda=5.0`。此时得到的是局部线性模型认为合适的 `delta_tau_raw`，还不能直接认为它在完整 MuJoCo 约束动力学中一定有效。
+
+#### 第 8 步：完整前向动力学验收与回退
+
+依次构造候选力矩：
+
+```text
+tau_candidate = clip(tau_nom + scale * delta_tau_raw)
+scale = 1.0, 0.5, 0.25, 0.125
+```
+
+对每个候选都调用一次完整 `mj_forward`，直接得到该候选在当前状态下的 `ddq_candidate`，并比较：
+
+$
+e_{candidate}=\|\ddot q_{candidate}-\ddot q_{des}\|_2
+$
+
+$
+e_{baseline}=\|\ddot q_{baseline}-\ddot q_{des}\|_2
+$
+
+程序采用第一个满足 $e_{candidate}<e_{baseline}$ 的候选：
+
+- `scale=1.0` 通过：使用完整修正
+- 否则依次尝试 `0.5/0.25/0.125`
+- 四个候选都没有改善：`scale=0`，退回 `tau_nom`
+
+这里的“完整验收”是完整求解当前 MuJoCo 接触、摩擦、限位等约束，而不是继续使用 $G_\tau$ 的线性预测。所有候选都只在临时 `MjData` 中计算，不改变真实 `data.qpos/qvel`，不推进仿真时间，也不会让机器人依次执行四个力矩。
+
+#### 第 9 步：只执行最终通过验收的力矩
+
+最终选择的右臂力矩写入：
+
+```python
+d.ctrl[18:23] = tau_cmd
+```
+
+然后整个程序只调用一次真实的 `mj_step`，让机器人向前推进 `0.002 s`。因此真实机器人在这一拍只看到一个最终力矩，不会看到验收过程中被拒绝的候选。
+
+#### 第 10 步：记录三类加速度，评估执行效果
+
+当前轨迹同时记录：
+
+- `right_arm_ddq_des`：LQR 期望加速度
+- `right_arm_qacc_mapping_predicted`：局部线性模型 $\ddot q_b+G_\tau\Delta\tau$ 的预测
+- `right_arm_qacc_mapping_validated`：完整 `mj_forward` 验收得到的瞬时加速度
+- `right_arm_qacc`：真实 `mj_step` 对应的 MuJoCo 瞬时加速度
+- `right_arm_ddq_real`：相邻两个 6 ms 手臂更新时刻之间，由速度差分得到的实际平均加速度
+
+最终打印的 DDQ `correlation/gain/RMSE` 比较的是同一 6 ms 区间内的 `ddq_des` 与 `right_arm_ddq_real`。完整验收主要负责避免局部线性映射在 friction/contact/limit 切换处生成错误力矩；它保证所选候选优于 `tau_nom`，但当前并不保证已经是四个比例中最优的候选，也不保证每个关节都单独达到零误差。
+
+当前完整数据流可以概括为：
+
+```text
+q, dq, torso motion
+        -> finite-horizon LQR (每 6 ms)
+        -> ddq_des
+        -> 一拍积分 -> q_ref, dq_ref -> tau_pd
+        -> inverse dynamics -> tau_ff
+        -> tau_nom = clip(tau_ff + tau_pd)
+        -> baseline forward dynamics
+        -> finite-difference G_tau
+        -> damped least-squares delta_tau
+        -> full forward-dynamics validation/backtracking
+        -> tau_cmd
+        -> d.ctrl[18:23]
+        -> one real mj_step (每 2 ms)
+```
+
+### 10.2 逆动力学、约束力与局部映射的数学细节
 
 LQR 输出为关节加速度：
 
@@ -669,7 +855,24 @@ $
 +\lambda\|\Delta\tau\|^2
 $
 
-最终力矩为 $\tau=\operatorname{clip}(\tau_{nom}+\Delta\tau)$。这是 1 次基准前向动力学加 5 次单关节扰动，之后直接求一次 $5\times5$ SVD，不是重复迭代到收敛。浮动基、腿部和接触在每次 `mj_forward` 中自然响应，因此不再需要人为指定它们的加速度。
+局部线性模型不能保证跨越 friction/contact/limit 约束模式切换后仍然成立，因此最终力矩不再直接采用完整修正。对
+
+$
+\tau(s)=\operatorname{clip}(\tau_{nom}+s\Delta\tau),
+\qquad s\in\{1,0.5,0.25,0.125\}
+$
+
+依次执行完整 `mj_forward`，计算真实的瞬时右臂加速度。第一个满足
+
+$
+\|\ddot q_{right}(\tau(s))-\ddot q_{des}\|_2
+<
+\|\ddot q_b-\ddot q_{des}\|_2
+$
+
+的候选才允许执行；若四个候选都没有改善，则取 $s=0$，退回 $\tau_{nom}$。这里的“验收”只在临时 `MjData` 中求值，不推进真实仿真时间，也不修改 LQR 的 `ddq_des`。
+
+因此每个仿真步包含 1 次基准前向动力学、5 次单关节扰动和 1 至 4 次完整候选验收，之后只求一次 $5\times5$ SVD，并不是让机器人反复执行到收敛。浮动基、腿部和接触在每次 `mj_forward` 中自然响应，因此不再需要人为指定它们的加速度。
 
 同时将 `ddq_des` 转换为反馈项所需的短时参考：
 
@@ -693,7 +896,7 @@ $
 
 - 模型根来源：`resources/g1_description/g1_29dof_with_hand.xml` 中右臂 5 个被控 joint 的 `actuatorfrcrange`
 - MuJoCo 读取结果：`sim_support.py` 在 `resolve_direct_drive_joint_group(...)` 中通过 `model.jnt_actfrcrange[joint_ids].copy()` 读取为 `torque_limits`
-- 实际执行位置：`apply_computed_torque_control(...)` 先计算 `tau_nominal=tau_ff+tau_pd`，再由 `local_forward_dynamics_torque_mapping(...)` 计算 `delta_tau`，最后执行 `clip(tau_nominal + delta_tau)`
+- 实际执行位置：`apply_computed_torque_control(...)` 先计算 `tau_nominal=tau_ff+tau_pd`；`local_forward_dynamics_torque_mapping(...)` 再计算 `delta_tau`，并通过完整前向动力学验收 `1/0.5/0.25/0.125` 倍候选，最后只执行通过验收的 `tau_cmd`
 - 当前右臂 5 个受控关节的上下限均为 `[-25, 25] N·m`：`right_shoulder_pitch_joint`、`right_shoulder_roll_joint`、`right_shoulder_yaw_joint`、`right_elbow_joint`、`right_wrist_roll_joint`
 - 记录用途：这个限幅属于“底层执行器/模型层硬限幅”，用于保证最终写入 `d.ctrl` 的力矩不超过 XML 定义的可用力矩范围
 
@@ -747,6 +950,7 @@ $
 当前实验完全旁路 `u = ddq_des` 后处理：
 
 - torso-relative 位置权重由 `configs/g1.yaml` 的 `lqr_q_position` 配置，当前初值为 $Q_p=20I_3$
+- 关节姿态权重采用 $Q_q=\operatorname{diag}(20,20,0.4,0.4,0.4)$，只明显约束 shoulder pitch/roll，避免大臂大幅前摆或侧抬
 - Riccati 得到的 `u_raw` 直接作为 `ddq_des`
 - 不启用 `max_ddq` 硬限幅、joint-limit guard、ddq 变化率限制或 ddq 平滑
 - `_apply_ddq_safety(...)` 和 `_post_process_ddq(...)` 暂时保留，只用于以后受控对比实验

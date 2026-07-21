@@ -106,9 +106,15 @@ class ForwardDynamicsMappingResult:
     qacc_baseline: np.ndarray
     qacc_predicted: np.ndarray
     qacc_prediction_error: np.ndarray
+    qacc_validated: np.ndarray
+    qacc_validation_error: np.ndarray
+    qacc_linearization_error: np.ndarray
     gain_matrix: np.ndarray
     singular_values: np.ndarray
     condition_number: float
+    validation_scale: float
+    validation_attempts: int
+    validation_improved: bool
 
 
 @dataclass
@@ -323,8 +329,9 @@ def local_forward_dynamics_torque_mapping(
     torque_limits,
     perturbation=0.1,
     regularization=5.0,
+    validation_scales=(1.0, 0.5, 0.25, 0.125),
 ):
-    """局部线性化前向动力学，一次求解使右臂加速度接近目标的力矩修正。"""
+    """局部线性求力矩，并用完整前向动力学验收候选结果。"""
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     tau_nominal = np.asarray(tau_nominal, dtype=np.float64)
     qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
@@ -338,14 +345,20 @@ def local_forward_dynamics_torque_mapping(
         raise ValueError("前向动力学映射的 ctrl/torque_limits 维度不正确。")
     if perturbation <= 0.0 or regularization < 0.0:
         raise ValueError("perturbation 必须大于 0，regularization 不能小于 0。")
+    validation_scales = tuple(float(scale) for scale in validation_scales)
+    if not validation_scales or any(scale <= 0.0 or scale > 1.0 for scale in validation_scales):
+        raise ValueError("validation_scales 必须是位于 (0, 1] 的非空序列。")
 
     tau_nominal = np.clip(tau_nominal, torque_limits[:, 0], torque_limits[:, 1])
     baseline_ctrl = fixed_ctrl.copy()
     baseline_ctrl[ctrl_indices] = tau_nominal
     mujoco.mj_copyData(scratch, model, data)
+    qacc_warmstart = scratch.qacc_warmstart.copy()
     scratch.ctrl[:] = baseline_ctrl
+    scratch.qacc_warmstart[:] = qacc_warmstart
     mujoco.mj_forward(model, scratch)
     qacc_baseline = scratch.qacc[qvel_indices].copy()
+    baseline_error_norm = float(np.linalg.norm(qacc_baseline - desired_qacc))
 
     # 每个右臂执行器只扰动一次，得到 G = d(ddq_right) / d(tau_right)。
     gain_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
@@ -355,6 +368,7 @@ def local_forward_dynamics_torque_mapping(
             signed_perturbation = -signed_perturbation
         scratch.ctrl[:] = baseline_ctrl
         scratch.ctrl[ctrl_indices[column]] += signed_perturbation
+        scratch.qacc_warmstart[:] = qacc_warmstart
         mujoco.mj_forwardSkip(model, scratch, mujoco.mjtStage.mjSTAGE_VEL, 1)
         gain_matrix[:, column] = (
             scratch.qacc[qvel_indices] - qacc_baseline
@@ -365,11 +379,35 @@ def local_forward_dynamics_torque_mapping(
     acceleration_error = desired_qacc - qacc_baseline
     damped_inverse = singular_values / (singular_values ** 2 + float(regularization))
     tau_correction_raw = vt_matrix.T @ (damped_inverse * (u_matrix.T @ acceleration_error))
-    tau_cmd_raw = tau_nominal + tau_correction_raw
-    tau_cmd = np.clip(tau_cmd_raw, torque_limits[:, 0], torque_limits[:, 1])
+    # 完整 mj_forward 会重新求约束。若局部导数跨过摩擦/接触切换点，逐级缩小修正量。
+    validation_scale = 0.0
+    validation_attempts = 0
+    qacc_validated = qacc_baseline.copy()
+    tau_cmd = tau_nominal.copy()
+    tau_cmd_raw = tau_nominal.copy()
+    for scale in validation_scales:
+        validation_attempts += 1
+        candidate_tau_raw = tau_nominal + scale * tau_correction_raw
+        candidate_tau = np.clip(candidate_tau_raw, torque_limits[:, 0], torque_limits[:, 1])
+        candidate_ctrl = baseline_ctrl.copy()
+        candidate_ctrl[ctrl_indices] = candidate_tau
+        scratch.ctrl[:] = candidate_ctrl
+        scratch.qacc_warmstart[:] = qacc_warmstart
+        mujoco.mj_forward(model, scratch)
+        candidate_qacc = scratch.qacc[qvel_indices].copy()
+        candidate_error_norm = float(np.linalg.norm(candidate_qacc - desired_qacc))
+        if candidate_error_norm < baseline_error_norm:
+            validation_scale = scale
+            qacc_validated = candidate_qacc
+            tau_cmd = candidate_tau
+            tau_cmd_raw = candidate_tau_raw
+            break
+
     tau_correction = tau_cmd - tau_nominal
     qacc_predicted = qacc_baseline + gain_matrix @ tau_correction
     qacc_prediction_error = qacc_predicted - desired_qacc
+    qacc_validation_error = qacc_validated - desired_qacc
+    qacc_linearization_error = qacc_validated - qacc_predicted
     if singular_values.size == 0 or singular_values[-1] <= np.finfo(np.float64).eps:
         condition_number = np.inf
     else:
@@ -382,9 +420,15 @@ def local_forward_dynamics_torque_mapping(
         qacc_baseline=qacc_baseline,
         qacc_predicted=qacc_predicted,
         qacc_prediction_error=qacc_prediction_error,
+        qacc_validated=qacc_validated,
+        qacc_validation_error=qacc_validation_error,
+        qacc_linearization_error=qacc_linearization_error,
         gain_matrix=gain_matrix,
         singular_values=singular_values,
         condition_number=condition_number,
+        validation_scale=validation_scale,
+        validation_attempts=validation_attempts,
+        validation_improved=validation_scale > 0.0,
     )
 
 
@@ -957,10 +1001,16 @@ def init_eval_buffers():
             "right_arm_qacc_mapping_baseline": [],
             "right_arm_qacc_mapping_predicted": [],
             "right_arm_qacc_mapping_prediction_error": [],
+            "right_arm_qacc_mapping_validated": [],
+            "right_arm_qacc_mapping_validation_error": [],
+            "right_arm_qacc_mapping_linearization_error": [],
             "right_arm_qacc_mapping_model_error": [],
             "right_arm_forward_dynamics_gain": [],
             "right_arm_forward_dynamics_singular_values": [],
             "right_arm_forward_dynamics_condition_number": [],
+            "right_arm_forward_dynamics_validation_scale": [],
+            "right_arm_forward_dynamics_validation_attempts": [],
+            "right_arm_forward_dynamics_validation_improved": [],
             "torso_lin_vel_world": [],
             "torso_ang_vel_world": [],
             "torso_acc_world_raw": [],
@@ -1264,6 +1314,9 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     qacc_mapping_baseline = matrix("right_arm_qacc_mapping_baseline", n)
     qacc_mapping_predicted = matrix("right_arm_qacc_mapping_predicted", n)
     qacc_mapping_prediction_error = matrix("right_arm_qacc_mapping_prediction_error", n)
+    qacc_mapping_validated = matrix("right_arm_qacc_mapping_validated", n)
+    qacc_mapping_validation_error = matrix("right_arm_qacc_mapping_validation_error", n)
+    qacc_mapping_linearization_error = matrix("right_arm_qacc_mapping_linearization_error", n)
     qacc_mapping_model_error = matrix("right_arm_qacc_mapping_model_error", n)
     forward_dynamics_singular_values = matrix("right_arm_forward_dynamics_singular_values", n)
     tau_raw = matrix("right_arm_tau_cmd_raw", n)
@@ -1328,6 +1381,9 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         ("right_arm_qacc_mapping_baseline", qacc_mapping_baseline),
         ("right_arm_qacc_mapping_predicted", qacc_mapping_predicted),
         ("right_arm_qacc_mapping_prediction_error", qacc_mapping_prediction_error),
+        ("right_arm_qacc_mapping_validated", qacc_mapping_validated),
+        ("right_arm_qacc_mapping_validation_error", qacc_mapping_validation_error),
+        ("right_arm_qacc_mapping_linearization_error", qacc_mapping_linearization_error),
         ("right_arm_qacc_mapping_model_error", qacc_mapping_model_error),
         ("right_arm_forward_dynamics_singular_values", forward_dynamics_singular_values),
     ]:
@@ -1340,6 +1396,20 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     )
     diagnostics["right_arm_qacc_mapping_prediction_error_norm_max"] = np.array(
         np.max(mapping_error_norm) if mapping_error_norm.size else 0.0
+    )
+    validation_error_norm = np.linalg.norm(qacc_mapping_validation_error, axis=1) if qacc_mapping_validation_error.shape[0] else np.zeros(0)
+    diagnostics["right_arm_qacc_mapping_validation_error_norm_rms"] = np.array(
+        np.sqrt(np.mean(validation_error_norm ** 2)) if validation_error_norm.size else 0.0
+    )
+    diagnostics["right_arm_qacc_mapping_validation_error_norm_max"] = np.array(
+        np.max(validation_error_norm) if validation_error_norm.size else 0.0
+    )
+    linearization_error_norm = np.linalg.norm(qacc_mapping_linearization_error, axis=1) if qacc_mapping_linearization_error.shape[0] else np.zeros(0)
+    diagnostics["right_arm_qacc_mapping_linearization_error_norm_rms"] = np.array(
+        np.sqrt(np.mean(linearization_error_norm ** 2)) if linearization_error_norm.size else 0.0
+    )
+    diagnostics["right_arm_qacc_mapping_linearization_error_norm_max"] = np.array(
+        np.max(linearization_error_norm) if linearization_error_norm.size else 0.0
     )
     mapping_model_error_norm = np.linalg.norm(qacc_mapping_model_error, axis=1) if qacc_mapping_model_error.shape[0] else np.zeros(0)
     diagnostics["right_arm_qacc_mapping_model_error_norm_rms"] = np.array(
@@ -1362,6 +1432,35 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     diagnostics["right_arm_forward_dynamics_condition_number_max"] = np.array(
         np.max(finite_condition) if finite_condition.size else np.inf
     )
+    validation_scale = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_validation_scale", []),
+        dtype=np.float64,
+    )
+    validation_attempts = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_validation_attempts", []),
+        dtype=np.float64,
+    )
+    validation_improved = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_validation_improved", []),
+        dtype=bool,
+    )
+    diagnostics["right_arm_forward_dynamics_validation_scale_mean"] = np.array(
+        np.mean(validation_scale) if validation_scale.size else 0.0
+    )
+    diagnostics["right_arm_forward_dynamics_validation_attempts_mean"] = np.array(
+        np.mean(validation_attempts) if validation_attempts.size else 0.0
+    )
+    diagnostics["right_arm_forward_dynamics_validation_attempts_max"] = np.array(
+        np.max(validation_attempts) if validation_attempts.size else 0.0
+    )
+    diagnostics["right_arm_forward_dynamics_validation_fallback_fraction"] = np.array(
+        np.mean(~validation_improved) if validation_improved.size else 0.0
+    )
+    for scale in (1.0, 0.5, 0.25, 0.125, 0.0):
+        label = str(scale).replace(".", "p")
+        diagnostics[f"right_arm_forward_dynamics_validation_scale_{label}_fraction"] = np.array(
+            np.mean(np.isclose(validation_scale, scale)) if validation_scale.size else 0.0
+        )
 
     if qacc.shape == ddq_des.shape and qacc.shape[0] > 0:
         tracking_error = qacc - ddq_des
@@ -1527,6 +1626,9 @@ def save_control_preview(run_dir, trajectory_data):
         ("right_arm_qacc_mapping_baseline", joint_labels),
         ("right_arm_qacc_mapping_predicted", joint_labels),
         ("right_arm_qacc_mapping_prediction_error", joint_labels),
+        ("right_arm_qacc_mapping_validated", joint_labels),
+        ("right_arm_qacc_mapping_validation_error", joint_labels),
+        ("right_arm_qacc_mapping_linearization_error", joint_labels),
         ("right_arm_qacc_mapping_model_error", joint_labels),
         ("right_arm_forward_dynamics_singular_values", joint_labels),
         ("right_arm_actual_qfrc_bias", joint_labels),
@@ -1545,6 +1647,9 @@ def save_control_preview(run_dir, trajectory_data):
     ]
     scalar_signals = [
         "right_arm_forward_dynamics_condition_number",
+        "right_arm_forward_dynamics_validation_scale",
+        "right_arm_forward_dynamics_validation_attempts",
+        "right_arm_forward_dynamics_validation_improved",
         "right_ee_upright_alignment",
         "arm_policy_updated",
         "contact_count",
@@ -1641,7 +1746,11 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     qacc_mapping_baseline = control_vector("qacc_mapping_baseline", 5)
     qacc_mapping_predicted = control_vector("qacc_mapping_predicted", 5)
     qacc_mapping_prediction_error = control_vector("qacc_mapping_prediction_error", 5)
-    qacc_mapping_model_error = data.qacc[RIGHT_ARM_QVEL_SLICE].copy() - qacc_mapping_predicted
+    qacc_mapping_validated = control_vector("qacc_mapping_validated", 5)
+    qacc_mapping_validation_error = control_vector("qacc_mapping_validation_error", 5)
+    qacc_mapping_linearization_error = control_vector("qacc_mapping_linearization_error", 5)
+    # mj_step 后的实际瞬时 qacc 应与验收用完整 mj_forward 一致；该误差用于检查时序和求解一致性。
+    qacc_mapping_model_error = data.qacc[RIGHT_ARM_QVEL_SLICE].copy() - qacc_mapping_validated
     forward_dynamics_singular_values = control_vector("forward_dynamics_singular_values", 5)
     forward_dynamics_gain = np.asarray(
         right_arm_control.get("forward_dynamics_gain", np.zeros((5, 5))),
@@ -1651,6 +1760,15 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
         forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
     forward_dynamics_condition_number = float(
         right_arm_control.get("forward_dynamics_condition_number", np.inf)
+    )
+    forward_dynamics_validation_scale = float(
+        right_arm_control.get("forward_dynamics_validation_scale", 0.0)
+    )
+    forward_dynamics_validation_attempts = int(
+        right_arm_control.get("forward_dynamics_validation_attempts", 0)
+    )
+    forward_dynamics_validation_improved = bool(
+        right_arm_control.get("forward_dynamics_validation_improved", False)
     )
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
@@ -1723,10 +1841,16 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_qacc_mapping_baseline"].append(qacc_mapping_baseline)
     buffers.trajectory_data["right_arm_qacc_mapping_predicted"].append(qacc_mapping_predicted)
     buffers.trajectory_data["right_arm_qacc_mapping_prediction_error"].append(qacc_mapping_prediction_error)
+    buffers.trajectory_data["right_arm_qacc_mapping_validated"].append(qacc_mapping_validated)
+    buffers.trajectory_data["right_arm_qacc_mapping_validation_error"].append(qacc_mapping_validation_error)
+    buffers.trajectory_data["right_arm_qacc_mapping_linearization_error"].append(qacc_mapping_linearization_error)
     buffers.trajectory_data["right_arm_qacc_mapping_model_error"].append(qacc_mapping_model_error)
     buffers.trajectory_data["right_arm_forward_dynamics_gain"].append(forward_dynamics_gain.copy())
     buffers.trajectory_data["right_arm_forward_dynamics_singular_values"].append(forward_dynamics_singular_values)
     buffers.trajectory_data["right_arm_forward_dynamics_condition_number"].append(forward_dynamics_condition_number)
+    buffers.trajectory_data["right_arm_forward_dynamics_validation_scale"].append(forward_dynamics_validation_scale)
+    buffers.trajectory_data["right_arm_forward_dynamics_validation_attempts"].append(forward_dynamics_validation_attempts)
+    buffers.trajectory_data["right_arm_forward_dynamics_validation_improved"].append(forward_dynamics_validation_improved)
     buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
     buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)
     buffers.trajectory_data["torso_acc_world_raw"].append(torso_acc_raw)

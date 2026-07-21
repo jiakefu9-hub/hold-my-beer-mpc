@@ -48,14 +48,20 @@ class ArmLQRPolicy:
         self.q_alpha = float(q_alpha)
         self.q_position = float(q_position)
         self.q_gravity = float(q_gravity)
-        self.q_posture = float(q_posture)
+        q_posture = np.asarray(q_posture, dtype=np.float64)
+        if q_posture.ndim == 0:
+            q_posture = np.full(self.n, float(q_posture), dtype=np.float64)
+        if q_posture.shape != (self.n,) or np.any(q_posture < 0.0):
+            raise ValueError(f"q_posture 必须是非负标量或长度为 {self.n} 的向量。")
+        self.q_posture = q_posture.copy()
         self.q_vel = float(q_vel)
         self.r_ddq = float(r_ddq)
         self.Qa = np.eye(3) * float(q_acc)
         self.Qalpha = np.eye(3) * float(q_alpha)
         self.Qp = np.eye(3) * float(q_position)
         self.Qg = np.eye(3) * float(q_gravity)
-        self.Qq = np.eye(self.n) * float(q_posture)
+        # 分关节姿态代价：允许单独约束 shoulder pitch/roll，保留其余关节调姿自由度。
+        self.Qq = np.diag(self.q_posture)
         self.Qv = np.eye(self.n) * float(q_vel)
         # 控制代价权重 R：惩罚关节加速度 u（ddq），u 越大代价越高，R 越大动作越平滑
         self.R = np.eye(self.n) * float(r_ddq)

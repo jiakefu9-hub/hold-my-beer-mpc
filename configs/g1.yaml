@@ -13,6 +13,9 @@ arm_controller: lqr
 lqr_horizon: 12
 # LQR cost tuning. Position is measured in the torso IMU frame.
 lqr_q_position: 20.0
+# Joint order: shoulder pitch, shoulder roll, shoulder yaw, elbow, wrist roll.
+# Keep the upper arm near its nominal pose while leaving yaw/elbow/wrist freer to stabilize the bottle.
+lqr_q_posture: [20.0, 20.0, 0.4, 0.4, 0.4]
 lqr_r_ddq: 0.25
 # q_ref/dq_ref still use the physical joint limits and this velocity limit.
 lqr_max_dq: 1.0
