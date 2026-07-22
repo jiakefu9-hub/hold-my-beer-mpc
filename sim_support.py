@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
@@ -71,6 +72,86 @@ class TorsoMotionState:
     ang_vel: np.ndarray
     lin_acc: np.ndarray
     ang_acc: np.ndarray
+
+
+@dataclass(frozen=True)
+class HeadingControlOutput:
+    reference_world: float
+    yaw_unwrapped: float
+    yaw_filtered: float
+    yaw_error: float
+    yaw_rate_filtered: float
+    yaw_rate_command: float
+    yaw_rate_correction: float
+    command_saturated: bool
+
+
+class HeadingHoldController:
+    """用一个步态周期的均值抑制躯干摆动，并闭环保持世界系航向。"""
+
+    def __init__(
+        self,
+        sample_dt,
+        averaging_window,
+        kp,
+        kd,
+        yaw_rate_feedforward,
+        max_abs_yaw_rate,
+    ):
+        self.kp = float(kp)
+        self.kd = float(kd)
+        self.yaw_rate_feedforward = float(yaw_rate_feedforward)
+        self.max_abs_yaw_rate = float(max_abs_yaw_rate)
+        self.window_samples = max(1, int(round(float(averaging_window) / float(sample_dt))))
+        self._yaw_history = deque(maxlen=self.window_samples)
+        self._yaw_rate_history = deque(maxlen=self.window_samples)
+        self._previous_wrapped_yaw = None
+        self._unwrapped_yaw = None
+        self._reference_world = None
+        self.last_output = HeadingControlOutput(
+            reference_world=np.nan,
+            yaw_unwrapped=np.nan,
+            yaw_filtered=np.nan,
+            yaw_error=np.nan,
+            yaw_rate_filtered=np.nan,
+            yaw_rate_command=self.yaw_rate_feedforward,
+            yaw_rate_correction=0.0,
+            command_saturated=False,
+        )
+
+    @staticmethod
+    def _wrap_to_pi(angle):
+        return (float(angle) + np.pi) % (2.0 * np.pi) - np.pi
+
+    def update(self, yaw_world, yaw_rate_world):
+        yaw_world = float(yaw_world)
+        yaw_rate_world = float(yaw_rate_world)
+        if self._previous_wrapped_yaw is None:
+            self._unwrapped_yaw = yaw_world
+            self._reference_world = yaw_world
+        else:
+            self._unwrapped_yaw += self._wrap_to_pi(yaw_world - self._previous_wrapped_yaw)
+        self._previous_wrapped_yaw = yaw_world
+
+        self._yaw_history.append(self._unwrapped_yaw)
+        self._yaw_rate_history.append(yaw_rate_world)
+        yaw_filtered = float(np.mean(self._yaw_history))
+        yaw_rate_filtered = float(np.mean(self._yaw_rate_history))
+        yaw_error = float(self._reference_world - yaw_filtered)
+        correction = self.kp * yaw_error - self.kd * yaw_rate_filtered
+        command_raw = self.yaw_rate_feedforward + correction
+        command = float(np.clip(command_raw, -self.max_abs_yaw_rate, self.max_abs_yaw_rate))
+        self.last_output = HeadingControlOutput(
+            reference_world=float(self._reference_world),
+            yaw_unwrapped=float(self._unwrapped_yaw),
+            yaw_filtered=yaw_filtered,
+            yaw_error=yaw_error,
+            yaw_rate_filtered=yaw_rate_filtered,
+            yaw_rate_command=command,
+            yaw_rate_correction=correction,
+            command_saturated=not np.isclose(command, command_raw),
+        )
+        return self.last_output
 
 
 @dataclass
@@ -1287,6 +1368,14 @@ def init_eval_buffers():
             "torso_acc_world_used": [],
             "torso_alpha_world_raw": [],
             "torso_alpha_world_used": [],
+            "heading_reference_world": [],
+            "heading_yaw_unwrapped": [],
+            "heading_yaw_filtered": [],
+            "heading_yaw_error": [],
+            "heading_yaw_rate_filtered": [],
+            "heading_yaw_rate_correction": [],
+            "heading_yaw_rate_command": [],
+            "heading_command_saturated": [],
             "right_ee_lin_vel_world": [],
             "right_ee_ang_vel_world": [],
             "right_ee_position_torso": [],
@@ -2184,6 +2273,14 @@ def save_control_preview(run_dir, trajectory_data):
         "right_arm_forward_dynamics_safety_fallback_used",
         "right_arm_forward_dynamics_safety_fallback_satisfied",
         "right_arm_forward_dynamics_safety_fallback_attempts",
+        "heading_reference_world",
+        "heading_yaw_unwrapped",
+        "heading_yaw_filtered",
+        "heading_yaw_error",
+        "heading_yaw_rate_filtered",
+        "heading_yaw_rate_correction",
+        "heading_yaw_rate_command",
+        "heading_command_saturated",
         "right_ee_upright_alignment",
         "arm_policy_updated",
         "contact_count",
@@ -2258,6 +2355,10 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     def control_vector(name, size, default=0.0):
         value = np.asarray(right_arm_control.get(name, np.full(size, default)), dtype=np.float64)
         return value.copy() if value.shape == (size,) else np.full(size, default, dtype=np.float64)
+
+    def control_scalar(name, default=np.nan):
+        value = np.asarray(right_arm_control.get(name, default), dtype=np.float64)
+        return float(value) if value.shape == () else float(default)
 
     target_q = control_vector("target_q", 5)
     target_dq = control_vector("target_dq", 5)
@@ -2395,6 +2496,14 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     torso_acc_used = control_vector("torso_acc_world_used", 3)
     torso_alpha_raw = control_vector("torso_alpha_world_raw", 3)
     torso_alpha_used = control_vector("torso_alpha_world_used", 3)
+    heading_reference_world = control_scalar("heading_reference_world")
+    heading_yaw_unwrapped = control_scalar("heading_yaw_unwrapped")
+    heading_yaw_filtered = control_scalar("heading_yaw_filtered")
+    heading_yaw_error = control_scalar("heading_yaw_error")
+    heading_yaw_rate_filtered = control_scalar("heading_yaw_rate_filtered")
+    heading_yaw_rate_correction = control_scalar("heading_yaw_rate_correction")
+    heading_yaw_rate_command = control_scalar("heading_yaw_rate_command")
+    heading_command_saturated = bool(right_arm_control.get("heading_command_saturated", False))
     position_reference = control_vector("ee_position_reference_torso", 3)
     lqr_prediction = right_arm_control.get("lqr_one_step_prediction")
     lqr_prediction_valid = isinstance(lqr_prediction, dict)
@@ -2496,6 +2605,14 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["torso_acc_world_used"].append(torso_acc_used)
     buffers.trajectory_data["torso_alpha_world_raw"].append(torso_alpha_raw)
     buffers.trajectory_data["torso_alpha_world_used"].append(torso_alpha_used)
+    buffers.trajectory_data["heading_reference_world"].append(heading_reference_world)
+    buffers.trajectory_data["heading_yaw_unwrapped"].append(heading_yaw_unwrapped)
+    buffers.trajectory_data["heading_yaw_filtered"].append(heading_yaw_filtered)
+    buffers.trajectory_data["heading_yaw_error"].append(heading_yaw_error)
+    buffers.trajectory_data["heading_yaw_rate_filtered"].append(heading_yaw_rate_filtered)
+    buffers.trajectory_data["heading_yaw_rate_correction"].append(heading_yaw_rate_correction)
+    buffers.trajectory_data["heading_yaw_rate_command"].append(heading_yaw_rate_command)
+    buffers.trajectory_data["heading_command_saturated"].append(heading_command_saturated)
     buffers.trajectory_data["right_ee_lin_vel_world"].append(right_lin_vel.copy())
     buffers.trajectory_data["right_ee_ang_vel_world"].append(right_ang_vel.copy())
     buffers.trajectory_data["right_ee_position_torso"].append(position_torso.copy())
@@ -2550,10 +2667,16 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
         eval_end_time,
     )
     control_preview_path = save_control_preview(run_dir, buffers.trajectory_data)
+    heading_stats, heading_plot_path, heading_diagnostics_path = save_heading_control_diagnostics(
+        run_dir,
+        buffers.trajectory_data,
+        eval_start_time,
+        eval_end_time,
+    )
     write_video(video_path, video_frames, video_fps)
     perf_summary_path, perf_windows_path = (None, None) if perf_monitor is None else perf_monitor.save_report(run_dir)
     walk_distance = float(np.linalg.norm(data.xpos[scene_ids.torso_id][:2] - buffers.torso_xy_start)) if buffers.torso_xy_start is not None else 0.0
-    stats, saved_paths = save_eval(run_dir, buffers.eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name)
+    stats, saved_paths = save_eval(run_dir, buffers.eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, extra_stats=heading_stats)
     saved_paths["perf_summary"] = perf_summary_path
     saved_paths["perf_windows"] = perf_windows_path
     saved_paths["right_arm_diagnostics"] = right_arm_diagnostics_path
@@ -2561,7 +2684,16 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     saved_paths["lqr_ddq_tracking_plot"] = lqr_ddq_tracking_plot_path
     saved_paths["lqr_tracking_preview"] = lqr_tracking_preview_path
     saved_paths["control_preview"] = control_preview_path
+    saved_paths["heading_control_plot"] = heading_plot_path
+    saved_paths["heading_control_diagnostics"] = heading_diagnostics_path
     print_run_summary(stats, saved_paths, trajectory_path, video_path, has_renderer, video_frames, video_width, video_height, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles)
+    if heading_stats:
+        print(
+            "Heading hold | filtered error rms/max = "
+            f"{heading_stats['heading_error_rms']:.5f}/{heading_stats['heading_error_max_abs']:.5f} rad, "
+            f"yaw-rate cmd mean/range = {heading_stats['heading_yaw_rate_command_mean']:.5f}/"
+            f"[{heading_stats['heading_yaw_rate_command_min']:.5f}, {heading_stats['heading_yaw_rate_command_max']:.5f}] rad/s"
+        )
     if lqr_tracking_diagnostics["sample_count"]:
         ddq_tracking = lqr_tracking_diagnostics["ddq_tracking"]
         print(f"LQR DDQ tracking RMSE = {np.asarray(ddq_tracking['rmse']).round(4).tolist()}")
@@ -2626,6 +2758,73 @@ def save_yaw_diagnostics(run_dir, time_values, yaw_values, eval_start_time, eval
     return stats, yaw_png
 
 
+def save_heading_control_diagnostics(run_dir, trajectory_data, eval_start_time, eval_end_time):
+    t = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
+    reference = np.asarray(trajectory_data.get("heading_reference_world", []), dtype=np.float64)
+    yaw = np.asarray(trajectory_data.get("heading_yaw_unwrapped", []), dtype=np.float64)
+    yaw_filtered = np.asarray(trajectory_data.get("heading_yaw_filtered", []), dtype=np.float64)
+    error = np.asarray(trajectory_data.get("heading_yaw_error", []), dtype=np.float64)
+    yaw_rate = np.asarray(trajectory_data.get("heading_yaw_rate_filtered", []), dtype=np.float64)
+    correction = np.asarray(trajectory_data.get("heading_yaw_rate_correction", []), dtype=np.float64)
+    command = np.asarray(trajectory_data.get("heading_yaw_rate_command", []), dtype=np.float64)
+    saturated = np.asarray(trajectory_data.get("heading_command_saturated", []), dtype=bool)
+    arrays = (reference, yaw, yaw_filtered, error, yaw_rate, correction, command, saturated)
+    if not len(t) or any(value.shape != t.shape for value in arrays):
+        return {}, None, None
+
+    valid = (
+        (t >= eval_start_time)
+        & (t < eval_end_time)
+        & np.isfinite(reference)
+        & np.isfinite(yaw_filtered)
+        & np.isfinite(error)
+        & np.isfinite(command)
+    )
+    if np.count_nonzero(valid) < 2:
+        return {}, None, None
+    slope = float(np.polyfit(t[valid], yaw_filtered[valid] - reference[valid], 1)[0])
+    stats = {
+        "heading_sample_count": int(np.count_nonzero(valid)),
+        "heading_error_mean": float(np.mean(error[valid])),
+        "heading_error_rms": float(np.sqrt(np.mean(error[valid] ** 2))),
+        "heading_error_max_abs": float(np.max(np.abs(error[valid]))),
+        "heading_filtered_drift_slope": slope,
+        "heading_yaw_rate_command_mean": float(np.mean(command[valid])),
+        "heading_yaw_rate_command_min": float(np.min(command[valid])),
+        "heading_yaw_rate_command_max": float(np.max(command[valid])),
+        "heading_command_saturation_fraction": float(np.mean(saturated[valid])),
+    }
+
+    diagnostics_path = os.path.join(run_dir, "heading_control_diagnostics.json")
+    with open(diagnostics_path, "w", encoding="utf-8") as f:
+        json.dump(_to_serializable(stats), f, indent=2, ensure_ascii=False)
+
+    plot_path = os.path.join(run_dir, "heading_control.png")
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+    axes[0].plot(t, yaw, lw=0.8, alpha=0.5, label="raw unwrapped yaw")
+    axes[0].plot(t, yaw_filtered, lw=1.4, label="one-cycle mean yaw")
+    axes[0].plot(t, reference, ls="--", lw=1.0, label="world heading reference")
+    axes[0].set_ylabel("yaw [rad]")
+    axes[0].legend(loc="best")
+    axes[1].plot(t, error, lw=1.2, label="heading error")
+    axes[1].plot(t, yaw_rate, lw=0.9, alpha=0.75, label="mean yaw rate")
+    axes[1].set_ylabel("error / rate")
+    axes[1].legend(loc="best")
+    axes[2].plot(t, command, lw=1.2, label="runtime yaw-rate command")
+    axes[2].plot(t, correction, lw=0.9, alpha=0.75, label="feedback correction")
+    axes[2].set_ylabel("command [rad/s]")
+    axes[2].set_xlabel("time [s]")
+    axes[2].legend(loc="best")
+    for ax in axes:
+        ax.axvline(eval_start_time, color="gray", ls="--")
+        ax.axvline(eval_end_time, color="gray", ls="--")
+        ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(plot_path, dpi=160)
+    plt.close(fig)
+    return stats, plot_path, diagnostics_path
+
+
 def save_eval(
     run_dir,
     data,
@@ -2638,6 +2837,7 @@ def save_eval(
     cooldown_cycles,
     gait_period,
     experiment_name,
+    extra_stats=None,
 ):
     t = np.asarray(data["time"])
     mask = (t >= eval_start_time) & (t < eval_end_time)
@@ -2656,6 +2856,8 @@ def save_eval(
     if "torso_yaw" in data and len(data["torso_yaw"]) > 0:
         yaw_stats, yaw_png_path = save_yaw_diagnostics(run_dir, data["time"], data["torso_yaw"], eval_start_time, eval_end_time)
         stats.update(yaw_stats)
+    if extra_stats:
+        stats.update(extra_stats)
 
     sides = ["left", "right"]
     fig, axes = plt.subplots(6, 2, figsize=(20, 12), sharex=True)

@@ -15,6 +15,7 @@ from arm_lqr import ArmLQRPolicy
 # 可选：导入手臂模型预测控制策略
 from kinematics_helper import KinematicsHelper
 from sim_support import (
+    HeadingHoldController,
     PerformanceMonitor,
     apply_computed_torque_control,
     build_right_arm_observation,
@@ -28,6 +29,7 @@ from sim_support import (
     make_video_camera,
     make_video_renderer,
     pd_control,
+    quat_to_yaw_wxyz,
     record_eval_step,
     resolve_right_arm_control_context,
     resolve_scene_ids,
@@ -90,6 +92,11 @@ if __name__ == "__main__":
             config.get("lqr_forward_dynamics_max_abs_qacc", 8.0)
         )
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
+        heading_control_enabled = bool(config.get("heading_control_enabled", True))
+        heading_filter_cycles = float(config.get("heading_filter_cycles", 1.0))
+        heading_kp = float(config.get("heading_kp", 0.6))
+        heading_kd = float(config.get("heading_kd", 0.1))
+        heading_max_yaw_rate = float(config.get("heading_max_yaw_rate", 0.25))
 
     # ==============================
     # 2. 初始化主循环状态【非核心代码】
@@ -208,6 +215,16 @@ if __name__ == "__main__":
         policy_type = "ArmPIDPolicy"
         controller_notes = "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small"
         controller_meta = {"pid_config": {"default_q": right_arm_target, "kp_pose_diag": np.diag(arm_policy.kp_pose), "kd_pose_diag": np.diag(arm_policy.kd_pose), "ki_pose_diag": np.diag(arm_policy.ki_pose), "posture_gain_diag": np.diag(arm_policy.posture_gain), "finite_diff_eps": arm_policy.finite_diff_eps, "damping": arm_policy.damping, "integral_limit": arm_policy.integral_limit, "max_dq": arm_policy.max_dq, "de_g_alpha": arm_policy.de_g_alpha}}
+    controller_meta["heading_control"] = {
+        "enabled": heading_control_enabled,
+        "reference_frame": "world",
+        "reference_source": "initial_torso_yaw",
+        "filter_cycles": heading_filter_cycles,
+        "kp": heading_kp,
+        "kd": heading_kd,
+        "yaw_rate_feedforward": float(cmd_nominal[2]),
+        "max_abs_yaw_rate": heading_max_yaw_rate,
+    }
     # ==============================
     # 5. 创建实验输出目录与视频录制器【非核心代码】
     # 每次 run 都单独保存 metadata、轨迹、评估图和视频，方便横向对比。
@@ -253,6 +270,19 @@ if __name__ == "__main__":
         imu_site_name="imu_in_torso",
         position_reference_q=right_arm_target,
     )
+
+    # 行走策略仍接收 yaw-rate 命令；这里在它外层增加世界系航向保持。
+    heading_controller = HeadingHoldController(
+        sample_dt=simulation_dt * control_decimation,
+        averaging_window=heading_filter_cycles * gait_period,
+        kp=heading_kp,
+        kd=heading_kd,
+        yaw_rate_feedforward=float(cmd_nominal[2]),
+        max_abs_yaw_rate=heading_max_yaw_rate,
+    )
+    heading_state = heading_controller.last_output
+    cmd_runtime = cmd_nominal.copy()
+    heading_yaw_rate_command_runtime = float(cmd_runtime[2])
 
     perf_monitor = PerformanceMonitor(step_budget=simulation_dt, arm_budget=arm_control_dt)
 
@@ -582,6 +612,14 @@ if __name__ == "__main__":
                     "torso_acc_world_used": torso_state.lin_acc,
                     "torso_alpha_world_raw": raw_torso_alpha,
                     "torso_alpha_world_used": torso_state.ang_acc,
+                    "heading_reference_world": heading_state.reference_world,
+                    "heading_yaw_unwrapped": heading_state.yaw_unwrapped,
+                    "heading_yaw_filtered": heading_state.yaw_filtered,
+                    "heading_yaw_error": heading_state.yaw_error,
+                    "heading_yaw_rate_filtered": heading_state.yaw_rate_filtered,
+                    "heading_yaw_rate_correction": heading_state.yaw_rate_correction,
+                    "heading_yaw_rate_command": heading_yaw_rate_command_runtime,
+                    "heading_command_saturated": heading_state.command_saturated,
                     "ee_position_reference_torso": right_ee_position_reference_torso,
                     "lqr_one_step_prediction": (
                         lqr_one_step_prediction
@@ -619,11 +657,18 @@ if __name__ == "__main__":
 
                 obs[:3] = omega
                 obs[3:6] = gravity_orientation
+                cmd_active = cmd_nominal.copy()
+                if heading_control_enabled:
+                    torso_yaw_world = quat_to_yaw_wxyz(d.xquat[scene_ids.torso_id].copy())
+                    heading_state = heading_controller.update(torso_yaw_world, torso_state.ang_vel[2])
+                    cmd_active[2] = heading_state.yaw_rate_command
                 if count < eval_end_time:
-                    cmd_runtime = cmd_nominal
+                    command_scale = 1.0
                 else:
                     cooldown_ratio = np.clip((count - eval_end_time) / max(eval_duration - eval_end_time, 1e-8), 0.0, 1.0)
-                    cmd_runtime = (1.0 - cooldown_ratio) * cmd_nominal
+                    command_scale = 1.0 - cooldown_ratio
+                cmd_runtime = command_scale * cmd_active
+                heading_yaw_rate_command_runtime = float(cmd_runtime[2])
                 obs[6:9] = cmd_runtime * cmd_scale
                 obs[9 : 9 + num_actions] = qj
                 obs[9 + num_actions : 9 + 2 * num_actions] = dqj
