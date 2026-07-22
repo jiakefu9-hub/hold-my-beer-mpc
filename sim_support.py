@@ -115,10 +115,18 @@ class ForwardDynamicsMappingResult:
     validation_scale: float
     validation_attempts: int
     validation_improved: bool
+    validation_tracking_safety_satisfied: bool
+    validation_qacc_safety_satisfied: bool
+    validation_safe_candidate_count: int
+    validation_total_error_rejections: int
+    validation_joint_error_rejections: int
+    validation_qacc_limit_rejections: int
     first_pass_qacc_validated: np.ndarray
     first_pass_qacc_validation_error: np.ndarray
     second_pass_triggered: bool
     second_pass_accepted: bool
+    second_pass_tracking_safety_satisfied: bool
+    second_pass_qacc_safety_satisfied: bool
     second_pass_tau_correction_raw: np.ndarray
     second_pass_tau_correction: np.ndarray
     second_pass_qacc_predicted: np.ndarray
@@ -130,6 +138,13 @@ class ForwardDynamicsMappingResult:
     second_pass_condition_number: float
     second_pass_validation_scale: float
     second_pass_validation_attempts: int
+    second_pass_safe_candidate_count: int
+    second_pass_total_error_rejections: int
+    second_pass_joint_error_rejections: int
+    second_pass_qacc_limit_rejections: int
+    safety_fallback_used: bool
+    safety_fallback_satisfied: bool
+    safety_fallback_attempts: int
 
 
 @dataclass
@@ -346,6 +361,8 @@ def local_forward_dynamics_torque_mapping(
     regularization=5.0,
     validation_scales=(1.0, 0.5, 0.25, 0.125),
     second_pass_error_threshold=5.0,
+    max_joint_error=4.0,
+    max_abs_qacc=8.0,
 ):
     """局部线性求力矩；高残差时在已验收力矩处重线性化一次。"""
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -359,8 +376,14 @@ def local_forward_dynamics_torque_mapping(
         raise ValueError("前向动力学映射的 desired_qacc/tau_nominal 维度不正确。")
     if fixed_ctrl.shape != (model.nu,) or torque_limits.shape != (joint_count, 2):
         raise ValueError("前向动力学映射的 ctrl/torque_limits 维度不正确。")
-    if perturbation <= 0.0 or regularization < 0.0 or second_pass_error_threshold < 0.0:
-        raise ValueError("perturbation 必须大于 0，regularization 和二次修正阈值不能小于 0。")
+    if (
+        perturbation <= 0.0
+        or regularization < 0.0
+        or second_pass_error_threshold < 0.0
+        or max_joint_error <= 0.0
+        or max_abs_qacc <= 0.0
+    ):
+        raise ValueError("扰动和验收安全阈值必须大于 0，正则化与二次修正阈值不能小于 0。")
     validation_scales = tuple(float(scale) for scale in validation_scales)
     if not validation_scales or any(scale <= 0.0 or scale > 1.0 for scale in validation_scales):
         raise ValueError("validation_scales 必须是位于 (0, 1] 的非空序列。")
@@ -376,7 +399,7 @@ def local_forward_dynamics_torque_mapping(
     qacc_baseline = scratch.qacc[qvel_indices].copy()
 
     def solve_validated_pass(base_tau, base_qacc):
-        """在指定力矩工作点重线性化，并返回第一个优于该工作点的候选。"""
+        """在指定力矩工作点重线性化，完整检查候选并返回安全候选中的最优项。"""
         pass_ctrl = fixed_ctrl.copy()
         pass_ctrl[ctrl_indices] = base_tau
         gain_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
@@ -399,9 +422,16 @@ def local_forward_dynamics_torque_mapping(
         base_error_norm = float(np.linalg.norm(base_qacc - desired_qacc))
         validation_scale = 0.0
         validation_attempts = 0
+        safe_candidate_count = 0
+        total_error_rejections = 0
+        joint_error_rejections = 0
+        qacc_limit_rejections = 0
         tau_cmd = base_tau.copy()
         tau_cmd_raw = base_tau.copy()
         qacc_validated = base_qacc.copy()
+        best_error_norm = np.inf
+        best_qacc_safe = None
+        best_progress = None
         for scale in validation_scales:
             validation_attempts += 1
             candidate_tau_raw = base_tau + scale * correction_raw
@@ -412,12 +442,55 @@ def local_forward_dynamics_torque_mapping(
             scratch.qacc_warmstart[:] = qacc_warmstart
             mujoco.mj_forward(model, scratch)
             candidate_qacc = scratch.qacc[qvel_indices].copy()
-            if np.linalg.norm(candidate_qacc - desired_qacc) < base_error_norm:
+            candidate_error = candidate_qacc - desired_qacc
+            candidate_error_norm = float(np.linalg.norm(candidate_error))
+            total_error_improved = candidate_error_norm < base_error_norm
+            joint_error_safe = float(np.max(np.abs(candidate_error))) <= float(max_joint_error)
+            qacc_safe = float(np.max(np.abs(candidate_qacc))) <= float(max_abs_qacc)
+            total_error_rejections += int(not total_error_improved)
+            joint_error_rejections += int(not joint_error_safe)
+            qacc_limit_rejections += int(not qacc_safe)
+            if total_error_improved and joint_error_safe and qacc_safe:
+                safe_candidate_count += 1
+            if (
+                total_error_improved
+                and joint_error_safe
+                and qacc_safe
+                and candidate_error_norm < best_error_norm
+            ):
                 validation_scale = scale
                 tau_cmd = candidate_tau
                 tau_cmd_raw = candidate_tau_raw
                 qacc_validated = candidate_qacc
-                break
+                best_error_norm = candidate_error_norm
+            if total_error_improved and qacc_safe:
+                qacc_safe_key = (float(np.max(np.abs(candidate_error))), candidate_error_norm)
+                if best_qacc_safe is None or qacc_safe_key < best_qacc_safe[0]:
+                    best_qacc_safe = (
+                        qacc_safe_key,
+                        scale,
+                        candidate_tau,
+                        candidate_tau_raw,
+                        candidate_qacc,
+                    )
+            if total_error_improved and (
+                best_progress is None or candidate_error_norm < best_progress[0]
+            ):
+                best_progress = (
+                    candidate_error_norm,
+                    scale,
+                    candidate_tau,
+                    candidate_tau_raw,
+                    candidate_qacc,
+                )
+
+        # 严格候选不可行时仍沿改善方向建立第二轮工作点；优先保住 qacc 硬上限。
+        tracking_safety_satisfied = safe_candidate_count > 0
+        if not tracking_safety_satisfied and best_qacc_safe is not None:
+            _, validation_scale, tau_cmd, tau_cmd_raw, qacc_validated = best_qacc_safe
+        elif not tracking_safety_satisfied and best_progress is not None:
+            _, validation_scale, tau_cmd, tau_cmd_raw, qacc_validated = best_progress
+        qacc_safety_satisfied = float(np.max(np.abs(qacc_validated))) <= float(max_abs_qacc)
 
         correction = tau_cmd - base_tau
         qacc_predicted = base_qacc + gain_matrix @ correction
@@ -440,13 +513,22 @@ def local_forward_dynamics_torque_mapping(
             "validation_scale": validation_scale,
             "validation_attempts": validation_attempts,
             "improved": validation_scale > 0.0,
+            "tracking_safety_satisfied": tracking_safety_satisfied,
+            "qacc_safety_satisfied": qacc_safety_satisfied,
+            "safe_candidate_count": safe_candidate_count,
+            "total_error_rejections": total_error_rejections,
+            "joint_error_rejections": joint_error_rejections,
+            "qacc_limit_rejections": qacc_limit_rejections,
         }
 
     first_pass = solve_validated_pass(tau_nominal, qacc_baseline)
     first_pass_residual_norm = float(np.linalg.norm(first_pass["qacc_validation_error"]))
     second_pass_triggered = bool(
         first_pass["improved"]
-        and first_pass_residual_norm > float(second_pass_error_threshold)
+        and (
+            not first_pass["tracking_safety_satisfied"]
+            or first_pass_residual_norm > float(second_pass_error_threshold)
+        )
     )
     second_pass = None
     if second_pass_triggered:
@@ -456,8 +538,38 @@ def local_forward_dynamics_torque_mapping(
             first_pass["qacc_validated"],
         )
 
-    final_pass = second_pass if second_pass is not None and second_pass["improved"] else first_pass
-    second_pass_accepted = bool(second_pass is not None and second_pass["improved"])
+    if second_pass is not None and second_pass["tracking_safety_satisfied"]:
+        final_pass = second_pass
+    elif first_pass["tracking_safety_satisfied"]:
+        final_pass = first_pass
+    elif (
+        second_pass is not None
+        and second_pass["improved"]
+        and second_pass["qacc_safety_satisfied"]
+    ):
+        final_pass = second_pass
+    else:
+        final_pass = first_pass
+    second_pass_accepted = bool(second_pass is not None and final_pass is second_pass)
+
+    safety_fallback_used = False
+    safety_fallback_satisfied = final_pass["qacc_safety_satisfied"]
+    safety_fallback_attempts = 0
+    if not safety_fallback_satisfied:
+        # 接触瞬态下固定回退力矩也可能更危险；在当前最佳点最多再重线性化两次。
+        safety_fallback_used = True
+        for _ in range(2):
+            safety_fallback_attempts += 1
+            rescue_pass = solve_validated_pass(
+                final_pass["tau_cmd"],
+                final_pass["qacc_validated"],
+            )
+            if not rescue_pass["improved"]:
+                break
+            final_pass = rescue_pass
+            if final_pass["qacc_safety_satisfied"]:
+                break
+        safety_fallback_satisfied = final_pass["qacc_safety_satisfied"]
     zero_vector = np.zeros(joint_count, dtype=np.float64)
     zero_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
     tau_cmd = final_pass["tau_cmd"]
@@ -487,10 +599,22 @@ def local_forward_dynamics_torque_mapping(
         validation_scale=first_pass["validation_scale"],
         validation_attempts=first_pass["validation_attempts"],
         validation_improved=first_pass["improved"],
+        validation_tracking_safety_satisfied=first_pass["tracking_safety_satisfied"],
+        validation_qacc_safety_satisfied=first_pass["qacc_safety_satisfied"],
+        validation_safe_candidate_count=first_pass["safe_candidate_count"],
+        validation_total_error_rejections=first_pass["total_error_rejections"],
+        validation_joint_error_rejections=first_pass["joint_error_rejections"],
+        validation_qacc_limit_rejections=first_pass["qacc_limit_rejections"],
         first_pass_qacc_validated=first_pass["qacc_validated"],
         first_pass_qacc_validation_error=first_pass["qacc_validation_error"],
         second_pass_triggered=second_pass_triggered,
         second_pass_accepted=second_pass_accepted,
+        second_pass_tracking_safety_satisfied=(
+            second_pass["tracking_safety_satisfied"] if second_pass is not None else False
+        ),
+        second_pass_qacc_safety_satisfied=(
+            second_pass["qacc_safety_satisfied"] if second_pass is not None else False
+        ),
         second_pass_tau_correction_raw=(
             second_pass["correction_raw"] if second_pass is not None else zero_vector
         ),
@@ -524,6 +648,21 @@ def local_forward_dynamics_torque_mapping(
         second_pass_validation_attempts=(
             second_pass["validation_attempts"] if second_pass is not None else 0
         ),
+        second_pass_safe_candidate_count=(
+            second_pass["safe_candidate_count"] if second_pass is not None else 0
+        ),
+        second_pass_total_error_rejections=(
+            second_pass["total_error_rejections"] if second_pass is not None else 0
+        ),
+        second_pass_joint_error_rejections=(
+            second_pass["joint_error_rejections"] if second_pass is not None else 0
+        ),
+        second_pass_qacc_limit_rejections=(
+            second_pass["qacc_limit_rejections"] if second_pass is not None else 0
+        ),
+        safety_fallback_used=safety_fallback_used,
+        safety_fallback_satisfied=safety_fallback_satisfied,
+        safety_fallback_attempts=safety_fallback_attempts,
     )
 
 
@@ -537,6 +676,8 @@ def apply_computed_torque_control(
     forward_dynamics_perturbation=0.1,
     forward_dynamics_regularization=5.0,
     forward_dynamics_second_pass_error_threshold=5.0,
+    forward_dynamics_max_joint_error=4.0,
+    forward_dynamics_max_abs_qacc=8.0,
 ):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -568,6 +709,8 @@ def apply_computed_torque_control(
         perturbation=forward_dynamics_perturbation,
         regularization=forward_dynamics_regularization,
         second_pass_error_threshold=forward_dynamics_second_pass_error_threshold,
+        max_joint_error=forward_dynamics_max_joint_error,
+        max_abs_qacc=forward_dynamics_max_abs_qacc,
     )
     return tau_cmd, inverse_result, mapping_result
 
@@ -1108,10 +1251,18 @@ def init_eval_buffers():
             "right_arm_forward_dynamics_validation_scale": [],
             "right_arm_forward_dynamics_validation_attempts": [],
             "right_arm_forward_dynamics_validation_improved": [],
+            "right_arm_forward_dynamics_tracking_safety_satisfied": [],
+            "right_arm_forward_dynamics_qacc_safety_satisfied": [],
+            "right_arm_forward_dynamics_safe_candidate_count": [],
+            "right_arm_forward_dynamics_total_error_rejections": [],
+            "right_arm_forward_dynamics_joint_error_rejections": [],
+            "right_arm_forward_dynamics_qacc_limit_rejections": [],
             "right_arm_first_pass_qacc_validated": [],
             "right_arm_first_pass_qacc_validation_error": [],
             "right_arm_forward_dynamics_second_pass_triggered": [],
             "right_arm_forward_dynamics_second_pass_accepted": [],
+            "right_arm_second_pass_tracking_safety_satisfied": [],
+            "right_arm_second_pass_qacc_safety_satisfied": [],
             "right_arm_second_pass_tau_correction_raw": [],
             "right_arm_second_pass_tau_correction": [],
             "right_arm_second_pass_qacc_predicted": [],
@@ -1123,6 +1274,13 @@ def init_eval_buffers():
             "right_arm_second_pass_condition_number": [],
             "right_arm_second_pass_validation_scale": [],
             "right_arm_second_pass_validation_attempts": [],
+            "right_arm_second_pass_safe_candidate_count": [],
+            "right_arm_second_pass_total_error_rejections": [],
+            "right_arm_second_pass_joint_error_rejections": [],
+            "right_arm_second_pass_qacc_limit_rejections": [],
+            "right_arm_forward_dynamics_safety_fallback_used": [],
+            "right_arm_forward_dynamics_safety_fallback_satisfied": [],
+            "right_arm_forward_dynamics_safety_fallback_attempts": [],
             "torso_lin_vel_world": [],
             "torso_ang_vel_world": [],
             "torso_acc_world_raw": [],
@@ -1362,6 +1520,33 @@ def _validation_scale_summary(scale_values, selection_mask):
     return {"sample_count": total, "selections": selections}
 
 
+def _validation_safety_summary(trajectory_data, prefix, selection_mask):
+    selection_mask = np.asarray(selection_mask, dtype=bool)
+    field_names = (
+        "safe_candidate_count",
+        "total_error_rejections",
+        "joint_error_rejections",
+        "qacc_limit_rejections",
+    )
+    summary = {}
+    for field_name in field_names:
+        values = np.asarray(
+            trajectory_data.get(f"{prefix}_{field_name}", []),
+            dtype=np.float64,
+        )
+        selected = values[selection_mask] if values.shape == selection_mask.shape else np.zeros(0)
+        summary[field_name] = {
+            "total": int(np.sum(selected)) if selected.size else 0,
+            "mean_per_pass": float(np.mean(selected)) if selected.size else 0.0,
+        }
+        if field_name == "safe_candidate_count":
+            summary[field_name]["zero_candidate_passes"] = int(np.sum(selected == 0))
+            summary[field_name]["zero_candidate_fraction"] = (
+                float(np.mean(selected == 0)) if selected.size else 0.0
+            )
+    return summary
+
+
 def _masked_vector_norm_stats(values, mask, width=5):
     values = np.asarray(values, dtype=np.float64)
     mask = np.asarray(mask, dtype=bool)
@@ -1425,6 +1610,34 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
         trajectory_data.get("right_arm_second_pass_validation_scale", []),
         dtype=np.float64,
     )
+    first_tracking_safe = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_tracking_safety_satisfied", []),
+        dtype=bool,
+    )
+    first_qacc_safe = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_qacc_safety_satisfied", []),
+        dtype=bool,
+    )
+    second_tracking_safe = np.asarray(
+        trajectory_data.get("right_arm_second_pass_tracking_safety_satisfied", []),
+        dtype=bool,
+    )
+    second_qacc_safe = np.asarray(
+        trajectory_data.get("right_arm_second_pass_qacc_safety_satisfied", []),
+        dtype=bool,
+    )
+    safety_fallback_used = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_safety_fallback_used", []),
+        dtype=bool,
+    )
+    safety_fallback_satisfied = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_safety_fallback_satisfied", []),
+        dtype=bool,
+    )
+    safety_fallback_attempts = np.asarray(
+        trajectory_data.get("right_arm_forward_dynamics_safety_fallback_attempts", []),
+        dtype=np.int64,
+    )
     if second_triggered.shape != time_values.shape:
         second_triggered = np.zeros_like(time_values, dtype=bool)
     if second_accepted.shape != time_values.shape:
@@ -1432,14 +1645,35 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
     second_eval_mask = eval_step_mask & second_triggered
     first_pass_validation = _validation_scale_summary(first_scale, eval_step_mask)
     second_pass_validation = _validation_scale_summary(second_scale, second_eval_mask)
+    first_pass_safety = _validation_safety_summary(
+        trajectory_data,
+        "right_arm_forward_dynamics",
+        eval_step_mask,
+    )
+    second_pass_safety = _validation_safety_summary(
+        trajectory_data,
+        "right_arm_second_pass",
+        second_eval_mask,
+    )
     eval_step_count = int(np.sum(eval_step_mask))
     triggered_count = int(np.sum(second_eval_mask))
     accepted_count = int(np.sum(eval_step_mask & second_accepted))
+    def masked_fraction(values, mask):
+        return float(np.mean(values[mask])) if values.shape == mask.shape and np.any(mask) else 0.0
+
     diagnostics["forward_dynamics_validation"] = {
-        "definition": "candidate scales are tested in order; the first scale that improves the current baseline is accepted",
-        "first_pass": first_pass_validation,
+        "definition": "all candidate scales are evaluated; select the minimum-total-error candidate that improves the baseline and satisfies per-joint-error/qacc safety limits",
+        "first_pass": {
+            **first_pass_validation,
+            "safety": first_pass_safety,
+            "tracking_safety_satisfied_fraction": masked_fraction(first_tracking_safe, eval_step_mask),
+            "qacc_safety_satisfied_fraction": masked_fraction(first_qacc_safe, eval_step_mask),
+        },
         "second_pass": {
             **second_pass_validation,
+            "safety": second_pass_safety,
+            "tracking_safety_satisfied_fraction": masked_fraction(second_tracking_safe, second_eval_mask),
+            "qacc_safety_satisfied_fraction": masked_fraction(second_qacc_safe, second_eval_mask),
             "triggered_count": triggered_count,
             "triggered_fraction_of_evaluation_steps": (
                 triggered_count / float(eval_step_count) if eval_step_count else 0.0
@@ -1448,6 +1682,20 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
             "accepted_fraction_given_triggered": (
                 accepted_count / float(triggered_count) if triggered_count else 0.0
             ),
+        },
+        "final_safety_fallback": {
+            "used_count": int(np.sum(safety_fallback_used[eval_step_mask]))
+            if safety_fallback_used.shape == eval_step_mask.shape
+            else 0,
+            "used_fraction": masked_fraction(safety_fallback_used, eval_step_mask),
+            "satisfied_fraction_when_used": (
+                masked_fraction(safety_fallback_satisfied, eval_step_mask & safety_fallback_used)
+                if safety_fallback_used.shape == eval_step_mask.shape
+                else 0.0
+            ),
+            "attempt_count": int(np.sum(safety_fallback_attempts[eval_step_mask]))
+            if safety_fallback_attempts.shape == eval_step_mask.shape
+            else 0,
         },
         "first_pass_residual_norm": _masked_vector_norm_stats(
             trajectory_data.get("right_arm_first_pass_qacc_validation_error", []),
@@ -1916,11 +2164,26 @@ def save_control_preview(run_dir, trajectory_data):
         "right_arm_forward_dynamics_validation_scale",
         "right_arm_forward_dynamics_validation_attempts",
         "right_arm_forward_dynamics_validation_improved",
+        "right_arm_forward_dynamics_tracking_safety_satisfied",
+        "right_arm_forward_dynamics_qacc_safety_satisfied",
+        "right_arm_forward_dynamics_safe_candidate_count",
+        "right_arm_forward_dynamics_total_error_rejections",
+        "right_arm_forward_dynamics_joint_error_rejections",
+        "right_arm_forward_dynamics_qacc_limit_rejections",
         "right_arm_forward_dynamics_second_pass_triggered",
         "right_arm_forward_dynamics_second_pass_accepted",
+        "right_arm_second_pass_tracking_safety_satisfied",
+        "right_arm_second_pass_qacc_safety_satisfied",
         "right_arm_second_pass_condition_number",
         "right_arm_second_pass_validation_scale",
         "right_arm_second_pass_validation_attempts",
+        "right_arm_second_pass_safe_candidate_count",
+        "right_arm_second_pass_total_error_rejections",
+        "right_arm_second_pass_joint_error_rejections",
+        "right_arm_second_pass_qacc_limit_rejections",
+        "right_arm_forward_dynamics_safety_fallback_used",
+        "right_arm_forward_dynamics_safety_fallback_satisfied",
+        "right_arm_forward_dynamics_safety_fallback_attempts",
         "right_ee_upright_alignment",
         "arm_policy_updated",
         "contact_count",
@@ -2041,6 +2304,24 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     forward_dynamics_validation_improved = bool(
         right_arm_control.get("forward_dynamics_validation_improved", False)
     )
+    forward_dynamics_tracking_safety_satisfied = bool(
+        right_arm_control.get("forward_dynamics_tracking_safety_satisfied", False)
+    )
+    forward_dynamics_qacc_safety_satisfied = bool(
+        right_arm_control.get("forward_dynamics_qacc_safety_satisfied", False)
+    )
+    forward_dynamics_safe_candidate_count = int(
+        right_arm_control.get("forward_dynamics_safe_candidate_count", 0)
+    )
+    forward_dynamics_total_error_rejections = int(
+        right_arm_control.get("forward_dynamics_total_error_rejections", 0)
+    )
+    forward_dynamics_joint_error_rejections = int(
+        right_arm_control.get("forward_dynamics_joint_error_rejections", 0)
+    )
+    forward_dynamics_qacc_limit_rejections = int(
+        right_arm_control.get("forward_dynamics_qacc_limit_rejections", 0)
+    )
     first_pass_qacc_validated = control_vector("first_pass_qacc_validated", 5)
     first_pass_qacc_validation_error = control_vector("first_pass_qacc_validation_error", 5)
     forward_dynamics_second_pass_triggered = bool(
@@ -2048,6 +2329,12 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     forward_dynamics_second_pass_accepted = bool(
         right_arm_control.get("forward_dynamics_second_pass_accepted", False)
+    )
+    second_pass_tracking_safety_satisfied = bool(
+        right_arm_control.get("second_pass_tracking_safety_satisfied", False)
+    )
+    second_pass_qacc_safety_satisfied = bool(
+        right_arm_control.get("second_pass_qacc_safety_satisfied", False)
     )
     second_pass_tau_correction_raw = control_vector("second_pass_tau_correction_raw", 5)
     second_pass_tau_correction = control_vector("second_pass_tau_correction", 5)
@@ -2070,6 +2357,27 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     second_pass_validation_attempts = int(
         right_arm_control.get("second_pass_validation_attempts", 0)
+    )
+    second_pass_safe_candidate_count = int(
+        right_arm_control.get("second_pass_safe_candidate_count", 0)
+    )
+    second_pass_total_error_rejections = int(
+        right_arm_control.get("second_pass_total_error_rejections", 0)
+    )
+    second_pass_joint_error_rejections = int(
+        right_arm_control.get("second_pass_joint_error_rejections", 0)
+    )
+    second_pass_qacc_limit_rejections = int(
+        right_arm_control.get("second_pass_qacc_limit_rejections", 0)
+    )
+    forward_dynamics_safety_fallback_used = bool(
+        right_arm_control.get("forward_dynamics_safety_fallback_used", False)
+    )
+    forward_dynamics_safety_fallback_satisfied = bool(
+        right_arm_control.get("forward_dynamics_safety_fallback_satisfied", False)
+    )
+    forward_dynamics_safety_fallback_attempts = int(
+        right_arm_control.get("forward_dynamics_safety_fallback_attempts", 0)
     )
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
@@ -2152,10 +2460,18 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_forward_dynamics_validation_scale"].append(forward_dynamics_validation_scale)
     buffers.trajectory_data["right_arm_forward_dynamics_validation_attempts"].append(forward_dynamics_validation_attempts)
     buffers.trajectory_data["right_arm_forward_dynamics_validation_improved"].append(forward_dynamics_validation_improved)
+    buffers.trajectory_data["right_arm_forward_dynamics_tracking_safety_satisfied"].append(forward_dynamics_tracking_safety_satisfied)
+    buffers.trajectory_data["right_arm_forward_dynamics_qacc_safety_satisfied"].append(forward_dynamics_qacc_safety_satisfied)
+    buffers.trajectory_data["right_arm_forward_dynamics_safe_candidate_count"].append(forward_dynamics_safe_candidate_count)
+    buffers.trajectory_data["right_arm_forward_dynamics_total_error_rejections"].append(forward_dynamics_total_error_rejections)
+    buffers.trajectory_data["right_arm_forward_dynamics_joint_error_rejections"].append(forward_dynamics_joint_error_rejections)
+    buffers.trajectory_data["right_arm_forward_dynamics_qacc_limit_rejections"].append(forward_dynamics_qacc_limit_rejections)
     buffers.trajectory_data["right_arm_first_pass_qacc_validated"].append(first_pass_qacc_validated)
     buffers.trajectory_data["right_arm_first_pass_qacc_validation_error"].append(first_pass_qacc_validation_error)
     buffers.trajectory_data["right_arm_forward_dynamics_second_pass_triggered"].append(forward_dynamics_second_pass_triggered)
     buffers.trajectory_data["right_arm_forward_dynamics_second_pass_accepted"].append(forward_dynamics_second_pass_accepted)
+    buffers.trajectory_data["right_arm_second_pass_tracking_safety_satisfied"].append(second_pass_tracking_safety_satisfied)
+    buffers.trajectory_data["right_arm_second_pass_qacc_safety_satisfied"].append(second_pass_qacc_safety_satisfied)
     buffers.trajectory_data["right_arm_second_pass_tau_correction_raw"].append(second_pass_tau_correction_raw)
     buffers.trajectory_data["right_arm_second_pass_tau_correction"].append(second_pass_tau_correction)
     buffers.trajectory_data["right_arm_second_pass_qacc_predicted"].append(second_pass_qacc_predicted)
@@ -2167,6 +2483,13 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_second_pass_condition_number"].append(second_pass_condition_number)
     buffers.trajectory_data["right_arm_second_pass_validation_scale"].append(second_pass_validation_scale)
     buffers.trajectory_data["right_arm_second_pass_validation_attempts"].append(second_pass_validation_attempts)
+    buffers.trajectory_data["right_arm_second_pass_safe_candidate_count"].append(second_pass_safe_candidate_count)
+    buffers.trajectory_data["right_arm_second_pass_total_error_rejections"].append(second_pass_total_error_rejections)
+    buffers.trajectory_data["right_arm_second_pass_joint_error_rejections"].append(second_pass_joint_error_rejections)
+    buffers.trajectory_data["right_arm_second_pass_qacc_limit_rejections"].append(second_pass_qacc_limit_rejections)
+    buffers.trajectory_data["right_arm_forward_dynamics_safety_fallback_used"].append(forward_dynamics_safety_fallback_used)
+    buffers.trajectory_data["right_arm_forward_dynamics_safety_fallback_satisfied"].append(forward_dynamics_safety_fallback_satisfied)
+    buffers.trajectory_data["right_arm_forward_dynamics_safety_fallback_attempts"].append(forward_dynamics_safety_fallback_attempts)
     buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
     buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)
     buffers.trajectory_data["torso_acc_world_raw"].append(torso_acc_raw)
