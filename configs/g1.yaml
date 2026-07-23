@@ -19,9 +19,6 @@ lqr_q_gravity: 30.0
 # than shoulder pitch/roll, but no joint is left nearly free to accumulate pose drift.
 lqr_q_posture: [40.0, 50.0, 30.0, 10.0, 1.0]
 lqr_q_vel: 0.02
-# Torso-relative end-effector velocity damping. Acceleration cost alone does not
-# penalize a nearly constant drift velocity.
-lqr_q_ee_velocity: 10.0
 lqr_r_ddq: 0.25
 # q_ref/dq_ref still use the physical joint limits and this velocity limit.
 lqr_max_dq: 1.0

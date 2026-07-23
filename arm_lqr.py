@@ -25,7 +25,6 @@ class ArmLQRPolicy:
         q_gravity=30.0,
         q_posture=0.4,
         q_vel=0.02,
-        q_ee_velocity=0.0,
         r_ddq=0.25,
         terminal_scale=2.0,
         reg=1e-6,
@@ -56,7 +55,6 @@ class ArmLQRPolicy:
             raise ValueError(f"q_posture 必须是非负标量或长度为 {self.n} 的向量。")
         self.q_posture = q_posture.copy()
         self.q_vel = float(q_vel)
-        self.q_ee_velocity = float(q_ee_velocity)
         self.r_ddq = float(r_ddq)
         self.Qa = np.eye(3) * float(q_acc)
         self.Qalpha = np.eye(3) * float(q_alpha)
@@ -65,7 +63,6 @@ class ArmLQRPolicy:
         # 分关节姿态代价：允许单独约束 shoulder pitch/roll，保留其余关节调姿自由度。
         self.Qq = np.diag(self.q_posture)
         self.Qv = np.eye(self.n) * float(q_vel)
-        self.Qeev = np.eye(3) * float(q_ee_velocity)
         # 控制代价权重 R：惩罚关节加速度 u（ddq），u 越大代价越高，R 越大动作越平滑
         self.R = np.eye(self.n) * float(r_ddq)
         # 终端状态代价权重 QN：惩罚姿态偏差 q_nom - q_ref 和关节速度偏差 dq_nom - dq_ref
@@ -124,10 +121,8 @@ class ArmLQRPolicy:
         # 倒序遍历预测步：k 从 horizon-1, horizon-2, ... 一直到 0。
         for k in range(self.horizon - 1, -1, -1):
             t = step_terms[k]
-            # torso-relative 末端速度为 J_p(q) dq；它直接抑制位置持续单向漂移。
-            G_pv = np.hstack([np.zeros((3, self.n), dtype=np.float64), t["G_p"][:, :self.n]])
             # 先整理当前第 k 步的单步代价 l_k 参数：关于状态 x 和控制 u 的二次项 / 一次项。
-            Qxx = S_v.T @ t["C_acc"].T @ self.Qa @ t["C_acc"] @ S_v + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["C_alpha"] @ S_v + t["G_p"].T @ self.Qp @ t["G_p"] + G_pv.T @ self.Qeev @ G_pv + t["G_g"].T @ self.Qg @ t["G_g"] + S_q.T @ self.Qq @ S_q + S_v.T @ self.Qv @ S_v
+            Qxx = S_v.T @ t["C_acc"].T @ self.Qa @ t["C_acc"] @ S_v + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["C_alpha"] @ S_v + t["G_p"].T @ self.Qp @ t["G_p"] + t["G_g"].T @ self.Qg @ t["G_g"] + S_q.T @ self.Qq @ S_q + S_v.T @ self.Qv @ S_v
             Qxu = S_v.T @ t["C_acc"].T @ self.Qa @ t["B_acc"] + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["B_alpha"]
             Quu = t["B_acc"].T @ self.Qa @ t["B_acc"] + t["B_alpha"].T @ self.Qalpha @ t["B_alpha"] + self.R
             fx = S_v.T @ t["C_acc"].T @ self.Qa @ t["D_acc"] + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["D_alpha"] + t["G_p"].T @ self.Qp @ t["d_p"] + t["G_g"].T @ self.Qg @ t["d_g"] - S_q.T @ self.Qq @ self.default_q
@@ -163,7 +158,6 @@ class ArmLQRPolicy:
         ee_ang_acc_model = first_terms["C_alpha"] @ dq + first_terms["B_alpha"] @ u + first_terms["D_alpha"]
         position_error_model = first_terms["G_p"] @ x1_model + first_terms["d_p"]
         gravity_error_model = first_terms["G_g"] @ x1_model + first_terms["d_g"]
-        ee_position_velocity_model = first_terms["G_p"][:, :self.n] @ dq1_model
         posture_error_model = q1_model - self.default_q
         cost_terms = {
             "linear_acceleration": float(ee_lin_acc_model @ self.Qa @ ee_lin_acc_model),
@@ -171,10 +165,7 @@ class ArmLQRPolicy:
             "position": float(position_error_model @ self.Qp @ position_error_model),
             "gravity": float(gravity_error_model @ self.Qg @ gravity_error_model),
             "posture": float(posture_error_model @ self.Qq @ posture_error_model),
-            "velocity": float(
-                dq1_model @ self.Qv @ dq1_model
-                + ee_position_velocity_model @ self.Qeev @ ee_position_velocity_model
-            ),
+            "velocity": float(dq1_model @ self.Qv @ dq1_model),
             "control": float(u @ self.R @ u),
         }
         self.last_u_raw = u_raw.copy()
@@ -219,7 +210,6 @@ class ArmLQRPolicy:
             "Qg": self.Qg.copy(),
             "Qq": self.Qq.copy(),
             "Qv": self.Qv.copy(),
-            "Qeev": self.Qeev.copy(),
             "R": self.R.copy(),
             "posture_reference": self.default_q.copy(),
         }

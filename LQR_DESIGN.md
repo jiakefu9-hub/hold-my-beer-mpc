@@ -181,14 +181,7 @@ G_{p,k}=J_{p,k}S_q,\qquad
 d_{p,k}=r_p(\bar q_k)-J_{p,k}\bar q_k
 $
 
-右臂关节不会改变上游 IMU site，因此上式中 torso 位姿对右臂 $q$ 的导数为零。torso-relative 末端位置只由右臂关节角决定，其速度可写为：
-
-$
-v_{p,k}=J_{p,k}\dot q_k=G_{pv,k}x_k,
-\qquad G_{pv,k}=J_{p,k}S_v
-$
-
-加速度代价不能惩罚近似恒定的漂移速度，因此当前版本单独加入 $v_p$ 代价，抑制末端持续向后或横向漂移。
+右臂关节不会改变上游 IMU site，因此上式中 torso 位姿对右臂 $q$ 的导数为零。末端速度代价曾做过一次对照，但关闭后主指标更好且位置误差仍可接受，因此当前不加入该项。
 
 ### 4.4 有方向的三维重力误差
 
@@ -230,7 +223,7 @@ $
 - base 预测器提供 `{}^W a_{B,k}, {}^W \omega_{B,k}, {}^W \alpha_{B,k}, {}^W R_{B,k}`
 - 运动学 helper 提供 `{}^B p_E(\bar q_k), {}^B J_v(\bar q_k), {}^B J_\omega(\bar q_k)`
 - `{}^B \dot J_v, {}^B \dot J_\omega, J_{g,k}` 可由解析法或有限差分法在工作点处计算
-- 然后严格按本节公式生成 `D_acc,k, C_acc,k, B_acc,k, D_alpha,k, C_alpha,k, B_alpha,k, d_p,k, G_p,k, G_pv,k, d_g,k, G_g,k`
+- 然后严格按本节公式生成 `D_acc,k, C_acc,k, B_acc,k, D_alpha,k, C_alpha,k, B_alpha,k, d_p,k, G_p,k, d_g,k, G_g,k`
 
 后文第 5 节到第 9 节中的所有 `Q_xx,k, Q_xu,k, Q_uu,k, f_x,k, f_u,k, P_k, p_k` 都建立在这里这些系数之上。因此本节就是后续程序实现时最直接的“物理建模说明书”。
 
@@ -241,10 +234,10 @@ $
 每一步代价定义为：
 
 $
-\ell_k(x_k, u_k) = \|{}^W a_{E,k}\|_{Q_a}^2 + \|{}^W \alpha_{E,k}\|_{Q_\alpha}^2 + \|r_{p,k}\|_{Q_p}^2 + \|v_{p,k}\|_{Q_{pv}}^2 + \|r_{g,k}\|_{Q_g}^2 + \|q_k - q_{nom}\|_{Q_q}^2 + \|\dot q_k\|_{Q_v}^2 + \|u_k\|_{R}^2
+\ell_k(x_k, u_k) = \|{}^W a_{E,k}\|_{Q_a}^2 + \|{}^W \alpha_{E,k}\|_{Q_\alpha}^2 + \|r_{p,k}\|_{Q_p}^2 + \|r_{g,k}\|_{Q_g}^2 + \|q_k - q_{nom}\|_{Q_q}^2 + \|\dot q_k\|_{Q_v}^2 + \|u_k\|_{R}^2
 $
 
-其中 $Q_p\succeq0$ 是 torso-relative 末端位置权重，$Q_{pv}\succeq0$ 是同一坐标系下的末端速度权重。当前诊断文件中的 `velocity` 代价等于关节速度代价与末端位置速度代价之和。
+其中 $Q_p\succeq0$ 是 torso-relative 末端位置权重，`velocity` 代价只表示关节速度项。
 
 `20260721_224416` 曾将三维重力方向权重从 $Q_g=30I_3$ 提高为 $Q_g=45I_3$，但右手重力误差、线加速度和角加速度均变差，并出现 elbow 下限冲击。单变量对照 `20260722_204009` 已恢复 $Q_g=30I_3$，其余执行层保持不变；当前代码继续使用 $Q_g=30I_3$。
 
@@ -287,7 +280,7 @@ $
 ### 6.1 二次项矩阵
 
 $
-Q_{xx,k} = S_v^T C_{acc,k}^T Q_a C_{acc,k} S_v + S_v^T C_{\alpha,k}^T Q_\alpha C_{\alpha,k} S_v + G_{p,k}^T Q_p G_{p,k} + G_{pv,k}^T Q_{pv} G_{pv,k} + G_{g,k}^T Q_g G_{g,k} + S_q^T Q_q S_q + S_v^T Q_v S_v
+Q_{xx,k} = S_v^T C_{acc,k}^T Q_a C_{acc,k} S_v + S_v^T C_{\alpha,k}^T Q_\alpha C_{\alpha,k} S_v + G_{p,k}^T Q_p G_{p,k} + G_{g,k}^T Q_g G_{g,k} + S_q^T Q_q S_q + S_v^T Q_v S_v
 $
 
 $
@@ -1016,7 +1009,7 @@ $
 当前实验完全旁路 `u = ddq_des` 后处理：
 
 - torso-relative 位置权重由 `configs/g1.yaml` 的 `lqr_q_position` 配置，当前采用 $Q_p=60I_3$
-- torso-relative 末端速度权重由 `lqr_q_ee_velocity` 配置，当前采用 $Q_{pv}=10I_3$；它用于抑制近似恒速的位置漂移，不修改测量值
+- 当前不使用 torso-relative 末端速度代价
 - 当前关节姿态权重采用 $Q_q=\operatorname{diag}(40,50,30,10,1)$。shoulder pitch/roll 保持上臂姿态，shoulder yaw 防止向 torso 中线内旋，elbow 防止过度屈肘把手收回胸前，wrist roll 仍保留较大调姿自由度
 - Riccati 得到的 `u_raw` 直接作为 `ddq_des`
 - 不启用 `max_ddq` 硬限幅、joint-limit guard、ddq 变化率限制或 ddq 平滑

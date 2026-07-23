@@ -1499,7 +1499,6 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
     Qg = np.asarray(cost_definition["Qg"], dtype=np.float64)
     Qq = np.asarray(cost_definition["Qq"], dtype=np.float64)
     Qv = np.asarray(cost_definition["Qv"], dtype=np.float64)
-    Qeev = np.asarray(cost_definition.get("Qeev", np.zeros((3, 3))), dtype=np.float64)
     R = np.asarray(cost_definition["R"], dtype=np.float64)
     posture_reference = np.asarray(cost_definition["posture_reference"], dtype=np.float64)
 
@@ -1518,9 +1517,6 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
         dq_actual = right_dq[end_index]
         position_actual = position_error[end_index]
         gravity_actual = gravity_error[end_index]
-        ee_position_velocity_actual = (
-            position_error[end_index] - position_error[before_index]
-        ) / interval_dt
         posture_error = q_actual - posture_reference
         control = ddq_des[start_index]
         actual_cost = np.array(
@@ -1530,8 +1526,7 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
                 position_actual @ Qp @ position_actual,
                 gravity_actual @ Qg @ gravity_actual,
                 posture_error @ Qq @ posture_error,
-                dq_actual @ Qv @ dq_actual
-                + ee_position_velocity_actual @ Qeev @ ee_position_velocity_actual,
+                dq_actual @ Qv @ dq_actual,
                 control @ R @ control,
             ],
             dtype=np.float64,

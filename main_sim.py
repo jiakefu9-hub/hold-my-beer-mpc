@@ -158,7 +158,6 @@ if __name__ == "__main__":
             "q_gravity": float(config.get("lqr_q_gravity", 30.0)),
             "q_posture": config.get("lqr_q_posture", 0.4),
             "q_vel": float(config.get("lqr_q_vel", 0.02)),
-            "q_ee_velocity": float(config.get("lqr_q_ee_velocity", 0.0)),
             "r_ddq": float(config.get("lqr_r_ddq", 0.25)),
             "terminal_scale": float(config.get("lqr_terminal_scale", 2.0)),
             "reg": float(config.get("lqr_reg", 1e-6)),
@@ -173,7 +172,7 @@ if __name__ == "__main__":
         arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
         lqr_cost_definition = arm_policy.get_cost_definition()
         policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with per-joint posture weights, torso-relative end-effector position/velocity costs, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and validated local MuJoCo forward-dynamics torque mapping initialized by non-friction-constraint-aware inverse dynamics plus joint-space PD"
+        controller_notes = "finite-horizon time-varying LQR with per-joint posture weights, torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and validated local MuJoCo forward-dynamics torque mapping initialized by non-friction-constraint-aware inverse dynamics plus joint-space PD"
         controller_meta = {
             "lqr_config": {
                 **lqr_kwargs,
@@ -202,7 +201,7 @@ if __name__ == "__main__":
                 "torso_alpha_source": "finite_difference_world_angular_velocity",
                 "position_reference_frame": "torso_imu",
                 "position_reference_q": right_arm_target.copy(),
-                "end_effector_velocity_cost_enabled": arm_policy.q_ee_velocity > 0.0,
+                "end_effector_velocity_cost_enabled": False,
                 "gravity_error": "directed_3d",
                 "ddq_post_process": "fully_bypassed",
                 "ddq_hard_clip_enabled": False,
