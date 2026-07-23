@@ -152,8 +152,8 @@ if __name__ == "__main__":
     if arm_controller == "lqr":
         lqr_kwargs = {
             "horizon": int(config.get("lqr_horizon", 12)),
-            "q_acc": float(config.get("lqr_q_acc", 1.0)),
-            "q_alpha": float(config.get("lqr_q_alpha", 0.05)),
+            "q_ee_acc": float(config.get("lqr_q_ee_acc", 1.0)),
+            "q_ee_alpha": float(config.get("lqr_q_ee_alpha", 0.05)),
             "q_position": float(config.get("lqr_q_position", 20.0)),
             "q_gravity": float(config.get("lqr_q_gravity", 30.0)),
             "q_posture": config.get("lqr_q_posture", 0.4),

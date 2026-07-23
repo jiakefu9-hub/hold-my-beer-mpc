@@ -1493,8 +1493,8 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
         trajectory_data.update(derived)
         return
 
-    Qa = np.asarray(cost_definition["Qa"], dtype=np.float64)
-    Qalpha = np.asarray(cost_definition["Qalpha"], dtype=np.float64)
+    Q_ee_acc = np.asarray(cost_definition["Q_ee_acc"], dtype=np.float64)
+    Q_ee_alpha = np.asarray(cost_definition["Q_ee_alpha"], dtype=np.float64)
     Qp = np.asarray(cost_definition["Qp"], dtype=np.float64)
     Qg = np.asarray(cost_definition["Qg"], dtype=np.float64)
     Qq = np.asarray(cost_definition["Qq"], dtype=np.float64)
@@ -1521,8 +1521,8 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
         control = ddq_des[start_index]
         actual_cost = np.array(
             [
-                ee_lin_acc_real @ Qa @ ee_lin_acc_real,
-                ee_ang_acc_real @ Qalpha @ ee_ang_acc_real,
+                ee_lin_acc_real @ Q_ee_acc @ ee_lin_acc_real,
+                ee_ang_acc_real @ Q_ee_alpha @ ee_ang_acc_real,
                 position_actual @ Qp @ position_actual,
                 gravity_actual @ Qg @ gravity_actual,
                 posture_error @ Qq @ posture_error,

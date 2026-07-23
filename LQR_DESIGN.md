@@ -1008,6 +1008,7 @@ $
 
 当前实验完全旁路 `u = ddq_des` 后处理：
 
+- 世界系末端线加速度和角加速度权重分别由 `lqr_q_ee_acc`、`lqr_q_ee_alpha` 配置，当前为 $Q_a=1.0I_3$、$Q_\alpha=0.075I_3$
 - torso-relative 位置权重由 `configs/g1.yaml` 的 `lqr_q_position` 配置，当前采用 $Q_p=60I_3$
 - 当前不使用 torso-relative 末端速度代价
 - 当前关节姿态权重采用 $Q_q=\operatorname{diag}(40,50,30,10,1)$。shoulder pitch/roll 保持上臂姿态，shoulder yaw 防止向 torso 中线内旋，elbow 防止过度屈肘把手收回胸前，wrist roll 仍保留较大调姿自由度

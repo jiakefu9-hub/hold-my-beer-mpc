@@ -12,6 +12,9 @@ arm_control_decimation: 3
 arm_controller: lqr
 lqr_horizon: 12
 # LQR cost tuning. Position is measured in the torso IMU frame.
+# End-effector linear/angular acceleration weights.
+lqr_q_ee_acc: 1.0
+lqr_q_ee_alpha: 0.075
 lqr_q_position: 60.0
 lqr_q_gravity: 30.0
 # Joint order: shoulder pitch, shoulder roll, shoulder yaw, elbow, wrist roll.

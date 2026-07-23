@@ -19,8 +19,8 @@ class ArmLQRPolicy:
         default_q,
         control_dt=0.02,
         horizon=12,
-        q_acc=1.0,
-        q_alpha=0.05,
+        q_ee_acc=1.0,
+        q_ee_alpha=0.05,
         q_position=20.0,
         q_gravity=30.0,
         q_posture=0.4,
@@ -44,8 +44,8 @@ class ArmLQRPolicy:
         # 控制周期；主程序 main_sim.py 中传入手臂控制更新周期 arm_control_dt。
         self.control_dt = float(control_dt)
         self.horizon = int(horizon)
-        self.q_acc = float(q_acc)
-        self.q_alpha = float(q_alpha)
+        self.q_ee_acc = float(q_ee_acc)
+        self.q_ee_alpha = float(q_ee_alpha)
         self.q_position = float(q_position)
         self.q_gravity = float(q_gravity)
         q_posture = np.asarray(q_posture, dtype=np.float64)
@@ -56,8 +56,8 @@ class ArmLQRPolicy:
         self.q_posture = q_posture.copy()
         self.q_vel = float(q_vel)
         self.r_ddq = float(r_ddq)
-        self.Qa = np.eye(3) * float(q_acc)
-        self.Qalpha = np.eye(3) * float(q_alpha)
+        self.Q_ee_acc = np.eye(3) * self.q_ee_acc
+        self.Q_ee_alpha = np.eye(3) * self.q_ee_alpha
         self.Qp = np.eye(3) * float(q_position)
         self.Qg = np.eye(3) * float(q_gravity)
         # 分关节姿态代价：允许单独约束 shoulder pitch/roll，保留其余关节调姿自由度。
@@ -122,11 +122,11 @@ class ArmLQRPolicy:
         for k in range(self.horizon - 1, -1, -1):
             t = step_terms[k]
             # 先整理当前第 k 步的单步代价 l_k 参数：关于状态 x 和控制 u 的二次项 / 一次项。
-            Qxx = S_v.T @ t["C_acc"].T @ self.Qa @ t["C_acc"] @ S_v + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["C_alpha"] @ S_v + t["G_p"].T @ self.Qp @ t["G_p"] + t["G_g"].T @ self.Qg @ t["G_g"] + S_q.T @ self.Qq @ S_q + S_v.T @ self.Qv @ S_v
-            Qxu = S_v.T @ t["C_acc"].T @ self.Qa @ t["B_acc"] + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["B_alpha"]
-            Quu = t["B_acc"].T @ self.Qa @ t["B_acc"] + t["B_alpha"].T @ self.Qalpha @ t["B_alpha"] + self.R
-            fx = S_v.T @ t["C_acc"].T @ self.Qa @ t["D_acc"] + S_v.T @ t["C_alpha"].T @ self.Qalpha @ t["D_alpha"] + t["G_p"].T @ self.Qp @ t["d_p"] + t["G_g"].T @ self.Qg @ t["d_g"] - S_q.T @ self.Qq @ self.default_q
-            fu = t["B_acc"].T @ self.Qa @ t["D_acc"] + t["B_alpha"].T @ self.Qalpha @ t["D_alpha"]
+            Qxx = S_v.T @ t["C_acc"].T @ self.Q_ee_acc @ t["C_acc"] @ S_v + S_v.T @ t["C_alpha"].T @ self.Q_ee_alpha @ t["C_alpha"] @ S_v + t["G_p"].T @ self.Qp @ t["G_p"] + t["G_g"].T @ self.Qg @ t["G_g"] + S_q.T @ self.Qq @ S_q + S_v.T @ self.Qv @ S_v
+            Qxu = S_v.T @ t["C_acc"].T @ self.Q_ee_acc @ t["B_acc"] + S_v.T @ t["C_alpha"].T @ self.Q_ee_alpha @ t["B_alpha"]
+            Quu = t["B_acc"].T @ self.Q_ee_acc @ t["B_acc"] + t["B_alpha"].T @ self.Q_ee_alpha @ t["B_alpha"] + self.R
+            fx = S_v.T @ t["C_acc"].T @ self.Q_ee_acc @ t["D_acc"] + S_v.T @ t["C_alpha"].T @ self.Q_ee_alpha @ t["D_alpha"] + t["G_p"].T @ self.Qp @ t["d_p"] + t["G_g"].T @ self.Qg @ t["d_g"] - S_q.T @ self.Qq @ self.default_q
+            fu = t["B_acc"].T @ self.Q_ee_acc @ t["D_acc"] + t["B_alpha"].T @ self.Q_ee_alpha @ t["D_alpha"]
             # 这里进入第 k 步时，P/p 是值函数 V_{k+1} 的参数。
             # 把单步代价加上 V_{k+1}，得到当前 Q_k(x,u) 的参数。
             F = Qxx + A.T @ P @ A
@@ -160,8 +160,8 @@ class ArmLQRPolicy:
         gravity_error_model = first_terms["G_g"] @ x1_model + first_terms["d_g"]
         posture_error_model = q1_model - self.default_q
         cost_terms = {
-            "linear_acceleration": float(ee_lin_acc_model @ self.Qa @ ee_lin_acc_model),
-            "angular_acceleration": float(ee_ang_acc_model @ self.Qalpha @ ee_ang_acc_model),
+            "linear_acceleration": float(ee_lin_acc_model @ self.Q_ee_acc @ ee_lin_acc_model),
+            "angular_acceleration": float(ee_ang_acc_model @ self.Q_ee_alpha @ ee_ang_acc_model),
             "position": float(position_error_model @ self.Qp @ position_error_model),
             "gravity": float(gravity_error_model @ self.Qg @ gravity_error_model),
             "posture": float(posture_error_model @ self.Qq @ posture_error_model),
@@ -204,8 +204,8 @@ class ArmLQRPolicy:
         """返回实际轨迹代价重算所需的权重和姿态参考。"""
         return {
             "term_names": self.COST_TERM_NAMES,
-            "Qa": self.Qa.copy(),
-            "Qalpha": self.Qalpha.copy(),
+            "Q_ee_acc": self.Q_ee_acc.copy(),
+            "Q_ee_alpha": self.Q_ee_alpha.copy(),
             "Qp": self.Qp.copy(),
             "Qg": self.Qg.copy(),
             "Qq": self.Qq.copy(),
