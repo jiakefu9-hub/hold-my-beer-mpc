@@ -12,11 +12,16 @@ arm_control_decimation: 3
 arm_controller: lqr
 lqr_horizon: 12
 # LQR cost tuning. Position is measured in the torso IMU frame.
-lqr_q_position: 40.0
+lqr_q_position: 60.0
 lqr_q_gravity: 30.0
 # Joint order: shoulder pitch, shoulder roll, shoulder yaw, elbow, wrist roll.
-# Keep the upper arm near its nominal pose while leaving yaw/elbow/wrist freer to stabilize the bottle.
-lqr_q_posture: [20.0, 30.0, 2.0, 0.4, 0.4]
+# Keep the arm near the nominal carrying pose. The distal joints remain less constrained
+# than shoulder pitch/roll, but no joint is left nearly free to accumulate pose drift.
+lqr_q_posture: [40.0, 50.0, 30.0, 10.0, 1.0]
+lqr_q_vel: 0.02
+# Torso-relative end-effector velocity damping. Acceleration cost alone does not
+# penalize a nearly constant drift velocity.
+lqr_q_ee_velocity: 10.0
 lqr_r_ddq: 0.25
 # q_ref/dq_ref still use the physical joint limits and this velocity limit.
 lqr_max_dq: 1.0
