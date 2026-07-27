@@ -8,8 +8,32 @@ simulation_dt: 0.002
 control_decimation: 10
 # Arm controller update frequency: simulation_dt * arm_control_decimation = 0.006; 166.7Hz
 arm_control_decimation: 3
-# Right arm controller: "pid" or "lqr"
-arm_controller: lqr
+# 右臂控制方式："pid"、"lqr" 或 "mpc"
+arm_controller: mpc
+
+# 仿真显示与实验长度。命令行 --headless/--smoke-test 会覆盖这些值。
+viewer_enabled: true
+record_video: true
+warmup_cycles: 3
+evaluation_cycles: 8
+cooldown_cycles: 2
+
+# ==============================
+# PID 参数
+# ==============================
+pid_kp_pose: [1.20, 1.20]
+pid_kd_pose: [1.20, 1.20]
+pid_ki_pose: [0.0, 0.0]
+pid_posture_gain: [1.15, 1.15, 2.10, 1.15, 0.95]
+pid_finite_diff_eps: 0.0001
+pid_damping: 0.15
+pid_integral_limit: 0.20
+pid_max_dq: 0.48
+pid_de_g_alpha: 0.07
+
+# ==============================
+# LQR 参数
+# ==============================
 lqr_horizon: 12
 # LQR cost tuning. Position is measured in the torso IMU frame.
 # End-effector linear/angular acceleration weights.
@@ -32,19 +56,54 @@ lqr_ddq_smoothing_alpha: 0.45
 lqr_joint_limit_margin: 0.25
 lqr_joint_limit_stiffness: 8.0
 lqr_joint_limit_damping: 2.0
-# Protect MuJoCo accelerometer data and finite-difference angular acceleration before LQR.
-lqr_torso_acc_filter_alpha: 0.20
-lqr_torso_alpha_filter_alpha: 0.20
-lqr_torso_acc_limit: 30.0
-lqr_torso_alpha_limit: 40.0
-# Local forward-dynamics torque mapping: one baseline + five right-arm perturbations.
-lqr_forward_dynamics_perturbation: 0.1
-lqr_forward_dynamics_regularization: 5.0
-# Re-linearize once around the accepted torque when the five-joint residual norm exceeds this value.
-lqr_forward_dynamics_second_pass_error_threshold: 5.0
-# Full mj_forward candidates must satisfy both per-joint tracking and absolute acceleration safety limits.
-lqr_forward_dynamics_max_joint_error: 4.0
-lqr_forward_dynamics_max_abs_qacc: 8.0
+# LQR/MPC 共用的 base 测量保护。
+ddq_torso_acc_filter_alpha: 0.20
+ddq_torso_alpha_filter_alpha: 0.20
+ddq_torso_acc_limit: 30.0
+ddq_torso_alpha_limit: 40.0
+
+# ==============================
+# MPC 参数
+# ==============================
+mpc_horizon: 12
+mpc_q_ee_acc: 1.0
+mpc_q_ee_alpha: 0.075
+mpc_q_gravity: 30.0
+# 五个关节趋近零位的正则权重；这是低权重项，不是重力误差。
+mpc_q_posture: [0.05, 0.05, 0.05, 0.05, 0.05]
+mpc_q_vel: 0.02
+mpc_r_ddq: 0.25
+mpc_terminal_scale: 2.0
+# 顺序：shoulder pitch、roll、yaw、elbow、wrist roll。
+mpc_q_min_deg: [-20.0, -10.0, -20.0, -20.0, -20.0]
+mpc_q_max_deg: [10.0, 5.0, 5.0, 20.0, 20.0]
+mpc_max_dq: 1.0
+mpc_max_ddq: 8.0
+mpc_qp_regularization: 0.000001
+mpc_osqp_max_iter: 400
+mpc_osqp_eps_abs: 0.001
+mpc_osqp_eps_rel: 0.001
+mpc_osqp_polishing: false
+mpc_failure_braking_gain: 4.0
+# 步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
+mpc_disturbance_feedforward_enabled: true
+# 可选：raw、half_smoothed、fully_smoothed。
+mpc_disturbance_template: fully_smoothed
+
+# ==============================
+# DDQ 到力矩的共用执行层
+# ==============================
+# 一轮包含：名义前向动力学、5 次力矩扰动和 4 个完整候选验收。
+ddq_execution_perturbation: 0.1
+ddq_execution_regularization: 5.0
+ddq_execution_second_pass_error_threshold: 5.0
+ddq_execution_max_joint_error: 4.0
+ddq_execution_max_abs_qacc: 8.0
+# LQR 保持当前两轮/救援行为；MPC 初版只跑第一轮并记录结果。
+lqr_execution_enable_second_pass: true
+lqr_execution_safety_rescue_passes: 2
+mpc_execution_enable_second_pass: false
+mpc_execution_safety_rescue_passes: 0
 
 kps: [100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40]
 kds: [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2]

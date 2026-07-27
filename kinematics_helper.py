@@ -23,6 +23,7 @@ class DisturbanceInput:
     acc_world: Optional[np.ndarray] = None
     omega_world: Optional[np.ndarray] = None
     alpha_world: Optional[np.ndarray] = None
+    # 该姿态由当前实测值锚定模板相对姿态得到。
     rot_world_body: Optional[np.ndarray] = None
 
 
@@ -39,10 +40,14 @@ class ControllerHelpers:
     model: Any = None
     data: Any = None
     disturbance: Optional[DisturbanceInput] = None
+    disturbance_prediction: Optional[tuple] = None
     kinematics: Optional[KinematicsCache] = None
     torso_relative_position_reference: Optional[np.ndarray] = None
     compute_gravity_error: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None
     compute_lqr_terms: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, Optional[DisturbanceInput]], dict]] = None
+    compute_mpc_terms: Optional[
+        Callable[[np.ndarray, np.ndarray, Optional[DisturbanceInput]], dict]
+    ] = None
 
 
 class KinematicsHelper:
@@ -115,12 +120,15 @@ class KinematicsHelper:
         alpha_world: Optional[np.ndarray] = None,
         rot_world_body: Optional[np.ndarray] = None,
     ) -> DisturbanceInput:
-        return DisturbanceInput(acc_world, omega_world, alpha_world, rot_world_body)
+        return DisturbanceInput(
+            acc_world, omega_world, alpha_world, rot_world_body
+        )
 
     def build_helpers(
         self,
         data: Any,
         disturbance: Optional[DisturbanceInput] = None,
+        disturbance_prediction: Optional[tuple] = None,
     ) -> ControllerHelpers:
         qpos_ref = np.asarray(data.qpos, dtype=np.float64).copy()
         position_reference = (
@@ -128,20 +136,27 @@ class KinematicsHelper:
             if self.torso_relative_position_reference is None
             else self.torso_relative_position_reference.copy()
         )
-        # 打包传给 ArmLQRPolicy / ArmPIDPolicy 的辅助对象；各字段对应 main_sim.py 主循环里的实时量
+        # 【半核心代码】统一打包各控制器所需的运动学回调。
+        # PID/MPC 使用二维重力误差；现有 LQR 仍通过 compute_lqr_terms 使用三维误差，
+        # 因此不能直接把底层三维函数改掉。
         return ControllerHelpers(
             model=self.model,  # right_arm_helper 初始化时的 MuJoCo 模型 m
             data=data,  # 当前仿真步的机器人状态 d（qpos/qvel 等）
-            disturbance=disturbance,  # main_sim 中由躯干 acc/omega/alpha/rotmat 构建的扰动
+            disturbance=disturbance,  # main_sim 中由世界系躯干 acc/omega/alpha/R 构建的完整扰动
+            disturbance_prediction=disturbance_prediction,
             kinematics=self.compute_kinematics_cache(data),  # 当前姿态下末端雅可比 J_v/J_w 及其导数
             torso_relative_position_reference=position_reference,
-            compute_gravity_error=lambda q, W_R_I: self.compute_gravity_error(q, W_R_I, qpos_ref),  # 重力方向误差 e_g
+            compute_gravity_error=lambda q, W_R_I: self.compute_tilt_error(q, W_R_I, qpos_ref),
             compute_lqr_terms=lambda q, dq, W_R_I, dist=None: self.compute_lqr_terms(
                 q, dq, W_R_I, qpos_ref, dist, position_reference
-            ),  # LQR 代价里加速度、位置和重力项的局部线性化系数
+            ),
+            compute_mpc_terms=lambda q, dq, dist=None: self.compute_mpc_terms(
+                q, dq, qpos_ref, dist
+            ),
         )
 
     def compute_gravity_error(self, q_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray) -> np.ndarray:
+        """现有 LQR 使用的三维有方向重力误差。"""
         # q_right_arm: shape=(5,), right arm qpos[25:30]; qpos_reference: shape=(model.nq,), full robot qpos.
         self._set_scratch_state(qpos_reference, q_right_arm, np.zeros(len(self.qvel_indices), dtype=np.float64))
         W_R_E = self._scratch.site_xmat[self.ee_site_id].reshape(3, 3).copy()
@@ -149,6 +164,17 @@ class KinematicsHelper:
         gravity_reference_end = np.array([0.0, 0.0, -np.linalg.norm(gravity_world)], dtype=np.float64)
         # 三维有方向误差：倒立时 z 误差约为 2g，不再与正立同为零。
         return W_R_E.T @ gravity_world - gravity_reference_end
+
+    def compute_tilt_error(self, q_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray) -> np.ndarray:
+        """PID/MPC 使用的二维有符号倾斜误差。"""
+        self._set_scratch_state(
+            qpos_reference,
+            q_right_arm,
+            np.zeros(len(self.qvel_indices), dtype=np.float64),
+        )
+        W_R_E = self._scratch.site_xmat[self.ee_site_id].reshape(3, 3)
+        gravity_world = np.asarray(self.model.opt.gravity, dtype=np.float64)
+        return (W_R_E.T @ gravity_world)[:2].copy()
 
     def compute_gravity_error_jacobian(self, q_right_arm: np.ndarray, W_R_I: np.ndarray, qpos_reference: np.ndarray, eps: float = 1e-4) -> np.ndarray:
         error_dim = self.compute_gravity_error(q_right_arm, W_R_I, qpos_reference).shape[0]
@@ -228,7 +254,11 @@ class KinematicsHelper:
         J_g = self.compute_gravity_error_jacobian(q, np.eye(3), qpos_reference)
         e_g = self.compute_gravity_error(q, np.eye(3), qpos_reference)
         return {
-            "D_acc": a_B + np.cross(alpha_B, r_BE) + np.cross(omega_B, np.cross(omega_B, r_BE)),
+            "D_acc": a_B
+            + np.cross(alpha_B, r_BE)
+            + np.cross(
+                omega_B, np.cross(omega_B, r_BE)
+            ),
             "C_acc": 2.0 * self._skew(omega_B) @ J_v + dJ_v,
             "B_acc": J_v,
             "D_alpha": alpha_B,
@@ -243,6 +273,102 @@ class KinematicsHelper:
             "position_error": position_error.copy(),
             "gravity_error": e_g.copy(),
         }
+
+    def compute_mpc_terms(
+        self,
+        q_right_arm: np.ndarray,
+        dq_right_arm: np.ndarray,
+        qpos_reference: np.ndarray,
+        disturbance: Optional[DisturbanceInput] = None,
+    ) -> dict:
+        """构造 MPC 单个预测步的局部仿射观测模型。
+
+        【核心代码】这里只提供末端线/角加速度与二维重力误差。
+        torso-relative 位置既不进入代价，也不进入约束。
+        """
+        q = np.asarray(q_right_arm, dtype=np.float64)
+        dq = np.asarray(dq_right_arm, dtype=np.float64)
+        self._set_scratch_state(qpos_reference, q, dq)
+        J_v, J_w = self._site_jacobians_world()
+        dJ_v, dJ_w = self._site_jacobian_dots_world(qpos_reference, q, dq)
+
+        # 有限差分会改变 scratch，读取位姿前必须恢复当前线性化点。
+        self._set_scratch_state(qpos_reference, q, dq)
+        p_E = self._scratch.site_xpos[self.ee_site_id].copy()
+        p_B = self._scratch.site_xpos[self.imu_site_id].copy()
+        W_R_B_current = (
+            self._scratch.site_xmat[self.imu_site_id].reshape(3, 3).copy()
+        )
+        W_R_E_current = (
+            self._scratch.site_xmat[self.ee_site_id].reshape(3, 3).copy()
+        )
+
+        omega_B = self._disturbance_vector(disturbance, "omega_world")
+        a_B = self._disturbance_vector(disturbance, "acc_world")
+        alpha_B = self._disturbance_vector(disturbance, "alpha_world")
+        W_R_B_predicted = self._disturbance_rotation(
+            disturbance, W_R_B_current
+        )
+
+        # 【核心代码】scratch 中的 p_E-p_B 已是当前 base 姿态下的世界系杠杆臂。
+        # base 平移严格相消，不需要进入模板。前馈只需用预测姿态相对当前姿态
+        # 的旋转增量修正它；关闭前馈时 delta_R=I，退化为 LQR 的直接差值写法。
+        delta_R = W_R_B_predicted @ W_R_B_current.T
+        r_BE = delta_R @ (p_E - p_B)
+        J_v = delta_R @ J_v
+        dJ_v = delta_R @ dJ_v
+        J_w = delta_R @ J_w
+        dJ_w = delta_R @ dJ_w
+        W_R_E = delta_R @ W_R_E_current
+
+        # 【核心代码】解析式二维重力 Jacobian。
+        # 相比逐关节中心差分，每个预测步可少做 10 次 mj_forward。
+        gravity_world = np.asarray(self.model.opt.gravity, dtype=np.float64)
+        gravity_end = W_R_E.T @ gravity_world
+        J_g = (W_R_E.T @ self._skew(gravity_world) @ J_w)[:2, :]
+        gravity_error = gravity_end[:2]
+
+        return {
+            "D_acc": a_B
+            + np.cross(alpha_B, r_BE)
+            + np.cross(
+                omega_B, np.cross(omega_B, r_BE)
+            ),
+            "C_acc": 2.0 * self._skew(omega_B) @ J_v + dJ_v,
+            "B_acc": J_v,
+            "D_alpha": alpha_B,
+            "C_alpha": self._skew(omega_B) @ J_w + dJ_w,
+            "B_alpha": J_w,
+            "d_g": gravity_error - J_g @ q,
+            "G_g": np.hstack([J_g, np.zeros_like(J_g)]),
+            "gravity_error": gravity_error.copy(),
+        }
+
+    @staticmethod
+    def _disturbance_vector(disturbance: Optional[DisturbanceInput], name: str) -> np.ndarray:
+        if disturbance is None:
+            return np.zeros(3, dtype=np.float64)
+        value = getattr(disturbance, name, None)
+        return np.zeros(3, dtype=np.float64) if value is None else np.asarray(value, dtype=np.float64)
+
+    @staticmethod
+    def _disturbance_rotation(
+        disturbance: Optional[DisturbanceInput],
+        default_rotation: np.ndarray,
+    ) -> np.ndarray:
+        if disturbance is None or disturbance.rot_world_body is None:
+            return np.asarray(default_rotation, dtype=np.float64)
+        rotation = np.asarray(disturbance.rot_world_body, dtype=np.float64)
+        if (
+            rotation.shape != (3, 3)
+            or not np.all(np.isfinite(rotation))
+            or not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-6)
+            or not np.isclose(np.linalg.det(rotation), 1.0, atol=1e-6)
+        ):
+            raise ValueError(
+                "disturbance.rot_world_body 必须是有效的 3x3 旋转矩阵。"
+            )
+        return rotation
 
     @staticmethod
     def _skew(v: np.ndarray) -> np.ndarray:

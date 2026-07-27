@@ -1,4 +1,5 @@
 import os
+from contextlib import nullcontext
 
 # viewer 使用 GLFW，离屏视频渲染改用独立 EGL 上下文，避免退出时 GLFW 重复销毁。
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -9,18 +10,18 @@ import numpy as np
 import torch
 import yaml
 
-# --- 引入我们独立的策略 ---
-from arm_pid import ArmPIDPolicy
-from arm_lqr import ArmLQRPolicy
-# 可选：导入手臂模型预测控制策略
 from kinematics_helper import KinematicsHelper
 from sim_support import (
     HeadingHoldController,
+    PhaseDisturbancePredictor,
     PerformanceMonitor,
+    TorsoAccelerationFilter,
     apply_computed_torque_control,
+    build_right_arm_control_record,
     build_right_arm_observation,
     build_run_metadata,
     close_renderer,
+    create_arm_controller,
     create_eval_run_dir,
     draw_debug_axes,
     finalize_run,
@@ -47,9 +48,14 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", type=str, help="config file name in the config folder")
+    parser.add_argument("--headless", action="store_true", help="不启动交互 viewer，适合服务器和自动测试")
+    parser.add_argument("--no-video", action="store_true", help="不创建离屏视频")
+    parser.add_argument("--smoke-test", action="store_true", help="只运行一个步态周期并关闭 viewer/video")
     args = parser.parse_args()
     config_file = args.config_file
-    with open(f"/home/fjk/g1_ws/hold-my-beer-mpc/configs/{config_file}", "r") as f:
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = config_file if os.path.isabs(config_file) else os.path.join(repo_dir, "configs", config_file)
+    with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
         policy_path = config["policy_path"]
         xml_path = config["xml_path"]
@@ -75,22 +81,11 @@ if __name__ == "__main__":
         num_actions = config["num_actions"]
         num_obs = config["num_obs"]
         arm_controller = config.get("arm_controller", "pid").lower()
+        if arm_controller not in {"pid", "lqr", "mpc"}:
+            raise ValueError(
+                f"arm_controller={arm_controller!r} 无效，只能选择 'pid'、'lqr' 或 'mpc'。"
+            )
         arm_control_decimation = int(config.get("arm_control_decimation", 2))
-        lqr_torso_acc_filter_alpha = float(config.get("lqr_torso_acc_filter_alpha", 0.20))
-        lqr_torso_alpha_filter_alpha = float(config.get("lqr_torso_alpha_filter_alpha", 0.20))
-        lqr_torso_acc_limit = float(config.get("lqr_torso_acc_limit", 30.0))
-        lqr_torso_alpha_limit = float(config.get("lqr_torso_alpha_limit", 40.0))
-        lqr_forward_dynamics_perturbation = float(config.get("lqr_forward_dynamics_perturbation", 0.1))
-        lqr_forward_dynamics_regularization = float(config.get("lqr_forward_dynamics_regularization", 5.0))
-        lqr_forward_dynamics_second_pass_error_threshold = float(
-            config.get("lqr_forward_dynamics_second_pass_error_threshold", 5.0)
-        )
-        lqr_forward_dynamics_max_joint_error = float(
-            config.get("lqr_forward_dynamics_max_joint_error", 4.0)
-        )
-        lqr_forward_dynamics_max_abs_qacc = float(
-            config.get("lqr_forward_dynamics_max_abs_qacc", 8.0)
-        )
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
         heading_control_enabled = bool(config.get("heading_control_enabled", True))
         heading_filter_cycles = float(config.get("heading_filter_cycles", 1.0))
@@ -109,9 +104,19 @@ if __name__ == "__main__":
 
     counter = 0
     gait_period = 0.8
-    warmup_cycles = 3
-    evaluation_cycles = 8
-    cooldown_cycles = 2
+    warmup_cycles = int(config.get("warmup_cycles", 3))
+    evaluation_cycles = int(config.get("evaluation_cycles", 8))
+    cooldown_cycles = int(config.get("cooldown_cycles", 2))
+    viewer_enabled = bool(config.get("viewer_enabled", True)) and not args.headless
+    record_video = bool(config.get("record_video", True)) and not args.no_video
+    if args.smoke_test:
+        warmup_cycles = 0
+        evaluation_cycles = 1
+        cooldown_cycles = 0
+        viewer_enabled = False
+        record_video = False
+    if warmup_cycles < 0 or evaluation_cycles <= 0 or cooldown_cycles < 0:
+        raise ValueError("warmup/evaluation/cooldown 周期必须分别满足 >=0、>0、>=0。")
     total_cycles = warmup_cycles + evaluation_cycles + cooldown_cycles
     eval_start_time = warmup_cycles * gait_period
     eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
@@ -127,6 +132,8 @@ if __name__ == "__main__":
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
+    # 初始化 site_xmat/xpos 等派生运动学量；扰动前馈第 0 拍需要有效的 torso 姿态。
+    mujoco.mj_forward(m, d)
 
     # --- 调试打印：如需检查关节、速度和驱动器的索引映射，可在这里临时添加打印 ---
     
@@ -135,8 +142,8 @@ if __name__ == "__main__":
 
     # ==============================
     # 4. 实例化右臂控制器【核心代码】
-    # 右臂可在 PID / LQR 之间切换；这里决定了本次实验到底在比较什么控制器。
-    # 这部分要重点理解：控制器输入输出是什么、控制周期是多少、PID 与 LQR 的执行链有什么区别。
+    # 右臂可在 PID / LQR / MPC 之间切换；这里决定本次实验使用哪个控制器。
+    # 这部分要重点理解：控制器输入输出、控制周期，以及加速度控制器如何接入力矩执行链。
     # ==============================
     right_arm_target = arm_waist_target[6:11].copy()
     arm_control_dt = simulation_dt * arm_control_decimation
@@ -145,76 +152,45 @@ if __name__ == "__main__":
     desired_right_arm_ddq = np.zeros(5, dtype=np.float32)
     raw_right_arm_ddq = np.zeros(5, dtype=np.float64)
     right_ee_position_reference_torso = np.zeros(3, dtype=np.float64)
-    filtered_torso_acc = np.zeros(3, dtype=np.float64)
-    filtered_torso_alpha = np.zeros(3, dtype=np.float64)
     lqr_one_step_prediction = None
-    lqr_cost_definition = None
-    if arm_controller == "lqr":
-        lqr_kwargs = {
-            "horizon": int(config.get("lqr_horizon", 12)),
-            "q_ee_acc": float(config.get("lqr_q_ee_acc", 1.0)),
-            "q_ee_alpha": float(config.get("lqr_q_ee_alpha", 0.05)),
-            "q_position": float(config.get("lqr_q_position", 20.0)),
-            "q_gravity": float(config.get("lqr_q_gravity", 30.0)),
-            "q_posture": config.get("lqr_q_posture", 0.4),
-            "q_vel": float(config.get("lqr_q_vel", 0.02)),
-            "r_ddq": float(config.get("lqr_r_ddq", 0.25)),
-            "terminal_scale": float(config.get("lqr_terminal_scale", 2.0)),
-            "reg": float(config.get("lqr_reg", 1e-6)),
-            "max_ddq": float(config.get("lqr_max_ddq", 3.0)),
-            "max_dq": float(config.get("lqr_max_dq", 1.0)),
-            "ddq_rate_limit": float(config.get("lqr_ddq_rate_limit", 350.0)),
-            "ddq_smoothing_alpha": float(config.get("lqr_ddq_smoothing_alpha", 0.45)),
-            "joint_limit_margin": float(config.get("lqr_joint_limit_margin", 0.25)),
-            "joint_limit_stiffness": float(config.get("lqr_joint_limit_stiffness", 8.0)),
-            "joint_limit_damping": float(config.get("lqr_joint_limit_damping", 2.0)),
+    mpc_diagnostics = None
+    controller_setup = create_arm_controller(
+        config, arm_controller, right_arm_target, arm_control_dt
+    )
+    arm_policy = controller_setup.policy
+    acceleration_controller = controller_setup.acceleration_controller
+    lqr_cost_definition = controller_setup.lqr_cost_definition
+    controller_meta = controller_setup.metadata
+    torso_acceleration_filter = TorsoAccelerationFilter(
+        config, enabled=acceleration_controller
+    )
+    disturbance_predictor = None
+    if arm_controller == "mpc" and bool(
+        config.get("mpc_disturbance_feedforward_enabled", False)
+    ):
+        disturbance_predictor = PhaseDisturbancePredictor(
+            template_dir=os.path.join(
+                repo_dir, "disturbance_model_new", "templates_world"
+            ),
+            variant=config.get(
+                "mpc_disturbance_template", "fully_smoothed"
+            ),
+            control_dt=arm_control_dt,
+            horizon=arm_policy.horizon,
+            acc_limit=torso_acceleration_filter.acc_limit,
+            alpha_limit=torso_acceleration_filter.alpha_limit,
+        )
+        controller_meta["mpc_config"][
+            "disturbance_feedforward"
+        ] = disturbance_predictor.metadata()
+    elif arm_controller == "mpc":
+        controller_meta["mpc_config"]["disturbance_feedforward"] = {
+            "enabled": False,
+            "variant": str(
+                config.get("mpc_disturbance_template", "fully_smoothed")
+            ),
+            "prediction": "zero_order_hold_current_measurement",
         }
-        arm_policy = ArmLQRPolicy(default_q=right_arm_target, control_dt=arm_control_dt, **lqr_kwargs)
-        lqr_cost_definition = arm_policy.get_cost_definition()
-        policy_type = "ArmLQRPolicy"
-        controller_notes = "finite-horizon time-varying LQR with per-joint posture weights, torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and validated local MuJoCo forward-dynamics torque mapping initialized by non-friction-constraint-aware inverse dynamics plus joint-space PD"
-        controller_meta = {
-            "lqr_config": {
-                **lqr_kwargs,
-                "control_dt": arm_policy.control_dt,
-                "torque_control": "mujoco_local_forward_dynamics_mapping_from_inverse_dynamics_nominal",
-                "constraint_aware_tau_formula": "qfrc_inverse + qfrc_constraint_nonfriction",
-                "constraints_added_back": "contact + joint/tendon limit + equality",
-                "constraints_excluded_from_addback": "FRICTION_DOF + FRICTION_TENDON",
-                "forward_dynamics_mapping": "ddq_right ~= ddq_baseline + G_tau * delta_tau, then evaluate every full mj_forward candidate and select the minimum-error safe candidate",
-                "forward_dynamics_perturbation_nm": lqr_forward_dynamics_perturbation,
-                "forward_dynamics_regularization": lqr_forward_dynamics_regularization,
-                "forward_dynamics_validation_scales": [1.0, 0.5, 0.25, 0.125],
-                "forward_dynamics_second_pass_error_threshold": lqr_forward_dynamics_second_pass_error_threshold,
-                "forward_dynamics_max_joint_error": lqr_forward_dynamics_max_joint_error,
-                "forward_dynamics_max_abs_qacc": lqr_forward_dynamics_max_abs_qacc,
-                "forward_dynamics_candidate_selection": "minimum total error among candidates that improve total error and satisfy joint-error/qacc limits",
-                "forward_dynamics_evaluations_per_step": "10; plus 9 when the second pass triggers; up to two additional 9-evaluation safety-rescue passes only if final qacc exceeds the limit",
-                "uncontrolled_qacc_assumption": 0.0,
-                "ddq_tracking": "6ms_velocity_difference_aligned_between_consecutive_arm_updates",
-                "cost_tracking": "one_step_model_vs_realized_next_arm_update",
-                "torso_acc_filter_alpha": lqr_torso_acc_filter_alpha,
-                "torso_alpha_filter_alpha": lqr_torso_alpha_filter_alpha,
-                "torso_acc_limit": lqr_torso_acc_limit,
-                "torso_alpha_limit": lqr_torso_alpha_limit,
-                "torso_acc_source": "mujoco_imu_accelerometer_world_without_gravity",
-                "torso_alpha_source": "finite_difference_world_angular_velocity",
-                "position_reference_frame": "torso_imu",
-                "position_reference_q": right_arm_target.copy(),
-                "end_effector_velocity_cost_enabled": False,
-                "gravity_error": "directed_3d",
-                "ddq_post_process": "fully_bypassed",
-                "ddq_hard_clip_enabled": False,
-                "joint_limit_guard": "disabled",
-                "ddq_rate_limit_enabled": False,
-                "ddq_smoothing_enabled": False,
-            }
-        }
-    else:
-        arm_policy = ArmPIDPolicy(default_q=right_arm_target, kp_pose=np.array([1.20, 1.20], dtype=np.float64), kd_pose=np.array([1.2, 1.2], dtype=np.float64), ki_pose=0.0, posture_gain=np.array([1.15, 1.15, 2.10, 1.15, 0.95], dtype=np.float64), control_dt=arm_control_dt, damping=1.5e-1, max_dq=0.48, de_g_alpha=0.07)
-        policy_type = "ArmPIDPolicy"
-        controller_notes = "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small"
-        controller_meta = {"pid_config": {"default_q": right_arm_target, "kp_pose_diag": np.diag(arm_policy.kp_pose), "kd_pose_diag": np.diag(arm_policy.kd_pose), "ki_pose_diag": np.diag(arm_policy.ki_pose), "posture_gain_diag": np.diag(arm_policy.posture_gain), "finite_diff_eps": arm_policy.finite_diff_eps, "damping": arm_policy.damping, "integral_limit": arm_policy.integral_limit, "max_dq": arm_policy.max_dq, "de_g_alpha": arm_policy.de_g_alpha}}
     controller_meta["heading_control"] = {
         "enabled": heading_control_enabled,
         "reference_frame": "world",
@@ -230,8 +206,20 @@ if __name__ == "__main__":
     # 每次 run 都单独保存 metadata、轨迹、评估图和视频，方便横向对比。
     # 这是实验管理与结果保存，不是控制数学核心。
     # ==============================
-    run_metadata = build_run_metadata(config_file, experiment_name, policy_type, controller_notes, controller_meta, cmd_nominal, simulation_dt, gait_period, warmup_cycles, evaluation_cycles, cooldown_cycles)
-    run_dir = create_eval_run_dir("/home/fjk/g1_ws/hold-my-beer-mpc/evaluation", experiment_name, run_metadata)
+    run_metadata = build_run_metadata(
+        config_file,
+        experiment_name,
+        controller_setup.policy_type,
+        controller_setup.notes,
+        controller_meta,
+        cmd_nominal,
+        simulation_dt,
+        gait_period,
+        warmup_cycles,
+        evaluation_cycles,
+        cooldown_cycles,
+    )
+    run_dir = create_eval_run_dir(os.path.join(repo_dir, "evaluation"), experiment_name, run_metadata)
     video_path = os.path.join(run_dir, "rollout.mp4")
     video_fps = 30
     video_stride = max(1, int(round(1.0 / (simulation_dt * video_fps))))
@@ -292,13 +280,20 @@ if __name__ == "__main__":
     #   腿部控制 -> 上肢状态读取与右臂控制 -> 写入力矩 -> mj_step 推进物理 -> 记录评估 -> RL 更新 -> 可视化与计时
     # 这里是整个文件最需要看懂的部分，因为真正的控制数据流都发生在这里。
     # ==============================
-    with mujoco.viewer.launch_passive(m, d) as viewer:
+    viewer_context = mujoco.viewer.launch_passive(m, d) if viewer_enabled else nullcontext(None)
+    with viewer_context as viewer:
         # viewer 和离屏 renderer 分别使用 GLFW/EGL。后创建 renderer，
         # 并在退出 viewer 前先关闭它，保证两个 OpenGL 上下文按反序释放。
-        renderer, video_width, video_height = make_video_renderer(m, preferred_width=1280, preferred_height=720)
+        if record_video:
+            renderer, video_width, video_height = make_video_renderer(
+                m,
+                preferred_width=1280,
+                preferred_height=720,
+            )
         video_renderer_available = renderer is not None
-        print(f"坐标轴可视化已开启：世界系/IMU/左右手均显示红=X轴，绿=Y轴，蓝=Z轴 | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
-        while viewer.is_running() and counter * simulation_dt < eval_duration:
+        display_mode = "交互显示" if viewer is not None else "headless"
+        print(f"运行模式 = {display_mode} | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
+        while (viewer is None or viewer.is_running()) and counter * simulation_dt < eval_duration:
             perf_monitor.start_step()
             
             # --- 7.1 腿部控制【半核心】---
@@ -312,12 +307,12 @@ if __name__ == "__main__":
             # --- 7.2 上肢状态读取与右臂控制【核心代码】---
             # 顺序: 腰部(1)、左臂(5)、右臂(5)
             # 这一段分成两层：
-            # 1) 上层控制器（PID / LQR）根据当前右臂状态和 torso 扰动，生成右臂参考。
+            # 1) 上层控制器（PID / LQR / MPC）根据当前右臂状态和 torso 扰动，生成右臂参考。
             #    - PID 路径：直接输出 right_arm 的 q_ref / dq_ref
-            #    - LQR 路径：除了输出 q_ref / dq_ref，还会额外输出期望关节加速度 ddq_des
+            #    - LQR/MPC 路径：除了输出 q_ref / dq_ref，还会额外输出期望关节加速度 ddq_des
             # 2) 下层执行层把参考转成真正施加到 MuJoCo 的力矩：
             #    - 基础项：所有上肢统一先经过 joint-space PD，得到 tau_pd
-            #    - LQR 额外项：mj_inverse() 先生成名义力矩，再用局部前向动力学
+            #    - LQR/MPC 额外项：mj_inverse() 先生成名义力矩，再用局部前向动力学
             #      映射反求使右臂实际加速度接近 ddq_des 的最终力矩。
 
             # 当前上肢的真实状态（腰 + 左臂 + 右臂），后面 PD 会用它和目标状态做误差反馈
@@ -336,19 +331,12 @@ if __name__ == "__main__":
             # torso 角加速度仍由世界系角速度有限差分得到。
             # 这些量一方面用于构建扰动输入，另一方面也会进入 right_arm_obs 给右臂控制器使用。
             torso_state = update_torso_motion_state(m, d, scene_ids, buffers, counter, simulation_dt)
-            raw_torso_acc = torso_state.lin_acc.copy()
-            raw_torso_alpha = torso_state.ang_acc.copy()
-            if arm_controller == "lqr":
-                acc_alpha = float(np.clip(lqr_torso_acc_filter_alpha, 0.0, 1.0))
-                alpha_alpha = float(np.clip(lqr_torso_alpha_filter_alpha, 0.0, 1.0))
-                torso_acc_limited = np.clip(torso_state.lin_acc, -lqr_torso_acc_limit, lqr_torso_acc_limit)
-                torso_alpha_limited = np.clip(torso_state.ang_acc, -lqr_torso_alpha_limit, lqr_torso_alpha_limit)
-                filtered_torso_acc = acc_alpha * torso_acc_limited + (1.0 - acc_alpha) * filtered_torso_acc
-                filtered_torso_alpha = alpha_alpha * torso_alpha_limited + (1.0 - alpha_alpha) * filtered_torso_alpha
-                torso_state.lin_acc = filtered_torso_acc.copy()
-                torso_state.ang_acc = filtered_torso_alpha.copy()
+            raw_torso_acc, raw_torso_alpha = torso_acceleration_filter.update(
+                torso_state
+            )
 
-            # 把 torso 的世界系运动量打包成 torso_disturbance，供 KinematicsHelper / LQR 局部线性化使用。
+            # 把 torso 世界系运动量和当前姿态打包，供 KinematicsHelper 以及
+            # LQR/MPC 局部线性化使用。MPC 前馈会以该 R_B,0 锚定模板相对姿态。
             torso_disturbance = right_arm_helper.build_disturbance_input(
                 acc_world=torso_state.lin_acc,
                 omega_world=torso_state.ang_vel,
@@ -360,17 +348,32 @@ if __name__ == "__main__":
             right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
             if counter % arm_control_decimation == 0:
                 perf_monitor.start_arm_control()
-                # right_arm_helpers 里封装了当前步右臂控制要用到的运动学量、重力误差计算和 LQR 线性化接口
-                right_arm_helpers = right_arm_helper.build_helpers(d, disturbance=torso_disturbance)
+                disturbance_prediction = (
+                    None
+                    if disturbance_predictor is None
+                    else disturbance_predictor.predict(
+                        counter * simulation_dt,
+                        torso_disturbance,
+                    )
+                )
+                # right_arm_helpers 封装当前步的运动学量，以及 PID/LQR/MPC 各自的线性化回调。
+                right_arm_helpers = right_arm_helper.build_helpers(
+                    d,
+                    disturbance=torso_disturbance,
+                    disturbance_prediction=disturbance_prediction,
+                )
                 right_ee_position_reference_torso = right_arm_helpers.torso_relative_position_reference.copy()
-                if arm_controller == "lqr":
-                    # LQR 先在上层求解：
+                if acceleration_controller:
+                    # 【核心代码】LQR/MPC 都输出 ddq_des，并复用同一条力矩执行链。
                     # - target_right_arm_q / dq：给下层 PD 跟踪的参考轨迹
                     # - desired_right_arm_ddq：期望关节加速度，后面用于 computed torque 前馈
                     target_right_arm_q, target_right_arm_dq, desired_right_arm_ddq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
-                    lqr_diagnostics = arm_policy.get_last_diagnostics()
-                    raw_right_arm_ddq = lqr_diagnostics["ddq_raw"]
-                    lqr_one_step_prediction = lqr_diagnostics["one_step_prediction"]
+                    controller_diagnostics = arm_policy.get_last_diagnostics()
+                    raw_right_arm_ddq = controller_diagnostics["ddq_raw"]
+                    if arm_controller == "lqr":
+                        lqr_one_step_prediction = controller_diagnostics["one_step_prediction"]
+                    else:
+                        mpc_diagnostics = controller_diagnostics
                 else:
                     # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
                     target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
@@ -385,65 +388,12 @@ if __name__ == "__main__":
                 target_arm_waist_q, arm_waist_q, arm_waist_kps,
                 target_arm_waist_dq, arm_waist_dq, arm_waist_kds
             )
-            # 只切出右臂 5 维的 PD 力矩；如果是 LQR，后面还要和逆动力学前馈叠加
+            # 只切出右臂 5 维的 PD 力矩；LQR/MPC 后面还要和逆动力学前馈叠加
             right_arm_tau_pd = tau_arm_waist[6:11].copy()
-            right_arm_tau_ff = np.zeros(5, dtype=np.float64)
-            right_arm_tau_inverse = np.zeros(5, dtype=np.float64)
-            right_arm_tau_contact = np.zeros(5, dtype=np.float64)
-            right_arm_tau_constraint_total = np.zeros(5, dtype=np.float64)
-            right_arm_tau_constraint_noncontact = np.zeros(5, dtype=np.float64)
-            right_arm_tau_constraint_nonfriction = np.zeros(5, dtype=np.float64)
-            right_arm_tau_constraint_friction = np.zeros(5, dtype=np.float64)
-            right_arm_tau_nominal = right_arm_tau_pd.copy()
-            right_arm_tau_mapping_correction_raw = np.zeros(5, dtype=np.float64)
-            right_arm_tau_mapping_correction = np.zeros(5, dtype=np.float64)
-            right_arm_qacc_mapping_baseline = np.zeros(5, dtype=np.float64)
-            right_arm_qacc_mapping_predicted = np.zeros(5, dtype=np.float64)
-            right_arm_qacc_mapping_prediction_error = np.zeros(5, dtype=np.float64)
-            right_arm_qacc_mapping_validated = np.zeros(5, dtype=np.float64)
-            right_arm_qacc_mapping_validation_error = np.zeros(5, dtype=np.float64)
-            right_arm_qacc_mapping_linearization_error = np.zeros(5, dtype=np.float64)
-            right_arm_forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
-            right_arm_forward_dynamics_singular_values = np.zeros(5, dtype=np.float64)
-            right_arm_forward_dynamics_condition_number = np.inf
-            right_arm_forward_dynamics_validation_scale = 0.0
-            right_arm_forward_dynamics_validation_attempts = 0
-            right_arm_forward_dynamics_validation_improved = False
-            right_arm_forward_dynamics_tracking_safety_satisfied = False
-            right_arm_forward_dynamics_qacc_safety_satisfied = False
-            right_arm_forward_dynamics_safe_candidate_count = 0
-            right_arm_forward_dynamics_total_error_rejections = 0
-            right_arm_forward_dynamics_joint_error_rejections = 0
-            right_arm_forward_dynamics_qacc_limit_rejections = 0
-            right_arm_first_pass_qacc_validated = np.zeros(5, dtype=np.float64)
-            right_arm_first_pass_qacc_validation_error = np.zeros(5, dtype=np.float64)
-            right_arm_forward_dynamics_second_pass_triggered = False
-            right_arm_forward_dynamics_second_pass_accepted = False
-            right_arm_second_pass_tracking_safety_satisfied = False
-            right_arm_second_pass_qacc_safety_satisfied = False
-            right_arm_second_pass_tau_correction_raw = np.zeros(5, dtype=np.float64)
-            right_arm_second_pass_tau_correction = np.zeros(5, dtype=np.float64)
-            right_arm_second_pass_qacc_predicted = np.zeros(5, dtype=np.float64)
-            right_arm_second_pass_qacc_validated = np.zeros(5, dtype=np.float64)
-            right_arm_second_pass_qacc_validation_error = np.zeros(5, dtype=np.float64)
-            right_arm_second_pass_qacc_linearization_error = np.zeros(5, dtype=np.float64)
-            right_arm_second_pass_forward_dynamics_gain = np.zeros((5, 5), dtype=np.float64)
-            right_arm_second_pass_singular_values = np.zeros(5, dtype=np.float64)
-            right_arm_second_pass_condition_number = np.inf
-            right_arm_second_pass_validation_scale = 0.0
-            right_arm_second_pass_validation_attempts = 0
-            right_arm_second_pass_safe_candidate_count = 0
-            right_arm_second_pass_total_error_rejections = 0
-            right_arm_second_pass_joint_error_rejections = 0
-            right_arm_second_pass_qacc_limit_rejections = 0
-            right_arm_forward_dynamics_safety_fallback_used = False
-            right_arm_forward_dynamics_safety_fallback_satisfied = False
-            right_arm_forward_dynamics_safety_fallback_attempts = 0
-            right_arm_tau_cmd_raw = right_arm_tau_pd.copy()
-            right_arm_tau_limit_lower = right_arm_id_index_scratch.torque_limits[:, 0].copy()
-            right_arm_tau_limit_upper = right_arm_id_index_scratch.torque_limits[:, 1].copy()
-            if arm_controller == "lqr":
-                # 第二层执行（仅 LQR）：
+            inverse_result = None
+            mapping_result = None
+            if acceleration_controller:
+                # 【核心代码】第二层执行（LQR/MPC 共用）：
                 # 用 desired_right_arm_ddq 作为右臂的期望关节加速度，调用 mj_inverse() 计算 tau_ff。
                 # apply_computed_torque_control() 内部会：
                 # 1) 复制当前整机 qpos / qvel 到 scratch data
@@ -463,68 +413,19 @@ if __name__ == "__main__":
                     desired_right_arm_ddq,
                     right_arm_tau_pd,
                     fixed_ctrl_for_mapping,
-                    forward_dynamics_perturbation=lqr_forward_dynamics_perturbation,
-                    forward_dynamics_regularization=lqr_forward_dynamics_regularization,
+                    forward_dynamics_perturbation=controller_setup.execution_perturbation,
+                    forward_dynamics_regularization=controller_setup.execution_regularization,
                     forward_dynamics_second_pass_error_threshold=(
-                        lqr_forward_dynamics_second_pass_error_threshold
+                        controller_setup.execution_second_pass_error_threshold
                     ),
-                    forward_dynamics_max_joint_error=lqr_forward_dynamics_max_joint_error,
-                    forward_dynamics_max_abs_qacc=lqr_forward_dynamics_max_abs_qacc,
+                    forward_dynamics_max_joint_error=controller_setup.execution_max_joint_error,
+                    forward_dynamics_max_abs_qacc=controller_setup.execution_max_abs_qacc,
+                    forward_dynamics_enable_second_pass=controller_setup.execution_enable_second_pass,
+                    forward_dynamics_max_safety_rescue_passes=(
+                        controller_setup.execution_safety_rescue_passes
+                    ),
                 )
                 perf_monitor.finish_computed_torque_control()
-                right_arm_tau_ff = inverse_result.tau_ff
-                right_arm_tau_inverse = inverse_result.tau_inverse
-                right_arm_tau_contact = inverse_result.tau_contact
-                right_arm_tau_constraint_total = inverse_result.tau_constraint_total
-                right_arm_tau_constraint_noncontact = inverse_result.tau_constraint_noncontact
-                right_arm_tau_constraint_nonfriction = inverse_result.tau_constraint_nonfriction
-                right_arm_tau_constraint_friction = inverse_result.tau_constraint_friction
-                right_arm_tau_nominal = mapping_result.tau_nominal
-                right_arm_tau_mapping_correction_raw = mapping_result.tau_correction_raw
-                right_arm_tau_mapping_correction = mapping_result.tau_correction
-                right_arm_qacc_mapping_baseline = mapping_result.qacc_baseline
-                right_arm_qacc_mapping_predicted = mapping_result.qacc_predicted
-                right_arm_qacc_mapping_prediction_error = mapping_result.qacc_prediction_error
-                right_arm_qacc_mapping_validated = mapping_result.qacc_validated
-                right_arm_qacc_mapping_validation_error = mapping_result.qacc_validation_error
-                right_arm_qacc_mapping_linearization_error = mapping_result.qacc_linearization_error
-                right_arm_forward_dynamics_gain = mapping_result.gain_matrix
-                right_arm_forward_dynamics_singular_values = mapping_result.singular_values
-                right_arm_forward_dynamics_condition_number = mapping_result.condition_number
-                right_arm_forward_dynamics_validation_scale = mapping_result.validation_scale
-                right_arm_forward_dynamics_validation_attempts = mapping_result.validation_attempts
-                right_arm_forward_dynamics_validation_improved = mapping_result.validation_improved
-                right_arm_forward_dynamics_tracking_safety_satisfied = mapping_result.validation_tracking_safety_satisfied
-                right_arm_forward_dynamics_qacc_safety_satisfied = mapping_result.validation_qacc_safety_satisfied
-                right_arm_forward_dynamics_safe_candidate_count = mapping_result.validation_safe_candidate_count
-                right_arm_forward_dynamics_total_error_rejections = mapping_result.validation_total_error_rejections
-                right_arm_forward_dynamics_joint_error_rejections = mapping_result.validation_joint_error_rejections
-                right_arm_forward_dynamics_qacc_limit_rejections = mapping_result.validation_qacc_limit_rejections
-                right_arm_first_pass_qacc_validated = mapping_result.first_pass_qacc_validated
-                right_arm_first_pass_qacc_validation_error = mapping_result.first_pass_qacc_validation_error
-                right_arm_forward_dynamics_second_pass_triggered = mapping_result.second_pass_triggered
-                right_arm_forward_dynamics_second_pass_accepted = mapping_result.second_pass_accepted
-                right_arm_second_pass_tracking_safety_satisfied = mapping_result.second_pass_tracking_safety_satisfied
-                right_arm_second_pass_qacc_safety_satisfied = mapping_result.second_pass_qacc_safety_satisfied
-                right_arm_second_pass_tau_correction_raw = mapping_result.second_pass_tau_correction_raw
-                right_arm_second_pass_tau_correction = mapping_result.second_pass_tau_correction
-                right_arm_second_pass_qacc_predicted = mapping_result.second_pass_qacc_predicted
-                right_arm_second_pass_qacc_validated = mapping_result.second_pass_qacc_validated
-                right_arm_second_pass_qacc_validation_error = mapping_result.second_pass_qacc_validation_error
-                right_arm_second_pass_qacc_linearization_error = mapping_result.second_pass_qacc_linearization_error
-                right_arm_second_pass_forward_dynamics_gain = mapping_result.second_pass_gain_matrix
-                right_arm_second_pass_singular_values = mapping_result.second_pass_singular_values
-                right_arm_second_pass_condition_number = mapping_result.second_pass_condition_number
-                right_arm_second_pass_validation_scale = mapping_result.second_pass_validation_scale
-                right_arm_second_pass_validation_attempts = mapping_result.second_pass_validation_attempts
-                right_arm_second_pass_safe_candidate_count = mapping_result.second_pass_safe_candidate_count
-                right_arm_second_pass_total_error_rejections = mapping_result.second_pass_total_error_rejections
-                right_arm_second_pass_joint_error_rejections = mapping_result.second_pass_joint_error_rejections
-                right_arm_second_pass_qacc_limit_rejections = mapping_result.second_pass_qacc_limit_rejections
-                right_arm_forward_dynamics_safety_fallback_used = mapping_result.safety_fallback_used
-                right_arm_forward_dynamics_safety_fallback_satisfied = mapping_result.safety_fallback_satisfied
-                right_arm_forward_dynamics_safety_fallback_attempts = mapping_result.safety_fallback_attempts
-                right_arm_tau_cmd_raw = mapping_result.tau_cmd_raw
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
             # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
@@ -543,90 +444,36 @@ if __name__ == "__main__":
                 simulation_dt,
                 scene_ids,
                 buffers,
-                right_arm_control={
-                    "arm_policy_updated": counter % arm_control_decimation == 0,
-                    "target_q": target_right_arm_q,
-                    "target_dq": target_right_arm_dq,
-                    "ddq_raw": raw_right_arm_ddq,
-                    "ddq_des": desired_right_arm_ddq,
-                    "ddq_saturation_limit": np.inf,
-                    "tau_inverse": right_arm_tau_inverse,
-                    "tau_contact": right_arm_tau_contact,
-                    "tau_constraint_total": right_arm_tau_constraint_total,
-                    "tau_constraint_noncontact": right_arm_tau_constraint_noncontact,
-                    "tau_constraint_nonfriction": right_arm_tau_constraint_nonfriction,
-                    "tau_constraint_friction": right_arm_tau_constraint_friction,
-                    "tau_ff": right_arm_tau_ff,
-                    "tau_pd": right_arm_tau_pd,
-                    "tau_nominal": right_arm_tau_nominal,
-                    "tau_mapping_correction_raw": right_arm_tau_mapping_correction_raw,
-                    "tau_mapping_correction": right_arm_tau_mapping_correction,
-                    "tau_cmd_raw": right_arm_tau_cmd_raw,
-                    "tau_limit_lower": right_arm_tau_limit_lower,
-                    "tau_limit_upper": right_arm_tau_limit_upper,
-                    "qacc_mapping_baseline": right_arm_qacc_mapping_baseline,
-                    "qacc_mapping_predicted": right_arm_qacc_mapping_predicted,
-                    "qacc_mapping_prediction_error": right_arm_qacc_mapping_prediction_error,
-                    "qacc_mapping_validated": right_arm_qacc_mapping_validated,
-                    "qacc_mapping_validation_error": right_arm_qacc_mapping_validation_error,
-                    "qacc_mapping_linearization_error": right_arm_qacc_mapping_linearization_error,
-                    "forward_dynamics_gain": right_arm_forward_dynamics_gain,
-                    "forward_dynamics_singular_values": right_arm_forward_dynamics_singular_values,
-                    "forward_dynamics_condition_number": right_arm_forward_dynamics_condition_number,
-                    "forward_dynamics_validation_scale": right_arm_forward_dynamics_validation_scale,
-                    "forward_dynamics_validation_attempts": right_arm_forward_dynamics_validation_attempts,
-                    "forward_dynamics_validation_improved": right_arm_forward_dynamics_validation_improved,
-                    "forward_dynamics_tracking_safety_satisfied": right_arm_forward_dynamics_tracking_safety_satisfied,
-                    "forward_dynamics_qacc_safety_satisfied": right_arm_forward_dynamics_qacc_safety_satisfied,
-                    "forward_dynamics_safe_candidate_count": right_arm_forward_dynamics_safe_candidate_count,
-                    "forward_dynamics_total_error_rejections": right_arm_forward_dynamics_total_error_rejections,
-                    "forward_dynamics_joint_error_rejections": right_arm_forward_dynamics_joint_error_rejections,
-                    "forward_dynamics_qacc_limit_rejections": right_arm_forward_dynamics_qacc_limit_rejections,
-                    "first_pass_qacc_validated": right_arm_first_pass_qacc_validated,
-                    "first_pass_qacc_validation_error": right_arm_first_pass_qacc_validation_error,
-                    "forward_dynamics_second_pass_triggered": right_arm_forward_dynamics_second_pass_triggered,
-                    "forward_dynamics_second_pass_accepted": right_arm_forward_dynamics_second_pass_accepted,
-                    "second_pass_tracking_safety_satisfied": right_arm_second_pass_tracking_safety_satisfied,
-                    "second_pass_qacc_safety_satisfied": right_arm_second_pass_qacc_safety_satisfied,
-                    "second_pass_tau_correction_raw": right_arm_second_pass_tau_correction_raw,
-                    "second_pass_tau_correction": right_arm_second_pass_tau_correction,
-                    "second_pass_qacc_predicted": right_arm_second_pass_qacc_predicted,
-                    "second_pass_qacc_validated": right_arm_second_pass_qacc_validated,
-                    "second_pass_qacc_validation_error": right_arm_second_pass_qacc_validation_error,
-                    "second_pass_qacc_linearization_error": right_arm_second_pass_qacc_linearization_error,
-                    "second_pass_forward_dynamics_gain": right_arm_second_pass_forward_dynamics_gain,
-                    "second_pass_singular_values": right_arm_second_pass_singular_values,
-                    "second_pass_condition_number": right_arm_second_pass_condition_number,
-                    "second_pass_validation_scale": right_arm_second_pass_validation_scale,
-                    "second_pass_validation_attempts": right_arm_second_pass_validation_attempts,
-                    "second_pass_safe_candidate_count": right_arm_second_pass_safe_candidate_count,
-                    "second_pass_total_error_rejections": right_arm_second_pass_total_error_rejections,
-                    "second_pass_joint_error_rejections": right_arm_second_pass_joint_error_rejections,
-                    "second_pass_qacc_limit_rejections": right_arm_second_pass_qacc_limit_rejections,
-                    "forward_dynamics_safety_fallback_used": right_arm_forward_dynamics_safety_fallback_used,
-                    "forward_dynamics_safety_fallback_satisfied": right_arm_forward_dynamics_safety_fallback_satisfied,
-                    "forward_dynamics_safety_fallback_attempts": right_arm_forward_dynamics_safety_fallback_attempts,
-                    "torso_lin_vel_world": torso_state.lin_vel,
-                    "torso_ang_vel_world": torso_state.ang_vel,
-                    "torso_acc_world_raw": raw_torso_acc,
-                    "torso_acc_world_used": torso_state.lin_acc,
-                    "torso_alpha_world_raw": raw_torso_alpha,
-                    "torso_alpha_world_used": torso_state.ang_acc,
-                    "heading_reference_world": heading_state.reference_world,
-                    "heading_yaw_unwrapped": heading_state.yaw_unwrapped,
-                    "heading_yaw_filtered": heading_state.yaw_filtered,
-                    "heading_yaw_error": heading_state.yaw_error,
-                    "heading_yaw_rate_filtered": heading_state.yaw_rate_filtered,
-                    "heading_yaw_rate_correction": heading_state.yaw_rate_correction,
-                    "heading_yaw_rate_command": heading_yaw_rate_command_runtime,
-                    "heading_command_saturated": heading_state.command_saturated,
-                    "ee_position_reference_torso": right_ee_position_reference_torso,
-                    "lqr_one_step_prediction": (
+                right_arm_control=build_right_arm_control_record(
+                    arm_policy_updated=counter % arm_control_decimation == 0,
+                    target_q=target_right_arm_q,
+                    target_dq=target_right_arm_dq,
+                    ddq_raw=raw_right_arm_ddq,
+                    ddq_des=desired_right_arm_ddq,
+                    ddq_saturation_limit=controller_setup.ddq_saturation_limit,
+                    tau_pd=right_arm_tau_pd,
+                    torque_limits=right_arm_id_index_scratch.torque_limits,
+                    torso_state=torso_state,
+                    raw_torso_acc=raw_torso_acc,
+                    raw_torso_alpha=raw_torso_alpha,
+                    heading_state=heading_state,
+                    heading_yaw_rate_command=heading_yaw_rate_command_runtime,
+                    ee_position_reference_torso=right_ee_position_reference_torso,
+                    inverse_result=inverse_result,
+                    mapping_result=mapping_result,
+                    lqr_one_step_prediction=(
                         lqr_one_step_prediction
-                        if arm_controller == "lqr" and counter % arm_control_decimation == 0
+                        if arm_controller == "lqr"
+                        and counter % arm_control_decimation == 0
                         else None
                     ),
-                },
+                    mpc_diagnostics=(
+                        mpc_diagnostics
+                        if arm_controller == "mpc"
+                        and counter % arm_control_decimation == 0
+                        else None
+                    ),
+                ),
             )
             if renderer is not None and counter % video_stride == 0:
                 renderer.update_scene(d, camera=video_camera)
@@ -681,8 +528,9 @@ if __name__ == "__main__":
                 target_dof_pos = action * action_scale + default_angles
 
             # --- 7.5 调试可视化与步时统计【非核心代码】---
-            draw_debug_axes(viewer.user_scn, d, scene_ids)
-            viewer.sync()
+            if viewer is not None:
+                draw_debug_axes(viewer.user_scn, d, scene_ids)
+                viewer.sync()
             perf_monitor.finish_step(counter)
 
         perf_monitor.print_summary()
@@ -694,4 +542,28 @@ if __name__ == "__main__":
     # renderer 和 viewer 都已按正确顺序释放，这里只做轨迹、评估指标、视频和性能统计的文件保存。
     # 这是实验收尾，不是控制逻辑核心。
     # ==============================
-    finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, video_renderer_available, video_width, video_height, d, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=perf_monitor, lqr_cost_definition=lqr_cost_definition)
+    finalize_run(
+        run_dir,
+        buffers,
+        xml_path,
+        simulation_dt,
+        video_path,
+        video_frames,
+        video_fps,
+        video_renderer_available,
+        video_width,
+        video_height,
+        d,
+        scene_ids,
+        eval_start_time,
+        eval_end_time,
+        total_cycles,
+        warmup_cycles,
+        evaluation_cycles,
+        cooldown_cycles,
+        gait_period,
+        experiment_name,
+        perf_monitor=perf_monitor,
+        lqr_cost_definition=lqr_cost_definition,
+        arm_controller=arm_controller,
+    )

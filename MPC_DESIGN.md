@@ -1,453 +1,1192 @@
-# 单臂 MPC 稳定控制系统设计文档
+# 右臂 MPC 稳定控制系统设计
 
-## 🎯 项目目标 (Project Objective)
+## 1. 文档范围与当前阶段
 
-本项目旨在实现人形机器人在移动过程中的单臂末端稳定控制。具体设定如下：
-- **下肢控制**：采用现有的强化学习 (RL) 策略进行运动控制。
-- **上肢控制**：采用模型预测控制 (MPC) 算法控制单侧手臂，确保末端执行器 (End-Effector, EE) 保持稳定。
-- **核心创新点（前馈补偿）**：基于死锁状态下采集的躯干震动数据，拟合/训练出一个机座（Base）的周期性扰动模型。将该扰动模型作为前馈补偿项（Feedforward Compensation）引入到 MPC 的预测时域中，从而在震动传导至末端前提前主动抵消，实现极致的稳定性。
-- **验证与评估**：在末端绑带装有水的瓶子作为直观的稳定性参考。然而，实际算法表现和性能评估将严格依赖末端的真实数据（线加速度、角加速度和基于重力方向的倾斜误差）。
-- **位置参考的工程定义**：末端抓持点跟踪 torso/IMU 坐标系中的名义位置，而不是固定的世界坐标点，使手臂能随行走中的躯干一起平移。
-- **姿态参考的工程定义**：采用有方向的三维重力误差作为“防洒水”指标，使正立与倒立不再得到相同误差；同时保留关节名义姿态正则项，避免手臂漂移到不自然构型。
+本项目使用人形机器人的右臂稳定抓持点，降低行走过程中末端的线加速度、角加速度和倾斜误差。系统分工如下：
 
----
+- 下肢继续使用现有 RL locomotion 策略。
+- 左臂保持固定 PD 基线。
+- 右臂 MPC 优化 5 个受控关节的期望关节加速度 `ddq_des`。
+- 下层执行器将 `ddq_des` 转换为最终关节力矩。
 
-## 🌍 物理建模与状态空间构建 (Physics & State-Space Modeling)
+当前实现支持两种可配置的 base 预测：
 
-### 零、 坐标系与符号定义（严格基准）
+1. **零阶保持。** 每个控制周期读取当前 base 运动量，并在本轮预测时域内保持不变。
+2. **phase-based 扰动前馈。** 从三个离线世界系模板中选择一个，按未来步态相位插值，并以当前测量为锚点预测整个时域。
 
-我们定义以下三个核心坐标系：
-- $\{W\}$ (World)：世界惯性坐标系（静止参考系）。
-- $\{B\}$ (Base)：基座坐标系（绑定在躯干 IMU 上）。
-- $\{E\}$ (End-Effector)：末端执行器坐标系（水杯）。
+当前 MPC 不进行整机接触力优化，也不把浮动基完整刚体动力学放进 QP。它是一个以关节加速度为输入、使用局部运动学观测模型的稀疏线性时变 QP。
 
-**符号约定：**
-- ${}^W R_B \in SO(3)$：表示从 $\{B\}$ 到 $\{W\}$ 的旋转矩阵。
-- ${}^B p_E(q) \in \mathbb{R}^3$：通过正向运动学（FK）求得的，末端在 $\{B\}$ 系下的位置。
-- ${}^B J(q) = \begin{bmatrix} {}^B J_v \\ {}^B J_\omega \end{bmatrix} \in \mathbb{R}^{6 \times n}$：在 $\{B\}$ 系下表达的几何雅可比矩阵。
-- $q, \dot{q}, \ddot{q} \in \mathbb{R}^n$：手臂的关节位置、速度、加速度。
-
-**任务末端（抓持点）工程定义：**
-- 当前项目中，真正用于稳定控制与评估的末端点不是 `left/right_wrist_roll_rubber_hand` 的 body 原点，而是定义在瓶身大圆柱中心的 `left/right_grasp_site`。
-- 这两个 `grasp site` 与 `wrist_roll_rubber_hand` 坐标系保持平行、刚性固连，因此其姿态与手腕末端 body 姿态一致，只是在位置上做了固定平移。
-- 相对于原 `wrist_roll_rubber_hand` 原点，左手抓持点的局部平移为 $[0.2, -0.035, 0]^T$ m，右手抓持点的局部平移为 $[0.2, 0.035, 0]^T$ m。
-- 后续仿真中的末端位置、姿态、可视化以及需要迁移到真机上的“手心/抓持点”参数，均应以这两个 `grasp site` 为准。
-
-**真实系统姿态参考的工程约定：**
-- 在真实机器人上，IMU 输出的初始四元数**不应默认**等于 $[1, 0, 0, 0]$。因为这取决于机器人启动瞬间的真实姿态以及底层状态估计器对世界系的定义。
-- 因此，在工程实现中，应将**第一帧四元数**记为参考姿态 $q_{ref}$（或对应旋转矩阵 $R_{ref}$）。
-- 如果后续关注的是相对扰动而非绝对朝向，则应统一使用“当前姿态相对于 $q_{ref}$ 的变化”来定义姿态误差与姿态漂移。
-
-### 一、 绝对加速度的严格物理推导（观测方程核心）
-
-**目标：**求出末端在 $\{W\}$ 系下的线加速度 ${}^W a_E$ 和角加速度 ${}^W \alpha_E$。
-
-**1. 末端线加速度 ${}^W a_E$ 的严密推导**
-
-末端在 $\{W\}$ 系下的绝对位置为：
-${}^W p_E = {}^W p_B + {}^W R_B \cdot {}^B p_E(q)$
-
-求一阶导数（速度），根据 $\frac{d}{dt}({}^W R_B) = [{}^W \omega_B]_{\times} {}^W R_B$ （其中 $[\cdot]_{\times}$ 是向量的反对称矩阵），以及 $\frac{d}{dt}({}^B p_E) = {}^B J_v \dot{q}$：
-${}^W v_E = {}^W v_B + {}^W \omega_B \times ({}^W R_B {}^B p_E) + {}^W R_B ({}^B J_v \dot{q})$
-
-求二阶导数（加速度）【全项保留，无一遗漏】：
-${}^W a_E = {}^W a_B + \underbrace{{}^W \alpha_B \times ({}^W R_B {}^B p_E)}_{\text{欧拉加速度}} + \underbrace{{}^W \omega_B \times ({}^W \omega_B \times ({}^W R_B {}^B p_E))}_{\text{向心加速度}} + \underbrace{2 {}^W \omega_B \times ({}^W R_B {}^B J_v \dot{q})}_{\text{科氏加速度}} + {}^W R_B \underbrace{({}^B \dot{J}_v \dot{q} + {}^B J_v \ddot{q})}_{\text{相对加速度}}$
-
-整理为关于未知变量的仿射线性形式 $a = D + C\dot{q} + Bu$（令 $u = \ddot{q}$）：
-- **$D_{acc}$ (已知常数项)**： ${}^W a_B + {}^W \alpha_B \times ({}^W R_B {}^B p_E) + {}^W \omega_B \times ({}^W \omega_B \times ({}^W R_B {}^B p_E))$
-- **$C_{acc} \dot{q}$ (速度耦合项)**： $\left( 2 [{}^W \omega_B]_{\times} {}^W R_B {}^B J_v + {}^W R_B {}^B \dot{J}_v \right) \dot{q}$
-- **$B_{acc} u$ (控制映射项)**： $({}^W R_B {}^B J_v) u$
-
-这里需要特别说明：严格来说，${}^B J_v = {}^B J_v(q)$ 是关节构型 $q$ 的函数，而 ${}^B \dot{J}_v = {}^B \dot{J}_v(q, \dot q)$ 同时依赖 $q$ 和 $\dot q$。因此，诸如 ${}^B \dot{J}_v \dot q$ 这样的项在严格数学上通常会包含更高阶的非线性（例如三角函数乘以速度平方），并不是全局精确的仿射形式。本文后续将其写成 $D_{acc} + C_{acc}\dot q + B_{acc}u$，其含义是：在每个 MPC 控制步长，围绕当前工作点 $(q^\star, \dot q^\star)$ 对这些非线性项做局部线性化，并将 ${}^B J_v(q^\star)$、${}^B \dot{J}_v(q^\star, \dot q^\star)$ 以及 ${}^W R_B, {}^W \omega_B, {}^W \alpha_B$ 等量冻结为本轮 QP 中的已知系数。换言之，这里的 $C_{acc}, B_{acc}, D_{acc}$ 应理解为“当前工作点附近的局部仿射近似系数”，而不是对所有状态都严格成立的全局常数矩阵。
-
-**2. 末端角加速度 ${}^W \alpha_E$ 的严密推导**
-
-绝对角速度：
-${}^W \omega_E = {}^W \omega_B + {}^W R_B ({}^B J_\omega \dot{q})$
-
-求导得绝对角加速度：
-${}^W \alpha_E = {}^W \alpha_B + {}^W \omega_B \times ({}^W R_B {}^B J_\omega \dot{q}) + {}^W R_B ({}^B \dot{J}_\omega \dot{q} + {}^B J_\omega \ddot{q})$
-
-整理为线性形式：
-- **$D_{\alpha}$ (已知常数项)**： ${}^W \alpha_B$
-- **$C_{\alpha} \dot{q}$ (速度耦合项)**： $\left( [{}^W \omega_B]_{\times} {}^W R_B {}^B J_\omega + {}^W R_B {}^B \dot{J}_\omega \right) \dot{q}$
-- **$B_{\alpha} u$ (控制映射项)**： $({}^W R_B {}^B J_\omega) u$
-
-同理，${}^B J_\omega = {}^B J_\omega(q)$、${}^B \dot{J}_\omega = {}^B \dot{J}_\omega(q, \dot q)$ 本身并不是常数。这里将它们并入 $C_{\alpha}$ 和 $B_{\alpha}$，同样表示在当前工作点处冻结系数后的局部线性化模型。后续 QP 推导默认建立在这一“逐时刻重线性化 / 逐时刻冻结系数”的工程近似基础上。
-
-### 二、 状态空间模型的严格构建 (State-Space)
-
-由于 torso-relative 末端位置和三维重力误差都可以作为 $q_k$ 的非线性观测量进行局部线性化，不需要把它们单独加入状态向量。因此这里采用更简洁的二阶关节空间状态：
-
-定义状态向量 $x_k \in \mathbb{R}^{2n}$ 以及控制输入 $u_k \in \mathbb{R}^n$：
-$x_k = \begin{bmatrix} q_k \\ \dot{q}_k \end{bmatrix}, \quad u_k = \ddot{q}_k$
-
-定义选择矩阵 $S_q = \begin{bmatrix} I_{n\times n} & 0_{n\times n} \end{bmatrix}$、$S_v = \begin{bmatrix} 0_{n\times n} & I_{n\times n} \end{bmatrix}$，使得 $q_k = S_q x_k$、$\dot{q}_k = S_v x_k$。
-
-离散化状态转移方程采用标准二阶积分器形式：
-$A_k = \begin{bmatrix} I_n & \Delta t \cdot I_n \\ 0 & I_n \end{bmatrix}, \quad B_k = \begin{bmatrix} 0.5 \Delta t^2 \cdot I_n \\ \Delta t \cdot I_n \end{bmatrix}$
-
-即：
-$x_{k+1} = A_k x_k + B_k u_k$
-
-这里与下肢步态相关的基座扰动仍然通过 ${}^W a_{B,k}, {}^W \omega_{B,k}, {}^W \alpha_{B,k}, {}^W R_{B,k}$ 进入末端线加速度和角加速度观测方程，而不再额外构造 $e_{ori}$ 的状态演化方程。
-
-**预测扰动 $d_k$ (由外部预测器提供)：**
-系统在未来每个时刻 $k$ 都受到来自下肢移动导致的基座扰动，其包含了基座在世界系 $\{W\}$ 下的线加速度、角速度、角加速度以及旋转矩阵：
-$d_k = \begin{bmatrix} {}^W a_{B, k} \\ {}^W \omega_{B, k} \\ {}^W \alpha_{B, k} \\ {}^W R_{B, k} \end{bmatrix}$
-*(这些变量构成了前文常数项 $D_{acc}, D_{\alpha}$ 和矩阵 $A_k, B_k$ 中的时变已知成分)*
+当前仓库已经实现 MPC、可选扰动前馈和第 10 节的 `ddq_des` 到力矩执行链。本文同时作为数学定义与当前实现说明。
 
 ---
 
-## 📐 MPC 算法推导：从物理代价函数映射到 OSQP 标准型
+## 2. 坐标系、任务点与关节定义
 
-这是一种做硬核运控算法必须具备的“打破砂锅问到底”的精神。你说得对，从原始的物理代价函数跳跃到 OSQP 的标准二次型矩阵，中间跨越了极其繁琐的多项式展开和矩阵重新组合。之前直接给出结论确实略去了最关键的代数合并过程。
+### 2.1 坐标系
 
-对于底层 C++ 落地来说，如果不知道这其中的每一项是怎么乘出来的，一旦矩阵维度报错，根本无从查起。
+- $\{W\}$：世界惯性坐标系。
+- $\{B\}$：torso/IMU 坐标系。
+- $\{E\}$：右手抓持点坐标系。
 
-现在，我为你**逐项展开、毫无保留地重写这段严密的代数推导过程**。
+旋转矩阵约定：
 
----
+$$
+{}^W R_B:\{B\}\rightarrow\{W\},
+\qquad
+{}^E R_W=({}^W R_E)^T .
+$$
 
-### 目标：从物理代价函数映射到 OSQP 标准型
+真实机器人启动时不应假设 IMU 四元数为单位四元数。当前姿态 ${}^W R_B$ 用于把 IMU 局部系测量转换到世界系，并作为完整扰动量 $d_k$ 的姿态分量进入世界系运动学。离线模板同时保存姿态四元数及其对应旋转矩阵；运行时仍以当前实测姿态为锚点，不直接照搬模板的绝对世界姿态。如果需要观察相对航向漂移，再单独保存第一帧姿态作为参考。
 
-我们在每一个控制步长 $k$ 下的局部代价函数为：
-$J_k = ||{}^W a_{EE, k}||_{Q_a}^2 + ||{}^W \alpha_{EE, k}||_{Q_\alpha}^2 + ||r_{p,k}||_{Q_p}^2 + ||r_{g,k}||_{Q_g}^2 + ||q_k||_{Q_q}^2 + ||\dot{q}_k||_{Q_v}^2 + ||u_k||_R^2$
+### 2.2 任务末端
 
-其中：
+稳定控制和评估使用 `right_grasp_site`，而不是 `right_wrist_roll_rubber_hand` 的 body 原点。抓持点位于瓶身大圆柱中心，与手腕末端刚性固连，其相对手腕的局部平移为
 
-$
-r_p(q)={}^B p_E(q)-{}^B p_E(q_{nom}) \in \mathbb{R}^3
-$
+$$
+\begin{bmatrix}
+0.2 & 0.035 & 0
+\end{bmatrix}^T\ \mathrm{m}.
+$$
 
-是 torso/IMU 相对末端位置误差。对于当前 IMU 与右肩固连的模型，${}^B p_E(q_{nom})$ 是只由名义右臂角决定的常量，可在控制器初始化时计算一次并缓存；它随 torso 的世界位置一起移动，因此不会妨碍整机行走。本版先不加入末端速度代价。
+末端位置、姿态、Jacobian、加速度和可视化均以该抓持点为准。
 
-$
-r_g(q)={}^E R_W(q)g^W-g^E_{ref}\in\mathbb{R}^3,
-\qquad g^E_{ref}=\begin{bmatrix}0&0&-\|g^W\|\end{bmatrix}^T
-$
+### 2.3 右臂关节顺序
 
-是有方向的三维重力误差。正立时为零，倒立时第三维约为 $2\|g\|$，修复旧二维 XY 投影无法区分正立与精确倒立的问题。在当前实验设定中 $q_{nom}=0$。
+右臂受控维数为 $n=5$，关节顺序固定为：
 
-这里我们将 MPC 的决策变量取为关节加速度 $u_k = \ddot q_k$，而不是直接取 $q$、$\dot q$ 或 $\tau$，主要有以下原因：
+1. `right_shoulder_pitch_joint`
+2. `right_shoulder_roll_joint`
+3. `right_shoulder_yaw_joint`
+4. `right_elbow_joint`
+5. `right_wrist_roll_joint`
 
-- 末端线加速度和角加速度与 $\ddot q$ 的关系最直接，因此当前代价函数中的核心目标项可以更自然地写成二次型。
-- 在离散时间下，$q$ 和 $\dot q$ 可以由 $\ddot q$ 通过二阶积分器直接预测，状态更新形式规整，便于保持标准 QP / OSQP 结构。
-- 当前方案主要依赖运动学映射和离散积分模型，不必显式引入完整刚体动力学，因此建模和调试复杂度更低，更适合在线快速求解。
-- 工程实现上也更清晰：上层 MPC 优化 $\ddot q$，下层通过逆动力学生成前馈力矩，再叠加短时 $q_{ref}$、$\dot q_{ref}$ 的 PD 修正。
+本文所有关节向量、权重和上下界都必须采用这个顺序。
 
-如果直接把 $q$ 或 $\dot q$ 作为决策变量，则末端线加速度和角加速度无法由决策变量自然表示，为了把这些项写进代价函数，通常还需要间接引入 $\ddot q$，模型表达会更绕，约束设计也不如当前方案直观。
+在当前 MuJoCo 模型的符号下：
 
-如果直接把 $\tau$ 作为决策变量，则通常需要显式引入机械臂动力学模型
-$M(q)\ddot q + h(q, \dot q) = \tau + J^T F_{ext}$
-这会额外带来惯量矩阵、重力项、科氏力项和外力项等建模负担，使系统非线性更强，在线线性化、求解和调试复杂度都明显上升。因此，对当前阶段而言，直接以 $\ddot q$ 作为决策变量是在控制目标表达自然性、QP 建模简洁性、在线计算效率和工程实现可控性之间的更合适折中。
+- shoulder roll 为正时，右臂向身体中线内收；
+- shoulder yaw 为正时，右手也向身体中线移动；
+- shoulder pitch 为负时，抓持点主要向前、向上移动；为正时主要向下、向后收回。
 
-OSQP 求解器**唯一认识**的数学形式是（注意前面的 $\frac{1}{2}$）：
-$$J_{OSQP} = \frac{1}{2} z_k^T H_k z_k + f_k^T z_k$$
-其中超级变量 $z_k = \begin{bmatrix} x_k \\ u_k \end{bmatrix}$。
-
-将其展开，OSQP 实际上在优化的形式是：
-$$\frac{1}{2} \begin{bmatrix} x_k^T & u_k^T \end{bmatrix} \begin{bmatrix} H_{xx} & H_{xu} \\ H_{ux} & H_{uu} \end{bmatrix} \begin{bmatrix} x_k \\ u_k \end{bmatrix} + \begin{bmatrix} f_x^T & f_u^T \end{bmatrix} \begin{bmatrix} x_k \\ u_k \end{bmatrix}$$
-$= \frac{1}{2} x_k^T H_{xx} x_k + \frac{1}{2} u_k^T H_{uu} u_k + x_k^T H_{xu} u_k + f_x^T x_k + f_u^T u_k$
-
-*(注：由于 $H_k$ 是对称矩阵，所以 $H_{ux} = H_{xu}^T$，且交叉项 $\frac{1}{2} x_k^T H_{xu} u_k + \frac{1}{2} u_k^T H_{ux} x_k = x_k^T H_{xu} u_k$)*
-
-**核心任务：** 我们必须把原始的 $J_k$ 完全展开，然后把对应 $x_k$ 和 $u_k$ 的系数“对号入座”到上面的 OSQP 公式中，以此反推 $H_{xx}, H_{uu}, H_{xu}, f_x, f_u$。
+这些符号不能从“左/右手”的直觉直接猜测，真机迁移时必须重新核对编码器方向。
 
 ---
 
-### 步骤一：提取状态自身的惩罚项 (State & Control Penalty)
+## 3. 状态、输入与总体数据流
 
-首先处理最简单的三项：关节名义姿态正则、关节速度、关节加速度控制量。
-定义一个组合状态权重矩阵 $Q_{state}$：
-$Q_{state} = \text{block\_diag}(Q_q, \ Q_v)$
-*(因为状态 $x_k = [q_k^T, \dot{q}_k^T]^T$，这里直接对关节位置与关节速度进行惩罚；在当前实验设定中 $q_{\text{nom}} = 0$)*
+### 3.1 状态和输入
 
-则关节位置与速度两项可以直接写为：
-$||q_k||_{Q_q}^2 + ||\dot{q}_k||_{Q_v}^2 = x_k^T Q_{state} x_k$
-因此在当前设定下，该部分只贡献二次项，不再产生由 $q_{\text{nom}}$ 引入的一次项。同时，控制输入项为 $||u_k||_R^2 = u_k^T R u_k$。
+定义状态、输入和选择矩阵：
 
-torso-relative 位置误差与三维重力误差都不是独立状态，而是由 $q_k$ 决定的非线性观测项。二者在当前工作点 $q^\star$ 附近分别做一阶泰勒展开：
+$$
+x_k=
+\begin{bmatrix}
+q_k\\
+\dot q_k
+\end{bmatrix}
+\in\mathbb R^{2n},
+\qquad
+u_k=\ddot q_k\in\mathbb R^n,
+$$
 
-$
-r_p(q_k)\approx r_p(q^\star)+J_p(q^\star)(q_k-q^\star)=d_p+G_p x_k
-$
+$$
+S_q=
+\begin{bmatrix}
+I_n&0
+\end{bmatrix},
+\qquad
+S_v=
+\begin{bmatrix}
+0&I_n
+\end{bmatrix},
+$$
 
-$
-r_g(q_k)\approx r_g(q^\star)+J_g(q^\star)(q_k-q^\star)=d_g+G_g x_k
-$
+$$
+q_k=S_qx_k,\qquad \dot q_k=S_vx_k.
+$$
 
-其中：
+本文在每次 MPC 求解开始时都重新编号：$k=0$ 表示当前测量点，
+$k=1,\ldots,N$ 表示本轮预测点。当前配置 $N=12$，因此有 12 个控制输入
+$u_0,\ldots,u_{11}$ 和 12 个控制区间，但状态点为
+$x_0,\ldots,x_{12}$，共 13 个；$x_{12}$ 是只计算终端代价和状态约束的终端点。
+本文不再为当前真实控制时刻另引入下标 $t$。
 
-$
-J_p(q^\star)=({}^W R_B)^T{}^W J_v(q^\star)\in\mathbb{R}^{3\times n},
-\quad G_p=J_pS_q,
-\quad d_p=r_p(q^\star)-J_pq^\star
-$
+### 3.2 为什么仍以 `ddq` 为优化输入
 
-$
-J_g(q^\star)=\left.\frac{\partial r_g}{\partial q}\right|_{q=q^\star}\in\mathbb{R}^{3\times n},
-\quad G_g=J_gS_q,
-\quad d_g=r_g(q^\star)-J_gq^\star
-$
+当前 MPC 保留 $u_k=\ddot q_k$，原因是：
 
-因此两个平方代价都保持标准凸二次型，例如：
+- 末端线加速度和角加速度与 $\ddot q$ 直接相关，核心防晃目标容易写成凸二次代价。
+- $q$ 和 $\dot q$ 可以通过二阶积分器预测，状态方程简单且稀疏。
+- 关节角、速度和加速度上下界都可以直接写成线性约束。
+- QP 不必显式包含整机惯量矩阵、接触力和摩擦锥，便于先完成在线实现与调试。
+- 当前已有 DDQ 到力矩的数值前向动力学映射，可用于隔离上层 MPC 与下层执行误差。
 
-$
-\|r_p(x_k)\|_{Q_p}^2\approx x_k^TG_p^TQ_pG_px_k+2d_p^TQ_pG_px_k+\text{const}
-$
+该选择也有明确局限：
 
-重力项同理得到 $G_g^TQ_gG_g$ 和 $G_g^TQ_gd_g$。只要每轮 QP 冻结 $J_p,J_g,d_p,d_g$，加入末端位置并不会把本轮 OSQP 问题变成非线性规划；下一控制周期再重新线性化即可。
+- QP 中满足的 $u_k$ 是期望关节加速度，不等于接触和限位作用下必然实现的真实 `qacc`。
+- 力矩上限不直接出现在当前预测模型中，最终仍依赖下层力矩限幅与前向动力学验收。
+- 二阶积分器不描述浮动基、腿部和右臂之间的动力学耦合。
+- 摩擦、接触和关节限位发生离散切换时，局部 DDQ 到力矩映射可能失效。
 
----
+因此，上层 MPC 负责生成受约束的 `ddq_des`，下层执行链负责寻找当前整机状态下尽可能准确且安全的力矩。
 
-### 步骤二：通用二次型展开引理 (The General Expansion Lemma)
+### 3.3 多速率数据流
 
-末端线加速度和角加速度的观测方程都具有相同的仿射结构：
-$$y = D + C S_v x_k + B u_k$$
-*(其中 $y$ 代表加速度，$D$ 是常数扰动，$C$ 是速度耦合矩阵，$S_v$ 是提取 $\dot{q}_k$ 的选择矩阵，$B$ 是控制映射矩阵)*
+当前仿真建议沿用以下周期：
 
-我们需要展开 $||y||_Q^2 = y^T Q y$：
-$$y^T Q y = (D + C S_v x_k + B u_k)^T Q (D + C S_v x_k + B u_k)$$
-
-利用矩阵乘法分配律展开（共 9 项），合并标量转置相同的项（例如 $x_k^T M^T Q N u_k = u_k^T N^T Q M x_k$）：
-
-1.  **关于 $x_k$ 的纯二次项：** $(C S_v x_k)^T Q (C S_v x_k) = x_k^T (S_v^T C^T Q C S_v) x_k$
-2.  **关于 $u_k$ 的纯二次项：** $(B u_k)^T Q (B u_k) = u_k^T (B^T Q B) u_k$
-3.  **关于 $x_k$ 和 $u_k$ 的交叉项：** $2 (C S_v x_k)^T Q (B u_k) = 2 x_k^T (S_v^T C^T Q B) u_k$
-4.  **关于 $x_k$ 的一次项（线性项）：** $2 D^T Q (C S_v x_k) = x_k^T (2 S_v^T C^T Q D)$
-5.  **关于 $u_k$ 的一次项（线性项）：** $2 D^T Q (B u_k) = u_k^T (2 B^T Q D)$
-6.  **常数项：** $D^T Q D$（对优化无影响，直接丢弃）
-
----
-
-### 步骤三：合并所有项并“对号入座” (Assembling the OSQP Matrices)
-
-现在，我们将线加速度（下标 $acc$）和角加速度（下标 $\alpha$）代入上述展开引理，并加上【步骤一】中的 $Q_{state}$ 和 $R$。
-
-合并后，原始物理代价函数 $J_k$ 中各部分的系数如下：
-
-**1. 对应 $x_k^T [\dots] x_k$ 的系数总和：**
-$\text{Coef}_{xx} = \underbrace{S_v^T C_{acc}^T Q_a C_{acc} S_v}_{\text{线加速度的 } x \text{ 二次项}} + \underbrace{S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v}_{\text{角加速度的 } x \text{ 二次项}} + \underbrace{G_p^T Q_p G_p}_{\text{torso-relative 位置误差}} + \underbrace{G_g^T Q_g G_g}_{\text{三维重力误差}} + \underbrace{Q_{state}}_{\text{状态自身惩罚}}$
-**2. 对应 $u_k^T [\dots] u_k$ 的系数总和：**
-$\text{Coef}_{uu} = \underbrace{B_{acc}^T Q_a B_{acc}}_{\text{线加速度的 } u \text{ 二次项}} + \underbrace{B_{\alpha}^T Q_\alpha B_{\alpha}}_{\text{角加速度的 } u \text{ 二次项}} + \underbrace{R}_{\text{控制量自身惩罚}}$
-**3. 对应 $x_k^T [\dots] u_k$ 的交叉系数总和：**
-$\text{Coef}_{xu} = \underbrace{2 S_v^T C_{acc}^T Q_a B_{acc}}_{\text{线加速度的 } x,u \text{ 交叉项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha B_{\alpha}}_{\text{角加速度的 } x,u \text{ 交叉项}}$
-**4. 对应 $x_k$ 一次项 $f_x$ 的系数总和：**
-$f_x = \underbrace{2 S_v^T C_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } x \text{ 线性项}} + \underbrace{2 S_v^T C_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } x \text{ 线性项}} + \underbrace{2 G_p^T Q_p d_p}_{\text{torso-relative 位置一次项}} + \underbrace{2 G_g^T Q_g d_g}_{\text{三维重力误差一次项}}$
-**5. 对应 $u_k$ 一次项 $f_u$ 的系数总和：**
-$f_u = \underbrace{2 B_{acc}^T Q_a D_{acc}}_{\text{线加速度的 } u \text{ 线性项}} + \underbrace{2 B_{\alpha}^T Q_\alpha D_{\alpha}}_{\text{角加速度的 } u \text{ 线性项}}$
+- MuJoCo physics step：$0.002\ \mathrm{s}$。
+- 右臂 MPC 更新周期：$\Delta t=0.006\ \mathrm{s}$。
+- `ddq_des` 在三个 physics step 内保持。
+- 逆动力学和 DDQ 到力矩映射可在每个 $0.002\ \mathrm{s}$ physics step 使用最新整机状态重新计算。
 
 ---
 
-### 步骤四：推导最终的 Hessian ($H_k$) 和 Gradient ($f_k$)
+## 4. 预测模型与工作轨迹
 
-最后一步，我们必须将推导出的系数与 OSQP 标准型严格对齐。
+### 4.1 二阶积分器
 
-回忆 OSQP 的公式：$\frac{1}{2} x_k^T H_{xx} x_k + \frac{1}{2} u_k^T H_{uu} u_k + x_k^T H_{xu} u_k + f_x^T x_k + f_u^T u_k$
+采用分段常加速度离散模型：
 
-* **推导 $H_{xx}$：** 因为 OSQP 公式里有一个 $\frac{1}{2}$，所以 $H_{xx} = 2 \times \text{Coef}_{xx}$。
-    $H_{xx} = 2 \left( S_v^T C_{acc}^T Q_a C_{acc} S_v + S_v^T C_{\alpha}^T Q_\alpha C_{\alpha} S_v + G_p^T Q_p G_p + G_g^T Q_g G_g + Q_{state} \right)$
-* **推导 $H_{uu}$：** 同理，因为有 $\frac{1}{2}$，所以 $H_{uu} = 2 \times \text{Coef}_{uu}$。
-    $$H_{uu} = 2 \left( B_{acc}^T Q_a B_{acc} + B_{\alpha}^T Q_\alpha B_{\alpha} + R \right)$$
-* **推导 $H_{xu}$：** OSQP 交叉项公式里**没有** $\frac{1}{2}$，所以 $H_{xu}$ 直接等于 $\text{Coef}_{xu}$。
-    $$H_{xu} = 2 \left( S_v^T C_{acc}^T Q_a B_{acc} + S_v^T C_{\alpha}^T Q_\alpha B_{\alpha} \right)$$
-* **推导 $H_{ux}$：** 为保证 Hessian 对称矩阵的性质：
-    $$H_{ux} = H_{xu}^T = 2 \left( B_{acc}^T Q_a C_{acc} S_v + B_{\alpha}^T Q_\alpha C_{\alpha} S_v \right)$$
-* **推导 $f_x$ 和 $f_u$：** 一次项完全一一对应，无需乘以 2（因为前面的展开过程中已经产生了 2）。
-    $f_x = 2 \left( S_v^T C_{acc}^T Q_a D_{acc} + S_v^T C_{\alpha}^T Q_\alpha D_{\alpha} + G_p^T Q_p d_p + G_g^T Q_g d_g \right)$
-    $f_u = 2 \left( B_{acc}^T Q_a D_{acc} + B_{\alpha}^T Q_\alpha D_{\alpha} \right)$
+$$
+A=
+\begin{bmatrix}
+I_n&\Delta t I_n\\
+0&I_n
+\end{bmatrix},
+\qquad
+B=
+\begin{bmatrix}
+\frac12\Delta t^2I_n\\
+\Delta t I_n
+\end{bmatrix},
+$$
 
----
+$$
+x_{k+1}=Ax_k+Bu_k,\qquad k=0,\ldots,N-1.
+$$
 
-**最终结论汇总（写入 C++/Eigen 的直接依据）：**
+这里不加入额外扰动项。base 运动不直接改变关节二阶积分器，而是进入第 5 节的末端观测模型。
 
-$H_k = \begin{bmatrix} H_{xx} & H_{xu} \\ H_{ux} & H_{uu} \end{bmatrix}$
-$f_k = \begin{bmatrix} f_x \\ f_u \end{bmatrix}$
+### 4.2 base 扰动预测与配置
 
----
+定义已知 base 量：
 
-## 🧮 零、 维度与超级变量定义 (The Super-Variable)
+$$
+d_k=
+\left(
+{}^Wa_{B,k},
+{}^W\omega_{B,k},
+{}^W\alpha_{B,k},
+{}^WR_{B,k}
+\right).
+$$
 
-假设你的预测时域为 $N$ 步。状态变量 $x_k \in \mathbb{R}^{n_x}$ （在我们的例子中，$n_x = 2n$）。控制输入 $u_k \in \mathbb{R}^{n_u}$ （在我们的例子中，$n_u = n$）。
+每次求解时读取当前真实测量并记为 $d_0$。配置
+`mpc_disturbance_feedforward_enabled: false` 时使用零阶保持：
 
-为了让求解器一次性看到所有的未来，我们把从 $k=0$ 到 $k=N$ 的所有状态，以及从 $k=0$ 到 $k=N-1$ 的所有控制量，垂直拼接成一个超级变量向量 $Y$。注意：包含了终端状态 $x_N$，但没有 $u_N$（因为第 $N$ 步不需要再输出了）。
+$$
+\hat d_k=d_0,
+\qquad k=0,\ldots,N.
+$$
 
-超级变量 $Y$ 的全貌如下（总维度 $M = N(n_x + n_u) + n_x$）：
-$Y = \begin{bmatrix} x_0 \\ u_0 \\ x_1 \\ u_1 \\ \vdots \\ x_{N-1} \\ u_{N-1} \\ x_N \end{bmatrix} \in \mathbb{R}^M$
+也就是说，$k=0$ 使用当前测量，未来所有阶段和终端步继续使用同一组当前测量。下一个控制周期会重新测量并整体刷新。
 
----
+配置 `mpc_disturbance_feedforward_enabled: true` 时，从
+`disturbance_model_new/templates_world` 读取
+`mpc_disturbance_template` 选择的模板：
 
-## 🏗️ 一、 全局代价矩阵构建 (Global Cost Matrices)
+- `raw`：线加速度和角速度均使用原始相位均值；
+- `half_smoothed`：线加速度使用原始均值，角速度使用环形平滑结果；
+- `fully_smoothed`：线加速度和角速度均使用环形平滑结果，当前默认使用该模板。
 
-OSQP 的目标函数为 $\min_Y \frac{1}{2} Y^T P Y + q_{vec}^T Y$。我们只需将你之前算出的单步 $H_k = \begin{bmatrix} H_{xx, k} & H_{xu, k} \\ H_{ux, k} & H_{uu, k} \end{bmatrix}$ 和 $f_k = \begin{bmatrix} f_{x, k} \\ f_{u, k} \end{bmatrix}$ 沿着对角线排布。对于最后的终端状态 $x_N$，我们只有状态惩罚 $H_{xx, N}$ 和 $f_{x, N}$（在当前 $q_{\text{nom}}=0$ 的设定下，终端项只保留关节构型与关节速度的二次惩罚，因此 $f_{x,N}=0$；终端代价可以加重力姿态误差项，但初版为了更简单更稳不加更合适）。
+三个模板都在世界系中，周期为 $T=0.8\ \mathrm{s}$，包含 100 个 bin。
+离线模板文件保存 $a_B,\omega_B,\alpha_B$，以及每个 bin 的 torso 姿态四元数 $q_B^{\mathrm{tpl}}$ 和由它生成的旋转矩阵 $R_B^{\mathrm{tpl}}$；不保存 $p_B$。
+原始模板中的姿态采用 Markley 四元数均值，避免 $q$ 与 $-q$ 的符号二义性；半平滑和全平滑模板再做 5-bin 环形四元数均值。预测相位为
 
-在当前定义下，由于 $q_{\text{nom}} = 0$，终端代价若仅保留 $||q_N||_{Q_q}^2 + ||\dot q_N||_{Q_v}^2$，则有 $Q_{\text{terminal}} = \text{block\_diag}(Q_q, Q_v)$，并且终端状态项直接写为
-$x_N^T Q_{\text{terminal}} x_N$
-与 OSQP 标准型对齐可得：
-$H_{xx, N} = 2 Q_{\text{terminal}} = 2\,\text{block\_diag}(Q_q, Q_v), \qquad f_{x, N} = 0$
-
-**1. 全局 Hessian 矩阵 $P$ (Block-Diagonal, 维度 $M \times M$)：**
-
-$P = \begin{bmatrix}
-\begin{array}{cc|}
-H_{xx, 0} & H_{xu, 0} \\
-H_{ux, 0} & H_{uu, 0} \\
-\hline
-\end{array} & \mathbf{0} & \dots & \mathbf{0} & \mathbf{0} \\
-\mathbf{0} & \begin{array}{|cc|}
-H_{xx, 1} & H_{xu, 1} \\
-H_{ux, 1} & H_{uu, 1} \\
-\hline
-\end{array} & \dots & \mathbf{0} & \mathbf{0} \\
-\vdots & \vdots & \ddots & \vdots & \vdots \\
-\mathbf{0} & \mathbf{0} & \dots & \begin{array}{|cc|}
-H_{xx, N-1} & H_{xu, N-1} \\
-H_{ux, N-1} & H_{uu, N-1} \\
-\hline
-\end{array} & \mathbf{0} \\
-\mathbf{0} & \mathbf{0} & \dots & \mathbf{0} & \begin{array}{|c|}
-H_{xx, N} \\
-\hline
-\end{array}
-\end{bmatrix}$
-
-*(注：这是一个极其稀疏的分块对角矩阵，除了对角线上的方块外，全为 0)。*
-
-**2. 全局一次项向量 $q_{vec}$ (维度 $M \times 1$)：**
-
-$q_{vec} = \begin{bmatrix} f_{x, 0} \\ f_{u, 0} \\ f_{x, 1} \\ f_{u, 1} \\ \vdots \\ f_{x, N-1} \\ f_{u, N-1} \\ f_{x, N} \end{bmatrix}$
-
----
-
-## 🔗 二、 全局动力学等式约束 (Global Dynamics Constraints)
-
-这是极其考验逻辑的一步。在物理上，系统必须符合状态转移：
-- **初始约束**：预测的第 0 步状态必须等于当前传感器的真实读数，即 $x_0 = x_{curr}$。
-- **转移约束**：每一个未来状态必须由前一个状态和输入积分而来，即 $x_{k+1} = A_k x_k + B_k u_k + d_{ext, k}$。
-
-我们把这些方程移项，让所有包含未知变量（$Y$ 里面的东西）留在左边，常数留在右边：
-- $I \cdot x_0 = x_{curr}$
-- $-A_0 x_0 - B_0 u_0 + I \cdot x_1 = d_{ext, 0}$
-- $-A_1 x_1 - B_1 u_1 + I \cdot x_2 = d_{ext, 1}$
-- ...
-
-将其写成庞大的矩阵形式 $A_{dyn} Y = b_{dyn}$：
-
-**1. 动力学矩阵 $A_{dyn}$ (带状稀疏矩阵，维度 $(N+1)n_x \times M$)：**
-
-请仔细观察它的阶梯状（Banded）结构，这是 C++ 中使用 `SparseMatrix` 插入元素（Triplet）时的核心依据：
-
-$A_{dyn} = \begin{bmatrix}
-I_{n_x} & \mathbf{0} & \mathbf{0} & \mathbf{0} & \mathbf{0} & \dots & \mathbf{0} & \mathbf{0} \\
--A_0 & -B_0 & I_{n_x} & \mathbf{0} & \mathbf{0} & \dots & \mathbf{0} & \mathbf{0} \\
-\mathbf{0} & \mathbf{0} & -A_1 & -B_1 & I_{n_x} & \dots & \mathbf{0} & \mathbf{0} \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \ddots & \vdots & \vdots \\
-\mathbf{0} & \mathbf{0} & \mathbf{0} & \mathbf{0} & \mathbf{0} & \dots & I_{n_x} & \mathbf{0} \\
-\mathbf{0} & \mathbf{0} & \mathbf{0} & \mathbf{0} & \mathbf{0} & \dots & -A_{N-1} & -B_{N-1} & I_{n_x}
-\end{bmatrix}$
-
-*(注：第一行的 $I_{n_x}$ 负责锁死 $x_0$。之后的每一行中的 $[-A_k, -B_k, I_{n_x}]$ 块都向右平移了 $(n_x + n_u)$ 个单位，完美对齐向量 $Y$ 中的 $[x_k, u_k, x_{k+1}]$)。*
-
-**2. 动力学常数向量 $b_{dyn}$ (维度 $(N+1)n_x \times 1$)：**
-
-$b_{dyn} = \begin{bmatrix} x_{curr} \\ d_{ext, 0} \\ d_{ext, 1} \\ \vdots \\ d_{ext, N-1} \end{bmatrix}$
-
----
-
-## 🚧 三、 全局边界不等式约束 (Global Bound Constraints)
-
-我们需要限制硬件的极限：关节位姿 $q$、关节速度 $\dot{q}$ 和关节加速度 $u$。因为这三者全部都在超级向量 $Y$ 里面，所以提取它们的矩阵仅仅是一个巨大的单位阵！设我们要约束 $Y_{min} \le Y \le Y_{max}$，则：
-
-**1. 不等式矩阵 $A_{ineq}$ (全维度单位阵，维度 $M \times M$)：**
-
-$A_{ineq} = \begin{bmatrix}
-I_{n_x} & 0 & 0 & \dots & 0 \\
-0 & I_{n_u} & 0 & \dots & 0 \\
-0 & 0 & I_{n_x} & \dots & 0 \\
-\vdots & \vdots & \vdots & \ddots & \vdots \\
-0 & 0 & 0 & \dots & I_{n_x}
-\end{bmatrix} = I_{M \times M}$
-
-**2. 不等式上下界 $l_{ineq}$ 和 $u_{ineq}$ (维度 $M \times 1$)：**
-
-如果某些状态（比如关节位置或关节速度中的某些分量）不需要硬约束，就填入 $-\infty$ 和 $\infty$。
-
-$l_{ineq} = \begin{bmatrix} x_{min} \\ u_{min} \\ x_{min} \\ u_{min} \\ \vdots \\ x_{min} \end{bmatrix}, \quad
-u_{ineq} = \begin{bmatrix} x_{max} \\ u_{max} \\ x_{max} \\ u_{max} \\ \vdots \\ x_{max} \end{bmatrix}$
-
----
-
-## 🧩 四、 最终 OSQP 标准型大一统组装
-
-OSQP 求解器的接口要求把“等式约束”和“不等式约束”垂直叠放在一起，统一写成：
-$l \le A_{cons} Y \le u$
-
-对于等式约束，只需令其上下界相等（$l = u$）即可被 OSQP 自动识别为等式。
-
-**1. 终极约束矩阵 $A_{cons}$ (维度 $((N+1)n_x + M) \times M$)：**
-
-$A_{cons} = \begin{bmatrix} A_{dyn} \\ A_{ineq} \end{bmatrix}$
-
-**2. 终极约束下界 $l$ 和 上界 $u$：**
-
-$l = \begin{bmatrix} b_{dyn} \\ l_{ineq} \end{bmatrix}, \quad
-u = \begin{bmatrix} b_{dyn} \\ u_{ineq} \end{bmatrix}$
-
----
-
-## ⚙️ 从 MPC 的 ddq 到执行力矩
-
-MPC 仍以 $u_k=\ddot q_k$ 为决策变量，不把完整刚体动力学放入预测状态方程。在线只执行第一拍 $\ddot q_0^\star$，下层执行器使用 inverse dynamics 转成力矩：
-
-$
-\tau=\tau_{ff}+K_p(q_{ref}-q)+K_d(\dot q_{ref}-\dot q)
-$
-
-MuJoCo 仿真先采用与 LQR 相同的非摩擦约束感知逆动力学生成名义力矩：
-
-```python
-scratch.qpos[:] = data.qpos
-scratch.qvel[:] = data.qvel
-scratch.qacc[:] = 0.0
-scratch.qacc[right_arm_qvel_indices] = ddq_des
-mujoco.mj_inverse(model, scratch)
-
-tau_inverse = scratch.qfrc_inverse[right_arm_qvel_indices]
-efc_J = np.asarray(scratch.efc_J).reshape(-1, model.nv)[:scratch.nefc]
-efc_type = scratch.efc_type[:scratch.nefc]
-friction_rows = np.isin(efc_type, FRICTION_CONSTRAINT_TYPES)
-qfrc_friction = efc_J[friction_rows].T @ scratch.efc_force[:scratch.nefc][friction_rows]
-qfrc_nonfriction = scratch.qfrc_constraint - qfrc_friction
-tau_ff = tau_inverse + qfrc_nonfriction[right_arm_qvel_indices]
+```yaml
+mpc_disturbance_feedforward_enabled: true
+mpc_disturbance_template: fully_smoothed  # raw / half_smoothed / fully_smoothed
 ```
 
-`qfrc_inverse` 加回 contact、joint/tendon limit 和 equality 等非摩擦约束，仅保留 `FRICTION_DOF` 与 `FRICTION_TENDON` 的摩擦补偿。然后固定其他执行器力矩，使用一次基准和五次右臂力矩扰动的 MuJoCo 前向动力学构建 $G_\tau=\partial\ddot q_{right}/\partial\tau_{right}$，再用阻尼最小二乘一次求出力矩修正。
+$$
+\phi_k=\left(\phi_0+\frac{k\Delta t}{T}\right)\bmod 1,
+\qquad k=0,\ldots,N.
+$$
 
-由于摩擦、接触和限位约束会发生离散切换，下层还必须用完整前向动力学依次验收 $1/0.5/0.25/0.125$ 倍力矩修正；只接受比当前工作点更接近 `ddq_des` 的候选。若第一轮验收后的五关节残差范数仍超过 `5 rad/s²`，则在已接受力矩处重新构建一次 $G_\tau$，对剩余残差再求一次受完整前向动力学验收的修正。该过程最多两轮，不修改 MPC 输出，只负责防止局部力矩映射跨过约束切换点后产生错误加速度。该下层映射允许浮动基和腿部自然响应，不需要把完整刚体动力学放进 MPC 的 QP。它不是完整的接触力优化；主动接触任务仍需把接触力和摩擦锥纳入 MPC。
+在相邻 bin 中心之间做跨周期线性插值。为避免第一步从实时测量跳到模板均值，对三个向量分量
+$z\in\{a_B,\omega_B,\alpha_B\}$ 使用测量锚定的模板增量：
 
-真机可用 Pinocchio/RBDL/厂商动力学库计算相同的无接触项：
+$$
+{}^W\hat z_k
+={}^Wz_0+\left[T_z(\phi_k)-T_z(\phi_0)\right].
+$$
 
-$
-\tau_{ff}=M(q)\ddot q_{des}+h(q,\dot q)
-$
+姿态分量不能使用向量加法。运行时先对模板四元数做最短路径
+SLERP，得到 $R_B^{\mathrm{tpl}}(\phi)$，再以当前实测姿态
+${}^WR_{B,0}$ 锚定模板的相对转动：
 
-如果后续希望 MPC 同时考虑力矩上限，又不想把力矩作为决策变量，可以在每轮工作点冻结动力学：
+$$
+{}^WR_{B,k}
+={}^WR_{B,0}
+\left(R_B^{\mathrm{tpl}}(\phi_0)\right)^T
+R_B^{\mathrm{tpl}}(\phi_k).
+$$
 
-$
-\tau_k\approx M(\bar q_k)u_k+h(\bar q_k,\dot{\bar q}_k)
-$
+最终组成
 
-这样 $\tau_{min}\le\tau_k\le\tau_{max}$ 仍是关于 $u_k$ 的线性不等式，可继续由 OSQP 求解。
+$$
+\hat d_k=
+\left(
+{}^W\hat a_{B,k},
+{}^W\hat\omega_{B,k},
+{}^W\hat\alpha_{B,k},
+{}^WR_{B,k}
+\right),
+\qquad
+\hat d_0=d_0.
+$$
 
-## 💡 工程师落地 Check-List (代码实现防坑指南)
+这样 $R_{B,0}$ 严格等于当前测量，未来步只复用模板从
+$\phi_0$ 到 $\phi_k$ 的相对姿态变化，不会把采集时的绝对航向强加给当前机器人，也不会产生角速度积分漂移。每个预测步的完整
+$\hat d_k$ 和运动学都使用该 $R_{B,k}$。
 
-当你把这些宏伟的矩阵写进 C++ 时，请严格遵守以下法则：
+### 4.3 逐步线性化与实时迭代
 
-1. **绝对不要用稠密矩阵类型**： 你的 $A_{cons}$ 矩阵非常庞大（例如对于 14 自由度，预测 20 步，矩阵维度将达到约 $1200 \times 900$），但里面 95% 以上的元素都是 0。如果你用 `Eigen::MatrixXd`，程序瞬间卡死。
-2. **必须使用 Triplet 插入法**： 在 Eigen 中构建这样的稀疏矩阵，必须声明 `std::vector<Eigen::Triplet<double>>`。然后在你的 `for (k=0...N)` 循环中，把每个单步小矩阵（比如 $-A_k$）的每一个非零元素，以 `(row, col, value)` 的形式 `push_back` 到 Triplet 列表里。
-3. **坐标索引要精准**：
-   - 在构建 $A_{dyn}$ 时，$-A_k$ 块的左上角坐标永远是： `row = (k+1)*n_x`，`col = k*(n_x + n_u)`。
-   - $I_{n_x}$（转移到的下一个状态）的左上角坐标是：`row = (k+1)*n_x`，`col = (k+1)*(n_x + n_u)`。
+每个预测步都围绕工作点
 
-只要你的下标索引严格遵守这张矩阵图纸，你的 C++ 代码就能在 1 毫秒内，极其优雅地解出抵抗外部颠簸和冲撞的最优前馈加速度序列。
+$$
+\bar x_k=
+\begin{bmatrix}
+\bar q_k\\
+\dot{\bar q}_k
+\end{bmatrix}
+$$
+
+冻结运动学系数。初次启动时用当前状态和零输入生成工作轨迹；之后先平移上一拍的最优输入：
+
+$$
+\bar u_k\leftarrow u^\star_{k+1,\mathrm{prev}},
+\qquad k=0,\ldots,N-2,
+$$
+
+$$
+\bar u_{N-1}\leftarrow u^\star_{N-1,\mathrm{prev}},
+\qquad
+\bar x_0\leftarrow x_{\mathrm{meas}},
+$$
+
+再按
+
+$$
+\bar x_{k+1}=A\bar x_k+B\bar u_k,
+\qquad k=0,\ldots,N-1
+$$
+
+向前滚动整条状态工作轨迹。这样得到的轨迹与积分器动力学一致，但仍需检查并裁剪输入、确认状态边界；OSQP 的 primal warm-start 使用这条轨迹，dual warm-start 使用上一拍对偶解的对应平移。
+
+也可以把末端输入补齐为零而不是重复上一拍最后一个输入，但一种策略确定后应保持一致并记录。本文初版采用“重复最后一个输入”，以避免预测末端出现人为突变。
+
+初版采用一次实时迭代：每个控制周期只围绕当前工作轨迹组装并求解一个 QP，不在同一周期内执行多轮 SQP。下一周期再用新状态和上一拍解重新线性化。
+
+---
+
+## 5. 末端物理量的局部仿射模型
+
+以下系数都带预测步下标 $k$，并在
+$(\bar x_k,\hat d_k)$ 处计算后冻结，其中 $\hat d_k$ 已包含
+${}^WR_{B,k}$。关闭前馈时 $\hat d_k=d_0$；开启前馈时其中的运动量和姿态逐步变化。
+
+### 5.1 末端线加速度
+
+末端世界系位置为
+
+$$
+{}^Wp_E={}^Wp_B+{}^WR_B\,{}^Bp_E(q).
+$$
+
+严格求导可得：
+
+$$
+\begin{aligned}
+{}^Wa_E={}&{}^Wa_B
++{}^W\alpha_B\times({}^WR_B{}^Bp_E)
++{}^W\omega_B\times\left({}^W\omega_B\times({}^WR_B{}^Bp_E)\right)\\
+&+2{}^W\omega_B\times({}^WR_B{}^BJ_v\dot q)
++{}^WR_B\left({}^B\dot J_v\dot q+{}^BJ_v\ddot q\right).
+\end{aligned}
+$$
+
+冻结当前步的 $p_E,J_v,\dot J_v$ 后，写成：
+
+$$
+{}^Wa_{E,k}\approx
+D_{a,k}+C_{a,k}S_vx_k+B_{a,k}u_k,
+$$
+
+其中
+
+$$
+\begin{aligned}
+D_{a,k}={}&{}^Wa_{B,k}
++{}^W\alpha_{B,k}\times({}^WR_{B,k}{}^Bp_E(\bar q_k))\\
+&+{}^W\omega_{B,k}\times
+\left({}^W\omega_{B,k}\times
+({}^WR_{B,k}{}^Bp_E(\bar q_k))\right),
+\end{aligned}
+$$
+
+$$
+C_{a,k}=
+2[{}^W\omega_{B,k}]_\times{}^WR_{B,k}{}^BJ_v(\bar q_k)
++{}^WR_{B,k}{}^B\dot J_v(\bar q_k,\dot{\bar q}_k),
+$$
+
+$$
+B_{a,k}={}^WR_{B,k}{}^BJ_v(\bar q_k).
+$$
+
+实现中直接沿用 LQR 的世界系位置差。对工作构型 $\bar q_k$ 做
+MuJoCo scratch 前向运动学后，有
+
+$$
+{}^Wr_{BE,k}^{\mathrm{scratch}}
+={}^Wp_E^{\mathrm{scratch}}(\bar q_k)
+-{}^Wp_B^{\mathrm{scratch}} .
+$$
+
+$\mathrm{scratch}$ 只表示该量来自临时的 MuJoCo `MjData`，不是新的坐标系。每次 MPC 求解开始时，代码把当前整机 `qpos` 复制到 scratch；计算各预测步时只把右臂关节替换为
+$\bar q_k$，其余关节以及 floating base 的位置、姿态均保持为 $k=0$ 的实测值。因此在同一轮预测中
+${}^Wp_B^{\mathrm{scratch}}$ 和 ${}^WR_{B,0}$ 不随 $k$ 变化，而
+${}^Wp_E^{\mathrm{scratch}}(\bar q_k)$、Jacobian 和末端姿态随
+$\bar q_k$ 变化。下一次 MPC 求解会重新复制整机实测状态。
+
+$r_{BE}$ 只是上述位置差的简称，不是新的状态或模板通道。世界系平移在相减时严格抵消，因此模板不需要预测 $p_B$。
+
+scratch 中的 base 姿态保持为当前测量姿态 ${}^WR_{B,0}$。若第 $k$ 步使用预测姿态 ${}^WR_{B,k}$，则只需用相对旋转修正位置差：
+
+$$
+\Delta R_k={}^WR_{B,k}({}^WR_{B,0})^T,
+$$
+
+$$
+{}^Wr_{BE,k}(\bar q_k)
+=\Delta R_k\,{}^Wr_{BE,k}^{\mathrm{scratch}}.
+$$
+
+它与严格公式
+${}^Wr_{BE,k}={}^WR_{B,k}{}^Bp_E(\bar q_k)$ 完全等价，但实现更直接，也无需显式构造 ${}^Bp_E$。关闭前馈时
+$R_{B,k}=R_{B,0}$、$\Delta R_k=I$，因此退化为 LQR 的
+${}^Wp_E-{}^Wp_B$ 写法。世界系
+$J_v,\dot J_v,J_\omega,\dot J_\omega$ 和末端姿态使用同一个
+$\Delta R_k$ 修正，不能只旋转位置差而遗漏这些量。
+
+### 5.2 末端角加速度
+
+末端绝对角速度和角加速度为
+
+$$
+{}^W\omega_E={}^W\omega_B+{}^WR_B{}^BJ_\omega\dot q,
+$$
+
+$$
+{}^W\alpha_E=
+{}^W\alpha_B+
+{}^W\omega_B\times({}^WR_B{}^BJ_\omega\dot q)
++{}^WR_B({}^B\dot J_\omega\dot q+{}^BJ_\omega\ddot q).
+$$
+
+局部仿射形式为
+
+$$
+{}^W\alpha_{E,k}\approx
+D_{\alpha,k}+C_{\alpha,k}S_vx_k+B_{\alpha,k}u_k,
+$$
+
+$$
+D_{\alpha,k}={}^W\alpha_{B,k},
+$$
+
+$$
+C_{\alpha,k}=
+[{}^W\omega_{B,k}]_\times{}^WR_{B,k}{}^BJ_\omega(\bar q_k)
++{}^WR_{B,k}{}^B\dot J_\omega(\bar q_k,\dot{\bar q}_k),
+$$
+
+$$
+B_{\alpha,k}={}^WR_{B,k}{}^BJ_\omega(\bar q_k).
+$$
+
+### 5.3 有符号二维重力误差
+
+定义末端系中的重力向量：
+
+$$
+g^E(q;{}^WR_{B,k})={}^ER_W(q;{}^WR_{B,k})g^W.
+$$
+
+只选取末端系 $x,y$ 两个分量：
+
+$$
+S_{xy}=
+\begin{bmatrix}
+1&0&0\\
+0&1&0
+\end{bmatrix},
+\qquad
+r_g(q;{}^WR_{B,k})=S_{xy}g^E(q;{}^WR_{B,k})\in\mathbb R^2.
+$$
+
+正立时 $r_g=0$。该二维误差保留倾斜方向和符号，但正立与精确倒立都会得到零误差。当前保守关节角盒不允许右臂把瓶体翻转到倒立构型，因此初版接受这一歧义，不再为排除不可达构型计算第三维误差。
+
+在 $\bar q_k$ 附近线性化：
+
+$$
+r_{g,k}\approx d_{g,k}+G_{g,k}x_k,
+$$
+
+$$
+J_{g,k}=
+\left.
+\frac{\partial r_g(q;{}^WR_{B,k})}{\partial q}
+\right|_{\bar q_k},
+\qquad
+G_{g,k}=J_{g,k}S_q,
+$$
+
+$$
+d_{g,k}=r_g(\bar q_k;{}^WR_{B,k})-J_{g,k}\bar q_k.
+$$
+
+$r_g,d_{g,k}\in\mathbb R^2$，$J_{g,k}\in\mathbb R^{2\times n}$，对应的 $Q_g\in\mathbb R^{2\times2}$。与三维写法相比，QP 少一个重力残差分量；末端姿态和 Jacobian 仍然需要计算，因此计算量下降有限，主要收益是删除当前不可达构型所需的冗余判别。
+
+当前 MPC 不定义 torso-relative 末端位置残差，也不构造相应的软代价或硬约束。${}^Bp_E$ 和线 Jacobian 仍需用于第 5.1 节的末端线加速度计算，这不表示存在位置保持任务。
+
+---
+
+## 6. 代价函数
+
+### 6.1 各代价项的职责
+
+每个代价项解决不同问题：
+
+- $\|a_E\|_{Q_a}^2$：降低抓持点绝对线加速度。
+- $\|\alpha_E\|_{Q_\alpha}^2$：降低抓持点绝对角加速度。
+- $\|r_g\|_{Q_g}^2$：用有符号二维倾斜误差保持杯体正立。
+- $\|q-q_{\mathrm{nom}}\|_{Q_q}^2$：低权重关节姿态正则，只用于打破近似等价解和避免长期贴住关节边界。
+- $\|\dot q\|_{Q_v}^2$：抑制持续关节运动和漂移。
+- $\|u\|_R^2$：抑制过大的 `ddq_des`。
+
+关节姿态正则不是重力姿态误差。前者让五个电机角度接近 $q_{\mathrm{nom}}=0$，后者让瓶体相对世界重力保持正立。
+
+由于初版已经使用保守的关节硬边界，$Q_q$ 不应再主导控制。建议初始值为
+
+$$
+Q_q=0.05I_5,
+$$
+
+后续根据各项实际平均代价调整。若确认去掉它不会导致多个等价解之间抖动，也可以在对照实验中令 $Q_q=0$。
+
+### 6.2 单步代价
+
+对 $k=0,\ldots,N-1$：
+
+$$
+\begin{aligned}
+\ell_k(x_k,u_k)={}&
+\|{}^Wa_{E,k}\|_{Q_a}^2
++\|{}^W\alpha_{E,k}\|_{Q_\alpha}^2
++\|r_{g,k}\|_{Q_g}^2\\
+&+\|S_qx_k-q_{\mathrm{nom}}\|_{Q_q}^2
++\|S_vx_k\|_{Q_v}^2
++\|u_k\|_R^2.
+\end{aligned}
+$$
+
+所有权重矩阵都应满足半正定；$R$ 应正定，以保证输入方向具有足够正则。
+
+### 6.3 终端代价
+
+终端没有 $u_N$，也不直接惩罚末端加速度。建议保留缩放后的姿态任务：
+
+$$
+\ell_N(x_N)=
+\|r_{g,N}\|_{Q_{g,N}}^2
++\|S_qx_N-q_{\mathrm{nom}}\|_{Q_{q,N}}^2
++\|S_vx_N\|_{Q_{v,N}}^2.
+$$
+
+初版可取
+
+$$
+Q_{g,N}=2Q_g,\quad
+Q_{q,N}=2Q_q,\quad
+Q_{v,N}=2Q_v.
+$$
+
+终端关节姿态项仍然是低权重正则，不应借助终端放大重新变成主导目标。
+
+### 6.4 单步二次型
+
+定义
+
+$$
+E_{a,k}=C_{a,k}S_v,
+\qquad
+E_{\alpha,k}=C_{\alpha,k}S_v.
+$$
+
+忽略与决策变量无关的常数后，单步代价可写为
+
+$$
+\ell_k=
+x_k^TQ_{xx,k}x_k
++2x_k^TQ_{xu,k}u_k
++u_k^TQ_{uu,k}u_k
++2f_{x,k}^Tx_k
++2f_{u,k}^Tu_k.
+$$
+
+其中
+
+$$
+\begin{aligned}
+Q_{xx,k}={}&
+E_{a,k}^TQ_aE_{a,k}
++E_{\alpha,k}^TQ_\alpha E_{\alpha,k}
++G_{g,k}^TQ_gG_{g,k}\\
+&+S_q^TQ_qS_q+S_v^TQ_vS_v,
+\end{aligned}
+$$
+
+$$
+Q_{xu,k}=
+E_{a,k}^TQ_aB_{a,k}
++E_{\alpha,k}^TQ_\alpha B_{\alpha,k},
+$$
+
+$$
+Q_{uu,k}=
+B_{a,k}^TQ_aB_{a,k}
++B_{\alpha,k}^TQ_\alpha B_{\alpha,k}
++R,
+$$
+
+$$
+\begin{aligned}
+f_{x,k}={}&
+E_{a,k}^TQ_aD_{a,k}
++E_{\alpha,k}^TQ_\alpha D_{\alpha,k}
++G_{g,k}^TQ_gd_{g,k}\\
+&-S_q^TQ_qq_{\mathrm{nom}},
+\end{aligned}
+$$
+
+$$
+f_{u,k}=
+B_{a,k}^TQ_aD_{a,k}
++B_{\alpha,k}^TQ_\alpha D_{\alpha,k}.
+$$
+
+对局部变量
+
+$$
+z_k=
+\begin{bmatrix}
+x_k\\u_k
+\end{bmatrix},
+$$
+
+与 OSQP 形式
+
+$$
+\frac12z_k^TH_kz_k+h_k^Tz_k
+$$
+
+对齐可得
+
+$$
+H_k=
+2
+\begin{bmatrix}
+Q_{xx,k}&Q_{xu,k}\\
+Q_{xu,k}^T&Q_{uu,k}
+\end{bmatrix},
+\qquad
+h_k=
+2
+\begin{bmatrix}
+f_{x,k}\\f_{u,k}
+\end{bmatrix}.
+$$
+
+终端代价使用同样的仿射展开方法得到 $H_N$ 和 $h_N$。
+
+---
+
+## 7. 硬约束
+
+### 7.1 关节角约束
+
+当前模型中，简单对称的 $\pm20^\circ$ 关节盒不能保证无碰撞：shoulder roll/yaw 同时向内时，多关节组合会使肘部接近 torso，甚至使左右瓶体相交。
+
+初版建议使用以下保守范围：
+
+| 关节 | 角度范围 | 弧度范围 | 设计考虑 |
+|---|---:|---:|---|
+| shoulder pitch | $[-20^\circ,\ 10^\circ]$ | $[-0.349,\ 0.175]$ | 保留抬臂补偿能力，限制向下、向后收回 |
+| shoulder roll | $[-10^\circ,\ 5^\circ]$ | $[-0.175,\ 0.087]$ | 正方向为向内收，故正向更严格 |
+| shoulder yaw | $[-20^\circ,\ 5^\circ]$ | $[-0.349,\ 0.087]$ | 正方向将手推向身体中线，故正向更严格 |
+| elbow pitch | $[-20^\circ,\ 20^\circ]$ | $[-0.349,\ 0.349]$ | 保留主要 pitch 补偿自由度 |
+| wrist roll | $[-20^\circ,\ 20^\circ]$ | $[-0.349,\ 0.349]$ | 保留末端 roll 调姿能力 |
+
+写成：
+
+$$
+q_{\min}\le S_qx_k\le q_{\max},
+\qquad k=1,\ldots,N.
+$$
+
+$x_0$ 已由实测状态锁定，不能被当前 QP 改变，因此不把 $x_0$ 再放进关节角硬边界。求解前应独立检查当前状态；若当前状态已越界，应进入恢复逻辑，而不是构造一个必然不可行的 QP。
+
+上述范围在当前 MuJoCo 模型中经过 243 个端点网格构型和 20000 个固定随机种子的盒内构型抽样复核，未观察到瓶体、手腕或肘部与 torso/左臂的非相邻碰撞。但这只是当前模型和抽样范围内的工程验证，不是对所有连续构型、模型误差和真机柔性的数学证明。
+
+抽样中仍可能出现 `right_shoulder_yaw_link` 与 `torso_link` 这一相邻结构几何对。需要单独确认它是合理的相邻碰撞排除项，还是实际结构干涉；不能依靠 MPC 关节盒掩盖 XML 几何语义问题。
+
+### 7.2 关节速度约束
+
+初版采用统一约束：
+
+$$
+-1.0\le\dot q_{k,j}\le1.0\ \mathrm{rad/s},
+\qquad
+k=1,\ldots,N.
+$$
+
+base 在世界中的运动不会直接占用该限制，因为这里约束的是关节相对速度，而不是末端世界速度。$1\ \mathrm{rad/s}$ 对当前 $\pm5^\circ\sim\pm20^\circ$ 的小关节盒已经足够宽，同时可以防止优化器用高关节速度穿过允许区域。
+
+若实验中该约束长期激活并明显损害末端稳定，再根据记录放宽；初版不建议完全取消速度约束。
+
+### 7.3 关节加速度约束
+
+初版采用：
+
+$$
+-8.0\le u_{k,j}\le8.0\ \mathrm{rad/s^2},
+\qquad
+k=0,\ldots,N-1.
+$$
+
+该值与当前执行层候选验收使用的瞬时加速度上限对齐，避免 MPC 主动要求明显超过执行安全筛选范围的 `ddq_des`。它约束的是期望加速度；实际 `qacc` 仍必须由第 10 节的前向动力学验收检查。
+
+初版不再额外增加 DDQ rate limit 或 jerk 约束。先记录加速度约束激活率、相邻 `ddq_des` 跳变量和最终力矩平滑度；只有确认存在问题时再增加 $\Delta u$ 代价或约束。
+
+### 7.4 当前不启用的硬约束
+
+当前初版明确不加入：
+
+- torso-relative 末端位置硬约束；
+- 瓶体、手腕、前臂到 torso/左臂的 signed-distance 约束；
+- QP 内的力矩约束；
+- 接触力和摩擦锥约束。
+
+torso-relative 位置也不进入代价函数。碰撞风险当前依赖保守关节角盒、离线构型抽样和仿真接触记录控制。
+
+如果后续出现以下任一情况，就不能继续假设关节盒足够，必须重新引入几何距离约束或独立安全层：
+
+- 瓶体、手腕、肘部或前臂出现非相邻接触；
+- 真机几何、负载或柔性与 MuJoCo 模型差异明显；
+- 为提高控制能力而放宽 shoulder roll/yaw 的向内边界；
+- 多关节组合在盒内仍出现过小安全间隙。
+
+---
+
+## 8. 全局稀疏 QP
+
+### 8.1 全局决策变量
+
+预测时域为 $N$。定义
+
+$$
+n_x=2n,\qquad n_u=n,
+$$
+
+并采用交错排列：
+
+$$
+Y=
+\begin{bmatrix}
+x_0\\u_0\\x_1\\u_1\\\vdots\\x_{N-1}\\u_{N-1}\\x_N
+\end{bmatrix}
+\in\mathbb R^M,
+$$
+
+$$
+M=(N+1)n_x+Nn_u.
+$$
+
+状态和输入块的列偏移为
+
+$$
+c_x(k)=k(n_x+n_u),\qquad k=0,\ldots,N-1,
+$$
+
+$$
+c_u(k)=c_x(k)+n_x,
+$$
+
+$$
+c_x(N)=N(n_x+n_u).
+$$
+
+### 8.2 全局目标函数
+
+OSQP 目标为
+
+$$
+\min_Y\frac12Y^TPY+q_{\mathrm{osqp}}^TY.
+$$
+
+对 $k=0,\ldots,N-1$，把单步 $H_k$ 放入对应的 $(x_k,u_k)$ 主对角块，把 $h_k$ 放入对应向量段；最后放入终端 $H_N,h_N$：
+
+$$
+P=\operatorname{blkdiag}(H_0,H_1,\ldots,H_{N-1},H_N),
+$$
+
+$$
+q_{\mathrm{osqp}}=
+\begin{bmatrix}
+h_0\\h_1\\\vdots\\h_{N-1}\\h_N
+\end{bmatrix}.
+$$
+
+这里每个 $H_k$ 本身包含 $x_k$ 与 $u_k$ 的交叉块，因此“分块对角”不表示状态和输入之间没有耦合。
+
+数值实现时应对 Hessian 做对称化，并保留很小的正则：
+
+$$
+P\leftarrow\frac12(P+P^T)+\epsilon I,
+\qquad \epsilon>0.
+$$
+
+### 8.3 全局动力学等式约束
+
+初始状态约束：
+
+$$
+x_0=x_{\mathrm{meas}}.
+$$
+
+每一步转移约束：
+
+$$
+-Ax_k-Bu_k+x_{k+1}=0,
+\qquad k=0,\ldots,N-1.
+$$
+
+组装为
+
+$$
+A_{\mathrm{dyn}}Y=b_{\mathrm{dyn}},
+$$
+
+其中
+
+$$
+A_{\mathrm{dyn}}=
+\begin{bmatrix}
+I&0&0&0&\cdots&0\\
+-A&-B&I&0&\cdots&0\\
+0&0&-A&-B&\ddots&\vdots\\
+\vdots&\vdots&\ddots&\ddots&\ddots&0\\
+0&0&\cdots&-A&-B&I
+\end{bmatrix},
+$$
+
+$$
+b_{\mathrm{dyn}}=
+\begin{bmatrix}
+x_{\mathrm{meas}}\\
+0\\
+\vdots\\
+0
+\end{bmatrix}
+\in\mathbb R^{(N+1)n_x}.
+$$
+
+第一块行在 $c_x(0)$ 插入 $I$。第 $k+1$ 个块行分别在 $c_x(k),c_u(k),c_x(k+1)$ 插入 $-A,-B,I$。这样可以无歧义地连接 $x_k,u_k,x_{k+1}$。
+
+### 8.4 全局边界约束
+
+不再使用一个对所有 $Y$ 分量都施加有限上下界的简单单位阵，而是按变量类型构造选择矩阵：
+
+- 对 $x_1,\ldots,x_N$ 插入 $S_q$，施加关节角边界；
+- 对 $x_1,\ldots,x_N$ 插入 $S_v$，施加关节速度边界；
+- 对 $u_0,\ldots,u_{N-1}$ 插入 $I_n$，施加关节加速度边界。
+
+记组装结果为
+
+$$
+l_{\mathrm{box}}\le A_{\mathrm{box}}Y\le u_{\mathrm{box}}.
+$$
+
+当前共有 $3Nn$ 行：
+
+$$
+\begin{aligned}
+q_{\min}&\le S_qx_k\le q_{\max},&&k=1,\ldots,N,\\
+\dot q_{\min}&\le S_vx_k\le\dot q_{\max},&&k=1,\ldots,N,\\
+u_{\min}&\le u_k\le u_{\max},&&k=0,\ldots,N-1.
+\end{aligned}
+$$
+
+### 8.5 OSQP 最终组装
+
+最终约束写成
+
+$$
+l\le A_{\mathrm{cons}}Y\le u,
+$$
+
+$$
+A_{\mathrm{cons}}=
+\begin{bmatrix}
+A_{\mathrm{dyn}}\\
+A_{\mathrm{box}}
+\end{bmatrix},
+$$
+
+$$
+l=
+\begin{bmatrix}
+b_{\mathrm{dyn}}\\
+l_{\mathrm{box}}
+\end{bmatrix},
+\qquad
+u=
+\begin{bmatrix}
+b_{\mathrm{dyn}}\\
+u_{\mathrm{box}}
+\end{bmatrix}.
+$$
+
+因此：
+
+$$
+A_{\mathrm{cons}}\in
+\mathbb R^{((N+1)n_x+3Nn)\times M}.
+$$
+
+动力学等式通过相同的上下界 $b_{\mathrm{dyn}}$ 表示。当前没有位置、碰撞或松弛变量；如果以后增加一般线性化约束，只需继续向 $A_{\mathrm{cons}},l,u$ 追加行。
+
+---
+
+## 9. 在线滚动运行流程
+
+每个 $0.006\ \mathrm{s}$ MPC 控制周期执行：
+
+1. 读取当前右臂 $q,\dot q$，设置 $x_{\mathrm{meas}}$。
+2. 读取、限幅和滤波当前 base 的 $a_B,\omega_B,\alpha_B,R_B$。
+3. 前馈关闭时对 base 量和姿态做零阶保持；前馈开启时按未来相位插值所选模板，以当前测量锚定
+$a_B,\omega_B,\alpha_B$，并以 $R_{B,0}$ 锚定模板的相对姿态变化。
+4. 平移上一拍最优解，生成本轮工作轨迹和 OSQP warm-start；首次运行使用零输入滚动。
+5. 对每个预测步根据 $\bar q_k$ 计算 scratch 中的
+$p_E-p_B$，再按 $R_{B,k}R_{B,0}^T$ 一致修正位置差、Jacobian、
+Jacobian 导数、末端姿态和二维重力误差线性化。
+6. 构造每步与终端代价，更新稀疏 $P,q_{\mathrm{osqp}}$。
+7. 更新初始状态、动力学等式和关节角/速度/加速度边界。
+8. 调用 OSQP。
+9. 检查 solver status、原始/对偶残差和约束违反量。
+10. 求解成功时只执行第一拍
+
+$$
+\ddot q_{\mathrm{des}}=u_0^\star.
+$$
+
+11. 下一个控制周期重新测量、重新线性化并重新求解。
+
+OSQP 的稀疏结构在 horizon 和约束类型不变时保持固定。初始化时建立一次 sparsity pattern，在线只更新非零数值、上下界和 warm-start，避免每拍重新分配矩阵。
+
+### 9.1 求解失败回退
+
+若 OSQP 超时、报告不可行或数值异常：
+
+1. 优先检查上一拍平移后的第一输入是否仍满足本拍的一步 $q,\dot q,u$ 边界；
+2. 若满足，可临时使用该有界输入；
+3. 否则使用受 $u_{\min},u_{\max}$ 限制的关节制动输入，使 $\dot q$ 向零收敛，并检查下一步关节角；
+4. 记录失败原因、回退输入和约束违反量。
+
+不应直接执行包含 NaN、未收敛或明显违反边界的 QP 解。
+
+---
+
+## 10. 从 `ddq_des` 到最终执行力矩
+
+MPC 只输出第一拍 `ddq_des`。下层执行链不改变 MPC 解，只负责寻找能在当前整机状态下实现该加速度的力矩。
+
+### 10.1 短时 PD 参考
+
+用一拍积分生成小 PD 修正需要的参考：
+
+$$
+\dot q_{\mathrm{ref}}=
+\dot q+\ddot q_{\mathrm{des}}\Delta t,
+$$
+
+$$
+q_{\mathrm{ref}}=
+q+\dot q\Delta t+
+\frac12\ddot q_{\mathrm{des}}\Delta t^2,
+$$
+
+$$
+\tau_{\mathrm{pd}}=
+K_p(q_{\mathrm{ref}}-q)+
+K_d(\dot q_{\mathrm{ref}}-\dot q).
+$$
+
+这条积分路径只生成局部反馈参考，不单独承担 DDQ 跟踪。
+
+### 10.2 逆动力学生成名义力矩
+
+在 MuJoCo 临时数据中复制当前整机状态，令非右臂期望加速度为零、右臂期望加速度为 `ddq_des`，调用 `mj_inverse`。
+
+当前采用非摩擦约束感知的名义前馈：
+
+$$
+\tau_{\mathrm{ff}}
+=
+qfrc_{\mathrm{inverse}}
++qfrc_{\mathrm{constraint,nonfriction}}.
+$$
+
+它加回 contact、joint/tendon limit 和 equality 等非摩擦约束，使执行器不主动对抗这些约束；`FRICTION_DOF` 和 `FRICTION_TENDON` 不加回，因此摩擦补偿仍保留在逆动力学结果中。
+
+名义力矩为
+
+$$
+\tau_{\mathrm{nom}}=
+\operatorname{clip}
+\left(
+\tau_{\mathrm{ff}}+\tau_{\mathrm{pd}},
+\tau_{\min},\tau_{\max}
+\right).
+$$
+
+非右臂加速度为零的假设只用于提供初始名义力矩，最终加速度由完整前向动力学评估。
+
+### 10.3 数值前向动力学局部映射
+
+固定腿、腰和左臂的当前控制力矩，先用 $\tau_{\mathrm{nom}}$ 执行一次完整前向动力学，得到右臂基准加速度 $\ddot q_b$。
+
+分别给 5 个右臂力矩增加小扰动 $\epsilon=0.1\ \mathrm{N\,m}$：
+
+$$
+G_\tau[:,j]\approx
+\frac{
+\ddot q_{\mathrm{right}}(\tau_{\mathrm{nom}}+\epsilon e_j)
+-\ddot q_b
+}{\epsilon}.
+$$
+
+局部模型为
+
+$$
+\ddot q_{\mathrm{right}}
+\approx
+\ddot q_b+G_\tau\Delta\tau.
+$$
+
+用阻尼最小二乘求修正：
+
+$$
+\Delta\tau=
+\arg\min_{\Delta\tau}
+\left\|
+G_\tau\Delta\tau-
+(\ddot q_{\mathrm{des}}-\ddot q_b)
+\right\|_2^2
++\lambda\|\Delta\tau\|_2^2.
+$$
+
+### 10.4 第一轮完整验收
+
+构造并完整评估四个候选：
+
+$$
+\tau(s)=
+\operatorname{clip}
+(\tau_{\mathrm{nom}}+s\Delta\tau),
+\qquad
+s\in\{1,0.5,0.25,0.125\}.
+$$
+
+每个候选都在临时 `MjData` 中调用完整 `mj_forward`，不推进真实仿真时间。记录：
+
+$$
+e(s)=
+\|\ddot q_{\mathrm{right}}(\tau(s))-\ddot q_{\mathrm{des}}\|_2,
+$$
+
+$$
+e_{\max}(s)=
+\max_j
+|\ddot q_{\mathrm{right},j}(\tau(s))-\ddot q_{\mathrm{des},j}|,
+$$
+
+$$
+a_{\max}(s)=
+\max_j|\ddot q_{\mathrm{right},j}(\tau(s))|.
+$$
+
+严格候选同时满足：
+
+1. 总误差小于当前工作点；
+2. $e_{\max}(s)\le4\ \mathrm{rad/s^2}$；
+3. $a_{\max}(s)\le8\ \mathrm{rad/s^2}$。
+
+对四个比例全部求值，并按以下顺序选择：
+
+1. 若存在严格候选，在严格候选中选择总误差最小者。
+2. 若没有严格候选，但存在“总误差改善且满足瞬时加速度上限”的候选，按 $(e_{\max},e)$ 的字典序选择，优先控制最差关节误差。
+3. 若连上述候选也不存在，在“仅总误差改善”的候选中选择总误差最小者；若没有任何改善候选，则保留 $\tau_{\mathrm{nom}}$。
+
+第 2、3 类结果不应标记为严格安全候选，必须分别记录 `tracking_safety_satisfied` 和 `qacc_safety_satisfied`。第 3 类只允许在当前 MPC 仿真验证阶段用于暴露执行链问题；真机不得执行已知超过瞬时加速度上限的候选，而应改用经完整前向动力学检查的保持/制动回退，或启用第 10.5 节的安全救援。
+
+### 10.5 第二轮和安全救援的当前策略
+
+MPC 初版默认只执行第一轮验收，同时完整记录：
+
+- 基准、局部预测和完整验收的 DDQ；
+- 四个候选的比例与误差；
+- 总误差、最大单关节误差和最大绝对加速度；
+- 是否存在严格候选；
+- 第一轮最终残差；
+- 计算耗时。
+
+第二轮重线性化和额外安全救援先保留为可配置功能，默认关闭。若数据表明第一轮经常出现以下情况，再启用第二轮：
+
+- 第一轮残差范数超过 $5\ \mathrm{rad/s^2}$；
+- 没有满足单关节误差条件的严格候选；
+- 局部映射跨过摩擦、接触或限位模式后明显失真。
+
+启用时，应在第一轮已接受力矩处重新构建 $G_{\tau,1}$，针对剩余残差再做一次阻尼最小二乘和四候选完整验收，不能直接复用第一轮 Jacobian。
+
+若两轮后仍超过瞬时加速度上限，可实验最多两轮额外安全救援，但必须单独记录触发率、成功率和耗时。只有数据证明它确实减少危险样本且计算预算允许时才保留。
+
+实时部署时可以固定为一轮验收；这里的“一轮”仍表示评估完整的四个比例候选，而不是未经完整动力学检查直接执行局部线性修正。
+
+### 10.6 最终执行
+
+只把最终选中的一个力矩写入右臂执行器，然后真实仿真只推进一次：
+
+```text
+q, dq, measured base motion
+        -> one MPC QP every 6 ms
+        -> ddq_des = u0*
+        -> one-step q_ref, dq_ref -> tau_pd
+        -> inverse dynamics -> tau_ff
+        -> clipped tau_nom
+        -> baseline forward dynamics
+        -> finite-difference G_tau
+        -> damped least-squares correction
+        -> first-pass four-candidate full validation
+        -> optional second pass / safety rescue
+        -> tau_cmd
+        -> one real mj_step every 2 ms
+```
+
+---
+
+## 11. 记录与验证
+
+### 11.1 MPC 求解记录
+
+每个 MPC 更新周期至少记录：
+
+- $x_{\mathrm{meas}}$、工作轨迹和预测状态/输入；
+- `ddq_des`；
+- OSQP status、迭代次数、primal/dual residual；
+- QP 组装时间和求解时间；
+- 关节角、速度、加速度约束的最小裕量和激活率；
+- 各代价项的单独数值；
+- 各预测步的 base 扰动、模板选择以及终端姿态预测变化量。
+
+### 11.2 物理效果
+
+继续使用抓持点统计：
+
+- 世界系末端线加速度；
+- 世界系末端角加速度；
+- 有符号二维重力误差；
+- 关节角、速度和 `ddq_des`；
+- 力矩大小、饱和率和平滑度。
+
+虽然初版不在 QP 中加入碰撞距离约束，仍必须记录 MuJoCo 接触对，并重点区分：
+
+- 瓶体、手腕、肘部、前臂与 torso/左臂的非相邻接触；
+- `right_shoulder_yaw_link` 与 `torso_link` 的相邻结构接触。
+
+### 11.3 DDQ 执行记录
+
+至少记录：
+
+- `ddq_des`；
+- 名义力矩对应的 `ddq_baseline`；
+- $G_\tau$ 的奇异值和条件数；
+- 局部模型预测 `ddq_predicted`；
+- 四个候选的完整前向动力学 `ddq_candidate`；
+- 最终验收 `ddq_validated`；
+- 真实控制区间平均 `ddq_real`；
+- 候选比例、拒绝原因和第一轮残差；
+- 可选第二轮/安全救援的触发、接受、成功和耗时。
+
+先用这些数据判断一轮验收是否足够，再决定是否打开第二轮，而不是预先把高计算量流程永久写死。
+
+---
+
+## 12. 已知局限与后续扩展
+
+1. phase-based 模板只适用于与采集时相近的下肢策略、$0.8\ \mathrm{s}$ 周期、速度指令和平地条件。当前模板来自固定世界系数据；若真机航向与模板采集航向明显不同，应改用 heading-aligned 模板或按当前 heading 旋转模板向量。
+2. 关节角盒只在当前模型中做过工程抽样验证，不能替代真机几何标定和独立安全验证。
+3. 二维重力误差不能区分正立和倒立。若以后明显放宽关节角盒、允许从任意构型启动或加入更大的姿态自由度，应恢复第三维误差，或增加保证末端朝上的半空间条件。
+4. 低权重关节姿态正则只用于数值与构型偏好，碰撞安全主要来自硬边界和验证，不应通过增大 $Q_q$ 间接实现。
+5. `ddq_des` 约束不等于真实接触加速度保证，下层前向动力学验收仍然必要。
+6. 当前 QP 不显式限制力矩。若以后需要在预测时域内考虑力矩上限，可在工作点冻结
+
+$$
+\tau_k\approx M(\bar q_k)u_k+h(\bar q_k,\dot{\bar q}_k),
+$$
+
+从而把 $\tau_{\min}\le\tau_k\le\tau_{\max}$ 作为关于 $u_k$ 的线性约束。
+
+7. 如果需要主动接触、推压环境或严格处理浮动基耦合，应升级为包含整机动力学、接触力和摩擦锥的 whole-body MPC，而不是继续扩展当前运动学积分器。
+
+---
+
+## 13. 实现检查清单
+
+- 右臂维数固定为 $n=5$，所有数组顺序一致。
+- `right_grasp_site` 是唯一任务末端。
+- 状态为 $x=[q;\dot q]$，输入为 $u=\ddot q$。
+- 状态方程严格采用 $x_{k+1}=Ax_k+Bu_k$，不加入额外扰动项。
+- 可通过 `mpc_disturbance_feedforward_enabled` 在零阶保持与相位模板前馈之间切换。
+- `mpc_disturbance_template` 只能选择 `raw`、`half_smoothed` 或 `fully_smoothed`。
+- 前馈采用当前测量锚定的模板增量，并生成 $N+1$ 个完整扰动点
+  $\hat d_k=(a_{B,k},\omega_{B,k},\alpha_{B,k},R_{B,k})$。
+- 离线模板文件不包含 $p_B$，但包含 Markley 均值姿态四元数及其旋转矩阵；完整扰动点中的
+  $R_{B,k}$ 由当前实测姿态锚定模板相对姿态得到。
+- scratch 中直接由该步工作构型计算 ${}^Wp_E-{}^Wp_B$；世界系平移严格相消，$p_B$ 不进入模板。未来步用
+  $R_{B,k}R_{B,0}^T$ 同步旋转该位置差和各运动学量。
+- 每拍只求解一个 QP，并使用上一拍解平移 warm-start。
+- $x_0=x_{\mathrm{meas}}$ 被完整写入等式约束。
+- 每个 $x_k,u_k,x_{k+1}$ 都由一行块 $[-A,-B,I]$ 连接。
+- 关节角、速度和加速度边界按正确阶段写入。
+- 二维重力残差及其 Jacobian、权重维数均为 2。
+- 不构造 torso-relative 位置残差、位置代价或位置硬约束。
+- 初版不启用 signed-distance 碰撞约束。
+- 关节姿态正则使用低权重，不与二维重力误差混淆。
+- OSQP 矩阵使用固定稀疏结构，在线只更新数值。
+- 只执行第一拍 `ddq_des`。
+- 初版默认一轮完整候选验收，并记录是否需要第二轮。
+- 所有被拒绝候选只在临时动力学数据中计算，不能写入真实执行器。
+- 对 MPC、DDQ 执行映射和完整控制循环分别记录耗时。

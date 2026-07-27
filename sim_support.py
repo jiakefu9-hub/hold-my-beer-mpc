@@ -241,6 +241,772 @@ class EvalBuffers:
     torso_xy_start: Optional[np.ndarray] = None
 
 
+@dataclass
+class ArmControllerSetup:
+    """右臂控制器及其运行期配置；用于把参数装配从主循环下沉。"""
+
+    policy: object
+    policy_type: str
+    notes: str
+    metadata: dict
+    acceleration_controller: bool
+    lqr_cost_definition: Optional[dict]
+    execution_perturbation: float
+    execution_regularization: float
+    execution_second_pass_error_threshold: float
+    execution_max_joint_error: float
+    execution_max_abs_qacc: float
+    execution_enable_second_pass: bool
+    execution_safety_rescue_passes: int
+    ddq_saturation_limit: float
+
+
+class TorsoAccelerationFilter:
+    """LQR/MPC 共用的 torso 加速度限幅与一阶滤波。"""
+
+    def __init__(self, config, enabled):
+        self.enabled = bool(enabled)
+        self.acc_alpha = float(
+            np.clip(config.get("ddq_torso_acc_filter_alpha", 0.20), 0.0, 1.0)
+        )
+        self.alpha_alpha = float(
+            np.clip(config.get("ddq_torso_alpha_filter_alpha", 0.20), 0.0, 1.0)
+        )
+        self.acc_limit = float(config.get("ddq_torso_acc_limit", 30.0))
+        self.alpha_limit = float(config.get("ddq_torso_alpha_limit", 40.0))
+        self.filtered_acc = np.zeros(3, dtype=np.float64)
+        self.filtered_alpha = np.zeros(3, dtype=np.float64)
+
+    def update(self, torso_state):
+        """返回原始加速度，并在启用时把 state 中的加速度替换为滤波值。"""
+        raw_acc = torso_state.lin_acc.copy()
+        raw_alpha = torso_state.ang_acc.copy()
+        if not self.enabled:
+            return raw_acc, raw_alpha
+
+        limited_acc = np.clip(torso_state.lin_acc, -self.acc_limit, self.acc_limit)
+        limited_alpha = np.clip(
+            torso_state.ang_acc, -self.alpha_limit, self.alpha_limit
+        )
+        self.filtered_acc = (
+            self.acc_alpha * limited_acc
+            + (1.0 - self.acc_alpha) * self.filtered_acc
+        )
+        self.filtered_alpha = (
+            self.alpha_alpha * limited_alpha
+            + (1.0 - self.alpha_alpha) * self.filtered_alpha
+        )
+        torso_state.lin_acc = self.filtered_acc.copy()
+        torso_state.ang_acc = self.filtered_alpha.copy()
+        return raw_acc, raw_alpha
+
+
+class PhaseDisturbancePredictor:
+    """按步态相位插值世界系模板，并生成 MPC 的 N+1 步扰动预测。"""
+
+    TEMPLATE_FILES = {
+        "raw": "world_disturbance_template.npz",
+        "half_smoothed": "world_disturbance_template_half_smoothed.npz",
+        "fully_smoothed": "world_disturbance_template_fully_smoothed.npz",
+    }
+
+    def __init__(
+        self,
+        template_dir,
+        variant,
+        control_dt,
+        horizon,
+        acc_limit=np.inf,
+        alpha_limit=np.inf,
+    ):
+        from kinematics_helper import DisturbanceInput
+
+        self._disturbance_type = DisturbanceInput
+        self.variant = str(variant).strip().lower()
+        if self.variant not in self.TEMPLATE_FILES:
+            raise ValueError(
+                "mpc_disturbance_template 必须是 raw、half_smoothed "
+                "或 fully_smoothed。"
+            )
+        self.path = os.path.abspath(
+            os.path.join(template_dir, self.TEMPLATE_FILES[self.variant])
+        )
+        if not os.path.isfile(self.path):
+            raise FileNotFoundError(f"找不到 MPC 扰动模板: {self.path}")
+
+        with np.load(self.path, allow_pickle=False) as source:
+            frame_name = str(np.asarray(source["frame_name"]).item())
+            stored_variant = str(np.asarray(source["template_variant"]).item())
+            self.period = float(np.asarray(source["period"]).item())
+            self.phase_centers = np.asarray(
+                source["phase_centers"], dtype=np.float64
+            ).copy()
+            valid_bins = np.asarray(source["valid_bins"], dtype=bool)
+            self.acc_template = np.asarray(
+                source["torso_linear_acceleration_template"], dtype=np.float64
+            ).copy()
+            self.omega_template = np.asarray(
+                source["torso_angular_velocity_template"], dtype=np.float64
+            ).copy()
+            self.alpha_template = np.asarray(
+                source["torso_angular_acceleration_template"], dtype=np.float64
+            ).copy()
+            self.orientation_quaternion_template = np.asarray(
+                source["torso_orientation_quaternion_template"],
+                dtype=np.float64,
+            ).copy()
+            self.orientation_rotation_template = np.asarray(
+                source["torso_orientation_rotation_matrix_template"],
+                dtype=np.float64,
+            ).copy()
+
+        expected_shape = (len(self.phase_centers), 3)
+        expected_quaternion_shape = (len(self.phase_centers), 4)
+        expected_rotation_shape = (len(self.phase_centers), 3, 3)
+        if frame_name != "world":
+            raise ValueError(f"扰动模板必须使用 world 坐标系，当前为 {frame_name!r}。")
+        if stored_variant != self.variant:
+            raise ValueError(
+                f"模板类型不匹配：配置={self.variant!r}，文件={stored_variant!r}。"
+            )
+        if (
+            self.period <= 0.0
+            or len(self.phase_centers) < 2
+            or not np.all(valid_bins)
+            or self.acc_template.shape != expected_shape
+            or self.omega_template.shape != expected_shape
+            or self.alpha_template.shape != expected_shape
+            or self.orientation_quaternion_template.shape
+            != expected_quaternion_shape
+            or self.orientation_rotation_template.shape != expected_rotation_shape
+        ):
+            raise ValueError("扰动模板的周期、有效 bin 或核心数组格式无效。")
+        if not all(
+            np.all(np.isfinite(value))
+            for value in (
+                self.phase_centers,
+                self.acc_template,
+                self.omega_template,
+                self.alpha_template,
+                self.orientation_quaternion_template,
+                self.orientation_rotation_template,
+            )
+        ):
+            raise ValueError("扰动模板包含 NaN 或 Inf。")
+        quaternion_norm_error = np.max(
+            np.abs(
+                np.linalg.norm(
+                    self.orientation_quaternion_template, axis=1
+                )
+                - 1.0
+            )
+        )
+        rotation_orthogonality_error = np.max(
+            np.linalg.norm(
+                np.transpose(self.orientation_rotation_template, (0, 2, 1))
+                @ self.orientation_rotation_template
+                - np.eye(3),
+                axis=(1, 2),
+            )
+        )
+        rotation_det_error = np.max(
+            np.abs(np.linalg.det(self.orientation_rotation_template) - 1.0)
+        )
+        rotations_from_quaternion = np.stack(
+            [
+                self._quaternion_to_rotation(quaternion)
+                for quaternion in self.orientation_quaternion_template
+            ]
+        )
+        quaternion_rotation_error = np.max(
+            np.linalg.norm(
+                rotations_from_quaternion - self.orientation_rotation_template,
+                axis=(1, 2),
+            )
+        )
+        if (
+            quaternion_norm_error > 1e-6
+            or rotation_orthogonality_error > 1e-6
+            or rotation_det_error > 1e-6
+            or quaternion_rotation_error > 1e-6
+        ):
+            raise ValueError("扰动模板中的姿态四元数或旋转矩阵无效。")
+
+        self.control_dt = float(control_dt)
+        self.horizon = int(horizon)
+        self.acc_limit = float(acc_limit)
+        self.alpha_limit = float(alpha_limit)
+        if self.control_dt <= 0.0 or self.horizon < 1:
+            raise ValueError("扰动预测器要求 control_dt>0 且 horizon>=1。")
+
+    def predict(self, simulation_time, measured_disturbance):
+        """生成完整 d_k：向量和姿态模板都以当前测量为锚点。"""
+        measured_acc = self._vector(measured_disturbance, "acc_world")
+        measured_omega = self._vector(measured_disturbance, "omega_world")
+        measured_alpha = self._vector(measured_disturbance, "alpha_world")
+        measured_rotation_value = getattr(
+            measured_disturbance, "rot_world_body", None
+        )
+        if measured_rotation_value is None:
+            raise ValueError("完整当前扰动 d_0 缺少 torso 姿态 R_B,0。")
+        measured_rotation = np.asarray(
+            measured_rotation_value, dtype=np.float64
+        ).copy()
+        if (
+            measured_rotation.shape != (3, 3)
+            or not np.all(np.isfinite(measured_rotation))
+            or not np.allclose(
+                measured_rotation.T @ measured_rotation,
+                np.eye(3),
+                atol=1e-6,
+            )
+            or not np.isclose(
+                np.linalg.det(measured_rotation), 1.0, atol=1e-6
+            )
+        ):
+            raise ValueError("当前 torso 姿态必须是有效的 3x3 旋转矩阵。")
+
+        phase_now = (float(simulation_time) / self.period) % 1.0
+        anchor_acc = self._sample(self.acc_template, phase_now)
+        anchor_omega = self._sample(self.omega_template, phase_now)
+        anchor_alpha = self._sample(self.alpha_template, phase_now)
+        anchor_orientation = self._quaternion_to_rotation(
+            self._sample_quaternion(
+                self.orientation_quaternion_template, phase_now
+            )
+        )
+
+        prediction = []
+        for step in range(self.horizon + 1):
+            phase = (
+                phase_now + step * self.control_dt / self.period
+            ) % 1.0
+            acc = measured_acc + self._sample(self.acc_template, phase) - anchor_acc
+            omega = (
+                measured_omega
+                + self._sample(self.omega_template, phase)
+                - anchor_omega
+            )
+            alpha = (
+                measured_alpha
+                + self._sample(self.alpha_template, phase)
+                - anchor_alpha
+            )
+            acc = np.clip(acc, -self.acc_limit, self.acc_limit)
+            alpha = np.clip(alpha, -self.alpha_limit, self.alpha_limit)
+
+            template_orientation = self._quaternion_to_rotation(
+                self._sample_quaternion(
+                    self.orientation_quaternion_template, phase
+                )
+            )
+            # 以当前实测姿态为锚点，只复用模板从 phi_0 到 phi_k 的相对转动。
+            rotation = (
+                measured_rotation
+                @ anchor_orientation.T
+                @ template_orientation
+            )
+
+            prediction.append(
+                self._disturbance_type(
+                    acc_world=acc,
+                    omega_world=omega,
+                    alpha_world=alpha,
+                    rot_world_body=rotation.copy(),
+                )
+            )
+        return tuple(prediction)
+
+    def metadata(self):
+        return {
+            "enabled": True,
+            "variant": self.variant,
+            "path": self.path,
+            "frame": "world",
+            "period": self.period,
+            "num_bins": int(len(self.phase_centers)),
+            "prediction": "measurement_anchored_template_delta",
+            "phase_source": "counter_times_simulation_dt",
+            "periodic_interpolation": "linear_between_bin_centers",
+            "rotation_prediction": "measurement_anchored_quaternion_template",
+            "orientation_interpolation": "shortest_path_slerp",
+        }
+
+    def _sample(self, values, phase):
+        # 模板采样点位于 bin 中心；这里允许最后一个与第一个 bin 跨周期插值。
+        coordinate = (float(phase) % 1.0) * len(self.phase_centers) - 0.5
+        lower_unwrapped = int(np.floor(coordinate))
+        fraction = coordinate - lower_unwrapped
+        lower = lower_unwrapped % len(self.phase_centers)
+        upper = (lower + 1) % len(self.phase_centers)
+        return (1.0 - fraction) * values[lower] + fraction * values[upper]
+
+    def _sample_quaternion(self, quaternions, phase):
+        # 四元数不能直接线性插值；使用最短路径 SLERP，并处理 q/-q 二义性。
+        coordinate = (float(phase) % 1.0) * len(self.phase_centers) - 0.5
+        lower_unwrapped = int(np.floor(coordinate))
+        fraction = coordinate - lower_unwrapped
+        lower = lower_unwrapped % len(self.phase_centers)
+        upper = (lower + 1) % len(self.phase_centers)
+        q0 = np.asarray(quaternions[lower], dtype=np.float64)
+        q1 = np.asarray(quaternions[upper], dtype=np.float64)
+        dot = float(np.dot(q0, q1))
+        if dot < 0.0:
+            q1 = -q1
+            dot = -dot
+        dot = np.clip(dot, -1.0, 1.0)
+        if dot > 0.9995:
+            result = (1.0 - fraction) * q0 + fraction * q1
+            return result / np.linalg.norm(result)
+        angle = np.arccos(dot)
+        scale = np.sin(angle)
+        return (
+            np.sin((1.0 - fraction) * angle) * q0
+            + np.sin(fraction * angle) * q1
+        ) / scale
+
+    @staticmethod
+    def _vector(disturbance, name):
+        value = None if disturbance is None else getattr(disturbance, name, None)
+        vector = (
+            np.zeros(3, dtype=np.float64)
+            if value is None
+            else np.asarray(value, dtype=np.float64)
+        )
+        if vector.shape != (3,) or not np.all(np.isfinite(vector)):
+            raise ValueError(f"measured_disturbance.{name} 必须是有限的三维向量。")
+        return vector
+
+    @staticmethod
+    def _quaternion_to_rotation(quaternion):
+        quaternion = np.asarray(quaternion, dtype=np.float64)
+        if quaternion.shape != (4,) or not np.all(np.isfinite(quaternion)):
+            raise ValueError("姿态四元数必须是有限的 wxyz 四维向量。")
+        norm = float(np.linalg.norm(quaternion))
+        if norm < 1e-12:
+            raise ValueError("姿态四元数范数不能为零。")
+        w, x, y, z = quaternion / norm
+        return np.array(
+            [
+                [
+                    1.0 - 2.0 * (y * y + z * z),
+                    2.0 * (x * y - z * w),
+                    2.0 * (x * z + y * w),
+                ],
+                [
+                    2.0 * (x * y + z * w),
+                    1.0 - 2.0 * (x * x + z * z),
+                    2.0 * (y * z - x * w),
+                ],
+                [
+                    2.0 * (x * z - y * w),
+                    2.0 * (y * z + x * w),
+                    1.0 - 2.0 * (x * x + y * y),
+                ],
+            ],
+            dtype=np.float64,
+        )
+
+
+def create_arm_controller(config, controller_name, default_q, control_dt):
+    """【半核心代码】从 YAML 参数创建 PID/LQR/MPC，并集中生成实验元数据。"""
+    from arm_lqr import ArmLQRPolicy
+    from arm_mpc import ArmMPCPolicy
+    from arm_pid import ArmPIDPolicy
+
+    controller_name = str(controller_name).lower()
+    if controller_name not in {"pid", "lqr", "mpc"}:
+        raise ValueError(
+            f"arm_controller={controller_name!r} 无效，只能选择 'pid'、'lqr' 或 'mpc'。"
+        )
+
+    perturbation = float(config.get("ddq_execution_perturbation", 0.1))
+    regularization = float(config.get("ddq_execution_regularization", 5.0))
+    second_pass_threshold = float(
+        config.get("ddq_execution_second_pass_error_threshold", 5.0)
+    )
+    max_joint_error = float(config.get("ddq_execution_max_joint_error", 4.0))
+    max_abs_qacc = float(config.get("ddq_execution_max_abs_qacc", 8.0))
+    enable_second_pass = bool(
+        config.get(
+            f"{controller_name}_execution_enable_second_pass",
+            controller_name == "lqr",
+        )
+    )
+    safety_rescue_passes = int(
+        config.get(
+            f"{controller_name}_execution_safety_rescue_passes",
+            2 if controller_name == "lqr" else 0,
+        )
+    )
+    torso_metadata = {
+        "torso_acc_filter_alpha": float(
+            config.get("ddq_torso_acc_filter_alpha", 0.20)
+        ),
+        "torso_alpha_filter_alpha": float(
+            config.get("ddq_torso_alpha_filter_alpha", 0.20)
+        ),
+        "torso_acc_limit": float(config.get("ddq_torso_acc_limit", 30.0)),
+        "torso_alpha_limit": float(config.get("ddq_torso_alpha_limit", 40.0)),
+    }
+    execution_metadata = {
+        "forward_dynamics_perturbation_nm": perturbation,
+        "forward_dynamics_regularization": regularization,
+        "forward_dynamics_second_pass_error_threshold": second_pass_threshold,
+        "forward_dynamics_max_joint_error": max_joint_error,
+        "forward_dynamics_max_abs_qacc": max_abs_qacc,
+        "forward_dynamics_enable_second_pass": enable_second_pass,
+        "forward_dynamics_safety_rescue_passes": safety_rescue_passes,
+    }
+
+    lqr_cost_definition = None
+    ddq_saturation_limit = np.inf
+    if controller_name == "lqr":
+        kwargs = {
+            "horizon": int(config.get("lqr_horizon", 12)),
+            "q_ee_acc": float(config.get("lqr_q_ee_acc", 1.0)),
+            "q_ee_alpha": float(config.get("lqr_q_ee_alpha", 0.05)),
+            "q_position": float(config.get("lqr_q_position", 20.0)),
+            "q_gravity": float(config.get("lqr_q_gravity", 30.0)),
+            "q_posture": config.get("lqr_q_posture", 0.4),
+            "q_vel": float(config.get("lqr_q_vel", 0.02)),
+            "r_ddq": float(config.get("lqr_r_ddq", 0.25)),
+            "terminal_scale": float(config.get("lqr_terminal_scale", 2.0)),
+            "reg": float(config.get("lqr_reg", 1e-6)),
+            "max_ddq": float(config.get("lqr_max_ddq", 3.0)),
+            "max_dq": float(config.get("lqr_max_dq", 1.0)),
+            "ddq_rate_limit": float(config.get("lqr_ddq_rate_limit", 350.0)),
+            "ddq_smoothing_alpha": float(
+                config.get("lqr_ddq_smoothing_alpha", 0.45)
+            ),
+            "joint_limit_margin": float(config.get("lqr_joint_limit_margin", 0.25)),
+            "joint_limit_stiffness": float(
+                config.get("lqr_joint_limit_stiffness", 8.0)
+            ),
+            "joint_limit_damping": float(
+                config.get("lqr_joint_limit_damping", 2.0)
+            ),
+        }
+        policy = ArmLQRPolicy(default_q=default_q, control_dt=control_dt, **kwargs)
+        lqr_cost_definition = policy.get_cost_definition()
+        policy_type = "ArmLQRPolicy"
+        notes = "finite-horizon time-varying LQR with per-joint posture weights, torso-relative end-effector position cost, directed 3D gravity error, fully bypassed ddq post-processing, protected torso disturbance inputs, and validated local MuJoCo forward-dynamics torque mapping initialized by non-friction-constraint-aware inverse dynamics plus joint-space PD"
+        metadata = {
+            "lqr_config": {
+                **kwargs,
+                "control_dt": policy.control_dt,
+                **torso_metadata,
+                **execution_metadata,
+                "torque_control": "mujoco_local_forward_dynamics_mapping_from_inverse_dynamics_nominal",
+                "constraint_aware_tau_formula": "qfrc_inverse + qfrc_constraint_nonfriction",
+                "constraints_added_back": "contact + joint/tendon limit + equality",
+                "constraints_excluded_from_addback": "FRICTION_DOF + FRICTION_TENDON",
+                "forward_dynamics_mapping": "ddq_right ~= ddq_baseline + G_tau * delta_tau, then evaluate every full mj_forward candidate and select the minimum-error safe candidate",
+                "forward_dynamics_validation_scales": [1.0, 0.5, 0.25, 0.125],
+                "forward_dynamics_candidate_selection": "minimum total error among candidates that improve total error and satisfy joint-error/qacc limits",
+                "forward_dynamics_evaluations_per_step": "10; plus 9 when the second pass triggers; up to two additional 9-evaluation safety-rescue passes only if final qacc exceeds the limit",
+                "uncontrolled_qacc_assumption": 0.0,
+                "gravity_error": "directed_3d",
+                "position_reference_q": np.asarray(default_q).copy(),
+                "torso_acc_source": "mujoco_imu_accelerometer_world_without_gravity",
+                "torso_alpha_source": "finite_difference_world_angular_velocity",
+                "position_reference_frame": "torso_imu",
+                "end_effector_velocity_cost_enabled": False,
+                "ddq_post_process": "fully_bypassed",
+                "ddq_hard_clip_enabled": False,
+                "joint_limit_guard": "disabled",
+                "ddq_rate_limit_enabled": False,
+                "ddq_smoothing_enabled": False,
+                "ddq_tracking": "6ms_velocity_difference_aligned_between_consecutive_arm_updates",
+                "cost_tracking": "one_step_model_vs_realized_next_arm_update",
+            }
+        }
+    elif controller_name == "mpc":
+        feedforward_enabled = bool(
+            config.get("mpc_disturbance_feedforward_enabled", False)
+        )
+        q_min = np.deg2rad(
+            np.asarray(
+                config.get(
+                    "mpc_q_min_deg", [-20.0, -10.0, -20.0, -20.0, -20.0]
+                ),
+                dtype=np.float64,
+            )
+        )
+        q_max = np.deg2rad(
+            np.asarray(
+                config.get("mpc_q_max_deg", [10.0, 5.0, 5.0, 20.0, 20.0]),
+                dtype=np.float64,
+            )
+        )
+        if q_min.shape != (5,) or q_max.shape != (5,) or np.any(q_min >= q_max):
+            raise ValueError(
+                "mpc_q_min_deg/mpc_q_max_deg 必须是长度为 5 且下界小于上界的数组。"
+            )
+        kwargs = {
+            "horizon": int(config.get("mpc_horizon", 12)),
+            "q_ee_acc": config.get("mpc_q_ee_acc", 1.0),
+            "q_ee_alpha": config.get("mpc_q_ee_alpha", 0.075),
+            "q_gravity": config.get("mpc_q_gravity", 30.0),
+            "q_posture": config.get("mpc_q_posture", 0.05),
+            "q_vel": config.get("mpc_q_vel", 0.02),
+            "r_ddq": config.get("mpc_r_ddq", 0.25),
+            "terminal_scale": float(config.get("mpc_terminal_scale", 2.0)),
+            "reg": float(config.get("mpc_qp_regularization", 1e-6)),
+            "max_dq": float(config.get("mpc_max_dq", 1.0)),
+            "max_ddq": float(config.get("mpc_max_ddq", 8.0)),
+            "joint_limits": np.column_stack([q_min, q_max]),
+            "solver_max_iter": int(config.get("mpc_osqp_max_iter", 400)),
+            "solver_eps_abs": float(config.get("mpc_osqp_eps_abs", 1e-3)),
+            "solver_eps_rel": float(config.get("mpc_osqp_eps_rel", 1e-3)),
+            "solver_polishing": bool(config.get("mpc_osqp_polishing", False)),
+            "failure_braking_gain": float(
+                config.get("mpc_failure_braking_gain", 4.0)
+            ),
+        }
+        policy = ArmMPCPolicy(default_q=default_q, control_dt=control_dt, **kwargs)
+        policy_type = "ArmMPCPolicy"
+        notes = (
+            "sparse constrained right-arm MPC with ddq input, "
+            + (
+                "phase-template base-disturbance feedforward, "
+                if feedforward_enabled
+                else "zero-order-held measured base motion, "
+            )
+            + "2D gravity error, no end-effector position cost, and validated "
+            "inverse/forward-dynamics torque execution"
+        )
+        ddq_saturation_limit = kwargs["max_ddq"]
+        metadata = {
+            "mpc_config": {
+                **kwargs,
+                "control_dt": control_dt,
+                **torso_metadata,
+                **execution_metadata,
+                "solver": "OSQP",
+                "base_prediction": (
+                    "measurement_anchored_phase_template"
+                    if feedforward_enabled
+                    else "zero_order_hold_current_measurement"
+                ),
+                "gravity_error": "signed_2d_xy",
+                "torso_relative_position_cost": False,
+            }
+        }
+    else:
+        kwargs = {
+            "kp_pose": config.get("pid_kp_pose", [1.20, 1.20]),
+            "kd_pose": config.get("pid_kd_pose", [1.20, 1.20]),
+            "ki_pose": config.get("pid_ki_pose", [0.0, 0.0]),
+            "posture_gain": config.get(
+                "pid_posture_gain", [1.15, 1.15, 2.10, 1.15, 0.95]
+            ),
+            "finite_diff_eps": float(config.get("pid_finite_diff_eps", 1e-4)),
+            "damping": float(config.get("pid_damping", 0.15)),
+            "integral_limit": float(config.get("pid_integral_limit", 0.20)),
+            "max_dq": float(config.get("pid_max_dq", 0.48)),
+            "de_g_alpha": float(config.get("pid_de_g_alpha", 0.07)),
+        }
+        policy = ArmPIDPolicy(default_q=default_q, control_dt=control_dt, **kwargs)
+        policy_type = "ArmPIDPolicy"
+        notes = "tuning_v7: continue monotonic conservative tuning with a slightly lower Kp, larger damped-pinv damping, tighter max_dq, slightly stronger de_g filtering, and a mild posture-regularization increase to further reduce right-hand acceleration while keeping tilt small"
+        metadata = {"pid_config": {"default_q": np.asarray(default_q).copy(), **kwargs}}
+
+    return ArmControllerSetup(
+        policy=policy,
+        policy_type=policy_type,
+        notes=notes,
+        metadata=metadata,
+        acceleration_controller=controller_name in {"lqr", "mpc"},
+        lqr_cost_definition=lqr_cost_definition,
+        execution_perturbation=perturbation,
+        execution_regularization=regularization,
+        execution_second_pass_error_threshold=second_pass_threshold,
+        execution_max_joint_error=max_joint_error,
+        execution_max_abs_qacc=max_abs_qacc,
+        execution_enable_second_pass=enable_second_pass,
+        execution_safety_rescue_passes=safety_rescue_passes,
+        ddq_saturation_limit=ddq_saturation_limit,
+    )
+
+
+def build_right_arm_control_record(
+    *,
+    arm_policy_updated,
+    target_q,
+    target_dq,
+    ddq_raw,
+    ddq_des,
+    ddq_saturation_limit,
+    tau_pd,
+    torque_limits,
+    torso_state,
+    raw_torso_acc,
+    raw_torso_alpha,
+    heading_state,
+    heading_yaw_rate_command,
+    ee_position_reference_torso,
+    inverse_result=None,
+    mapping_result=None,
+    lqr_one_step_prediction=None,
+    mpc_diagnostics=None,
+):
+    """【非核心代码】把执行结果展开成 record_eval_step 所需的日志字典。"""
+    zeros = np.zeros(5, dtype=np.float64)
+    zero_matrix = np.zeros((5, 5), dtype=np.float64)
+
+    if inverse_result is None:
+        inverse_values = {
+            "tau_inverse": zeros,
+            "tau_contact": zeros,
+            "tau_constraint_total": zeros,
+            "tau_constraint_noncontact": zeros,
+            "tau_constraint_nonfriction": zeros,
+            "tau_constraint_friction": zeros,
+            "tau_ff": zeros,
+        }
+    else:
+        inverse_values = {
+            "tau_inverse": inverse_result.tau_inverse,
+            "tau_contact": inverse_result.tau_contact,
+            "tau_constraint_total": inverse_result.tau_constraint_total,
+            "tau_constraint_noncontact": inverse_result.tau_constraint_noncontact,
+            "tau_constraint_nonfriction": inverse_result.tau_constraint_nonfriction,
+            "tau_constraint_friction": inverse_result.tau_constraint_friction,
+            "tau_ff": inverse_result.tau_ff,
+        }
+
+    if mapping_result is None:
+        mapping_values = {
+            "tau_nominal": tau_pd,
+            "tau_mapping_correction_raw": zeros,
+            "tau_mapping_correction": zeros,
+            "tau_cmd_raw": tau_pd,
+            "qacc_mapping_baseline": zeros,
+            "qacc_mapping_predicted": zeros,
+            "qacc_mapping_prediction_error": zeros,
+            "qacc_mapping_validated": zeros,
+            "qacc_mapping_validation_error": zeros,
+            "qacc_mapping_linearization_error": zeros,
+            "forward_dynamics_gain": zero_matrix,
+            "forward_dynamics_singular_values": zeros,
+            "forward_dynamics_condition_number": np.inf,
+            "forward_dynamics_validation_scale": 0.0,
+            "forward_dynamics_validation_attempts": 0,
+            "forward_dynamics_validation_improved": False,
+            "forward_dynamics_tracking_safety_satisfied": False,
+            "forward_dynamics_qacc_safety_satisfied": False,
+            "forward_dynamics_safe_candidate_count": 0,
+            "forward_dynamics_total_error_rejections": 0,
+            "forward_dynamics_joint_error_rejections": 0,
+            "forward_dynamics_qacc_limit_rejections": 0,
+            "first_pass_qacc_validated": zeros,
+            "first_pass_qacc_validation_error": zeros,
+            "forward_dynamics_second_pass_triggered": False,
+            "forward_dynamics_second_pass_accepted": False,
+            "second_pass_tracking_safety_satisfied": False,
+            "second_pass_qacc_safety_satisfied": False,
+            "second_pass_tau_correction_raw": zeros,
+            "second_pass_tau_correction": zeros,
+            "second_pass_qacc_predicted": zeros,
+            "second_pass_qacc_validated": zeros,
+            "second_pass_qacc_validation_error": zeros,
+            "second_pass_qacc_linearization_error": zeros,
+            "second_pass_forward_dynamics_gain": zero_matrix,
+            "second_pass_singular_values": zeros,
+            "second_pass_condition_number": np.inf,
+            "second_pass_validation_scale": 0.0,
+            "second_pass_validation_attempts": 0,
+            "second_pass_safe_candidate_count": 0,
+            "second_pass_total_error_rejections": 0,
+            "second_pass_joint_error_rejections": 0,
+            "second_pass_qacc_limit_rejections": 0,
+            "forward_dynamics_safety_fallback_used": False,
+            "forward_dynamics_safety_fallback_satisfied": False,
+            "forward_dynamics_safety_fallback_attempts": 0,
+        }
+    else:
+        mapping_values = {
+            "tau_nominal": mapping_result.tau_nominal,
+            "tau_mapping_correction_raw": mapping_result.tau_correction_raw,
+            "tau_mapping_correction": mapping_result.tau_correction,
+            "tau_cmd_raw": mapping_result.tau_cmd_raw,
+            "qacc_mapping_baseline": mapping_result.qacc_baseline,
+            "qacc_mapping_predicted": mapping_result.qacc_predicted,
+            "qacc_mapping_prediction_error": mapping_result.qacc_prediction_error,
+            "qacc_mapping_validated": mapping_result.qacc_validated,
+            "qacc_mapping_validation_error": mapping_result.qacc_validation_error,
+            "qacc_mapping_linearization_error": mapping_result.qacc_linearization_error,
+            "forward_dynamics_gain": mapping_result.gain_matrix,
+            "forward_dynamics_singular_values": mapping_result.singular_values,
+            "forward_dynamics_condition_number": mapping_result.condition_number,
+            "forward_dynamics_validation_scale": mapping_result.validation_scale,
+            "forward_dynamics_validation_attempts": mapping_result.validation_attempts,
+            "forward_dynamics_validation_improved": mapping_result.validation_improved,
+            "forward_dynamics_tracking_safety_satisfied": mapping_result.validation_tracking_safety_satisfied,
+            "forward_dynamics_qacc_safety_satisfied": mapping_result.validation_qacc_safety_satisfied,
+            "forward_dynamics_safe_candidate_count": mapping_result.validation_safe_candidate_count,
+            "forward_dynamics_total_error_rejections": mapping_result.validation_total_error_rejections,
+            "forward_dynamics_joint_error_rejections": mapping_result.validation_joint_error_rejections,
+            "forward_dynamics_qacc_limit_rejections": mapping_result.validation_qacc_limit_rejections,
+            "first_pass_qacc_validated": mapping_result.first_pass_qacc_validated,
+            "first_pass_qacc_validation_error": mapping_result.first_pass_qacc_validation_error,
+            "forward_dynamics_second_pass_triggered": mapping_result.second_pass_triggered,
+            "forward_dynamics_second_pass_accepted": mapping_result.second_pass_accepted,
+            "second_pass_tracking_safety_satisfied": mapping_result.second_pass_tracking_safety_satisfied,
+            "second_pass_qacc_safety_satisfied": mapping_result.second_pass_qacc_safety_satisfied,
+            "second_pass_tau_correction_raw": mapping_result.second_pass_tau_correction_raw,
+            "second_pass_tau_correction": mapping_result.second_pass_tau_correction,
+            "second_pass_qacc_predicted": mapping_result.second_pass_qacc_predicted,
+            "second_pass_qacc_validated": mapping_result.second_pass_qacc_validated,
+            "second_pass_qacc_validation_error": mapping_result.second_pass_qacc_validation_error,
+            "second_pass_qacc_linearization_error": mapping_result.second_pass_qacc_linearization_error,
+            "second_pass_forward_dynamics_gain": mapping_result.second_pass_gain_matrix,
+            "second_pass_singular_values": mapping_result.second_pass_singular_values,
+            "second_pass_condition_number": mapping_result.second_pass_condition_number,
+            "second_pass_validation_scale": mapping_result.second_pass_validation_scale,
+            "second_pass_validation_attempts": mapping_result.second_pass_validation_attempts,
+            "second_pass_safe_candidate_count": mapping_result.second_pass_safe_candidate_count,
+            "second_pass_total_error_rejections": mapping_result.second_pass_total_error_rejections,
+            "second_pass_joint_error_rejections": mapping_result.second_pass_joint_error_rejections,
+            "second_pass_qacc_limit_rejections": mapping_result.second_pass_qacc_limit_rejections,
+            "forward_dynamics_safety_fallback_used": mapping_result.safety_fallback_used,
+            "forward_dynamics_safety_fallback_satisfied": mapping_result.safety_fallback_satisfied,
+            "forward_dynamics_safety_fallback_attempts": mapping_result.safety_fallback_attempts,
+        }
+
+    return {
+        "arm_policy_updated": bool(arm_policy_updated),
+        "target_q": target_q,
+        "target_dq": target_dq,
+        "ddq_raw": ddq_raw,
+        "ddq_des": ddq_des,
+        "ddq_saturation_limit": ddq_saturation_limit,
+        **inverse_values,
+        "tau_pd": tau_pd,
+        **mapping_values,
+        "tau_limit_lower": torque_limits[:, 0],
+        "tau_limit_upper": torque_limits[:, 1],
+        "torso_lin_vel_world": torso_state.lin_vel,
+        "torso_ang_vel_world": torso_state.ang_vel,
+        "torso_acc_world_raw": raw_torso_acc,
+        "torso_acc_world_used": torso_state.lin_acc,
+        "torso_alpha_world_raw": raw_torso_alpha,
+        "torso_alpha_world_used": torso_state.ang_acc,
+        "heading_reference_world": heading_state.reference_world,
+        "heading_yaw_unwrapped": heading_state.yaw_unwrapped,
+        "heading_yaw_filtered": heading_state.yaw_filtered,
+        "heading_yaw_error": heading_state.yaw_error,
+        "heading_yaw_rate_filtered": heading_state.yaw_rate_filtered,
+        "heading_yaw_rate_correction": heading_state.yaw_rate_correction,
+        "heading_yaw_rate_command": heading_yaw_rate_command,
+        "heading_command_saturated": heading_state.command_saturated,
+        "ee_position_reference_torso": ee_position_reference_torso,
+        "lqr_one_step_prediction": lqr_one_step_prediction,
+        "mpc_diagnostics": mpc_diagnostics,
+    }
+
+
 # ==============================
 # 核心代码：主控制链直接依赖的支持函数
 # 这部分最值得优先阅读，主要服务 main_sim.py 的右臂控制与状态构建。
@@ -444,6 +1210,8 @@ def local_forward_dynamics_torque_mapping(
     second_pass_error_threshold=5.0,
     max_joint_error=4.0,
     max_abs_qacc=8.0,
+    enable_second_pass=True,
+    max_safety_rescue_passes=2,
 ):
     """局部线性求力矩；高残差时在已验收力矩处重线性化一次。"""
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -465,6 +1233,9 @@ def local_forward_dynamics_torque_mapping(
         or max_abs_qacc <= 0.0
     ):
         raise ValueError("扰动和验收安全阈值必须大于 0，正则化与二次修正阈值不能小于 0。")
+    max_safety_rescue_passes = int(max_safety_rescue_passes)
+    if max_safety_rescue_passes < 0:
+        raise ValueError("max_safety_rescue_passes 不能小于 0。")
     validation_scales = tuple(float(scale) for scale in validation_scales)
     if not validation_scales or any(scale <= 0.0 or scale > 1.0 for scale in validation_scales):
         raise ValueError("validation_scales 必须是位于 (0, 1] 的非空序列。")
@@ -605,7 +1376,8 @@ def local_forward_dynamics_torque_mapping(
     first_pass = solve_validated_pass(tau_nominal, qacc_baseline)
     first_pass_residual_norm = float(np.linalg.norm(first_pass["qacc_validation_error"]))
     second_pass_triggered = bool(
-        first_pass["improved"]
+        enable_second_pass
+        and first_pass["improved"]
         and (
             not first_pass["tracking_safety_satisfied"]
             or first_pass_residual_norm > float(second_pass_error_threshold)
@@ -636,10 +1408,10 @@ def local_forward_dynamics_torque_mapping(
     safety_fallback_used = False
     safety_fallback_satisfied = final_pass["qacc_safety_satisfied"]
     safety_fallback_attempts = 0
-    if not safety_fallback_satisfied:
-        # 接触瞬态下固定回退力矩也可能更危险；在当前最佳点最多再重线性化两次。
+    if not safety_fallback_satisfied and max_safety_rescue_passes > 0:
+        # 【半核心代码】可选安全救援；MPC 初版在配置中设为 0，只记录第一轮结果。
         safety_fallback_used = True
-        for _ in range(2):
+        for _ in range(max_safety_rescue_passes):
             safety_fallback_attempts += 1
             rescue_pass = solve_validated_pass(
                 final_pass["tau_cmd"],
@@ -759,6 +1531,8 @@ def apply_computed_torque_control(
     forward_dynamics_second_pass_error_threshold=5.0,
     forward_dynamics_max_joint_error=4.0,
     forward_dynamics_max_abs_qacc=8.0,
+    forward_dynamics_enable_second_pass=True,
+    forward_dynamics_max_safety_rescue_passes=2,
 ):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -792,6 +1566,8 @@ def apply_computed_torque_control(
         second_pass_error_threshold=forward_dynamics_second_pass_error_threshold,
         max_joint_error=forward_dynamics_max_joint_error,
         max_abs_qacc=forward_dynamics_max_abs_qacc,
+        enable_second_pass=forward_dynamics_enable_second_pass,
+        max_safety_rescue_passes=forward_dynamics_max_safety_rescue_passes,
     )
     return tau_cmd, inverse_result, mapping_result
 
@@ -1391,6 +2167,29 @@ def init_eval_buffers():
             "right_lqr_one_step_gravity_error_model": [],
             "right_lqr_one_step_cost_model": [],
             "right_lqr_one_step_prediction_valid": [],
+            "right_mpc_solver_success": [],
+            "right_mpc_solver_status_val": [],
+            "right_mpc_solver_iterations": [],
+            "right_mpc_primal_residual": [],
+            "right_mpc_dual_residual": [],
+            "right_mpc_objective": [],
+            "right_mpc_assembly_time": [],
+            "right_mpc_solve_time": [],
+            "right_mpc_max_constraint_violation": [],
+            "right_mpc_fallback_used": [],
+            "right_mpc_q_margin_min": [],
+            "right_mpc_dq_margin_min": [],
+            "right_mpc_ddq_margin_min": [],
+            "right_mpc_disturbance_acc_k0": [],
+            "right_mpc_disturbance_acc_k1": [],
+            "right_mpc_disturbance_acc_terminal": [],
+            "right_mpc_disturbance_omega_k0": [],
+            "right_mpc_disturbance_omega_k1": [],
+            "right_mpc_disturbance_omega_terminal": [],
+            "right_mpc_disturbance_alpha_k0": [],
+            "right_mpc_disturbance_alpha_k1": [],
+            "right_mpc_disturbance_alpha_terminal": [],
+            "right_mpc_disturbance_rotation_terminal_angle": [],
             "arm_policy_updated": [],
             "contact_count": [],
         },
@@ -1439,7 +2238,7 @@ def make_video_renderer(model, preferred_width=1280, preferred_height=720):
 
 
 def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_definition):
-    """把相邻两次手臂更新之间的真实响应与一步预测对齐到前一次更新时间。"""
+    """对齐相邻手臂更新间的 DDQ 响应；有 LQR 代价定义时再计算一步代价。"""
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
     sample_count = len(time_values)
     joint_count = len(RIGHT_ARM_JOINT_NAMES)
@@ -1451,6 +2250,8 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
     derived = {
         "right_arm_ddq_real": empty(joint_count),
         "right_arm_ddq_tracking_error": empty(joint_count),
+        "right_arm_ddq_tracking_interval_dt": np.full(sample_count, np.nan, dtype=np.float64),
+        "right_arm_ddq_tracking_valid": np.zeros(sample_count, dtype=bool),
         "right_lqr_one_step_q_actual": empty(joint_count),
         "right_lqr_one_step_dq_actual": empty(joint_count),
         "right_lqr_one_step_ee_lin_acc_actual": empty(3),
@@ -1462,7 +2263,38 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
         "right_lqr_tracking_interval_dt": np.full(sample_count, np.nan, dtype=np.float64),
         "right_lqr_tracking_valid": np.zeros(sample_count, dtype=bool),
     }
-    if sample_count == 0 or cost_definition is None:
+    if sample_count == 0:
+        trajectory_data.update(derived)
+        return
+
+    # 【非核心代码】DDQ 实际响应是 PID/LQR/MPC 共用指标，不应依赖 LQR 代价定义。
+    arm_updated = np.asarray(trajectory_data.get("arm_policy_updated", []), dtype=bool)
+    right_dq = np.asarray(trajectory_data.get("right_arm_dq", []), dtype=np.float64)
+    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
+    if (
+        arm_updated.shape == (sample_count,)
+        and right_dq.shape == (sample_count, joint_count)
+        and ddq_des.shape == (sample_count, joint_count)
+    ):
+        update_indices = np.flatnonzero(arm_updated)
+        for start_index, next_index in zip(update_indices[:-1], update_indices[1:]):
+            before_index = start_index - 1
+            end_index = next_index - 1
+            interval_dt = (next_index - start_index) * float(simulation_dt)
+            if before_index < 0 or end_index <= before_index or interval_dt <= 0.0:
+                continue
+            ddq_real = (right_dq[end_index] - right_dq[before_index]) / interval_dt
+            derived["right_arm_ddq_real"][start_index] = ddq_real
+            derived["right_arm_ddq_tracking_error"][start_index] = (
+                ddq_real - ddq_des[start_index]
+            )
+            derived["right_arm_ddq_tracking_interval_dt"][start_index] = interval_dt
+            derived["right_arm_ddq_tracking_valid"][start_index] = (
+                np.all(np.isfinite(ddq_des[start_index]))
+                and np.all(np.isfinite(ddq_real))
+            )
+
+    if cost_definition is None:
         trajectory_data.update(derived)
         return
 
@@ -1470,9 +2302,7 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
         trajectory_data.get("right_lqr_one_step_prediction_valid", []),
         dtype=bool,
     )
-    right_dq = np.asarray(trajectory_data.get("right_arm_dq", []), dtype=np.float64)
     right_q = np.asarray(trajectory_data.get("right_arm_q", []), dtype=np.float64)
-    ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
     ee_lin_vel = np.asarray(trajectory_data.get("right_ee_lin_vel_world", []), dtype=np.float64)
     ee_ang_vel = np.asarray(trajectory_data.get("right_ee_ang_vel_world", []), dtype=np.float64)
     position_error = np.asarray(trajectory_data.get("right_ee_position_error_torso", []), dtype=np.float64)
@@ -1655,14 +2485,31 @@ def _masked_vector_norm_stats(values, mask, width=5):
 
 def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_time):
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
-    valid = np.asarray(trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool).copy()
+    # 【半核心代码】DDQ 跟踪是三种控制器共用指标，不依赖 LQR 一步代价是否存在。
+    valid = np.asarray(trajectory_data.get("right_arm_ddq_tracking_valid", []), dtype=bool).copy()
     if valid.shape != time_values.shape:
         valid = np.zeros_like(time_values, dtype=bool)
-    interval_dt = np.asarray(trajectory_data.get("right_lqr_tracking_interval_dt", []), dtype=np.float64)
+    interval_dt = np.asarray(
+        trajectory_data.get("right_arm_ddq_tracking_interval_dt", []),
+        dtype=np.float64,
+    )
     if interval_dt.shape != time_values.shape:
         valid = np.zeros_like(time_values, dtype=bool)
         interval_dt = np.full_like(time_values, np.nan)
     valid &= (time_values >= eval_start_time) & (time_values + interval_dt <= eval_end_time + 1e-12)
+
+    cost_valid = np.asarray(
+        trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool
+    ).copy()
+    cost_interval_dt = np.asarray(
+        trajectory_data.get("right_lqr_tracking_interval_dt", []), dtype=np.float64
+    )
+    if cost_valid.shape != time_values.shape or cost_interval_dt.shape != time_values.shape:
+        cost_valid = np.zeros_like(time_values, dtype=bool)
+    else:
+        cost_valid &= (time_values >= eval_start_time) & (
+            time_values + cost_interval_dt <= eval_end_time + 1e-12
+        )
     ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
     ddq_real = np.asarray(trajectory_data.get("right_arm_ddq_real", []), dtype=np.float64)
     model_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_model", []), dtype=np.float64)
@@ -1678,6 +2525,7 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
             "evaluation_window": [float(eval_start_time), float(eval_end_time)],
         },
         "sample_count": sample_count,
+        "cost_sample_count": int(np.sum(cost_valid)),
         "joint_names": list(RIGHT_ARM_JOINT_NAMES),
         "cost_term_names": list(LQR_COST_TERM_NAMES),
         "interval_dt_mean": float(np.mean(interval_dt[valid])) if sample_count else 0.0,
@@ -1795,29 +2643,32 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
             eval_step_mask,
         ),
     }
-    if (
-        sample_count == 0
-        or ddq_des.shape != ddq_real.shape
-        or ddq_des.shape[0] != len(time_values)
-        or model_cost.shape != actual_cost.shape
-        or model_cost.shape[0] != len(time_values)
-    ):
+    if sample_count == 0 or ddq_des.shape != ddq_real.shape or ddq_des.shape[0] != len(time_values):
         diagnostics["ddq_tracking"] = _component_tracking_metrics(np.zeros((0, 5)), np.zeros((0, 5)))
-        diagnostics["cost_tracking"] = _component_tracking_metrics(np.zeros((0, 7)), np.zeros((0, 7)))
-        return diagnostics
+    else:
+        ddq_metrics = _component_tracking_metrics(ddq_des[valid], ddq_real[valid])
+        ddq_error_norm = np.linalg.norm(ddq_real[valid] - ddq_des[valid], axis=1)
+        ddq_metrics["error_norm_rms"] = float(np.sqrt(np.mean(ddq_error_norm ** 2)))
+        ddq_metrics["error_norm_p95"] = float(np.percentile(ddq_error_norm, 95.0))
+        ddq_metrics["error_norm_max"] = float(np.max(ddq_error_norm))
+        diagnostics["ddq_tracking"] = ddq_metrics
 
-    ddq_metrics = _component_tracking_metrics(ddq_des[valid], ddq_real[valid])
-    ddq_error_norm = np.linalg.norm(ddq_real[valid] - ddq_des[valid], axis=1)
-    ddq_metrics["error_norm_rms"] = float(np.sqrt(np.mean(ddq_error_norm ** 2)))
-    ddq_metrics["error_norm_p95"] = float(np.percentile(ddq_error_norm, 95.0))
-    ddq_metrics["error_norm_max"] = float(np.max(ddq_error_norm))
-    diagnostics["ddq_tracking"] = ddq_metrics
-
-    cost_metrics = _component_tracking_metrics(model_cost[valid], actual_cost[valid])
-    model_total = np.sum(model_cost[valid], axis=1, keepdims=True)
-    actual_total = np.sum(actual_cost[valid], axis=1, keepdims=True)
-    cost_metrics["total"] = _component_tracking_metrics(model_total, actual_total)
-    diagnostics["cost_tracking"] = cost_metrics
+    if (
+        np.any(cost_valid)
+        and model_cost.shape == actual_cost.shape
+        and model_cost.shape[0] == len(time_values)
+    ):
+        cost_metrics = _component_tracking_metrics(
+            model_cost[cost_valid], actual_cost[cost_valid]
+        )
+        model_total = np.sum(model_cost[cost_valid], axis=1, keepdims=True)
+        actual_total = np.sum(actual_cost[cost_valid], axis=1, keepdims=True)
+        cost_metrics["total"] = _component_tracking_metrics(model_total, actual_total)
+        diagnostics["cost_tracking"] = cost_metrics
+    else:
+        diagnostics["cost_tracking"] = _component_tracking_metrics(
+            np.zeros((0, 7)), np.zeros((0, 7))
+        )
     return diagnostics
 
 
@@ -2069,19 +2920,33 @@ def save_right_arm_diagnostics(run_dir, diagnostics):
     return diagnostics_path
 
 
-def save_lqr_tracking_diagnostics(run_dir, diagnostics):
-    diagnostics_path = os.path.join(run_dir, "lqr_tracking_diagnostics.json")
+def save_lqr_tracking_diagnostics(run_dir, diagnostics, controller_name="lqr"):
+    diagnostics_path = os.path.join(
+        run_dir, f"{controller_name}_tracking_diagnostics.json"
+    )
     with open(diagnostics_path, "w", encoding="utf-8") as f:
         json.dump(_to_serializable(diagnostics), f, indent=2, ensure_ascii=False)
     return diagnostics_path
 
 
-def save_lqr_ddq_tracking_plot(run_dir, trajectory_data, diagnostics, eval_start_time, eval_end_time):
+def save_lqr_ddq_tracking_plot(
+    run_dir,
+    trajectory_data,
+    diagnostics,
+    eval_start_time,
+    eval_end_time,
+    controller_name="lqr",
+):
     """绘制评估区间内五关节 ddq_des 与 6 ms 速度差分 ddq_real。"""
     plot_path = os.path.join(run_dir, "ddq_tracking.png")
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
-    valid = np.asarray(trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool)
-    interval_dt = np.asarray(trajectory_data.get("right_lqr_tracking_interval_dt", []), dtype=np.float64)
+    valid = np.asarray(
+        trajectory_data.get("right_arm_ddq_tracking_valid", []), dtype=bool
+    )
+    interval_dt = np.asarray(
+        trajectory_data.get("right_arm_ddq_tracking_interval_dt", []),
+        dtype=np.float64,
+    )
     ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
     ddq_real = np.asarray(trajectory_data.get("right_arm_ddq_real", []), dtype=np.float64)
     expected_shape = (len(time_values), len(RIGHT_ARM_JOINT_NAMES))
@@ -2124,25 +2989,39 @@ def save_lqr_ddq_tracking_plot(run_dir, trajectory_data, diagnostics, eval_start
         )
     axes[0].legend(loc="upper left")
     axes[-1].set_xlabel("time [s]")
-    fig.suptitle("LQR DDQ tracking: desired versus realized 6 ms average acceleration")
+    fig.suptitle(
+        f"{controller_name.upper()} DDQ tracking: "
+        "desired versus realized arm-interval average acceleration"
+    )
     fig.tight_layout()
     fig.savefig(plot_path, dpi=170)
     plt.close(fig)
     return plot_path
 
 
-def save_lqr_tracking_preview(run_dir, trajectory_data, eval_start_time, eval_end_time):
+def save_lqr_tracking_preview(
+    run_dir,
+    trajectory_data,
+    eval_start_time,
+    eval_end_time,
+    controller_name="lqr",
+):
     """保存严格按相邻手臂控制更新对齐的 DDQ 与一步代价跟踪表。"""
-    preview_path = os.path.join(run_dir, "lqr_tracking_preview.csv")
+    preview_path = os.path.join(run_dir, f"{controller_name}_tracking_preview.csv")
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
-    valid = np.asarray(trajectory_data.get("right_lqr_tracking_valid", []), dtype=bool)
+    valid = np.asarray(
+        trajectory_data.get("right_arm_ddq_tracking_valid", []), dtype=bool
+    )
     ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
     ddq_real = np.asarray(trajectory_data.get("right_arm_ddq_real", []), dtype=np.float64)
     ddq_error = np.asarray(trajectory_data.get("right_arm_ddq_tracking_error", []), dtype=np.float64)
     model_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_model", []), dtype=np.float64)
     actual_cost = np.asarray(trajectory_data.get("right_lqr_one_step_cost_actual", []), dtype=np.float64)
     cost_error = np.asarray(trajectory_data.get("right_lqr_one_step_cost_error", []), dtype=np.float64)
-    interval_dt = np.asarray(trajectory_data.get("right_lqr_tracking_interval_dt", []), dtype=np.float64)
+    interval_dt = np.asarray(
+        trajectory_data.get("right_arm_ddq_tracking_interval_dt", []),
+        dtype=np.float64,
+    )
     sample_count = len(time_values)
     expected = (
         valid.shape == (sample_count,),
@@ -2507,6 +3386,46 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     position_reference = control_vector("ee_position_reference_torso", 3)
     lqr_prediction = right_arm_control.get("lqr_one_step_prediction")
     lqr_prediction_valid = isinstance(lqr_prediction, dict)
+    mpc_diagnostics = right_arm_control.get("mpc_diagnostics")
+    mpc_diagnostics_valid = isinstance(mpc_diagnostics, dict)
+
+    def mpc_scalar(name):
+        if not mpc_diagnostics_valid:
+            return np.nan
+        return float(mpc_diagnostics.get(name, np.nan))
+
+    mpc_margins = (
+        mpc_diagnostics.get("min_constraint_margins", {})
+        if mpc_diagnostics_valid
+        else {}
+    )
+    mpc_disturbance_prediction = (
+        mpc_diagnostics.get("disturbance_prediction", {})
+        if mpc_diagnostics_valid
+        else {}
+    )
+
+    def mpc_disturbance_vector(name, index):
+        values = np.asarray(
+            mpc_disturbance_prediction.get(name, []), dtype=np.float64
+        )
+        if values.ndim != 2 or values.shape[1] != 3 or not len(values):
+            return np.full(3, np.nan, dtype=np.float64)
+        resolved_index = index if index >= 0 else len(values) + index
+        if not 0 <= resolved_index < len(values):
+            return np.full(3, np.nan, dtype=np.float64)
+        return values[resolved_index].copy()
+
+    def mpc_terminal_rotation_angle():
+        values = np.asarray(
+            mpc_disturbance_prediction.get("rot_world_body", []),
+            dtype=np.float64,
+        )
+        if values.ndim != 3 or values.shape[1:] != (3, 3) or len(values) < 2:
+            return np.nan
+        relative = values[-1] @ values[0].T
+        cosine = np.clip((np.trace(relative) - 1.0) * 0.5, -1.0, 1.0)
+        return float(np.arccos(cosine))
 
     def prediction_vector(name, size):
         if not lqr_prediction_valid:
@@ -2628,6 +3547,48 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_lqr_one_step_gravity_error_model"].append(prediction_vector("gravity_error", 3))
     buffers.trajectory_data["right_lqr_one_step_cost_model"].append(lqr_cost_model)
     buffers.trajectory_data["right_lqr_one_step_prediction_valid"].append(lqr_prediction_valid)
+    buffers.trajectory_data["right_mpc_solver_success"].append(
+        bool(mpc_diagnostics.get("success", False)) if mpc_diagnostics_valid else False
+    )
+    buffers.trajectory_data["right_mpc_solver_status_val"].append(mpc_scalar("solver_status_val"))
+    buffers.trajectory_data["right_mpc_solver_iterations"].append(mpc_scalar("iterations"))
+    buffers.trajectory_data["right_mpc_primal_residual"].append(mpc_scalar("primal_residual"))
+    buffers.trajectory_data["right_mpc_dual_residual"].append(mpc_scalar("dual_residual"))
+    buffers.trajectory_data["right_mpc_objective"].append(mpc_scalar("objective"))
+    buffers.trajectory_data["right_mpc_assembly_time"].append(mpc_scalar("assembly_time"))
+    buffers.trajectory_data["right_mpc_solve_time"].append(mpc_scalar("solve_time"))
+    buffers.trajectory_data["right_mpc_max_constraint_violation"].append(
+        mpc_scalar("max_constraint_violation")
+    )
+    buffers.trajectory_data["right_mpc_fallback_used"].append(
+        bool(mpc_diagnostics.get("fallback_used", False)) if mpc_diagnostics_valid else False
+    )
+    buffers.trajectory_data["right_mpc_q_margin_min"].append(
+        float(mpc_margins.get("q", np.nan))
+    )
+    buffers.trajectory_data["right_mpc_dq_margin_min"].append(
+        float(mpc_margins.get("dq", np.nan))
+    )
+    buffers.trajectory_data["right_mpc_ddq_margin_min"].append(
+        float(mpc_margins.get("ddq", np.nan))
+    )
+    for field, source_name, index in (
+        ("right_mpc_disturbance_acc_k0", "acc_world", 0),
+        ("right_mpc_disturbance_acc_k1", "acc_world", 1),
+        ("right_mpc_disturbance_acc_terminal", "acc_world", -1),
+        ("right_mpc_disturbance_omega_k0", "omega_world", 0),
+        ("right_mpc_disturbance_omega_k1", "omega_world", 1),
+        ("right_mpc_disturbance_omega_terminal", "omega_world", -1),
+        ("right_mpc_disturbance_alpha_k0", "alpha_world", 0),
+        ("right_mpc_disturbance_alpha_k1", "alpha_world", 1),
+        ("right_mpc_disturbance_alpha_terminal", "alpha_world", -1),
+    ):
+        buffers.trajectory_data[field].append(
+            mpc_disturbance_vector(source_name, index)
+        )
+    buffers.trajectory_data[
+        "right_mpc_disturbance_rotation_terminal_angle"
+    ].append(mpc_terminal_rotation_angle())
     buffers.trajectory_data["arm_policy_updated"].append(arm_policy_updated)
     buffers.trajectory_data["contact_count"].append(int(data.ncon))
     buffers.eval_data["time"].append(t)
@@ -2642,7 +3603,7 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.eval_data["right_ee_upright_alignment"].append(upright_alignment)
 
 
-def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None, lqr_cost_definition=None):
+def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None, lqr_cost_definition=None, arm_controller="lqr"):
     trajectory_path = os.path.join(run_dir, "trajectory.npz")
     add_lqr_tracking_trajectory_data(buffers.trajectory_data, simulation_dt, lqr_cost_definition)
     lqr_tracking_diagnostics = compute_lqr_tracking_diagnostics(
@@ -2652,19 +3613,23 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     )
     right_arm_diagnostics = save_trajectory(trajectory_path, buffers.trajectory_data, xml_path, simulation_dt)
     right_arm_diagnostics_path = save_right_arm_diagnostics(run_dir, right_arm_diagnostics)
-    lqr_tracking_diagnostics_path = save_lqr_tracking_diagnostics(run_dir, lqr_tracking_diagnostics)
+    lqr_tracking_diagnostics_path = save_lqr_tracking_diagnostics(
+        run_dir, lqr_tracking_diagnostics, arm_controller
+    )
     lqr_ddq_tracking_plot_path = save_lqr_ddq_tracking_plot(
         run_dir,
         buffers.trajectory_data,
         lqr_tracking_diagnostics,
         eval_start_time,
         eval_end_time,
+        arm_controller,
     )
     lqr_tracking_preview_path = save_lqr_tracking_preview(
         run_dir,
         buffers.trajectory_data,
         eval_start_time,
         eval_end_time,
+        arm_controller,
     )
     control_preview_path = save_control_preview(run_dir, buffers.trajectory_data)
     heading_stats, heading_plot_path, heading_diagnostics_path = save_heading_control_diagnostics(
@@ -2696,11 +3661,13 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
         )
     if lqr_tracking_diagnostics["sample_count"]:
         ddq_tracking = lqr_tracking_diagnostics["ddq_tracking"]
-        print(f"LQR DDQ tracking RMSE = {np.asarray(ddq_tracking['rmse']).round(4).tolist()}")
-        print(f"LQR DDQ tracking correlation = {np.asarray(ddq_tracking['correlation']).round(4).tolist()}")
-        print(f"LQR DDQ tracking gain = {np.asarray(ddq_tracking['gain']).round(4).tolist()}")
-        cost_rmse = lqr_tracking_diagnostics["cost_tracking"]["rmse"]
-        print(f"LQR one-step cost tracking RMSE = {dict(zip(LQR_COST_TERM_NAMES, np.asarray(cost_rmse).round(4).tolist()))}")
+        controller_label = arm_controller.upper()
+        print(f"{controller_label} DDQ tracking RMSE = {np.asarray(ddq_tracking['rmse']).round(4).tolist()}")
+        print(f"{controller_label} DDQ tracking correlation = {np.asarray(ddq_tracking['correlation']).round(4).tolist()}")
+        print(f"{controller_label} DDQ tracking gain = {np.asarray(ddq_tracking['gain']).round(4).tolist()}")
+        if lqr_tracking_diagnostics.get("cost_sample_count", 0):
+            cost_rmse = lqr_tracking_diagnostics["cost_tracking"]["rmse"]
+            print(f"LQR one-step cost tracking RMSE = {dict(zip(LQR_COST_TERM_NAMES, np.asarray(cost_rmse).round(4).tolist()))}")
         validation = lqr_tracking_diagnostics.get("forward_dynamics_validation", {})
         first_selections = validation.get("first_pass", {}).get("selections", [])
         if first_selections:
@@ -2708,11 +3675,11 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
                 f"{item['label']}({item['scale']:g})={item['count']} ({item['fraction'] * 100.0:.2f}%)"
                 for item in first_selections
             )
-            print(f"LQR forward-dynamics first-pass selections: {selection_text}")
+            print(f"{controller_label} forward-dynamics first-pass selections: {selection_text}")
         second = validation.get("second_pass", {})
         if second:
             print(
-                "LQR forward-dynamics second pass: "
+                f"{controller_label} forward-dynamics second pass: "
                 f"triggered={second.get('triggered_count', 0)} "
                 f"({second.get('triggered_fraction_of_evaluation_steps', 0.0) * 100.0:.2f}%), "
                 f"accepted={second.get('accepted_count', 0)} "
@@ -3062,9 +4029,9 @@ def print_run_summary(
     extra_perf = saved_paths.get("perf_summary") if saved_paths.get("perf_summary") is not None else "未保存 perf 概览"
     extra_right_arm = saved_paths.get("right_arm_diagnostics") if saved_paths.get("right_arm_diagnostics") is not None else "未保存右臂诊断"
     extra_control_preview = saved_paths.get("control_preview") if saved_paths.get("control_preview") is not None else "未保存控制 CSV"
-    extra_lqr_tracking = saved_paths.get("lqr_tracking_diagnostics") if saved_paths.get("lqr_tracking_diagnostics") is not None else "未保存 LQR tracking 诊断"
-    extra_lqr_tracking_preview = saved_paths.get("lqr_tracking_preview") if saved_paths.get("lqr_tracking_preview") is not None else "未保存 LQR tracking CSV"
-    extra_lqr_tracking_plot = saved_paths.get("lqr_ddq_tracking_plot") if saved_paths.get("lqr_ddq_tracking_plot") is not None else "未保存 LQR tracking 图片"
+    extra_lqr_tracking = saved_paths.get("lqr_tracking_diagnostics") if saved_paths.get("lqr_tracking_diagnostics") is not None else "未保存 DDQ tracking 诊断"
+    extra_lqr_tracking_preview = saved_paths.get("lqr_tracking_preview") if saved_paths.get("lqr_tracking_preview") is not None else "未保存 DDQ tracking CSV"
+    extra_lqr_tracking_plot = saved_paths.get("lqr_ddq_tracking_plot") if saved_paths.get("lqr_ddq_tracking_plot") is not None else "未保存 DDQ tracking 图片"
     print(
         f"文件: {saved_paths['npz']} | {saved_paths['csv']} | {saved_paths['png']} | "
         f"{saved_paths['summary']} | {extra_perf} | {extra_right_arm} | {extra_control_preview} | "
