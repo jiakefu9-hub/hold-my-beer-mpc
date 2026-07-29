@@ -29,11 +29,11 @@ class ArmMPCPolicy:
     DEFAULT_JOINT_LIMITS = np.deg2rad(
         np.array(
             [
-                [-20.0, 10.0],
-                [-10.0, 5.0],
+                [-5.0, 5.0],
+                [-5.0, 3.0],
                 [-20.0, 5.0],
-                [-20.0, 20.0],
-                [-20.0, 20.0],
+                [-40.0, 40.0],
+                [-40.0, 40.0],
             ],
             dtype=np.float64,
         )
@@ -55,10 +55,16 @@ class ArmMPCPolicy:
         max_dq=1.0,
         max_ddq=8.0,
         failure_braking_gain=4.0,
+        failure_posture_gain=4.0,
+        failure_max_ddq_scale=0.5,
         joint_limits=None,
+        joint_limit_margin=0.0,
         solver_eps_abs=1e-4,
         solver_eps_rel=1e-4,
         solver_max_iter=1000,
+        solver_rho=0.1,
+        solver_adaptive_rho=True,
+        solver_scaled_termination=False,
         solver_polishing=False,
         solver_verbose=False,
         solver_time_limit=None,
@@ -103,6 +109,20 @@ class ArmMPCPolicy:
         self.failure_braking_gain = float(failure_braking_gain)
         if not np.isfinite(self.failure_braking_gain) or self.failure_braking_gain <= 0.0:
             raise ValueError("failure_braking_gain 必须是正数。")
+        self.failure_posture_gain = float(failure_posture_gain)
+        if not np.isfinite(self.failure_posture_gain) or self.failure_posture_gain < 0.0:
+            raise ValueError("failure_posture_gain 必须是非负数。")
+        self.failure_max_ddq_scale = float(failure_max_ddq_scale)
+        if (
+            not np.isfinite(self.failure_max_ddq_scale)
+            or self.failure_max_ddq_scale <= 0.0
+            or self.failure_max_ddq_scale > 1.0
+        ):
+            raise ValueError("failure_max_ddq_scale 必须位于 (0, 1]。")
+        self.joint_limit_margin = self._make_nonnegative_vector(
+            joint_limit_margin, self.n, "joint_limit_margin"
+        )
+        self.safety_joint_limits = None
         self.joint_limits = None
         self.set_joint_limits(
             self.DEFAULT_JOINT_LIMITS if joint_limits is None else joint_limits
@@ -111,6 +131,9 @@ class ArmMPCPolicy:
         self.solver_eps_abs = float(solver_eps_abs)
         self.solver_eps_rel = float(solver_eps_rel)
         self.solver_max_iter = int(solver_max_iter)
+        self.solver_rho = float(solver_rho)
+        self.solver_adaptive_rho = bool(solver_adaptive_rho)
+        self.solver_scaled_termination = bool(solver_scaled_termination)
         self.solver_polishing = bool(solver_polishing)
         self.solver_verbose = bool(solver_verbose)
         self.solver_time_limit = (
@@ -120,6 +143,8 @@ class ArmMPCPolicy:
             raise ValueError("OSQP 的 eps_abs / eps_rel 必须是正数。")
         if self.solver_max_iter < 1:
             raise ValueError("solver_max_iter 必须至少为 1。")
+        if not np.isfinite(self.solver_rho) or self.solver_rho <= 0.0:
+            raise ValueError("solver_rho 必须是正数。")
         if self.solver_time_limit is not None and self.solver_time_limit <= 0.0:
             raise ValueError("solver_time_limit 必须是正数或 None。")
 
@@ -196,11 +221,21 @@ class ArmMPCPolicy:
         if P.nnz != len(self._p_rows):
             raise RuntimeError("MPC Hessian 的固定稀疏结构发生变化。")
 
-        lower = self._l_template.copy()
-        upper = self._u_template.copy()
+        (
+            lower,
+            upper,
+            recovery_states,
+            recovery_inputs,
+            recovery_active,
+        ) = self._build_online_constraint_bounds(q, dq)
         lower[: self.nx] = x_measured
         upper[: self.nx] = x_measured
-        warm_start = self._pack_trajectory(working_states, working_inputs)
+        # 状态已在正常运行盒外时，用确定性的恢复轨迹 warm-start；它与本轮
+        # 时变硬边界完全一致，避免继续拿越界的上一拍轨迹初始化 OSQP。
+        warm_start = self._pack_trajectory(
+            recovery_states if recovery_active else working_states,
+            recovery_inputs if recovery_active else working_inputs,
+        )
         assembly_time = time.perf_counter() - start_time
 
         result, solver_error = self._solve_qp(
@@ -236,7 +271,11 @@ class ArmMPCPolicy:
         q_ref = q + dq * self.control_dt + 0.5 * ddq_des * self.control_dt**2
         dq_ref = dq + ddq_des * self.control_dt
         # 正常解只会有求解容差级偏差；fallback 时裁剪可避免 PD 参考继续越界。
-        q_ref = np.clip(q_ref, self.joint_limits[:, 0], self.joint_limits[:, 1])
+        q_ref = np.clip(
+            q_ref,
+            self.safety_joint_limits[:, 0],
+            self.safety_joint_limits[:, 1],
+        )
         dq_ref = np.clip(dq_ref, -self.max_dq, self.max_dq)
 
         one_step_prediction = self._build_one_step_diagnostics(
@@ -290,6 +329,14 @@ class ArmMPCPolicy:
                     0.0,
                 )
             ),
+            "current_q_safety_violation": float(
+                max(
+                    np.max(self.safety_joint_limits[:, 0] - q),
+                    np.max(q - self.safety_joint_limits[:, 1]),
+                    0.0,
+                )
+            ),
+            "recovery_active": bool(recovery_active),
             "one_step_prediction": one_step_prediction,
         }
 
@@ -318,7 +365,7 @@ class ArmMPCPolicy:
         }
 
     def set_joint_limits(self, joint_limits):
-        """更新 MPC 使用的保守关节角边界。"""
+        """更新外层安全边界，并由配置裕量得到正常运行边界。"""
         limits = np.asarray(joint_limits, dtype=np.float64)
         if limits.shape != (self.n, 2):
             raise ValueError(
@@ -326,7 +373,14 @@ class ArmMPCPolicy:
             )
         if not np.all(np.isfinite(limits)) or np.any(limits[:, 0] >= limits[:, 1]):
             raise ValueError("joint_limits 必须有限，且每个下界都严格小于上界。")
-        self.joint_limits = limits.copy()
+        operating_limits = limits.copy()
+        operating_limits[:, 0] += self.joint_limit_margin
+        operating_limits[:, 1] -= self.joint_limit_margin
+        if np.any(operating_limits[:, 0] >= operating_limits[:, 1]):
+            raise ValueError("joint_limit_margin 过大，导致正常运行关节盒为空。")
+        self.safety_joint_limits = limits.copy()
+        # joint_limits 保留为正常 MPC 运行盒，避免改变已有代价与诊断接口。
+        self.joint_limits = operating_limits
         if hasattr(self, "_A_cons"):
             self._A_cons, self._l_template, self._u_template = self._build_constraints()
 
@@ -465,6 +519,117 @@ class ArmMPCPolicy:
             raise RuntimeError("MPC 约束行数内部组装错误。")
         return constraints.tocsc(), lower, upper
 
+    def _build_online_constraint_bounds(self, q, dq):
+        """【核心代码】构造正常运行盒或跨控制拍收回的恢复硬边界。
+
+        正常状态严格使用内层运行盒。若当前状态或其制动距离已经在运行盒
+        外，shoulder 对应方向临时开放到外层安全盒；每个真实控制拍重新
+        计算，状态返回后自动恢复内层边界。这里没有 QP 松弛变量。
+        """
+        recovery_states, recovery_inputs = self._build_recovery_trajectory(q, dq)
+        lower = self._l_template.copy()
+        upper = self._u_template.copy()
+        q_row_start = (self.horizon + 1) * self.nx
+        recovery_active = False
+        # 按 80% 可用 DDQ 计算向外速度的制动距离，给真正的最大制动保留
+        # 20% 可行性余量；numerical_margin 约 0.006°，远小于 1° 运行裕量。
+        braking_acceleration = 0.8 * self.max_ddq
+        numerical_margin = 1e-4
+        upper_stopping_envelope = (
+            q
+            + np.maximum(dq, 0.0) ** 2 / (2.0 * braking_acceleration)
+            + numerical_margin
+        )
+        lower_stopping_envelope = (
+            q
+            - np.maximum(-dq, 0.0) ** 2 / (2.0 * braking_acceleration)
+            - numerical_margin
+        )
+        recovery_lower = np.minimum(
+            self.joint_limits[:, 0], lower_stopping_envelope
+        )
+        recovery_upper = np.maximum(
+            self.joint_limits[:, 1], upper_stopping_envelope
+        )
+        lower_recovery_needed = (
+            lower_stopping_envelope < self.joint_limits[:, 0]
+        )
+        upper_recovery_needed = (
+            upper_stopping_envelope > self.joint_limits[:, 1]
+        )
+        has_operating_margin = self.joint_limit_margin > 0.0
+        # 对设置了内层裕量的 shoulder，一旦需要恢复就开放到对应的外层
+        # 安全边界，避免制动轨迹再次贴住一个几乎无内部空间的数值边界。
+        recovery_lower[lower_recovery_needed & has_operating_margin] = (
+            self.safety_joint_limits[lower_recovery_needed & has_operating_margin, 0]
+        )
+        recovery_upper[upper_recovery_needed & has_operating_margin] = (
+            self.safety_joint_limits[upper_recovery_needed & has_operating_margin, 1]
+        )
+
+        currently_safe = (
+            (q >= self.safety_joint_limits[:, 0])
+            & (q <= self.safety_joint_limits[:, 1])
+        )
+        recovery_lower[currently_safe] = np.maximum(
+            recovery_lower[currently_safe],
+            self.safety_joint_limits[currently_safe, 0],
+        )
+        recovery_upper[currently_safe] = np.minimum(
+            recovery_upper[currently_safe],
+            self.safety_joint_limits[currently_safe, 1],
+        )
+        recovery_active = bool(
+            np.any(recovery_lower < self.joint_limits[:, 0] - 1e-12)
+            or np.any(recovery_upper > self.joint_limits[:, 1] + 1e-12)
+        )
+
+        for k in range(1, self.horizon + 1):
+            row = q_row_start + (k - 1) * self.n
+            lower[row : row + self.n] = recovery_lower
+            upper[row : row + self.n] = recovery_upper
+
+        return lower, upper, recovery_states, recovery_inputs, recovery_active
+
+    def _build_recovery_trajectory(self, q, dq):
+        """【半核心代码】生成满足 DDQ/DQ 上限的确定性关节恢复轨迹。"""
+        states = np.empty((self.horizon + 1, self.nx), dtype=np.float64)
+        inputs = np.empty((self.horizon, self.nu), dtype=np.float64)
+        states[0] = np.concatenate([q, dq])
+        target_q = np.clip(
+            self.default_q,
+            self.joint_limits[:, 0],
+            self.joint_limits[:, 1],
+        )
+        dt = self.control_dt
+
+        for k in range(self.horizon):
+            q_k = states[k, : self.n]
+            dq_k = states[k, self.n :]
+            desired = 24.0 * (target_q - q_k) - 6.0 * dq_k
+
+            # 已经越界或下一拍按当前速度将越界时，优先使用最大向内加速度。
+            q_zero_input = q_k + dt * dq_k
+            upper_recovery = (q_k > self.joint_limits[:, 1]) | (
+                q_zero_input > self.joint_limits[:, 1]
+            )
+            lower_recovery = (q_k < self.joint_limits[:, 0]) | (
+                q_zero_input < self.joint_limits[:, 0]
+            )
+            desired[upper_recovery] = -self.max_ddq[upper_recovery]
+            desired[lower_recovery] = self.max_ddq[lower_recovery]
+
+            input_lower = np.maximum(
+                -self.max_ddq, (-self.max_dq - dq_k) / dt
+            )
+            input_upper = np.minimum(
+                self.max_ddq, (self.max_dq - dq_k) / dt
+            )
+            inputs[k] = np.clip(desired, input_lower, input_upper)
+            states[k + 1] = self.A @ states[k] + self.B @ inputs[k]
+
+        return states, inputs
+
     def _build_hessian_pattern(self):
         rows = []
         cols = []
@@ -494,6 +659,9 @@ class ArmMPCPolicy:
                     "eps_abs": self.solver_eps_abs,
                     "eps_rel": self.solver_eps_rel,
                     "max_iter": self.solver_max_iter,
+                    "rho": self.solver_rho,
+                    "adaptive_rho": self.solver_adaptive_rho,
+                    "scaled_termination": self.solver_scaled_termination,
                     "polishing": self.solver_polishing,
                     "warm_starting": True,
                 }
@@ -544,7 +712,7 @@ class ArmMPCPolicy:
                 0.0,
             )
         )
-        tolerance = max(1e-3, 10.0 * self.solver_eps_abs)
+        tolerance = max(1e-3, 2.0 * self.solver_eps_abs)
         solved = accepted_status and max_violation <= tolerance
         return solved, solution, status, status_val, max_violation
 
@@ -587,8 +755,23 @@ class ArmMPCPolicy:
     # 【半核心代码】失败回退、helper 校验和诊断
     # ------------------------------------------------------------------
     def _braking_fallback(self, q, dq):
+        """QP 失败时温和制动，并缓慢把关节拉回运行盒中央。
+
+        正常回退最多只使用 ``failure_max_ddq_scale`` 比例的 DDQ。只有
+        下一控制拍已经会越过外层安全盒时，后面的硬安全裁剪才允许给出
+        更强的向内加速度；这是安全兜底，不是常规恢复命令。
+        """
+        target_q = np.clip(
+            self.default_q,
+            self.joint_limits[:, 0],
+            self.joint_limits[:, 1],
+        )
+        fallback_limit = self.failure_max_ddq_scale * self.max_ddq
         desired = np.clip(
-            -self.failure_braking_gain * dq, -self.max_ddq, self.max_ddq
+            self.failure_posture_gain * (target_q - q)
+            - self.failure_braking_gain * dq,
+            -fallback_limit,
+            fallback_limit,
         )
         dt = self.control_dt
         lower = -self.max_ddq.copy()
@@ -598,11 +781,15 @@ class ArmMPCPolicy:
         upper = np.minimum(upper, (self.max_dq - dq) / dt)
         lower = np.maximum(
             lower,
-            2.0 * (self.joint_limits[:, 0] - q - dt * dq) / (dt * dt),
+            2.0
+            * (self.safety_joint_limits[:, 0] - q - dt * dq)
+            / (dt * dt),
         )
         upper = np.minimum(
             upper,
-            2.0 * (self.joint_limits[:, 1] - q - dt * dq) / (dt * dt),
+            2.0
+            * (self.safety_joint_limits[:, 1] - q - dt * dq)
+            / (dt * dt),
         )
 
         feasible = bool(np.all(lower <= upper))
@@ -816,6 +1003,8 @@ class ArmMPCPolicy:
                 ),
             },
             "current_q_violation": 0.0,
+            "current_q_safety_violation": 0.0,
+            "recovery_active": False,
             "one_step_prediction": {
                 "q": np.zeros(self.n, dtype=np.float64),
                 "dq": np.zeros(self.n, dtype=np.float64),
@@ -872,6 +1061,17 @@ class ArmMPCPolicy:
             raise ValueError(f"{name} 必须是正标量或长度 {size} 的正向量。")
         if np.any(array <= 0.0):
             raise ValueError(f"{name} 的所有分量都必须大于 0。")
+        return array.copy()
+
+    @staticmethod
+    def _make_nonnegative_vector(value, size, name):
+        array = np.asarray(value, dtype=np.float64)
+        if array.ndim == 0:
+            array = np.full(size, float(array), dtype=np.float64)
+        if array.shape != (size,) or not np.all(np.isfinite(array)):
+            raise ValueError(f"{name} 必须是非负标量或长度 {size} 的非负向量。")
+        if np.any(array < 0.0):
+            raise ValueError(f"{name} 的所有分量都必须大于等于 0。")
         return array.copy()
 
     @staticmethod

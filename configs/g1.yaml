@@ -69,28 +69,40 @@ mpc_horizon: 12
 mpc_q_ee_acc: 1.0
 mpc_q_ee_alpha: 0.075
 mpc_q_gravity: 30.0
-# 五个关节趋近零位的正则权重；这是低权重项，不是重力误差。
-mpc_q_posture: [0.05, 0.05, 0.05, 0.05, 0.05]
+# 五个关节趋近零位的正则权重；双层硬边界已经提供肩部运行裕量，
+# 因此比上一轮略微降低正则，避免过多挤占加速度和重力任务。
+mpc_q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
 mpc_q_vel: 0.02
 mpc_r_ddq: 0.25
 mpc_terminal_scale: 2.0
-# 顺序：shoulder pitch、roll、yaw、elbow、wrist roll。
-mpc_q_min_deg: [-20.0, -10.0, -20.0, -20.0, -20.0]
-mpc_q_max_deg: [10.0, 5.0, 5.0, 20.0, 20.0]
+# 外层安全盒，顺序：shoulder pitch、roll、yaw、elbow、wrist roll。
+mpc_q_min_deg: [-5.0, -5.0, -20.0, -40.0, -40.0]
+mpc_q_max_deg: [5.0, 3.0, 5.0, 40.0, 40.0]
+# 从安全盒两侧向内收缩的正常运行裕量：pitch 正常为 ±4°；
+# roll 正常为 [-4°, 2°]，外层 [-5°, 3°] 给执行误差和逐步恢复留余量。
+mpc_q_operating_margin_deg: [1.0, 1.0, 0.0, 0.0, 0.0]
 mpc_max_dq: 1.0
 mpc_max_ddq: 8.0
 mpc_qp_regularization: 0.000001
 mpc_osqp_max_iter: 400
 mpc_osqp_eps_abs: 0.001
 mpc_osqp_eps_rel: 0.001
+# OSQP 数值参数也保留为配置项；当前完整时变 QP 使用自适应 rho。
+mpc_osqp_rho: 0.1
+mpc_osqp_adaptive_rho: true
+mpc_osqp_scaled_termination: false
 mpc_osqp_polishing: false
+# QP 失败时采用温和的“回中 + 速度制动”，常规回退 DDQ 不超过上限的一半；
+# 只有下一拍将越过外层安全盒时，硬安全裁剪才允许更强的向内加速度。
 mpc_failure_braking_gain: 4.0
+mpc_failure_posture_gain: 4.0
+mpc_failure_max_ddq_scale: 0.5
 # H 系步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
 # 开启后第一完整周期只用于计算 H，约 0.8 s 后前馈开始生效。
 mpc_disturbance_feedforward_enabled: true
 # 从 disturbance_model_new_heading/templates_heading 选择：
-# raw、half_smoothed、fully_smoothed。
-mpc_disturbance_template: fully_smoothed
+# raw、half_smoothed、fully_smoothed；同配置闭环 A/B 后默认采用 half_smoothed。
+mpc_disturbance_template: half_smoothed
 
 # ==============================
 # DDQ 到力矩的共用执行层
@@ -101,11 +113,15 @@ ddq_execution_regularization: 5.0
 ddq_execution_second_pass_error_threshold: 5.0
 ddq_execution_max_joint_error: 4.0
 ddq_execution_max_abs_qacc: 8.0
-# LQR 保持当前两轮/救援行为；MPC 初版只跑第一轮并记录结果。
+# 仿真阶段两种优化控制器都启用第二轮重线性化和最多两轮安全救援；
+# 仅在预测瞬时 qacc 超限或第一轮残差较大时触发，不是每拍固定执行。
 lqr_execution_enable_second_pass: true
 lqr_execution_safety_rescue_passes: 2
-mpc_execution_enable_second_pass: false
-mpc_execution_safety_rescue_passes: 0
+mpc_execution_enable_second_pass: true
+mpc_execution_safety_rescue_passes: 2
+# 安全救援仍失败时，用当前状态完整验收上一仿真步实际执行的右臂力矩；
+# 只有验收后的瞬时 qacc 安全才保持该力矩。
+mpc_execution_hold_last_safe: true
 
 kps: [100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40]
 kds: [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2]

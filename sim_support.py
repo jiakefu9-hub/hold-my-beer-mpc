@@ -234,6 +234,10 @@ class ForwardDynamicsMappingResult:
     safety_fallback_used: bool
     safety_fallback_satisfied: bool
     safety_fallback_attempts: int
+    hold_last_safe_available: bool
+    hold_last_safe_used: bool
+    hold_last_safe_satisfied: bool
+    hold_last_safe_qacc: np.ndarray
 
 
 @dataclass
@@ -266,6 +270,7 @@ class ArmControllerSetup:
     execution_max_abs_qacc: float
     execution_enable_second_pass: bool
     execution_safety_rescue_passes: int
+    execution_hold_last_safe: bool
     ddq_saturation_limit: float
 
 
@@ -988,6 +993,12 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
             2 if controller_name == "lqr" else 0,
         )
     )
+    hold_last_safe = bool(
+        config.get(
+            f"{controller_name}_execution_hold_last_safe",
+            controller_name == "mpc",
+        )
+    )
     torso_metadata = {
         "torso_acc_filter_alpha": float(
             config.get("ddq_torso_acc_filter_alpha", 0.20)
@@ -1006,6 +1017,7 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
         "forward_dynamics_max_abs_qacc": max_abs_qacc,
         "forward_dynamics_enable_second_pass": enable_second_pass,
         "forward_dynamics_safety_rescue_passes": safety_rescue_passes,
+        "forward_dynamics_hold_last_safe": hold_last_safe,
     }
 
     lqr_cost_definition = None
@@ -1092,6 +1104,21 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
             raise ValueError(
                 "mpc_q_min_deg/mpc_q_max_deg 必须是长度为 5 且下界小于上界的数组。"
             )
+        q_operating_margin = np.deg2rad(
+            np.asarray(
+                config.get("mpc_q_operating_margin_deg", np.zeros(5)),
+                dtype=np.float64,
+            )
+        )
+        if (
+            q_operating_margin.shape != (5,)
+            or np.any(q_operating_margin < 0.0)
+            or np.any(2.0 * q_operating_margin >= q_max - q_min)
+        ):
+            raise ValueError(
+                "mpc_q_operating_margin_deg 必须是长度为 5 的非负数组，"
+                "且两侧裕量之和必须小于对应安全范围。"
+            )
         kwargs = {
             "horizon": int(config.get("mpc_horizon", 12)),
             "q_ee_acc": config.get("mpc_q_ee_acc", 1.0),
@@ -1105,12 +1132,26 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
             "max_dq": float(config.get("mpc_max_dq", 1.0)),
             "max_ddq": float(config.get("mpc_max_ddq", 8.0)),
             "joint_limits": np.column_stack([q_min, q_max]),
+            "joint_limit_margin": q_operating_margin,
             "solver_max_iter": int(config.get("mpc_osqp_max_iter", 400)),
+            "solver_rho": float(config.get("mpc_osqp_rho", 0.1)),
+            "solver_adaptive_rho": bool(
+                config.get("mpc_osqp_adaptive_rho", True)
+            ),
+            "solver_scaled_termination": bool(
+                config.get("mpc_osqp_scaled_termination", False)
+            ),
             "solver_eps_abs": float(config.get("mpc_osqp_eps_abs", 1e-3)),
             "solver_eps_rel": float(config.get("mpc_osqp_eps_rel", 1e-3)),
             "solver_polishing": bool(config.get("mpc_osqp_polishing", False)),
             "failure_braking_gain": float(
                 config.get("mpc_failure_braking_gain", 4.0)
+            ),
+            "failure_posture_gain": float(
+                config.get("mpc_failure_posture_gain", 4.0)
+            ),
+            "failure_max_ddq_scale": float(
+                config.get("mpc_failure_max_ddq_scale", 0.5)
             ),
         }
         policy = ArmMPCPolicy(default_q=default_q, control_dt=control_dt, **kwargs)
@@ -1175,6 +1216,7 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
         execution_max_abs_qacc=max_abs_qacc,
         execution_enable_second_pass=enable_second_pass,
         execution_safety_rescue_passes=safety_rescue_passes,
+        execution_hold_last_safe=hold_last_safe,
         ddq_saturation_limit=ddq_saturation_limit,
     )
 
@@ -1273,6 +1315,10 @@ def build_right_arm_control_record(
             "forward_dynamics_safety_fallback_used": False,
             "forward_dynamics_safety_fallback_satisfied": False,
             "forward_dynamics_safety_fallback_attempts": 0,
+            "forward_dynamics_hold_last_safe_available": False,
+            "forward_dynamics_hold_last_safe_used": False,
+            "forward_dynamics_hold_last_safe_satisfied": False,
+            "forward_dynamics_hold_last_safe_qacc": zeros,
         }
     else:
         mapping_values = {
@@ -1322,6 +1368,10 @@ def build_right_arm_control_record(
             "forward_dynamics_safety_fallback_used": mapping_result.safety_fallback_used,
             "forward_dynamics_safety_fallback_satisfied": mapping_result.safety_fallback_satisfied,
             "forward_dynamics_safety_fallback_attempts": mapping_result.safety_fallback_attempts,
+            "forward_dynamics_hold_last_safe_available": mapping_result.hold_last_safe_available,
+            "forward_dynamics_hold_last_safe_used": mapping_result.hold_last_safe_used,
+            "forward_dynamics_hold_last_safe_satisfied": mapping_result.hold_last_safe_satisfied,
+            "forward_dynamics_hold_last_safe_qacc": mapping_result.hold_last_safe_qacc,
         }
 
     return {
@@ -1561,6 +1611,7 @@ def local_forward_dynamics_torque_mapping(
     max_abs_qacc=8.0,
     enable_second_pass=True,
     max_safety_rescue_passes=2,
+    previous_executed_tau=None,
 ):
     """局部线性求力矩；高残差时在已验收力矩处重线性化一次。"""
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -1569,11 +1620,26 @@ def local_forward_dynamics_torque_mapping(
     ctrl_indices = np.asarray(ctrl_indices, dtype=np.int32)
     torque_limits = np.asarray(torque_limits, dtype=np.float64)
     fixed_ctrl = np.asarray(fixed_ctrl, dtype=np.float64)
+    previous_executed_tau = (
+        None
+        if previous_executed_tau is None
+        else np.asarray(previous_executed_tau, dtype=np.float64)
+    )
     joint_count = len(qvel_indices)
     if desired_qacc.shape != (joint_count,) or tau_nominal.shape != (joint_count,):
         raise ValueError("前向动力学映射的 desired_qacc/tau_nominal 维度不正确。")
     if fixed_ctrl.shape != (model.nu,) or torque_limits.shape != (joint_count, 2):
         raise ValueError("前向动力学映射的 ctrl/torque_limits 维度不正确。")
+    if (
+        previous_executed_tau is not None
+        and previous_executed_tau.shape != (joint_count,)
+    ):
+        raise ValueError("previous_executed_tau 维度不正确。")
+    if (
+        previous_executed_tau is not None
+        and not np.all(np.isfinite(previous_executed_tau))
+    ):
+        raise ValueError("previous_executed_tau 包含 NaN 或 Inf。")
     if (
         perturbation <= 0.0
         or regularization < 0.0
@@ -1772,15 +1838,61 @@ def local_forward_dynamics_torque_mapping(
             if final_pass["qacc_safety_satisfied"]:
                 break
         safety_fallback_satisfied = final_pass["qacc_safety_satisfied"]
+
+    # 【核心安全代码】救援仍失败时，重新验收上一仿真步实际执行的力矩。
+    # 状态和接触模式可能已经改变，所以不能未经本拍 mj_forward 就直接复用。
+    # 这里的 available 表示“本拍确实需要并能够尝试”，便于统计救援失败次数，
+    # 而不是笼统表示上一拍力矩存在（除首拍外它几乎总是存在）。
+    hold_last_safe_available = bool(
+        not safety_fallback_satisfied and previous_executed_tau is not None
+    )
+    hold_last_safe_used = False
+    hold_last_safe_satisfied = False
+    hold_last_safe_qacc = np.zeros(joint_count, dtype=np.float64)
+    if not safety_fallback_satisfied and hold_last_safe_available:
+        hold_tau = np.clip(
+            previous_executed_tau,
+            torque_limits[:, 0],
+            torque_limits[:, 1],
+        )
+        hold_ctrl = fixed_ctrl.copy()
+        hold_ctrl[ctrl_indices] = hold_tau
+        scratch.ctrl[:] = hold_ctrl
+        scratch.qacc_warmstart[:] = qacc_warmstart
+        mujoco.mj_forward(model, scratch)
+        hold_last_safe_qacc = scratch.qacc[qvel_indices].copy()
+        hold_last_safe_satisfied = bool(
+            np.max(np.abs(hold_last_safe_qacc)) <= float(max_abs_qacc)
+        )
+        if hold_last_safe_satisfied:
+            hold_last_safe_used = True
+            safety_fallback_satisfied = True
+
     zero_vector = np.zeros(joint_count, dtype=np.float64)
     zero_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
-    tau_cmd = final_pass["tau_cmd"]
+    tau_cmd = (
+        np.clip(previous_executed_tau, torque_limits[:, 0], torque_limits[:, 1])
+        if hold_last_safe_used
+        else final_pass["tau_cmd"]
+    )
     tau_correction = tau_cmd - tau_nominal
-    qacc_predicted = final_pass["qacc_predicted"]
-    qacc_validated = final_pass["qacc_validated"]
+    qacc_predicted = (
+        hold_last_safe_qacc.copy()
+        if hold_last_safe_used
+        else final_pass["qacc_predicted"]
+    )
+    qacc_validated = (
+        hold_last_safe_qacc.copy()
+        if hold_last_safe_used
+        else final_pass["qacc_validated"]
+    )
     qacc_prediction_error = qacc_predicted - desired_qacc
     qacc_validation_error = qacc_validated - desired_qacc
-    qacc_linearization_error = final_pass["qacc_linearization_error"]
+    qacc_linearization_error = (
+        zero_vector.copy()
+        if hold_last_safe_used
+        else final_pass["qacc_linearization_error"]
+    )
     gain_matrix = final_pass["gain_matrix"]
     singular_values = final_pass["singular_values"]
     condition_number = final_pass["condition_number"]
@@ -1788,7 +1900,9 @@ def local_forward_dynamics_torque_mapping(
         tau_nominal=tau_nominal,
         tau_correction_raw=first_pass["correction_raw"],
         tau_correction=tau_correction,
-        tau_cmd_raw=final_pass["tau_cmd_raw"],
+        tau_cmd_raw=(
+            tau_cmd.copy() if hold_last_safe_used else final_pass["tau_cmd_raw"]
+        ),
         qacc_baseline=qacc_baseline,
         qacc_predicted=qacc_predicted,
         qacc_prediction_error=qacc_prediction_error,
@@ -1865,6 +1979,10 @@ def local_forward_dynamics_torque_mapping(
         safety_fallback_used=safety_fallback_used,
         safety_fallback_satisfied=safety_fallback_satisfied,
         safety_fallback_attempts=safety_fallback_attempts,
+        hold_last_safe_available=hold_last_safe_available,
+        hold_last_safe_used=hold_last_safe_used,
+        hold_last_safe_satisfied=hold_last_safe_satisfied,
+        hold_last_safe_qacc=hold_last_safe_qacc,
     )
 
 
@@ -1882,6 +2000,7 @@ def apply_computed_torque_control(
     forward_dynamics_max_abs_qacc=8.0,
     forward_dynamics_enable_second_pass=True,
     forward_dynamics_max_safety_rescue_passes=2,
+    forward_dynamics_enable_hold_last_safe=False,
 ):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -1900,6 +2019,11 @@ def apply_computed_torque_control(
         id_index_scratch.torque_limits[:, 0],
         id_index_scratch.torque_limits[:, 1],
     )
+    previous_executed_tau = (
+        data.ctrl[id_index_scratch.ctrl_indices].copy()
+        if forward_dynamics_enable_hold_last_safe and data.time > 0.0
+        else None
+    )
     tau_cmd, mapping_result = local_forward_dynamics_torque_mapping(
         model,
         data,
@@ -1917,6 +2041,7 @@ def apply_computed_torque_control(
         max_abs_qacc=forward_dynamics_max_abs_qacc,
         enable_second_pass=forward_dynamics_enable_second_pass,
         max_safety_rescue_passes=forward_dynamics_max_safety_rescue_passes,
+        previous_executed_tau=previous_executed_tau,
     )
     return tau_cmd, inverse_result, mapping_result
 
@@ -2487,6 +2612,10 @@ def init_eval_buffers():
             "right_arm_forward_dynamics_safety_fallback_used": [],
             "right_arm_forward_dynamics_safety_fallback_satisfied": [],
             "right_arm_forward_dynamics_safety_fallback_attempts": [],
+            "right_arm_forward_dynamics_hold_last_safe_available": [],
+            "right_arm_forward_dynamics_hold_last_safe_used": [],
+            "right_arm_forward_dynamics_hold_last_safe_satisfied": [],
+            "right_arm_forward_dynamics_hold_last_safe_qacc": [],
             "torso_lin_vel_world": [],
             "torso_ang_vel_world": [],
             "torso_acc_world_raw": [],
@@ -2528,6 +2657,8 @@ def init_eval_buffers():
             "right_mpc_fallback_used": [],
             "right_mpc_fallback_feasible": [],
             "right_mpc_current_q_violation": [],
+            "right_mpc_current_q_safety_violation": [],
+            "right_mpc_recovery_active": [],
             "right_mpc_q_margin_min": [],
             "right_mpc_dq_margin_min": [],
             "right_mpc_ddq_margin_min": [],
@@ -3067,6 +3198,27 @@ def _masked_vector_norm_stats(values, mask, width=5):
     }
 
 
+def _contact_mode_changed_during_intervals(
+    time_values, interval_dt, valid, contact_count
+):
+    """标记每个手臂控制区间内 MuJoCo 接触数量是否发生变化。"""
+    changed = np.zeros_like(valid, dtype=bool)
+    if (
+        contact_count.shape != valid.shape
+        or interval_dt.shape != valid.shape
+        or time_values.shape != valid.shape
+    ):
+        return changed
+    for index in np.flatnonzero(valid):
+        interval_end = time_values[index] + interval_dt[index] + 1e-12
+        end_index = int(np.searchsorted(time_values, interval_end, side="right"))
+        values = contact_count[index:max(index + 1, end_index)]
+        changed[index] = bool(
+            values.size > 1 and np.any(values[1:] != values[0])
+        )
+    return changed
+
+
 def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_time):
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
     # 【半核心代码】DDQ 跟踪是三种控制器共用指标，不依赖 LQR 一步代价是否存在。
@@ -3159,6 +3311,24 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
         trajectory_data.get("right_arm_forward_dynamics_safety_fallback_attempts", []),
         dtype=np.int64,
     )
+    hold_last_safe_available = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_hold_last_safe_available", []
+        ),
+        dtype=bool,
+    )
+    hold_last_safe_used = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_hold_last_safe_used", []
+        ),
+        dtype=bool,
+    )
+    hold_last_safe_satisfied = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_hold_last_safe_satisfied", []
+        ),
+        dtype=bool,
+    )
     if second_triggered.shape != time_values.shape:
         second_triggered = np.zeros_like(time_values, dtype=bool)
     if second_accepted.shape != time_values.shape:
@@ -3218,6 +3388,25 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
             if safety_fallback_attempts.shape == eval_step_mask.shape
             else 0,
         },
+        "hold_last_safe": {
+            "available_fraction": masked_fraction(
+                hold_last_safe_available, eval_step_mask
+            ),
+            "used_count": int(np.sum(hold_last_safe_used[eval_step_mask]))
+            if hold_last_safe_used.shape == eval_step_mask.shape
+            else 0,
+            "used_fraction": masked_fraction(
+                hold_last_safe_used, eval_step_mask
+            ),
+            "satisfied_fraction_when_available": (
+                masked_fraction(
+                    hold_last_safe_satisfied,
+                    eval_step_mask & hold_last_safe_available,
+                )
+                if hold_last_safe_available.shape == eval_step_mask.shape
+                else 0.0
+            ),
+        },
         "first_pass_residual_norm": _masked_vector_norm_stats(
             trajectory_data.get("right_arm_first_pass_qacc_validation_error", []),
             eval_step_mask,
@@ -3235,6 +3424,83 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
         ddq_metrics["error_norm_rms"] = float(np.sqrt(np.mean(ddq_error_norm ** 2)))
         ddq_metrics["error_norm_p95"] = float(np.percentile(ddq_error_norm, 95.0))
         ddq_metrics["error_norm_max"] = float(np.max(ddq_error_norm))
+        ddq_limits = np.asarray(
+            trajectory_data.get("right_arm_ddq_saturation_limit", []),
+            dtype=np.float64,
+        )
+        if ddq_limits.shape == valid.shape:
+            ddq_limits = ddq_limits[:, None]
+        if ddq_limits.shape in (ddq_real.shape, (len(valid), 1)):
+            spike_mask = valid & np.any(
+                np.abs(ddq_real) > ddq_limits + 1e-9, axis=1
+            )
+            qacc_safe = np.asarray(
+                trajectory_data.get(
+                    "right_arm_forward_dynamics_safety_fallback_satisfied", []
+                ),
+                dtype=bool,
+            )
+            tau_contact = np.asarray(
+                trajectory_data.get("right_arm_tau_contact", []),
+                dtype=np.float64,
+            )
+            recovery_active = np.asarray(
+                trajectory_data.get("right_mpc_recovery_active", []),
+                dtype=bool,
+            )
+            contact_count = np.asarray(
+                trajectory_data.get("contact_count", []), dtype=np.int64
+            )
+            contact_mode_changed = _contact_mode_changed_during_intervals(
+                time_values,
+                interval_dt,
+                valid,
+                contact_count,
+            )
+            final_validated_unsafe = (
+                ~qacc_safe
+                if qacc_safe.shape == valid.shape
+                else np.zeros_like(valid)
+            )
+            arm_contact = (
+                np.linalg.norm(tau_contact, axis=1) > 1e-6
+                if tau_contact.shape == ddq_real.shape
+                else np.zeros_like(valid)
+            )
+            if recovery_active.shape != valid.shape:
+                recovery_active = np.zeros_like(valid)
+            spike_count = int(np.count_nonzero(spike_mask))
+            ddq_metrics["spike_diagnostics"] = {
+                "definition": (
+                    "an arm interval is a spike when any |ddq_real_j| exceeds "
+                    "that joint's configured ddq limit"
+                ),
+                "count": spike_count,
+                "fraction": float(spike_count / sample_count),
+                "max_abs_ddq_real": float(
+                    np.max(np.abs(ddq_real[valid]))
+                ),
+                "final_validated_unsafe_fraction_given_spike": (
+                    float(np.mean(final_validated_unsafe[spike_mask]))
+                    if spike_count
+                    else 0.0
+                ),
+                "right_arm_contact_fraction_given_spike": (
+                    float(np.mean(arm_contact[spike_mask]))
+                    if spike_count
+                    else 0.0
+                ),
+                "contact_count_changed_fraction_given_spike": (
+                    float(np.mean(contact_mode_changed[spike_mask]))
+                    if spike_count
+                    else 0.0
+                ),
+                "recovery_active_fraction_given_spike": (
+                    float(np.mean(recovery_active[spike_mask]))
+                    if spike_count
+                    else 0.0
+                ),
+            }
         diagnostics["ddq_tracking"] = ddq_metrics
 
     if (
@@ -3320,7 +3586,8 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
                 "arm update k+1"
             ),
             "model_acceleration": (
-                "affine MPC task model evaluated with optimized first input u_0"
+                "affine task model evaluated with the selected first input; "
+                "QP u_0 when solved, configured fallback input otherwise"
             ),
             "actual_acceleration": (
                 "end-effector velocity difference over the same arm-control interval"
@@ -3330,7 +3597,8 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
             ),
             "weighted_cost": (
                 "the same Q_A, Q_alpha, Q_G, Q_q, Q_v and R applied to "
-                "model and actual interval outcomes"
+                "model and actual interval outcomes; fallback samples are not "
+                "optimized MPC ideals"
             ),
             "template_anchor_error": (
                 "current measured d_0 minus unanchored H-template value at "
@@ -3373,6 +3641,13 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
         trajectory_data.get("right_mpc_current_q_violation", []),
         dtype=np.float64,
     )
+    current_q_safety_violation = np.asarray(
+        trajectory_data.get("right_mpc_current_q_safety_violation", []),
+        dtype=np.float64,
+    )
+    recovery_active = np.asarray(
+        trajectory_data.get("right_mpc_recovery_active", []), dtype=bool
+    )
     expected_scalar_shape = (sample_count,)
     if all(
         value.shape == expected_scalar_shape
@@ -3383,6 +3658,8 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
             fallback_feasible,
             solver_status,
             current_q_violation,
+            current_q_safety_violation,
+            recovery_active,
         )
     ):
         update_mask = eval_mask & arm_updated
@@ -3393,6 +3670,10 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
         )
         violation_values = current_q_violation[update_mask]
         finite_violation = violation_values[np.isfinite(violation_values)]
+        safety_violation_values = current_q_safety_violation[update_mask]
+        finite_safety_violation = safety_violation_values[
+            np.isfinite(safety_violation_values)
+        ]
         diagnostics["solver"] = {
             "update_count": int(np.sum(update_mask)),
             "success_fraction": (
@@ -3428,6 +3709,21 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
                 if finite_violation.size
                 else 0.0
             ),
+            "current_q_safety_violation_fraction": (
+                float(np.mean(finite_safety_violation > 1e-9))
+                if finite_safety_violation.size
+                else 0.0
+            ),
+            "current_q_safety_violation_max_rad": (
+                float(np.max(finite_safety_violation))
+                if finite_safety_violation.size
+                else 0.0
+            ),
+            "recovery_active_fraction": (
+                float(np.mean(recovery_active[update_mask]))
+                if np.any(update_mask)
+                else 0.0
+            ),
         }
     else:
         diagnostics["solver"] = {
@@ -3438,6 +3734,9 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
             "status_val_counts": {},
             "current_q_violation_fraction": 0.0,
             "current_q_violation_max_rad": 0.0,
+            "current_q_safety_violation_fraction": 0.0,
+            "current_q_safety_violation_max_rad": 0.0,
+            "recovery_active_fraction": 0.0,
         }
     for name, model_values, actual_values in (
         ("linear_acceleration", model_linear, actual_linear),
@@ -3448,6 +3747,47 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
         diagnostics[name] = _component_tracking_metrics(
             model_values[tracking_valid], actual_values[tracking_valid]
         )
+        if name != "weighted_cost" and np.any(tracking_valid):
+            model_norm_rms = float(
+                np.sqrt(
+                    np.mean(
+                        np.sum(model_values[tracking_valid] ** 2, axis=1)
+                    )
+                )
+            )
+            actual_norm_rms = float(
+                np.sqrt(
+                    np.mean(
+                        np.sum(actual_values[tracking_valid] ** 2, axis=1)
+                    )
+                )
+            )
+            error_norm_rms = float(
+                np.sqrt(
+                    np.mean(
+                        np.sum(
+                            (
+                                actual_values[tracking_valid]
+                                - model_values[tracking_valid]
+                            )
+                            ** 2,
+                            axis=1,
+                        )
+                    )
+                )
+            )
+            diagnostics[name]["norm_summary"] = {
+                "model_rms": model_norm_rms,
+                "actual_rms": actual_norm_rms,
+                "actual_minus_model_percent": float(
+                    100.0
+                    * (actual_norm_rms - model_norm_rms)
+                    / max(model_norm_rms, 1e-12)
+                ),
+                "tracking_error_percent_of_actual_rms": float(
+                    100.0 * error_norm_rms / max(actual_norm_rms, 1e-12)
+                ),
+            }
     diagnostics["linear_acceleration_decomposition"] = {
         "ddq_execution_effect": _component_tracking_metrics(
             model_linear[tracking_valid],
@@ -3547,6 +3887,24 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
         )
         forecast_tracking["error_norm"] = _masked_vector_norm_stats(
             forecast_error, forecast_mask, width=3
+        )
+        measured_anchor_norm_rms = float(
+            np.sqrt(np.mean(np.sum(measured[anchor_mask] ** 2, axis=1)))
+        ) if np.any(anchor_mask) else 0.0
+        measured_forecast_norm_rms = float(
+            np.sqrt(np.mean(np.sum(measured[forecast_mask] ** 2, axis=1)))
+        ) if np.any(forecast_mask) else 0.0
+        anchor_tracking["measured_norm_rms"] = measured_anchor_norm_rms
+        anchor_tracking["error_percent_of_measured_rms"] = float(
+            100.0
+            * anchor_tracking["error_norm"]["rms"]
+            / max(measured_anchor_norm_rms, 1e-12)
+        )
+        forecast_tracking["measured_norm_rms"] = measured_forecast_norm_rms
+        forecast_tracking["error_percent_of_measured_rms"] = float(
+            100.0
+            * forecast_tracking["error_norm"]["rms"]
+            / max(measured_forecast_norm_rms, 1e-12)
         )
         template_diagnostics[name] = {
             "current_phase_absolute_match": anchor_tracking,
@@ -3860,7 +4218,7 @@ def save_mpc_diagnostics_plot(
     eval_start_time,
     eval_end_time,
 ):
-    """【非核心代码】并列显示 MPC 理想/实际任务量和模板预测误差。"""
+    """【非核心代码】比较控制器一步模型预测和同区间实际量。"""
     time_values = np.asarray(
         trajectory_data.get("time", []), dtype=np.float64
     )
@@ -3868,30 +4226,20 @@ def save_mpc_diagnostics_plot(
     tracking_valid = np.asarray(
         trajectory_data.get("right_mpc_tracking_valid", []), dtype=bool
     )
-    forecast_valid = np.asarray(
-        trajectory_data.get(
-            "right_mpc_template_one_step_prediction_valid", []
-        ),
-        dtype=bool,
-    )
-    heading_ready = np.asarray(
-        trajectory_data.get("right_mpc_template_heading_ready", []),
-        dtype=bool,
-    )
-    if (
-        tracking_valid.shape != (sample_count,)
-        or forecast_valid.shape != (sample_count,)
-        or heading_ready.shape != (sample_count,)
-    ):
+    if tracking_valid.shape != (sample_count,):
         return None
     eval_mask = (time_values >= eval_start_time) & (
         time_values < eval_end_time
     )
     tracking_valid &= eval_mask
-    forecast_valid &= eval_mask
-    heading_ready &= eval_mask
     if not np.any(tracking_valid):
         return None
+    solver_success = np.asarray(
+        trajectory_data.get("right_mpc_solver_success", []), dtype=bool
+    )
+    if solver_success.shape != (sample_count,):
+        solver_success = np.zeros(sample_count, dtype=bool)
+    fallback_in_plot = ~solver_success[tracking_valid]
 
     def matrix(name, width):
         values = np.asarray(
@@ -3920,64 +4268,177 @@ def save_mpc_diagnostics_plot(
             matrix("right_mpc_one_step_gravity_error_actual", 2),
         ),
     )
-    template_signals = (
-        (
-            "Base acceleration error norm [m/s²]",
-            matrix("right_mpc_template_anchor_acc_error", 3),
-            matrix("right_mpc_template_one_step_acc_error", 3),
-        ),
-        (
-            "Base angular-velocity error norm [rad/s]",
-            matrix("right_mpc_template_anchor_omega_error", 3),
-            matrix("right_mpc_template_one_step_omega_error", 3),
-        ),
-        (
-            "Base angular-acceleration error norm [rad/s²]",
-            matrix("right_mpc_template_anchor_alpha_error", 3),
-            matrix("right_mpc_template_one_step_alpha_error", 3),
-        ),
-    )
-
-    plot_path = os.path.join(run_dir, "mpc_task_and_template_diagnostics.png")
-    fig, axes = plt.subplots(2, 3, figsize=(17, 9), sharex=True)
-    for axis, (title, model_values, actual_values) in zip(
-        axes[0], task_signals
-    ):
-        axis.plot(
-            time_values[tracking_valid],
-            np.linalg.norm(model_values[tracking_valid], axis=1),
-            lw=1.1,
-            label="MPC model",
+    plot_path = os.path.join(run_dir, "mpc_model_vs_actual.png")
+    fig, axes = plt.subplots(3, 1, figsize=(15, 11), sharex=True)
+    for axis, (title, model_values, actual_values) in zip(axes, task_signals):
+        model_norm = np.linalg.norm(model_values[tracking_valid], axis=1)
+        actual_norm = np.linalg.norm(actual_values[tracking_valid], axis=1)
+        model_rms = np.sqrt(np.mean(model_norm**2))
+        actual_rms = np.sqrt(np.mean(actual_norm**2))
+        level_difference_percent = (
+            100.0 * (actual_rms - model_rms) / max(model_rms, 1e-12)
         )
         axis.plot(
             time_values[tracking_valid],
-            np.linalg.norm(actual_values[tracking_valid], axis=1),
+            model_norm,
+            lw=1.2,
+            label="controller one-step model",
+        )
+        axis.plot(
+            time_values[tracking_valid],
+            actual_norm,
             lw=1.0,
             label="actual",
         )
-        axis.set_title(title)
+        if np.any(fallback_in_plot):
+            axis.plot(
+                time_values[tracking_valid][fallback_in_plot],
+                model_norm[fallback_in_plot],
+                linestyle="none",
+                marker="x",
+                markersize=3,
+                alpha=0.45,
+                color="tab:red",
+                label="QP fallback sample",
+            )
+        axis.set_title(
+            f"{title} | RMS: model={model_rms:.3f}, actual={actual_rms:.3f}, "
+            f"actual is {level_difference_percent:+.1f}%"
+        )
         axis.grid(True, alpha=0.3)
-    for axis, (title, anchor_error, forecast_error) in zip(
-        axes[1], template_signals
+    axes[0].legend(loc="upper right")
+    axes[-1].set_xlabel("time [s]")
+    fig.suptitle(
+        "Controller one-step model versus actual task quantities "
+        "(red x = QP fallback, not an optimized MPC solution)"
+    )
+    fig.tight_layout()
+    fig.savefig(plot_path, dpi=170)
+    plt.close(fig)
+    return plot_path
+
+
+def save_mpc_template_tracking_plot(
+    run_dir,
+    trajectory_data,
+    eval_start_time,
+    eval_end_time,
+    gait_period,
+):
+    """用中间一个步态周期显示当前模板、一步预测与同拍实测量。"""
+    time_values = np.asarray(
+        trajectory_data.get("time", []), dtype=np.float64
+    )
+    sample_count = len(time_values)
+    heading_ready = np.asarray(
+        trajectory_data.get("right_mpc_template_heading_ready", []),
+        dtype=bool,
+    )
+    forecast_valid = np.asarray(
+        trajectory_data.get(
+            "right_mpc_template_one_step_prediction_valid", []
+        ),
+        dtype=bool,
+    )
+    if (
+        heading_ready.shape != (sample_count,)
+        or forecast_valid.shape != (sample_count,)
     ):
+        return None
+    period = float(gait_period)
+    if not np.isfinite(period) or period <= 0.0:
+        return None
+    complete_cycles = max(
+        1, int(np.floor((eval_end_time - eval_start_time) / period))
+    )
+    middle_cycle = complete_cycles // 2
+    plot_start_time = eval_start_time + middle_cycle * period
+    plot_end_time = min(plot_start_time + period, eval_end_time)
+    cycle_mask = (time_values >= plot_start_time) & (
+        time_values < plot_end_time
+    )
+    valid = cycle_mask & heading_ready & forecast_valid
+    if not np.any(valid):
+        return None
+
+    def matrix(name):
+        values = np.asarray(
+            trajectory_data.get(name, []), dtype=np.float64
+        )
+        return (
+            values
+            if values.shape == (sample_count, 3)
+            else np.full((sample_count, 3), np.nan, dtype=np.float64)
+        )
+
+    signals = (
+        (
+            "Base acceleration norm [m/s²]",
+            matrix("torso_acc_world_used"),
+            matrix("right_mpc_template_acc_world"),
+            matrix("right_mpc_template_one_step_acc_error"),
+        ),
+        (
+            "Base angular velocity norm [rad/s]",
+            matrix("torso_ang_vel_world"),
+            matrix("right_mpc_template_omega_world"),
+            matrix("right_mpc_template_one_step_omega_error"),
+        ),
+        (
+            "Base angular acceleration norm [rad/s²]",
+            matrix("torso_alpha_world_used"),
+            matrix("right_mpc_template_alpha_world"),
+            matrix("right_mpc_template_one_step_alpha_error"),
+        ),
+    )
+
+    plot_path = os.path.join(run_dir, "mpc_template_tracking.png")
+    fig, axes = plt.subplots(3, 1, figsize=(15, 11), sharex=True)
+    for axis, (title, measured, current_template, forecast_error) in zip(
+        axes, signals
+    ):
+        one_step_prediction = measured - forecast_error
+        measured_norm = np.linalg.norm(measured[valid], axis=1)
+        template_norm = np.linalg.norm(current_template[valid], axis=1)
+        forecast_norm = np.linalg.norm(one_step_prediction[valid], axis=1)
+        measured_rms = np.sqrt(np.mean(measured_norm**2))
+        current_error_rms = np.sqrt(
+            np.mean(np.sum((measured[valid] - current_template[valid]) ** 2, axis=1))
+        )
+        forecast_error_rms = np.sqrt(
+            np.mean(np.sum(forecast_error[valid] ** 2, axis=1))
+        )
+        current_percent = 100.0 * current_error_rms / max(measured_rms, 1e-12)
+        forecast_percent = 100.0 * forecast_error_rms / max(measured_rms, 1e-12)
         axis.plot(
-            time_values[heading_ready],
-            np.linalg.norm(anchor_error[heading_ready], axis=1),
-            lw=1.0,
-            label="current template mismatch",
+            time_values[valid],
+            measured_norm,
+            lw=1.2,
+            label="measured at current update",
         )
         axis.plot(
-            time_values[forecast_valid],
-            np.linalg.norm(forecast_error[forecast_valid], axis=1),
+            time_values[valid],
+            template_norm,
             lw=1.0,
-            label="anchored one-step error",
+            label="template at current phase",
         )
-        axis.set_title(title)
-        axis.set_xlabel("time [s]")
+        axis.plot(
+            time_values[valid],
+            forecast_norm,
+            lw=1.0,
+            label="previous update's k=1 prediction for current update",
+        )
+        axis.set_title(
+            f"{title} | error/measured RMS: "
+            f"current={current_percent:.1f}%, one-step={forecast_percent:.1f}%"
+        )
         axis.grid(True, alpha=0.3)
-    axes[0, 0].legend(loc="upper right")
-    axes[1, 0].legend(loc="upper right")
-    fig.suptitle("MPC one-step task realization and disturbance-template quality")
+    axes[0].legend(loc="upper right")
+    axes[-1].set_xlabel("time [s]")
+    fig.suptitle(
+        "Disturbance template versus measured base motion — "
+        f"middle gait cycle [{plot_start_time:.3f}, {plot_end_time:.3f}) s"
+    )
     fig.tight_layout()
     fig.savefig(plot_path, dpi=170)
     plt.close(fig)
@@ -4185,6 +4646,47 @@ def save_lqr_ddq_tracking_plot(
     correlation = np.asarray(metrics.get("correlation", np.zeros(5)), dtype=np.float64)
     gain = np.asarray(metrics.get("gain", np.zeros(5)), dtype=np.float64)
     rmse = np.asarray(metrics.get("rmse", np.zeros(5)), dtype=np.float64)
+    qacc_safe = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safety_fallback_satisfied", []
+        ),
+        dtype=bool,
+    )
+    tau_contact = np.asarray(
+        trajectory_data.get("right_arm_tau_contact", []), dtype=np.float64
+    )
+    recovery_active = np.asarray(
+        trajectory_data.get("right_mpc_recovery_active", []), dtype=bool
+    )
+    hold_last_safe_used = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_hold_last_safe_used", []
+        ),
+        dtype=bool,
+    )
+    contact_count = np.asarray(
+        trajectory_data.get("contact_count", []), dtype=np.int64
+    )
+    unsafe = (
+        ~qacc_safe
+        if qacc_safe.shape == time_values.shape
+        else np.zeros_like(valid)
+    )
+    arm_contact = (
+        np.linalg.norm(tau_contact, axis=1) > 1e-6
+        if tau_contact.shape == expected_shape
+        else np.zeros_like(valid)
+    )
+    if recovery_active.shape != time_values.shape:
+        recovery_active = np.zeros_like(valid)
+    if hold_last_safe_used.shape != time_values.shape:
+        hold_last_safe_used = np.zeros_like(valid)
+    contact_mode_changed = _contact_mode_changed_during_intervals(
+        time_values,
+        interval_dt,
+        valid,
+        contact_count,
+    )
     labels = tuple(name.removeprefix("right_").removesuffix("_joint") for name in RIGHT_ARM_JOINT_NAMES)
     fig, axes = plt.subplots(5, 1, figsize=(15, 14), sharex=True)
     plot_time = time_values[valid]
@@ -4192,6 +4694,33 @@ def save_lqr_ddq_tracking_plot(
         axis.plot(plot_time, ddq_des[valid, joint], color="tab:blue", lw=1.2, label="ddq_des")
         axis.plot(plot_time, ddq_real[valid, joint], color="tab:orange", lw=1.0, alpha=0.9, label="ddq_real")
         axis.axhline(0.0, color="black", lw=0.6, alpha=0.4)
+        # 图顶短标记用于区分执行安全、接触切换、右臂接触和 MPC 恢复盒，
+        # 从而避免把所有 ddq_real 尖峰都误判为关节恢复命令。
+        marker_specs = (
+            (unsafe, 0.98, "tab:red", "final validated qacc unsafe"),
+            (
+                contact_mode_changed,
+                0.95,
+                "tab:cyan",
+                "contact count changed in interval",
+            ),
+            (arm_contact, 0.92, "tab:purple", "right-arm contact torque"),
+            (hold_last_safe_used, 0.89, "tab:orange", "hold-last-safe torque"),
+            (recovery_active, 0.86, "tab:green", "MPC recovery box active"),
+        )
+        for marker_mask, y_position, color, marker_label in marker_specs:
+            marker_valid = valid & marker_mask
+            if np.any(marker_valid):
+                axis.plot(
+                    time_values[marker_valid],
+                    np.full(np.count_nonzero(marker_valid), y_position),
+                    linestyle="none",
+                    marker="|",
+                    markersize=5,
+                    color=color,
+                    transform=axis.get_xaxis_transform(),
+                    label=marker_label if joint == 0 else None,
+                )
         axis.grid(True, alpha=0.3)
         axis.set_ylabel("rad/s^2")
         axis.set_title(label)
@@ -4207,9 +4736,15 @@ def save_lqr_ddq_tracking_plot(
         )
     axes[0].legend(loc="upper left")
     axes[-1].set_xlabel("time [s]")
+    valid_count = max(int(np.count_nonzero(valid)), 1)
     fig.suptitle(
         f"{controller_name.upper()} DDQ tracking: "
-        "desired versus realized arm-interval average acceleration"
+        "desired versus realized arm-interval average acceleration\n"
+        f"final-validated-unsafe={np.count_nonzero(valid & unsafe) / valid_count:.1%}, "
+        f"contact-change={np.count_nonzero(valid & contact_mode_changed) / valid_count:.1%}, "
+        f"right-arm-contact={np.count_nonzero(valid & arm_contact) / valid_count:.1%}, "
+        f"hold-last-safe={np.count_nonzero(valid & hold_last_safe_used) / valid_count:.1%}, "
+        f"recovery-box={np.count_nonzero(valid & recovery_active) / valid_count:.1%}"
     )
     fig.tight_layout()
     fig.savefig(plot_path, dpi=170)
@@ -4331,6 +4866,7 @@ def save_control_preview(run_dir, trajectory_data):
         ("right_arm_second_pass_qacc_validation_error", joint_labels),
         ("right_arm_second_pass_qacc_linearization_error", joint_labels),
         ("right_arm_second_pass_singular_values", joint_labels),
+        ("right_arm_forward_dynamics_hold_last_safe_qacc", joint_labels),
         ("right_arm_actual_qfrc_bias", joint_labels),
         ("right_arm_actual_qfrc_passive", joint_labels),
         ("right_arm_actual_qfrc_constraint", joint_labels),
@@ -4370,6 +4906,9 @@ def save_control_preview(run_dir, trajectory_data):
         "right_arm_forward_dynamics_safety_fallback_used",
         "right_arm_forward_dynamics_safety_fallback_satisfied",
         "right_arm_forward_dynamics_safety_fallback_attempts",
+        "right_arm_forward_dynamics_hold_last_safe_available",
+        "right_arm_forward_dynamics_hold_last_safe_used",
+        "right_arm_forward_dynamics_hold_last_safe_satisfied",
         "heading_reference_world",
         "heading_yaw_unwrapped",
         "heading_yaw_filtered",
@@ -4577,6 +5116,22 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     forward_dynamics_safety_fallback_attempts = int(
         right_arm_control.get("forward_dynamics_safety_fallback_attempts", 0)
     )
+    forward_dynamics_hold_last_safe_available = bool(
+        right_arm_control.get(
+            "forward_dynamics_hold_last_safe_available", False
+        )
+    )
+    forward_dynamics_hold_last_safe_used = bool(
+        right_arm_control.get("forward_dynamics_hold_last_safe_used", False)
+    )
+    forward_dynamics_hold_last_safe_satisfied = bool(
+        right_arm_control.get(
+            "forward_dynamics_hold_last_safe_satisfied", False
+        )
+    )
+    forward_dynamics_hold_last_safe_qacc = control_vector(
+        "forward_dynamics_hold_last_safe_qacc", 5
+    )
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
     tau_limit_upper = np.asarray(right_arm_control.get("tau_limit_upper", np.full(5, np.inf)), dtype=np.float64).copy()
@@ -4775,6 +5330,10 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_forward_dynamics_safety_fallback_used"].append(forward_dynamics_safety_fallback_used)
     buffers.trajectory_data["right_arm_forward_dynamics_safety_fallback_satisfied"].append(forward_dynamics_safety_fallback_satisfied)
     buffers.trajectory_data["right_arm_forward_dynamics_safety_fallback_attempts"].append(forward_dynamics_safety_fallback_attempts)
+    buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_available"].append(forward_dynamics_hold_last_safe_available)
+    buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_used"].append(forward_dynamics_hold_last_safe_used)
+    buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_satisfied"].append(forward_dynamics_hold_last_safe_satisfied)
+    buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_qacc"].append(forward_dynamics_hold_last_safe_qacc)
     buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
     buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)
     buffers.trajectory_data["torso_acc_world_raw"].append(torso_acc_raw)
@@ -4827,6 +5386,14 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     buffers.trajectory_data["right_mpc_current_q_violation"].append(
         mpc_scalar("current_q_violation")
+    )
+    buffers.trajectory_data["right_mpc_current_q_safety_violation"].append(
+        mpc_scalar("current_q_safety_violation")
+    )
+    buffers.trajectory_data["right_mpc_recovery_active"].append(
+        bool(mpc_diagnostics.get("recovery_active", False))
+        if mpc_diagnostics_valid
+        else False
     )
     buffers.trajectory_data["right_mpc_q_margin_min"].append(
         float(mpc_margins.get("q", np.nan))
@@ -4963,6 +5530,13 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
         eval_start_time,
         eval_end_time,
     )
+    mpc_template_plot_path = save_mpc_template_tracking_plot(
+        run_dir,
+        buffers.trajectory_data,
+        eval_start_time,
+        eval_end_time,
+        gait_period,
+    )
     mpc_diagnostics_preview_path = save_mpc_diagnostics_preview(
         run_dir,
         buffers.trajectory_data,
@@ -5003,6 +5577,7 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     saved_paths["lqr_tracking_preview"] = lqr_tracking_preview_path
     saved_paths["mpc_diagnostics"] = mpc_diagnostics_path
     saved_paths["mpc_diagnostics_plot"] = mpc_diagnostics_plot_path
+    saved_paths["mpc_template_plot"] = mpc_template_plot_path
     saved_paths["mpc_diagnostics_preview"] = mpc_diagnostics_preview_path
     saved_paths["control_preview"] = control_preview_path
     saved_paths["heading_control_plot"] = heading_plot_path
@@ -5044,10 +5619,15 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     if arm_controller == "mpc" and mpc_diagnostics["task_sample_count"]:
         solver = mpc_diagnostics["solver"]
         print(
-            "MPC solver success/fallback/current-q-outside fraction = "
+            "MPC solver success/fallback/operating-box-outside fraction = "
             f"{solver['success_fraction']:.3f}/"
             f"{solver['fallback_fraction']:.3f}/"
             f"{solver['current_q_violation_fraction']:.3f}"
+        )
+        print(
+            "MPC safety-box-outside/recovery-active fraction = "
+            f"{solver['current_q_safety_violation_fraction']:.3f}/"
+            f"{solver['recovery_active_fraction']:.3f}"
         )
         task_total = mpc_diagnostics["weighted_task_cost_total"]
         print(
@@ -5056,6 +5636,18 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
             f"{task_total['actual_mean']:.4f}/"
             f"{task_total['ratio_actual_to_model_mean']:.3f}"
         )
+        for name, label in (
+            ("linear_acceleration", "linear acceleration"),
+            ("angular_acceleration", "angular acceleration"),
+            ("gravity_error", "2D gravity error"),
+        ):
+            norm_summary = mpc_diagnostics[name]["norm_summary"]
+            print(
+                f"MPC {label} RMS (model/actual/actual-minus-model) = "
+                f"{norm_summary['model_rms']:.4f}/"
+                f"{norm_summary['actual_rms']:.4f}/"
+                f"{norm_summary['actual_minus_model_percent']:+.1f}%"
+            )
         for name, label in (
             ("linear_acceleration_decomposition", "linear acceleration"),
             ("angular_acceleration_decomposition", "angular acceleration"),
@@ -5085,10 +5677,18 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
             forecast_rms = item["anchored_one_step_prediction"][
                 "error_norm"
             ]["rms"]
+            anchor_percent = item["current_phase_absolute_match"][
+                "error_percent_of_measured_rms"
+            ]
+            forecast_percent = item["anchored_one_step_prediction"][
+                "error_percent_of_measured_rms"
+            ]
             print(
                 f"MPC template {label} error-norm RMS "
                 f"(current match/one-step) = "
-                f"{anchor_rms:.4f}/{forecast_rms:.4f}"
+                f"{anchor_rms:.4f}/{forecast_rms:.4f}; "
+                f"relative to measured = "
+                f"{anchor_percent:.1f}%/{forecast_percent:.1f}%"
             )
 
 
@@ -5213,6 +5813,10 @@ def save_eval(
 ):
     t = np.asarray(data["time"])
     mask = (t >= eval_start_time) & (t < eval_end_time)
+    # MPC 的重力任务严格只使用末端系 x/y；LQR 保持原有三维定义。
+    gravity_norm_width = (
+        2 if str(experiment_name).lower().endswith("_mpc") else 3
+    )
 
     stats = {
         "gait_period": gait_period,
@@ -5223,6 +5827,11 @@ def save_eval(
         "eval_start_time": eval_start_time,
         "eval_end_time": eval_end_time,
         "walk_distance_xy": walk_distance,
+        "gravity_error_norm_definition": (
+            "signed_xy_used_by_mpc_cost"
+            if gravity_norm_width == 2
+            else "directed_xyz"
+        ),
     }
     yaw_png_path = None
     if "torso_yaw" in data and len(data["torso_yaw"]) > 0:
@@ -5256,7 +5865,7 @@ def save_eval(
                 "tilt_x",
                 "tilt_y",
                 "tilt_z",
-                "tilt_norm",
+                "gravity_error_cost_norm",
                 "upright_alignment",
             ]
         )
@@ -5269,7 +5878,8 @@ def save_eval(
 
             acc_n = np.linalg.norm(acc, axis=1)
             alpha_n = np.linalg.norm(alpha, axis=1)
-            tilt_n = np.linalg.norm(tilt, axis=1)
+            tilt_n = np.linalg.norm(tilt[:, :gravity_norm_width], axis=1)
+            tilt_xyz_n = np.linalg.norm(tilt, axis=1)
 
             for i in range(len(t)):
                 writer.writerow(
@@ -5308,6 +5918,11 @@ def save_eval(
             stats[f"{side}_tilt_xyz_mean"] = tilt[mask].mean(axis=0)
             stats[f"{side}_tilt_xyz_std"] = tilt[mask].std(axis=0)
             stats[f"{side}_tilt_xyz_rms"] = np.sqrt(np.mean(tilt[mask] ** 2, axis=0))
+            stats[f"{side}_tilt_xyz_norm_mean"] = tilt_xyz_n[mask].mean()
+            stats[f"{side}_tilt_xyz_norm_std"] = tilt_xyz_n[mask].std()
+            stats[f"{side}_tilt_xyz_norm_rms"] = np.sqrt(
+                np.mean(tilt_xyz_n[mask] ** 2)
+            )
             stats[f"{side}_upright_alignment_mean"] = alignment[mask].mean()
             stats[f"{side}_upright_alignment_min"] = alignment[mask].min()
             stats[f"{side}_inverted_fraction"] = np.mean(alignment[mask] < 0.0)
@@ -5328,8 +5943,21 @@ def save_eval(
                 f"{side} acc norm",
                 f"{side} alpha xyz",
                 f"{side} alpha norm",
-                f"{side} directed gravity error xyz",
-                f"{side} gravity error norm",
+                (
+                    f"{side} directed gravity error xyz "
+                    "(z diagnostic only)"
+                    if gravity_norm_width == 2
+                    else f"{side} directed gravity error xyz"
+                ),
+                (
+                    (
+                        f"{side} gravity error xy norm (MPC cost)"
+                        if side == "right"
+                        else f"{side} gravity error xy norm (diagnostic)"
+                    )
+                    if gravity_norm_width == 2
+                    else f"{side} gravity error xyz norm"
+                ),
             ]
 
             for r in [0, 2, 4]:
@@ -5450,8 +6078,18 @@ def print_run_summary(
     for side in ["left", "right"]:
         print(f"{side} | acc mean/std/rms = {stats[f'{side}_acc_mean']:.4f}/{stats[f'{side}_acc_std']:.4f}/{stats[f'{side}_acc_rms']:.4f}")
         print(f"{side} | alpha mean/std/rms = {stats[f'{side}_alpha_mean']:.4f}/{stats[f'{side}_alpha_std']:.4f}/{stats[f'{side}_alpha_rms']:.4f}")
+        gravity_components = (
+            (
+                "xy (MPC cost)"
+                if side == "right"
+                else "xy (diagnostic)"
+            )
+            if stats.get("gravity_error_norm_definition")
+            == "signed_xy_used_by_mpc_cost"
+            else "xyz"
+        )
         print(
-            f"{side} | gravity error mean/std/rms = "
+            f"{side} | gravity error {gravity_components} norm mean/std/rms = "
             f"{stats[f'{side}_tilt_mean']:.4f}/{stats[f'{side}_tilt_std']:.4f}/{stats[f'{side}_tilt_rms']:.4f}, "
             f"upright min/inverted = {stats[f'{side}_upright_alignment_min']:.4f}/{stats[f'{side}_inverted_fraction'] * 100.0:.2f}%"
         )

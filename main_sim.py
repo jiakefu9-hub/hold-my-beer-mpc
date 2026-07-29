@@ -411,7 +411,7 @@ if __name__ == "__main__":
                 # 3) 调用 mj_inverse()，生成“非摩擦约束不对抗”的名义力矩
                 # 4) 固定腿、腰和左臂力矩，用 1+5 次前向动力学构建 G_tau
                 # 5) 通过一次阻尼最小二乘求右臂力矩修正
-                # 6) 用完整 mj_forward 验收；失败时按 0.5/0.25/0.125 缩小修正，最后可退回名义力矩
+                # 6) 用完整 mj_forward 验收；失败时缩小修正，救援仍失败则验收上一拍实际力矩
                 # 7) 验收后残差仍大于阈值时，在已接受力矩处重算 G_tau，并做一次同样受验收的二次修正
                 fixed_ctrl_for_mapping = d.ctrl.copy()
                 fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
@@ -433,6 +433,9 @@ if __name__ == "__main__":
                     forward_dynamics_enable_second_pass=controller_setup.execution_enable_second_pass,
                     forward_dynamics_max_safety_rescue_passes=(
                         controller_setup.execution_safety_rescue_passes
+                    ),
+                    forward_dynamics_enable_hold_last_safe=(
+                        controller_setup.execution_hold_last_safe
                     ),
                 )
                 perf_monitor.finish_computed_torque_control()
