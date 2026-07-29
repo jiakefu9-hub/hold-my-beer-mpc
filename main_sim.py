@@ -160,6 +160,9 @@ if __name__ == "__main__":
     arm_policy = controller_setup.policy
     acceleration_controller = controller_setup.acceleration_controller
     lqr_cost_definition = controller_setup.lqr_cost_definition
+    mpc_cost_definition = (
+        arm_policy.get_cost_definition() if arm_controller == "mpc" else None
+    )
     controller_meta = controller_setup.metadata
     torso_acceleration_filter = TorsoAccelerationFilter(
         config, enabled=acceleration_controller
@@ -170,7 +173,9 @@ if __name__ == "__main__":
     ):
         disturbance_predictor = PhaseDisturbancePredictor(
             template_dir=os.path.join(
-                repo_dir, "disturbance_model_new", "templates_world"
+                repo_dir,
+                "disturbance_model_new_heading",
+                "templates_heading",
             ),
             variant=config.get(
                 "mpc_disturbance_template", "fully_smoothed"
@@ -336,7 +341,8 @@ if __name__ == "__main__":
             )
 
             # 把 torso 世界系运动量和当前姿态打包，供 KinematicsHelper 以及
-            # LQR/MPC 局部线性化使用。MPC 前馈会以该 R_B,0 锚定模板相对姿态。
+            # LQR/MPC 局部线性化使用。MPC 前馈先把 H 模板旋到 W，
+            # 再以该 d_0（包括 R_B,0）锚定模板相对变化。
             torso_disturbance = right_arm_helper.build_disturbance_input(
                 acc_world=torso_state.lin_acc,
                 omega_world=torso_state.ang_vel,
@@ -374,6 +380,10 @@ if __name__ == "__main__":
                         lqr_one_step_prediction = controller_diagnostics["one_step_prediction"]
                     else:
                         mpc_diagnostics = controller_diagnostics
+                        if disturbance_predictor is not None:
+                            mpc_diagnostics["disturbance_template_diagnostics"] = (
+                                disturbance_predictor.get_last_diagnostics()
+                            )
                 else:
                     # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
                     target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
@@ -565,5 +575,6 @@ if __name__ == "__main__":
         experiment_name,
         perf_monitor=perf_monitor,
         lqr_cost_definition=lqr_cost_definition,
+        mpc_cost_definition=mpc_cost_definition,
         arm_controller=arm_controller,
     )

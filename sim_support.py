@@ -38,6 +38,14 @@ LQR_COST_TERM_NAMES = (
     "velocity",
     "control",
 )
+MPC_COST_TERM_NAMES = (
+    "linear_acceleration",
+    "angular_acceleration",
+    "gravity",
+    "posture",
+    "velocity",
+    "control",
+)
 CONTACT_CONSTRAINT_TYPES = np.array(
     [
         int(mujoco.mjtConstraint.mjCNSTR_CONTACT_FRICTIONLESS),
@@ -302,12 +310,12 @@ class TorsoAccelerationFilter:
 
 
 class PhaseDisturbancePredictor:
-    """按步态相位插值世界系模板，并生成 MPC 的 N+1 步扰动预测。"""
+    """按步态相位插值 H 系模板，并输出世界系 MPC 扰动预测。"""
 
     TEMPLATE_FILES = {
-        "raw": "world_disturbance_template.npz",
-        "half_smoothed": "world_disturbance_template_half_smoothed.npz",
-        "fully_smoothed": "world_disturbance_template_fully_smoothed.npz",
+        "raw": "heading_disturbance_template.npz",
+        "half_smoothed": "heading_disturbance_template_half_smoothed.npz",
+        "fully_smoothed": "heading_disturbance_template_fully_smoothed.npz",
     }
 
     def __init__(
@@ -337,6 +345,9 @@ class PhaseDisturbancePredictor:
         with np.load(self.path, allow_pickle=False) as source:
             frame_name = str(np.asarray(source["frame_name"]).item())
             stored_variant = str(np.asarray(source["template_variant"]).item())
+            heading_definition = str(
+                np.asarray(source["heading_definition"]).item()
+            )
             self.period = float(np.asarray(source["period"]).item())
             self.phase_centers = np.asarray(
                 source["phase_centers"], dtype=np.float64
@@ -363,8 +374,18 @@ class PhaseDisturbancePredictor:
         expected_shape = (len(self.phase_centers), 3)
         expected_quaternion_shape = (len(self.phase_centers), 4)
         expected_rotation_shape = (len(self.phase_centers), 3, 3)
-        if frame_name != "world":
-            raise ValueError(f"扰动模板必须使用 world 坐标系，当前为 {frame_name!r}。")
+        expected_heading_definition = (
+            "previous_complete_gait_cycle_circular_mean_torso_yaw"
+        )
+        if frame_name != "heading":
+            raise ValueError(
+                f"扰动模板必须使用 heading 坐标系，当前为 {frame_name!r}。"
+            )
+        if heading_definition != expected_heading_definition:
+            raise ValueError(
+                "H 系定义不匹配：模板必须使用上一完整步态周期 torso yaw "
+                "的圆周均值。"
+            )
         if stored_variant != self.variant:
             raise ValueError(
                 f"模板类型不匹配：配置={self.variant!r}，文件={stored_variant!r}。"
@@ -439,8 +460,23 @@ class PhaseDisturbancePredictor:
         if self.control_dt <= 0.0 or self.horizon < 1:
             raise ValueError("扰动预测器要求 control_dt>0 且 horizon>=1。")
 
+        # 【核心代码】H_j 使用上一完整周期 C_{j-1} 的 torso yaw 圆周均值。
+        # 第一周期只积累历史；从第二周期开始，每个周期边界更新一次并整周期保持。
+        self._cycle_index = None
+        self._cycle_first_time = None
+        self._cycle_last_time = None
+        self._yaw_sine_sum = 0.0
+        self._yaw_cosine_sum = 0.0
+        self._yaw_sample_count = 0
+        self._heading_yaw_world = None
+        self._heading_concentration = np.nan
+        self._heading_activation_time = None
+        self._previous_one_step_prediction = None
+        self._previous_prediction_used_template = False
+        self._last_prediction_diagnostics = self._empty_prediction_diagnostics()
+
     def predict(self, simulation_time, measured_disturbance):
-        """生成完整 d_k：向量和姿态模板都以当前测量为锚点。"""
+        """生成完整世界系 d_k；H 未初始化时返回当前测量零阶保持。"""
         measured_acc = self._vector(measured_disturbance, "acc_world")
         measured_omega = self._vector(measured_disturbance, "omega_world")
         measured_alpha = self._vector(measured_disturbance, "alpha_world")
@@ -466,13 +502,50 @@ class PhaseDisturbancePredictor:
         ):
             raise ValueError("当前 torso 姿态必须是有效的 3x3 旋转矩阵。")
 
+        self._update_heading_frame(
+            simulation_time=float(simulation_time),
+            measured_rotation=measured_rotation,
+        )
+        if self._heading_yaw_world is None:
+            prediction = self._zero_order_hold(
+                measured_acc,
+                measured_omega,
+                measured_alpha,
+                measured_rotation,
+            )
+            self._last_prediction_diagnostics = self._build_prediction_diagnostics(
+                simulation_time=simulation_time,
+                measured_acc=measured_acc,
+                measured_omega=measured_omega,
+                measured_alpha=measured_alpha,
+                measured_rotation=measured_rotation,
+                template_acc_world=None,
+                template_omega_world=None,
+                template_alpha_world=None,
+                template_rotation_world=None,
+            )
+            self._remember_one_step_prediction(prediction[1], used_template=False)
+            return prediction
+
+        # ^W R_H 只含上一完整周期平均 yaw，z 轴始终与 W 系重力轴重合。
+        rotation_world_heading = self._rotation_z(
+            self._heading_yaw_world
+        )
         phase_now = (float(simulation_time) / self.period) % 1.0
-        anchor_acc = self._sample(self.acc_template, phase_now)
-        anchor_omega = self._sample(self.omega_template, phase_now)
-        anchor_alpha = self._sample(self.alpha_template, phase_now)
-        anchor_orientation = self._quaternion_to_rotation(
-            self._sample_quaternion(
-                self.orientation_quaternion_template, phase_now
+        anchor_acc_world = rotation_world_heading @ self._sample(
+            self.acc_template, phase_now
+        )
+        anchor_omega_world = rotation_world_heading @ self._sample(
+            self.omega_template, phase_now
+        )
+        anchor_alpha_world = rotation_world_heading @ self._sample(
+            self.alpha_template, phase_now
+        )
+        anchor_orientation_world = rotation_world_heading @ (
+            self._quaternion_to_rotation(
+                self._sample_quaternion(
+                    self.orientation_quaternion_template, phase_now
+                )
             )
         )
 
@@ -481,30 +554,44 @@ class PhaseDisturbancePredictor:
             phase = (
                 phase_now + step * self.control_dt / self.period
             ) % 1.0
-            acc = measured_acc + self._sample(self.acc_template, phase) - anchor_acc
+            # 【核心代码】先把 H 模板旋到 W，再使用模板相对当前相位的增量。
+            # 这样第 0 步严格等于实测值，模板不会替代当前传感器测量。
+            template_acc_world = rotation_world_heading @ self._sample(
+                self.acc_template, phase
+            )
+            template_omega_world = rotation_world_heading @ self._sample(
+                self.omega_template, phase
+            )
+            template_alpha_world = rotation_world_heading @ self._sample(
+                self.alpha_template, phase
+            )
+            acc = measured_acc + template_acc_world - anchor_acc_world
             omega = (
                 measured_omega
-                + self._sample(self.omega_template, phase)
-                - anchor_omega
+                + template_omega_world
+                - anchor_omega_world
             )
             alpha = (
                 measured_alpha
-                + self._sample(self.alpha_template, phase)
-                - anchor_alpha
+                + template_alpha_world
+                - anchor_alpha_world
             )
             acc = np.clip(acc, -self.acc_limit, self.acc_limit)
             alpha = np.clip(alpha, -self.alpha_limit, self.alpha_limit)
 
-            template_orientation = self._quaternion_to_rotation(
-                self._sample_quaternion(
-                    self.orientation_quaternion_template, phase
+            template_orientation_world = rotation_world_heading @ (
+                self._quaternion_to_rotation(
+                    self._sample_quaternion(
+                        self.orientation_quaternion_template, phase
+                    )
                 )
             )
-            # 以当前实测姿态为锚点，只复用模板从 phi_0 到 phi_k 的相对转动。
+            # 姿态也先做 H→W，再以当前实测姿态锚定模板相对转动。
+            # 同一个 ^W R_H 在相对转动中会严格抵消，但保留显式转换更易核对。
             rotation = (
                 measured_rotation
-                @ anchor_orientation.T
-                @ template_orientation
+                @ anchor_orientation_world.T
+                @ template_orientation_world
             )
 
             prediction.append(
@@ -515,22 +602,271 @@ class PhaseDisturbancePredictor:
                     rot_world_body=rotation.copy(),
                 )
             )
-        return tuple(prediction)
+        prediction = tuple(prediction)
+        self._last_prediction_diagnostics = self._build_prediction_diagnostics(
+            simulation_time=simulation_time,
+            measured_acc=measured_acc,
+            measured_omega=measured_omega,
+            measured_alpha=measured_alpha,
+            measured_rotation=measured_rotation,
+            template_acc_world=anchor_acc_world,
+            template_omega_world=anchor_omega_world,
+            template_alpha_world=anchor_alpha_world,
+            template_rotation_world=anchor_orientation_world,
+        )
+        self._remember_one_step_prediction(prediction[1], used_template=True)
+        return prediction
 
     def metadata(self):
         return {
             "enabled": True,
             "variant": self.variant,
             "path": self.path,
-            "frame": "world",
+            "template_frame": "heading",
+            "controller_output_frame": "world",
             "period": self.period,
             "num_bins": int(len(self.phase_centers)),
-            "prediction": "measurement_anchored_template_delta",
+            "heading_definition": (
+                "previous_complete_gait_cycle_circular_mean_torso_yaw"
+            ),
+            "heading_update": "once_per_gait_cycle_and_held_within_cycle",
+            "initialization": (
+                "zero_order_hold_until_first_complete_gait_cycle"
+            ),
+            "prediction": (
+                "heading_to_world_then_measurement_anchored_template_delta"
+            ),
             "phase_source": "counter_times_simulation_dt",
             "periodic_interpolation": "linear_between_bin_centers",
             "rotation_prediction": "measurement_anchored_quaternion_template",
             "orientation_interpolation": "shortest_path_slerp",
         }
+
+    def runtime_state(self):
+        """【非核心代码】返回 H 系初始化状态，便于日志与诊断。"""
+        return {
+            "heading_ready": self._heading_yaw_world is not None,
+            "heading_yaw_world": (
+                np.nan
+                if self._heading_yaw_world is None
+                else float(self._heading_yaw_world)
+            ),
+            "heading_concentration": float(self._heading_concentration),
+            "heading_activation_time": (
+                np.nan
+                if self._heading_activation_time is None
+                else float(self._heading_activation_time)
+            ),
+        }
+
+    def get_last_diagnostics(self):
+        """【非核心代码】返回模板当前偏差和上一拍的一步预测误差。"""
+        copied = {}
+        for name, value in self._last_prediction_diagnostics.items():
+            copied[name] = value.copy() if isinstance(value, np.ndarray) else value
+        return copied
+
+    def _build_prediction_diagnostics(
+        self,
+        simulation_time,
+        measured_acc,
+        measured_omega,
+        measured_alpha,
+        measured_rotation,
+        template_acc_world,
+        template_omega_world,
+        template_alpha_world,
+        template_rotation_world,
+    ):
+        """【半核心代码】区分模板绝对偏差与真正的一步预测误差。"""
+        nan_vector = np.full(3, np.nan, dtype=np.float64)
+        template_ready = template_acc_world is not None
+        previous = self._previous_one_step_prediction
+        one_step_valid = (
+            previous is not None and self._previous_prediction_used_template
+        )
+
+        diagnostics = {
+            "heading_ready": bool(template_ready),
+            "phase": (float(simulation_time) / self.period) % 1.0,
+            "heading_yaw_world": (
+                np.nan
+                if self._heading_yaw_world is None
+                else float(self._heading_yaw_world)
+            ),
+            "template_acc_world": (
+                nan_vector.copy()
+                if template_acc_world is None
+                else np.asarray(template_acc_world, dtype=np.float64).copy()
+            ),
+            "template_omega_world": (
+                nan_vector.copy()
+                if template_omega_world is None
+                else np.asarray(template_omega_world, dtype=np.float64).copy()
+            ),
+            "template_alpha_world": (
+                nan_vector.copy()
+                if template_alpha_world is None
+                else np.asarray(template_alpha_world, dtype=np.float64).copy()
+            ),
+            "anchor_acc_error": (
+                nan_vector.copy()
+                if template_acc_world is None
+                else measured_acc - template_acc_world
+            ),
+            "anchor_omega_error": (
+                nan_vector.copy()
+                if template_omega_world is None
+                else measured_omega - template_omega_world
+            ),
+            "anchor_alpha_error": (
+                nan_vector.copy()
+                if template_alpha_world is None
+                else measured_alpha - template_alpha_world
+            ),
+            "anchor_rotation_error_angle": (
+                np.nan
+                if template_rotation_world is None
+                else self._rotation_error_angle(
+                    measured_rotation, template_rotation_world
+                )
+            ),
+            "one_step_prediction_valid": bool(one_step_valid),
+            "one_step_acc_error": (
+                measured_acc - previous["acc_world"]
+                if one_step_valid
+                else nan_vector.copy()
+            ),
+            "one_step_omega_error": (
+                measured_omega - previous["omega_world"]
+                if one_step_valid
+                else nan_vector.copy()
+            ),
+            "one_step_alpha_error": (
+                measured_alpha - previous["alpha_world"]
+                if one_step_valid
+                else nan_vector.copy()
+            ),
+            "one_step_rotation_error_angle": (
+                self._rotation_error_angle(
+                    measured_rotation, previous["rot_world_body"]
+                )
+                if one_step_valid
+                else np.nan
+            ),
+        }
+        return diagnostics
+
+    def _remember_one_step_prediction(self, prediction, used_template):
+        self._previous_one_step_prediction = {
+            "acc_world": np.asarray(prediction.acc_world, dtype=np.float64).copy(),
+            "omega_world": np.asarray(
+                prediction.omega_world, dtype=np.float64
+            ).copy(),
+            "alpha_world": np.asarray(
+                prediction.alpha_world, dtype=np.float64
+            ).copy(),
+            "rot_world_body": np.asarray(
+                prediction.rot_world_body, dtype=np.float64
+            ).copy(),
+        }
+        self._previous_prediction_used_template = bool(used_template)
+
+    @staticmethod
+    def _rotation_error_angle(measured_rotation, predicted_rotation):
+        relative = np.asarray(measured_rotation) @ np.asarray(predicted_rotation).T
+        cosine = np.clip((np.trace(relative) - 1.0) * 0.5, -1.0, 1.0)
+        return float(np.arccos(cosine))
+
+    @staticmethod
+    def _empty_prediction_diagnostics():
+        nan_vector = np.full(3, np.nan, dtype=np.float64)
+        return {
+            "heading_ready": False,
+            "phase": np.nan,
+            "heading_yaw_world": np.nan,
+            "template_acc_world": nan_vector.copy(),
+            "template_omega_world": nan_vector.copy(),
+            "template_alpha_world": nan_vector.copy(),
+            "anchor_acc_error": nan_vector.copy(),
+            "anchor_omega_error": nan_vector.copy(),
+            "anchor_alpha_error": nan_vector.copy(),
+            "anchor_rotation_error_angle": np.nan,
+            "one_step_prediction_valid": False,
+            "one_step_acc_error": nan_vector.copy(),
+            "one_step_omega_error": nan_vector.copy(),
+            "one_step_alpha_error": nan_vector.copy(),
+            "one_step_rotation_error_angle": np.nan,
+        }
+
+    def _update_heading_frame(self, simulation_time, measured_rotation):
+        """在周期边界用刚结束的完整周期更新当前 H 系。"""
+        if not np.isfinite(simulation_time) or simulation_time < 0.0:
+            raise ValueError("simulation_time 必须是非负有限数。")
+        cycle_index = int(np.floor(simulation_time / self.period + 1e-12))
+        yaw_world = float(
+            np.arctan2(measured_rotation[1, 0], measured_rotation[0, 0])
+        )
+
+        if self._cycle_index is None:
+            self._cycle_index = cycle_index
+            self._cycle_first_time = simulation_time
+        elif cycle_index < self._cycle_index:
+            raise ValueError("扰动预测器不支持仿真时间倒退。")
+        elif cycle_index > self._cycle_index:
+            covered_duration = (
+                0.0
+                if self._cycle_last_time is None
+                else self._cycle_last_time
+                - self._cycle_first_time
+                + self.control_dt
+            )
+            enough_samples = self._yaw_sample_count >= max(
+                2, int(np.floor(0.9 * self.period / self.control_dt))
+            )
+            if enough_samples and covered_duration >= 0.9 * self.period:
+                concentration = np.hypot(
+                    self._yaw_sine_sum, self._yaw_cosine_sum
+                ) / self._yaw_sample_count
+                if concentration >= 1e-6:
+                    self._heading_yaw_world = float(
+                        np.arctan2(
+                            self._yaw_sine_sum,
+                            self._yaw_cosine_sum,
+                        )
+                    )
+                    self._heading_concentration = float(concentration)
+                    if self._heading_activation_time is None:
+                        self._heading_activation_time = simulation_time
+
+            self._cycle_index = cycle_index
+            self._cycle_first_time = simulation_time
+            self._cycle_last_time = None
+            self._yaw_sine_sum = 0.0
+            self._yaw_cosine_sum = 0.0
+            self._yaw_sample_count = 0
+
+        self._yaw_sine_sum += np.sin(yaw_world)
+        self._yaw_cosine_sum += np.cos(yaw_world)
+        self._yaw_sample_count += 1
+        self._cycle_last_time = simulation_time
+
+    def _zero_order_hold(
+        self,
+        measured_acc,
+        measured_omega,
+        measured_alpha,
+        measured_rotation,
+    ):
+        return tuple(
+            self._disturbance_type(
+                acc_world=measured_acc.copy(),
+                omega_world=measured_omega.copy(),
+                alpha_world=measured_alpha.copy(),
+                rot_world_body=measured_rotation.copy(),
+            )
+            for _ in range(self.horizon + 1)
+        )
 
     def _sample(self, values, phase):
         # 模板采样点位于 bin 中心；这里允许最后一个与第一个 bin 跨周期插值。
@@ -603,6 +939,19 @@ class PhaseDisturbancePredictor:
                     2.0 * (y * z + x * w),
                     1.0 - 2.0 * (x * x + y * y),
                 ],
+            ],
+            dtype=np.float64,
+        )
+
+    @staticmethod
+    def _rotation_z(angle):
+        cosine = np.cos(float(angle))
+        sine = np.sin(float(angle))
+        return np.array(
+            [
+                [cosine, -sine, 0.0],
+                [sine, cosine, 0.0],
+                [0.0, 0.0, 1.0],
             ],
             dtype=np.float64,
         )
@@ -769,7 +1118,7 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
         notes = (
             "sparse constrained right-arm MPC with ddq input, "
             + (
-                "phase-template base-disturbance feedforward, "
+                "heading-frame phase-template base-disturbance feedforward, "
                 if feedforward_enabled
                 else "zero-order-held measured base motion, "
             )
@@ -785,7 +1134,7 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
                 **execution_metadata,
                 "solver": "OSQP",
                 "base_prediction": (
-                    "measurement_anchored_phase_template"
+                    "heading_to_world_measurement_anchored_phase_template"
                     if feedforward_enabled
                     else "zero_order_hold_current_measurement"
                 ),
@@ -2177,9 +2526,22 @@ def init_eval_buffers():
             "right_mpc_solve_time": [],
             "right_mpc_max_constraint_violation": [],
             "right_mpc_fallback_used": [],
+            "right_mpc_fallback_feasible": [],
+            "right_mpc_current_q_violation": [],
             "right_mpc_q_margin_min": [],
             "right_mpc_dq_margin_min": [],
             "right_mpc_ddq_margin_min": [],
+            "right_mpc_one_step_q_model": [],
+            "right_mpc_one_step_dq_model": [],
+            "right_mpc_one_step_ee_lin_acc_model": [],
+            "right_mpc_one_step_ee_ang_acc_model": [],
+            "right_mpc_one_step_gravity_error_model": [],
+            "right_mpc_one_step_ee_lin_acc_offset": [],
+            "right_mpc_one_step_ee_lin_acc_ddq_map": [],
+            "right_mpc_one_step_ee_ang_acc_offset": [],
+            "right_mpc_one_step_ee_ang_acc_ddq_map": [],
+            "right_mpc_one_step_cost_model": [],
+            "right_mpc_one_step_prediction_valid": [],
             "right_mpc_disturbance_acc_k0": [],
             "right_mpc_disturbance_acc_k1": [],
             "right_mpc_disturbance_acc_terminal": [],
@@ -2190,6 +2552,21 @@ def init_eval_buffers():
             "right_mpc_disturbance_alpha_k1": [],
             "right_mpc_disturbance_alpha_terminal": [],
             "right_mpc_disturbance_rotation_terminal_angle": [],
+            "right_mpc_template_heading_ready": [],
+            "right_mpc_template_phase": [],
+            "right_mpc_template_heading_yaw_world": [],
+            "right_mpc_template_acc_world": [],
+            "right_mpc_template_omega_world": [],
+            "right_mpc_template_alpha_world": [],
+            "right_mpc_template_anchor_acc_error": [],
+            "right_mpc_template_anchor_omega_error": [],
+            "right_mpc_template_anchor_alpha_error": [],
+            "right_mpc_template_anchor_rotation_error_angle": [],
+            "right_mpc_template_one_step_prediction_valid": [],
+            "right_mpc_template_one_step_acc_error": [],
+            "right_mpc_template_one_step_omega_error": [],
+            "right_mpc_template_one_step_alpha_error": [],
+            "right_mpc_template_one_step_rotation_error_angle": [],
             "arm_policy_updated": [],
             "contact_count": [],
         },
@@ -2377,6 +2754,213 @@ def add_lqr_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
             np.all(np.isfinite(model_cost[start_index]))
             and np.all(np.isfinite(actual_cost))
             and np.all(np.isfinite(ddq_real))
+        )
+
+    trajectory_data.update(derived)
+
+
+def add_mpc_tracking_trajectory_data(trajectory_data, simulation_dt, cost_definition):
+    """【半核心代码】把 MPC 的一步模型结果与下一控制拍前的真实响应严格对齐。"""
+    time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
+    sample_count = len(time_values)
+    joint_count = len(RIGHT_ARM_JOINT_NAMES)
+    cost_count = len(MPC_COST_TERM_NAMES)
+
+    def empty(width):
+        return np.full((sample_count, width), np.nan, dtype=np.float64)
+
+    derived = {
+        "right_mpc_one_step_q_actual": empty(joint_count),
+        "right_mpc_one_step_dq_actual": empty(joint_count),
+        "right_mpc_one_step_ee_lin_acc_actual": empty(3),
+        "right_mpc_one_step_ee_ang_acc_actual": empty(3),
+        "right_mpc_one_step_gravity_error_actual": empty(2),
+        "right_mpc_one_step_ee_lin_acc_realized_ddq_model": empty(3),
+        "right_mpc_one_step_ee_ang_acc_realized_ddq_model": empty(3),
+        "right_mpc_one_step_ee_lin_acc_error": empty(3),
+        "right_mpc_one_step_ee_ang_acc_error": empty(3),
+        "right_mpc_one_step_gravity_error": empty(2),
+        "right_mpc_one_step_cost_actual": empty(cost_count),
+        "right_mpc_one_step_cost_error": empty(cost_count),
+        "right_mpc_tracking_interval_dt": np.full(
+            sample_count, np.nan, dtype=np.float64
+        ),
+        "right_mpc_tracking_valid": np.zeros(sample_count, dtype=bool),
+    }
+    if sample_count == 0 or cost_definition is None:
+        trajectory_data.update(derived)
+        return
+
+    prediction_valid = np.asarray(
+        trajectory_data.get("right_mpc_one_step_prediction_valid", []),
+        dtype=bool,
+    )
+    right_q = np.asarray(
+        trajectory_data.get("right_arm_q", []), dtype=np.float64
+    )
+    right_dq = np.asarray(
+        trajectory_data.get("right_arm_dq", []), dtype=np.float64
+    )
+    ddq_des = np.asarray(
+        trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64
+    )
+    ee_lin_vel = np.asarray(
+        trajectory_data.get("right_ee_lin_vel_world", []), dtype=np.float64
+    )
+    ee_ang_vel = np.asarray(
+        trajectory_data.get("right_ee_ang_vel_world", []), dtype=np.float64
+    )
+    gravity_error = np.asarray(
+        trajectory_data.get("right_ee_gravity_error_end", []),
+        dtype=np.float64,
+    )
+    model_linear_acc = np.asarray(
+        trajectory_data.get("right_mpc_one_step_ee_lin_acc_model", []),
+        dtype=np.float64,
+    )
+    model_angular_acc = np.asarray(
+        trajectory_data.get("right_mpc_one_step_ee_ang_acc_model", []),
+        dtype=np.float64,
+    )
+    model_gravity = np.asarray(
+        trajectory_data.get("right_mpc_one_step_gravity_error_model", []),
+        dtype=np.float64,
+    )
+    linear_offset = np.asarray(
+        trajectory_data.get("right_mpc_one_step_ee_lin_acc_offset", []),
+        dtype=np.float64,
+    )
+    linear_ddq_map = np.asarray(
+        trajectory_data.get("right_mpc_one_step_ee_lin_acc_ddq_map", []),
+        dtype=np.float64,
+    )
+    angular_offset = np.asarray(
+        trajectory_data.get("right_mpc_one_step_ee_ang_acc_offset", []),
+        dtype=np.float64,
+    )
+    angular_ddq_map = np.asarray(
+        trajectory_data.get("right_mpc_one_step_ee_ang_acc_ddq_map", []),
+        dtype=np.float64,
+    )
+    model_cost = np.asarray(
+        trajectory_data.get("right_mpc_one_step_cost_model", []),
+        dtype=np.float64,
+    )
+    expected_shapes = (
+        prediction_valid.shape == (sample_count,),
+        right_q.shape == (sample_count, joint_count),
+        right_dq.shape == (sample_count, joint_count),
+        ddq_des.shape == (sample_count, joint_count),
+        ee_lin_vel.shape == (sample_count, 3),
+        ee_ang_vel.shape == (sample_count, 3),
+        gravity_error.shape == (sample_count, 3),
+        model_linear_acc.shape == (sample_count, 3),
+        model_angular_acc.shape == (sample_count, 3),
+        model_gravity.shape == (sample_count, 2),
+        linear_offset.shape == (sample_count, 3),
+        linear_ddq_map.shape == (sample_count, 3, joint_count),
+        angular_offset.shape == (sample_count, 3),
+        angular_ddq_map.shape == (sample_count, 3, joint_count),
+        model_cost.shape == (sample_count, cost_count),
+    )
+    if not all(expected_shapes):
+        trajectory_data.update(derived)
+        return
+
+    Q_ee_acc = np.asarray(cost_definition["Q_ee_acc"], dtype=np.float64)
+    Q_ee_alpha = np.asarray(cost_definition["Q_ee_alpha"], dtype=np.float64)
+    Qg = np.asarray(cost_definition["Qg"], dtype=np.float64)
+    Qq = np.asarray(cost_definition["Qq"], dtype=np.float64)
+    Qv = np.asarray(cost_definition["Qv"], dtype=np.float64)
+    R = np.asarray(cost_definition["R"], dtype=np.float64)
+    posture_reference = np.asarray(
+        cost_definition["posture_reference"], dtype=np.float64
+    )
+
+    update_indices = np.flatnonzero(prediction_valid)
+    for start_index, next_index in zip(update_indices[:-1], update_indices[1:]):
+        before_index = start_index - 1
+        end_index = next_index - 1
+        interval_dt = (next_index - start_index) * float(simulation_dt)
+        if before_index < 0 or end_index <= before_index or interval_dt <= 0.0:
+            continue
+
+        ee_lin_acc_actual = (
+            ee_lin_vel[end_index] - ee_lin_vel[before_index]
+        ) / interval_dt
+        ee_ang_acc_actual = (
+            ee_ang_vel[end_index] - ee_ang_vel[before_index]
+        ) / interval_dt
+        ddq_real = (
+            right_dq[end_index] - right_dq[before_index]
+        ) / interval_dt
+        linear_realized_ddq_model = (
+            linear_offset[start_index]
+            + linear_ddq_map[start_index] @ ddq_real
+        )
+        angular_realized_ddq_model = (
+            angular_offset[start_index]
+            + angular_ddq_map[start_index] @ ddq_real
+        )
+        q_actual = right_q[end_index]
+        dq_actual = right_dq[end_index]
+        gravity_actual = gravity_error[end_index, :2]
+        posture_error = q_actual - posture_reference
+        control = ddq_des[start_index]
+        actual_cost = np.array(
+            [
+                ee_lin_acc_actual @ Q_ee_acc @ ee_lin_acc_actual,
+                ee_ang_acc_actual @ Q_ee_alpha @ ee_ang_acc_actual,
+                gravity_actual @ Qg @ gravity_actual,
+                posture_error @ Qq @ posture_error,
+                dq_actual @ Qv @ dq_actual,
+                control @ R @ control,
+            ],
+            dtype=np.float64,
+        )
+
+        derived["right_mpc_one_step_q_actual"][start_index] = q_actual
+        derived["right_mpc_one_step_dq_actual"][start_index] = dq_actual
+        derived["right_mpc_one_step_ee_lin_acc_actual"][
+            start_index
+        ] = ee_lin_acc_actual
+        derived["right_mpc_one_step_ee_ang_acc_actual"][
+            start_index
+        ] = ee_ang_acc_actual
+        derived["right_mpc_one_step_gravity_error_actual"][
+            start_index
+        ] = gravity_actual
+        derived["right_mpc_one_step_ee_lin_acc_realized_ddq_model"][
+            start_index
+        ] = linear_realized_ddq_model
+        derived["right_mpc_one_step_ee_ang_acc_realized_ddq_model"][
+            start_index
+        ] = angular_realized_ddq_model
+        derived["right_mpc_one_step_ee_lin_acc_error"][start_index] = (
+            ee_lin_acc_actual - model_linear_acc[start_index]
+        )
+        derived["right_mpc_one_step_ee_ang_acc_error"][start_index] = (
+            ee_ang_acc_actual - model_angular_acc[start_index]
+        )
+        derived["right_mpc_one_step_gravity_error"][start_index] = (
+            gravity_actual - model_gravity[start_index]
+        )
+        derived["right_mpc_one_step_cost_actual"][start_index] = actual_cost
+        derived["right_mpc_one_step_cost_error"][start_index] = (
+            actual_cost - model_cost[start_index]
+        )
+        derived["right_mpc_tracking_interval_dt"][start_index] = interval_dt
+        derived["right_mpc_tracking_valid"][start_index] = all(
+            np.all(np.isfinite(value))
+            for value in (
+                model_linear_acc[start_index],
+                model_angular_acc[start_index],
+                model_gravity[start_index],
+                model_cost[start_index],
+                linear_realized_ddq_model,
+                angular_realized_ddq_model,
+                actual_cost,
+            )
         )
 
     trajectory_data.update(derived)
@@ -2672,6 +3256,339 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
     return diagnostics
 
 
+def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
+    """汇总“模板→QP 一步理想量→仿真实际量”三层 MPC 诊断。"""
+    time_values = np.asarray(
+        trajectory_data.get("time", []), dtype=np.float64
+    )
+    sample_count = len(time_values)
+    eval_mask = (
+        (time_values >= eval_start_time) & (time_values < eval_end_time)
+        if sample_count
+        else np.zeros(0, dtype=bool)
+    )
+    tracking_valid = np.asarray(
+        trajectory_data.get("right_mpc_tracking_valid", []), dtype=bool
+    )
+    interval_dt = np.asarray(
+        trajectory_data.get("right_mpc_tracking_interval_dt", []),
+        dtype=np.float64,
+    )
+    if (
+        tracking_valid.shape != (sample_count,)
+        or interval_dt.shape != (sample_count,)
+    ):
+        tracking_valid = np.zeros(sample_count, dtype=bool)
+        interval_dt = np.full(sample_count, np.nan, dtype=np.float64)
+    else:
+        tracking_valid &= eval_mask
+        tracking_valid &= (
+            time_values + interval_dt <= eval_end_time + 1e-12
+        )
+
+    def matrix(name, width):
+        values = np.asarray(
+            trajectory_data.get(name, []), dtype=np.float64
+        )
+        if values.shape != (sample_count, width):
+            return np.full((sample_count, width), np.nan, dtype=np.float64)
+        return values
+
+    model_linear = matrix("right_mpc_one_step_ee_lin_acc_model", 3)
+    actual_linear = matrix("right_mpc_one_step_ee_lin_acc_actual", 3)
+    realized_ddq_linear = matrix(
+        "right_mpc_one_step_ee_lin_acc_realized_ddq_model", 3
+    )
+    model_angular = matrix("right_mpc_one_step_ee_ang_acc_model", 3)
+    actual_angular = matrix("right_mpc_one_step_ee_ang_acc_actual", 3)
+    realized_ddq_angular = matrix(
+        "right_mpc_one_step_ee_ang_acc_realized_ddq_model", 3
+    )
+    model_gravity = matrix("right_mpc_one_step_gravity_error_model", 2)
+    actual_gravity = matrix("right_mpc_one_step_gravity_error_actual", 2)
+    model_cost = matrix(
+        "right_mpc_one_step_cost_model", len(MPC_COST_TERM_NAMES)
+    )
+    actual_cost = matrix(
+        "right_mpc_one_step_cost_actual", len(MPC_COST_TERM_NAMES)
+    )
+
+    diagnostics = {
+        "definition": {
+            "alignment": (
+                "model at arm update k versus response immediately before "
+                "arm update k+1"
+            ),
+            "model_acceleration": (
+                "affine MPC task model evaluated with optimized first input u_0"
+            ),
+            "actual_acceleration": (
+                "end-effector velocity difference over the same arm-control interval"
+            ),
+            "gravity": (
+                "model x_1 versus measured end-of-interval signed xy gravity error"
+            ),
+            "weighted_cost": (
+                "the same Q_A, Q_alpha, Q_G, Q_q, Q_v and R applied to "
+                "model and actual interval outcomes"
+            ),
+            "template_anchor_error": (
+                "current measured d_0 minus unanchored H-template value at "
+                "the same phase, after H-to-W rotation"
+            ),
+            "template_one_step_error": (
+                "current measured disturbance minus the previous update's "
+                "anchored k=1 prediction"
+            ),
+            "evaluation_window": [
+                float(eval_start_time),
+                float(eval_end_time),
+            ],
+        },
+        "task_sample_count": int(np.sum(tracking_valid)),
+        "cost_term_names": list(MPC_COST_TERM_NAMES),
+        "interval_dt_mean": (
+            float(np.mean(interval_dt[tracking_valid]))
+            if np.any(tracking_valid)
+            else 0.0
+        ),
+    }
+    arm_updated = np.asarray(
+        trajectory_data.get("arm_policy_updated", []), dtype=bool
+    )
+    solver_success = np.asarray(
+        trajectory_data.get("right_mpc_solver_success", []), dtype=bool
+    )
+    fallback_used = np.asarray(
+        trajectory_data.get("right_mpc_fallback_used", []), dtype=bool
+    )
+    fallback_feasible = np.asarray(
+        trajectory_data.get("right_mpc_fallback_feasible", []), dtype=bool
+    )
+    solver_status = np.asarray(
+        trajectory_data.get("right_mpc_solver_status_val", []),
+        dtype=np.float64,
+    )
+    current_q_violation = np.asarray(
+        trajectory_data.get("right_mpc_current_q_violation", []),
+        dtype=np.float64,
+    )
+    expected_scalar_shape = (sample_count,)
+    if all(
+        value.shape == expected_scalar_shape
+        for value in (
+            arm_updated,
+            solver_success,
+            fallback_used,
+            fallback_feasible,
+            solver_status,
+            current_q_violation,
+        )
+    ):
+        update_mask = eval_mask & arm_updated
+        status_values = solver_status[update_mask]
+        finite_status = status_values[np.isfinite(status_values)].astype(int)
+        unique_status, status_counts = np.unique(
+            finite_status, return_counts=True
+        )
+        violation_values = current_q_violation[update_mask]
+        finite_violation = violation_values[np.isfinite(violation_values)]
+        diagnostics["solver"] = {
+            "update_count": int(np.sum(update_mask)),
+            "success_fraction": (
+                float(np.mean(solver_success[update_mask]))
+                if np.any(update_mask)
+                else 0.0
+            ),
+            "fallback_fraction": (
+                float(np.mean(fallback_used[update_mask]))
+                if np.any(update_mask)
+                else 0.0
+            ),
+            "fallback_feasible_fraction_given_fallback": (
+                float(
+                    np.mean(
+                        fallback_feasible[update_mask & fallback_used]
+                    )
+                )
+                if np.any(update_mask & fallback_used)
+                else 0.0
+            ),
+            "status_val_counts": {
+                str(value): int(count)
+                for value, count in zip(unique_status, status_counts)
+            },
+            "current_q_violation_fraction": (
+                float(np.mean(finite_violation > 1e-9))
+                if finite_violation.size
+                else 0.0
+            ),
+            "current_q_violation_max_rad": (
+                float(np.max(finite_violation))
+                if finite_violation.size
+                else 0.0
+            ),
+        }
+    else:
+        diagnostics["solver"] = {
+            "update_count": 0,
+            "success_fraction": 0.0,
+            "fallback_fraction": 0.0,
+            "fallback_feasible_fraction_given_fallback": 0.0,
+            "status_val_counts": {},
+            "current_q_violation_fraction": 0.0,
+            "current_q_violation_max_rad": 0.0,
+        }
+    for name, model_values, actual_values in (
+        ("linear_acceleration", model_linear, actual_linear),
+        ("angular_acceleration", model_angular, actual_angular),
+        ("gravity_error", model_gravity, actual_gravity),
+        ("weighted_cost", model_cost, actual_cost),
+    ):
+        diagnostics[name] = _component_tracking_metrics(
+            model_values[tracking_valid], actual_values[tracking_valid]
+        )
+    diagnostics["linear_acceleration_decomposition"] = {
+        "ddq_execution_effect": _component_tracking_metrics(
+            model_linear[tracking_valid],
+            realized_ddq_linear[tracking_valid],
+        ),
+        "remaining_task_model_error": _component_tracking_metrics(
+            realized_ddq_linear[tracking_valid],
+            actual_linear[tracking_valid],
+        ),
+    }
+    diagnostics["angular_acceleration_decomposition"] = {
+        "ddq_execution_effect": _component_tracking_metrics(
+            model_angular[tracking_valid],
+            realized_ddq_angular[tracking_valid],
+        ),
+        "remaining_task_model_error": _component_tracking_metrics(
+            realized_ddq_angular[tracking_valid],
+            actual_angular[tracking_valid],
+        ),
+    }
+
+    if np.any(tracking_valid):
+        model_task_total = np.sum(model_cost[tracking_valid, :3], axis=1)
+        actual_task_total = np.sum(actual_cost[tracking_valid, :3], axis=1)
+        diagnostics["weighted_task_cost_total"] = {
+            "model_mean": float(np.mean(model_task_total)),
+            "model_rms": float(np.sqrt(np.mean(model_task_total**2))),
+            "actual_mean": float(np.mean(actual_task_total)),
+            "actual_rms": float(np.sqrt(np.mean(actual_task_total**2))),
+            "ratio_actual_to_model_mean": float(
+                np.mean(actual_task_total)
+                / max(np.mean(model_task_total), 1e-12)
+            ),
+        }
+    else:
+        diagnostics["weighted_task_cost_total"] = {
+            "model_mean": 0.0,
+            "model_rms": 0.0,
+            "actual_mean": 0.0,
+            "actual_rms": 0.0,
+            "ratio_actual_to_model_mean": 0.0,
+        }
+
+    heading_ready = np.asarray(
+        trajectory_data.get("right_mpc_template_heading_ready", []),
+        dtype=bool,
+    )
+    one_step_valid = np.asarray(
+        trajectory_data.get(
+            "right_mpc_template_one_step_prediction_valid", []
+        ),
+        dtype=bool,
+    )
+    if heading_ready.shape != (sample_count,):
+        heading_ready = np.zeros(sample_count, dtype=bool)
+    if one_step_valid.shape != (sample_count,):
+        one_step_valid = np.zeros(sample_count, dtype=bool)
+    anchor_mask = eval_mask & heading_ready
+    forecast_mask = eval_mask & one_step_valid
+
+    template_values = {
+        "acceleration": (
+            matrix("right_mpc_template_acc_world", 3),
+            matrix("torso_acc_world_used", 3),
+            matrix("right_mpc_template_anchor_acc_error", 3),
+            matrix("right_mpc_template_one_step_acc_error", 3),
+        ),
+        "angular_velocity": (
+            matrix("right_mpc_template_omega_world", 3),
+            matrix("torso_ang_vel_world", 3),
+            matrix("right_mpc_template_anchor_omega_error", 3),
+            matrix("right_mpc_template_one_step_omega_error", 3),
+        ),
+        "angular_acceleration": (
+            matrix("right_mpc_template_alpha_world", 3),
+            matrix("torso_alpha_world_used", 3),
+            matrix("right_mpc_template_anchor_alpha_error", 3),
+            matrix("right_mpc_template_one_step_alpha_error", 3),
+        ),
+    }
+    template_diagnostics = {
+        "anchor_sample_count": int(np.sum(anchor_mask)),
+        "one_step_sample_count": int(np.sum(forecast_mask)),
+    }
+    for name, (template, measured, anchor_error, forecast_error) in template_values.items():
+        anchor_tracking = _component_tracking_metrics(
+            template[anchor_mask], measured[anchor_mask]
+        )
+        forecast_prediction = measured[forecast_mask] - forecast_error[
+            forecast_mask
+        ]
+        forecast_tracking = _component_tracking_metrics(
+            forecast_prediction, measured[forecast_mask]
+        )
+        anchor_tracking["error_norm"] = _masked_vector_norm_stats(
+            anchor_error, anchor_mask, width=3
+        )
+        forecast_tracking["error_norm"] = _masked_vector_norm_stats(
+            forecast_error, forecast_mask, width=3
+        )
+        template_diagnostics[name] = {
+            "current_phase_absolute_match": anchor_tracking,
+            "anchored_one_step_prediction": forecast_tracking,
+        }
+
+    anchor_rotation_error = np.asarray(
+        trajectory_data.get(
+            "right_mpc_template_anchor_rotation_error_angle", []
+        ),
+        dtype=np.float64,
+    )
+    forecast_rotation_error = np.asarray(
+        trajectory_data.get(
+            "right_mpc_template_one_step_rotation_error_angle", []
+        ),
+        dtype=np.float64,
+    )
+
+    def scalar_error_stats(values, mask):
+        if values.shape != (sample_count,) or not np.any(mask):
+            return {"mean": 0.0, "rms": 0.0, "p95": 0.0, "max": 0.0}
+        selected = np.abs(values[mask])
+        return {
+            "mean": float(np.mean(selected)),
+            "rms": float(np.sqrt(np.mean(selected**2))),
+            "p95": float(np.percentile(selected, 95.0)),
+            "max": float(np.max(selected)),
+        }
+
+    template_diagnostics["orientation_error_angle_rad"] = {
+        "current_phase_absolute_match": scalar_error_stats(
+            anchor_rotation_error, anchor_mask
+        ),
+        "anchored_one_step_prediction": scalar_error_stats(
+            forecast_rotation_error, forecast_mask
+        ),
+    }
+    diagnostics["disturbance_template"] = template_diagnostics
+    return diagnostics
+
+
 def compute_right_arm_trajectory_diagnostics(trajectory_data):
     n = len(RIGHT_ARM_JOINT_NAMES)
     def matrix(name, width):
@@ -2907,6 +3824,7 @@ def save_trajectory(trajectory_path, trajectory_data, xml_path, simulation_dt):
         **arrays,
         **right_arm_diagnostics,
         lqr_cost_term_names=np.asarray(LQR_COST_TERM_NAMES),
+        mpc_cost_term_names=np.asarray(MPC_COST_TERM_NAMES),
         xml_path=np.array(xml_path),
         simulation_dt=np.array(simulation_dt),
     )
@@ -2927,6 +3845,306 @@ def save_lqr_tracking_diagnostics(run_dir, diagnostics, controller_name="lqr"):
     with open(diagnostics_path, "w", encoding="utf-8") as f:
         json.dump(_to_serializable(diagnostics), f, indent=2, ensure_ascii=False)
     return diagnostics_path
+
+
+def save_mpc_diagnostics(run_dir, diagnostics):
+    diagnostics_path = os.path.join(run_dir, "mpc_diagnostics.json")
+    with open(diagnostics_path, "w", encoding="utf-8") as f:
+        json.dump(_to_serializable(diagnostics), f, indent=2, ensure_ascii=False)
+    return diagnostics_path
+
+
+def save_mpc_diagnostics_plot(
+    run_dir,
+    trajectory_data,
+    eval_start_time,
+    eval_end_time,
+):
+    """【非核心代码】并列显示 MPC 理想/实际任务量和模板预测误差。"""
+    time_values = np.asarray(
+        trajectory_data.get("time", []), dtype=np.float64
+    )
+    sample_count = len(time_values)
+    tracking_valid = np.asarray(
+        trajectory_data.get("right_mpc_tracking_valid", []), dtype=bool
+    )
+    forecast_valid = np.asarray(
+        trajectory_data.get(
+            "right_mpc_template_one_step_prediction_valid", []
+        ),
+        dtype=bool,
+    )
+    heading_ready = np.asarray(
+        trajectory_data.get("right_mpc_template_heading_ready", []),
+        dtype=bool,
+    )
+    if (
+        tracking_valid.shape != (sample_count,)
+        or forecast_valid.shape != (sample_count,)
+        or heading_ready.shape != (sample_count,)
+    ):
+        return None
+    eval_mask = (time_values >= eval_start_time) & (
+        time_values < eval_end_time
+    )
+    tracking_valid &= eval_mask
+    forecast_valid &= eval_mask
+    heading_ready &= eval_mask
+    if not np.any(tracking_valid):
+        return None
+
+    def matrix(name, width):
+        values = np.asarray(
+            trajectory_data.get(name, []), dtype=np.float64
+        )
+        return (
+            values
+            if values.shape == (sample_count, width)
+            else np.full((sample_count, width), np.nan, dtype=np.float64)
+        )
+
+    task_signals = (
+        (
+            "Linear acceleration norm [m/s²]",
+            matrix("right_mpc_one_step_ee_lin_acc_model", 3),
+            matrix("right_mpc_one_step_ee_lin_acc_actual", 3),
+        ),
+        (
+            "Angular acceleration norm [rad/s²]",
+            matrix("right_mpc_one_step_ee_ang_acc_model", 3),
+            matrix("right_mpc_one_step_ee_ang_acc_actual", 3),
+        ),
+        (
+            "2D gravity-error norm [m/s²]",
+            matrix("right_mpc_one_step_gravity_error_model", 2),
+            matrix("right_mpc_one_step_gravity_error_actual", 2),
+        ),
+    )
+    template_signals = (
+        (
+            "Base acceleration error norm [m/s²]",
+            matrix("right_mpc_template_anchor_acc_error", 3),
+            matrix("right_mpc_template_one_step_acc_error", 3),
+        ),
+        (
+            "Base angular-velocity error norm [rad/s]",
+            matrix("right_mpc_template_anchor_omega_error", 3),
+            matrix("right_mpc_template_one_step_omega_error", 3),
+        ),
+        (
+            "Base angular-acceleration error norm [rad/s²]",
+            matrix("right_mpc_template_anchor_alpha_error", 3),
+            matrix("right_mpc_template_one_step_alpha_error", 3),
+        ),
+    )
+
+    plot_path = os.path.join(run_dir, "mpc_task_and_template_diagnostics.png")
+    fig, axes = plt.subplots(2, 3, figsize=(17, 9), sharex=True)
+    for axis, (title, model_values, actual_values) in zip(
+        axes[0], task_signals
+    ):
+        axis.plot(
+            time_values[tracking_valid],
+            np.linalg.norm(model_values[tracking_valid], axis=1),
+            lw=1.1,
+            label="MPC model",
+        )
+        axis.plot(
+            time_values[tracking_valid],
+            np.linalg.norm(actual_values[tracking_valid], axis=1),
+            lw=1.0,
+            label="actual",
+        )
+        axis.set_title(title)
+        axis.grid(True, alpha=0.3)
+    for axis, (title, anchor_error, forecast_error) in zip(
+        axes[1], template_signals
+    ):
+        axis.plot(
+            time_values[heading_ready],
+            np.linalg.norm(anchor_error[heading_ready], axis=1),
+            lw=1.0,
+            label="current template mismatch",
+        )
+        axis.plot(
+            time_values[forecast_valid],
+            np.linalg.norm(forecast_error[forecast_valid], axis=1),
+            lw=1.0,
+            label="anchored one-step error",
+        )
+        axis.set_title(title)
+        axis.set_xlabel("time [s]")
+        axis.grid(True, alpha=0.3)
+    axes[0, 0].legend(loc="upper right")
+    axes[1, 0].legend(loc="upper right")
+    fig.suptitle("MPC one-step task realization and disturbance-template quality")
+    fig.tight_layout()
+    fig.savefig(plot_path, dpi=170)
+    plt.close(fig)
+    return plot_path
+
+
+def save_mpc_diagnostics_preview(
+    run_dir,
+    trajectory_data,
+    eval_start_time,
+    eval_end_time,
+):
+    """保存每个 MPC 更新点最直接的模型/实际代价与模板误差。"""
+    preview_path = os.path.join(run_dir, "mpc_diagnostics_preview.csv")
+    time_values = np.asarray(
+        trajectory_data.get("time", []), dtype=np.float64
+    )
+    sample_count = len(time_values)
+    tracking_valid = np.asarray(
+        trajectory_data.get("right_mpc_tracking_valid", []), dtype=bool
+    )
+    interval_dt = np.asarray(
+        trajectory_data.get("right_mpc_tracking_interval_dt", []),
+        dtype=np.float64,
+    )
+    model_cost = np.asarray(
+        trajectory_data.get("right_mpc_one_step_cost_model", []),
+        dtype=np.float64,
+    )
+    actual_cost = np.asarray(
+        trajectory_data.get("right_mpc_one_step_cost_actual", []),
+        dtype=np.float64,
+    )
+    anchor_rotation = np.asarray(
+        trajectory_data.get(
+            "right_mpc_template_anchor_rotation_error_angle", []
+        ),
+        dtype=np.float64,
+    )
+    forecast_rotation = np.asarray(
+        trajectory_data.get(
+            "right_mpc_template_one_step_rotation_error_angle", []
+        ),
+        dtype=np.float64,
+    )
+
+    def matrix(name, width):
+        values = np.asarray(
+            trajectory_data.get(name, []), dtype=np.float64
+        )
+        return (
+            values
+            if values.shape == (sample_count, width)
+            else np.full((sample_count, width), np.nan, dtype=np.float64)
+        )
+
+    anchor_errors = (
+        matrix("right_mpc_template_anchor_acc_error", 3),
+        matrix("right_mpc_template_anchor_omega_error", 3),
+        matrix("right_mpc_template_anchor_alpha_error", 3),
+    )
+    forecast_errors = (
+        matrix("right_mpc_template_one_step_acc_error", 3),
+        matrix("right_mpc_template_one_step_omega_error", 3),
+        matrix("right_mpc_template_one_step_alpha_error", 3),
+    )
+    task_norm_values = (
+        (
+            "linear_acceleration",
+            matrix("right_mpc_one_step_ee_lin_acc_model", 3),
+            matrix(
+                "right_mpc_one_step_ee_lin_acc_realized_ddq_model", 3
+            ),
+            matrix("right_mpc_one_step_ee_lin_acc_actual", 3),
+        ),
+        (
+            "angular_acceleration",
+            matrix("right_mpc_one_step_ee_ang_acc_model", 3),
+            matrix(
+                "right_mpc_one_step_ee_ang_acc_realized_ddq_model", 3
+            ),
+            matrix("right_mpc_one_step_ee_ang_acc_actual", 3),
+        ),
+    )
+    expected = (
+        tracking_valid.shape == (sample_count,),
+        interval_dt.shape == (sample_count,),
+        model_cost.shape == (sample_count, len(MPC_COST_TERM_NAMES)),
+        actual_cost.shape == model_cost.shape,
+        anchor_rotation.shape == (sample_count,),
+        forecast_rotation.shape == (sample_count,),
+    )
+    if not all(expected):
+        tracking_valid = np.zeros(sample_count, dtype=bool)
+
+    headers = ["time", "interval_dt", "in_evaluation"]
+    for name, _, _, _ in task_norm_values:
+        headers.extend(
+            (
+                f"{name}_model_norm",
+                f"{name}_realized_ddq_model_norm",
+                f"{name}_actual_norm",
+            )
+        )
+    for term in MPC_COST_TERM_NAMES:
+        headers.extend(
+            (
+                f"cost_model_{term}",
+                f"cost_actual_{term}",
+                f"cost_error_{term}",
+            )
+        )
+    for prefix in ("acc", "omega", "alpha"):
+        headers.extend(
+            (
+                f"template_anchor_{prefix}_error_norm",
+                f"template_one_step_{prefix}_error_norm",
+            )
+        )
+    headers.extend(
+        (
+            "template_anchor_rotation_error_angle",
+            "template_one_step_rotation_error_angle",
+        )
+    )
+
+    with open(preview_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for index in np.flatnonzero(tracking_valid):
+            row = [
+                time_values[index],
+                interval_dt[index],
+                bool(
+                    eval_start_time <= time_values[index]
+                    and time_values[index] + interval_dt[index]
+                    <= eval_end_time + 1e-12
+                ),
+            ]
+            for _, model_value, realized_value, actual_value in task_norm_values:
+                row.extend(
+                    (
+                        np.linalg.norm(model_value[index]),
+                        np.linalg.norm(realized_value[index]),
+                        np.linalg.norm(actual_value[index]),
+                    )
+                )
+            for term in range(len(MPC_COST_TERM_NAMES)):
+                row.extend(
+                    (
+                        model_cost[index, term],
+                        actual_cost[index, term],
+                        actual_cost[index, term] - model_cost[index, term],
+                    )
+                )
+            for anchor_error, forecast_error in zip(
+                anchor_errors, forecast_errors
+            ):
+                row.extend(
+                    (
+                        np.linalg.norm(anchor_error[index]),
+                        np.linalg.norm(forecast_error[index]),
+                    )
+                )
+            row.extend((anchor_rotation[index], forecast_rotation[index]))
+            writer.writerow(row)
+    return preview_path
 
 
 def save_lqr_ddq_tracking_plot(
@@ -3404,6 +4622,17 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
         if mpc_diagnostics_valid
         else {}
     )
+    mpc_prediction = (
+        mpc_diagnostics.get("one_step_prediction")
+        if mpc_diagnostics_valid
+        else None
+    )
+    mpc_prediction_valid = isinstance(mpc_prediction, dict)
+    mpc_template_diagnostics = (
+        mpc_diagnostics.get("disturbance_template_diagnostics", {})
+        if mpc_diagnostics_valid
+        else {}
+    )
 
     def mpc_disturbance_vector(name, index):
         values = np.asarray(
@@ -3427,17 +4656,45 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
         cosine = np.clip((np.trace(relative) - 1.0) * 0.5, -1.0, 1.0)
         return float(np.arccos(cosine))
 
-    def prediction_vector(name, size):
-        if not lqr_prediction_valid:
+    def dictionary_vector(dictionary, name, size):
+        if not isinstance(dictionary, dict):
             return np.full(size, np.nan, dtype=np.float64)
-        value = np.asarray(lqr_prediction.get(name, np.full(size, np.nan)), dtype=np.float64)
+        value = np.asarray(
+            dictionary.get(name, np.full(size, np.nan)), dtype=np.float64
+        )
         return value.copy() if value.shape == (size,) else np.full(size, np.nan, dtype=np.float64)
+
+    def dictionary_matrix(dictionary, name, shape):
+        if not isinstance(dictionary, dict):
+            return np.full(shape, np.nan, dtype=np.float64)
+        value = np.asarray(
+            dictionary.get(name, np.full(shape, np.nan)), dtype=np.float64
+        )
+        return value.copy() if value.shape == shape else np.full(
+            shape, np.nan, dtype=np.float64
+        )
 
     prediction_costs = {} if not lqr_prediction_valid else lqr_prediction.get("cost_terms", {})
     lqr_cost_model = np.array(
         [float(prediction_costs.get(name, np.nan)) for name in LQR_COST_TERM_NAMES],
         dtype=np.float64,
     )
+    mpc_prediction_costs = (
+        {} if not mpc_prediction_valid else mpc_prediction.get("cost_terms", {})
+    )
+    mpc_cost_model = np.array(
+        [
+            float(mpc_prediction_costs.get(name, np.nan))
+            for name in MPC_COST_TERM_NAMES
+        ],
+        dtype=np.float64,
+    )
+
+    def template_scalar(name):
+        return float(mpc_template_diagnostics.get(name, np.nan))
+
+    def template_vector(name):
+        return dictionary_vector(mpc_template_diagnostics, name, 3)
     torso_rot = data.site_xmat[scene_ids.imu_site_id].reshape(3, 3).copy()
     position_torso = torso_rot.T @ (
         data.site_xpos[scene_ids.right_grasp_site_id] - data.site_xpos[scene_ids.imu_site_id]
@@ -3539,12 +4796,12 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_ee_position_error_torso"].append(position_error)
     buffers.trajectory_data["right_ee_gravity_error_end"].append(gravity_error)
     buffers.trajectory_data["right_ee_upright_alignment"].append(upright_alignment)
-    buffers.trajectory_data["right_lqr_one_step_q_model"].append(prediction_vector("q", 5))
-    buffers.trajectory_data["right_lqr_one_step_dq_model"].append(prediction_vector("dq", 5))
-    buffers.trajectory_data["right_lqr_one_step_ee_lin_acc_model"].append(prediction_vector("ee_lin_acc", 3))
-    buffers.trajectory_data["right_lqr_one_step_ee_ang_acc_model"].append(prediction_vector("ee_ang_acc", 3))
-    buffers.trajectory_data["right_lqr_one_step_position_error_model"].append(prediction_vector("position_error", 3))
-    buffers.trajectory_data["right_lqr_one_step_gravity_error_model"].append(prediction_vector("gravity_error", 3))
+    buffers.trajectory_data["right_lqr_one_step_q_model"].append(dictionary_vector(lqr_prediction, "q", 5))
+    buffers.trajectory_data["right_lqr_one_step_dq_model"].append(dictionary_vector(lqr_prediction, "dq", 5))
+    buffers.trajectory_data["right_lqr_one_step_ee_lin_acc_model"].append(dictionary_vector(lqr_prediction, "ee_lin_acc", 3))
+    buffers.trajectory_data["right_lqr_one_step_ee_ang_acc_model"].append(dictionary_vector(lqr_prediction, "ee_ang_acc", 3))
+    buffers.trajectory_data["right_lqr_one_step_position_error_model"].append(dictionary_vector(lqr_prediction, "position_error", 3))
+    buffers.trajectory_data["right_lqr_one_step_gravity_error_model"].append(dictionary_vector(lqr_prediction, "gravity_error", 3))
     buffers.trajectory_data["right_lqr_one_step_cost_model"].append(lqr_cost_model)
     buffers.trajectory_data["right_lqr_one_step_prediction_valid"].append(lqr_prediction_valid)
     buffers.trajectory_data["right_mpc_solver_success"].append(
@@ -3563,6 +4820,14 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_mpc_fallback_used"].append(
         bool(mpc_diagnostics.get("fallback_used", False)) if mpc_diagnostics_valid else False
     )
+    buffers.trajectory_data["right_mpc_fallback_feasible"].append(
+        bool(mpc_diagnostics.get("fallback_feasible", False))
+        if mpc_diagnostics_valid
+        else False
+    )
+    buffers.trajectory_data["right_mpc_current_q_violation"].append(
+        mpc_scalar("current_q_violation")
+    )
     buffers.trajectory_data["right_mpc_q_margin_min"].append(
         float(mpc_margins.get("q", np.nan))
     )
@@ -3571,6 +4836,37 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     buffers.trajectory_data["right_mpc_ddq_margin_min"].append(
         float(mpc_margins.get("ddq", np.nan))
+    )
+    buffers.trajectory_data["right_mpc_one_step_q_model"].append(
+        dictionary_vector(mpc_prediction, "q", 5)
+    )
+    buffers.trajectory_data["right_mpc_one_step_dq_model"].append(
+        dictionary_vector(mpc_prediction, "dq", 5)
+    )
+    buffers.trajectory_data["right_mpc_one_step_ee_lin_acc_model"].append(
+        dictionary_vector(mpc_prediction, "ee_lin_acc", 3)
+    )
+    buffers.trajectory_data["right_mpc_one_step_ee_ang_acc_model"].append(
+        dictionary_vector(mpc_prediction, "ee_ang_acc", 3)
+    )
+    buffers.trajectory_data["right_mpc_one_step_gravity_error_model"].append(
+        dictionary_vector(mpc_prediction, "gravity_error", 2)
+    )
+    buffers.trajectory_data["right_mpc_one_step_ee_lin_acc_offset"].append(
+        dictionary_vector(mpc_prediction, "ee_lin_acc_offset", 3)
+    )
+    buffers.trajectory_data["right_mpc_one_step_ee_lin_acc_ddq_map"].append(
+        dictionary_matrix(mpc_prediction, "ee_lin_acc_ddq_map", (3, 5))
+    )
+    buffers.trajectory_data["right_mpc_one_step_ee_ang_acc_offset"].append(
+        dictionary_vector(mpc_prediction, "ee_ang_acc_offset", 3)
+    )
+    buffers.trajectory_data["right_mpc_one_step_ee_ang_acc_ddq_map"].append(
+        dictionary_matrix(mpc_prediction, "ee_ang_acc_ddq_map", (3, 5))
+    )
+    buffers.trajectory_data["right_mpc_one_step_cost_model"].append(mpc_cost_model)
+    buffers.trajectory_data["right_mpc_one_step_prediction_valid"].append(
+        mpc_prediction_valid
     )
     for field, source_name, index in (
         ("right_mpc_disturbance_acc_k0", "acc_world", 0),
@@ -3589,6 +4885,42 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data[
         "right_mpc_disturbance_rotation_terminal_angle"
     ].append(mpc_terminal_rotation_angle())
+    buffers.trajectory_data["right_mpc_template_heading_ready"].append(
+        bool(mpc_template_diagnostics.get("heading_ready", False))
+    )
+    buffers.trajectory_data["right_mpc_template_phase"].append(
+        template_scalar("phase")
+    )
+    buffers.trajectory_data["right_mpc_template_heading_yaw_world"].append(
+        template_scalar("heading_yaw_world")
+    )
+    for field, source_name in (
+        ("right_mpc_template_acc_world", "template_acc_world"),
+        ("right_mpc_template_omega_world", "template_omega_world"),
+        ("right_mpc_template_alpha_world", "template_alpha_world"),
+        ("right_mpc_template_anchor_acc_error", "anchor_acc_error"),
+        ("right_mpc_template_anchor_omega_error", "anchor_omega_error"),
+        ("right_mpc_template_anchor_alpha_error", "anchor_alpha_error"),
+        ("right_mpc_template_one_step_acc_error", "one_step_acc_error"),
+        ("right_mpc_template_one_step_omega_error", "one_step_omega_error"),
+        ("right_mpc_template_one_step_alpha_error", "one_step_alpha_error"),
+    ):
+        buffers.trajectory_data[field].append(template_vector(source_name))
+    buffers.trajectory_data[
+        "right_mpc_template_anchor_rotation_error_angle"
+    ].append(template_scalar("anchor_rotation_error_angle"))
+    buffers.trajectory_data[
+        "right_mpc_template_one_step_prediction_valid"
+    ].append(
+        bool(
+            mpc_template_diagnostics.get(
+                "one_step_prediction_valid", False
+            )
+        )
+    )
+    buffers.trajectory_data[
+        "right_mpc_template_one_step_rotation_error_angle"
+    ].append(template_scalar("one_step_rotation_error_angle"))
     buffers.trajectory_data["arm_policy_updated"].append(arm_policy_updated)
     buffers.trajectory_data["contact_count"].append(int(data.ncon))
     buffers.eval_data["time"].append(t)
@@ -3603,10 +4935,18 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.eval_data["right_ee_upright_alignment"].append(upright_alignment)
 
 
-def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None, lqr_cost_definition=None, arm_controller="lqr"):
+def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_frames, video_fps, has_renderer, video_width, video_height, data, scene_ids, eval_start_time, eval_end_time, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, perf_monitor=None, lqr_cost_definition=None, mpc_cost_definition=None, arm_controller="lqr"):
     trajectory_path = os.path.join(run_dir, "trajectory.npz")
     add_lqr_tracking_trajectory_data(buffers.trajectory_data, simulation_dt, lqr_cost_definition)
+    add_mpc_tracking_trajectory_data(
+        buffers.trajectory_data, simulation_dt, mpc_cost_definition
+    )
     lqr_tracking_diagnostics = compute_lqr_tracking_diagnostics(
+        buffers.trajectory_data,
+        eval_start_time,
+        eval_end_time,
+    )
+    mpc_diagnostics = compute_mpc_diagnostics(
         buffers.trajectory_data,
         eval_start_time,
         eval_end_time,
@@ -3615,6 +4955,19 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     right_arm_diagnostics_path = save_right_arm_diagnostics(run_dir, right_arm_diagnostics)
     lqr_tracking_diagnostics_path = save_lqr_tracking_diagnostics(
         run_dir, lqr_tracking_diagnostics, arm_controller
+    )
+    mpc_diagnostics_path = save_mpc_diagnostics(run_dir, mpc_diagnostics)
+    mpc_diagnostics_plot_path = save_mpc_diagnostics_plot(
+        run_dir,
+        buffers.trajectory_data,
+        eval_start_time,
+        eval_end_time,
+    )
+    mpc_diagnostics_preview_path = save_mpc_diagnostics_preview(
+        run_dir,
+        buffers.trajectory_data,
+        eval_start_time,
+        eval_end_time,
     )
     lqr_ddq_tracking_plot_path = save_lqr_ddq_tracking_plot(
         run_dir,
@@ -3648,6 +5001,9 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     saved_paths["lqr_tracking_diagnostics"] = lqr_tracking_diagnostics_path
     saved_paths["lqr_ddq_tracking_plot"] = lqr_ddq_tracking_plot_path
     saved_paths["lqr_tracking_preview"] = lqr_tracking_preview_path
+    saved_paths["mpc_diagnostics"] = mpc_diagnostics_path
+    saved_paths["mpc_diagnostics_plot"] = mpc_diagnostics_plot_path
+    saved_paths["mpc_diagnostics_preview"] = mpc_diagnostics_preview_path
     saved_paths["control_preview"] = control_preview_path
     saved_paths["heading_control_plot"] = heading_plot_path
     saved_paths["heading_control_diagnostics"] = heading_diagnostics_path
@@ -3684,6 +5040,55 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
                 f"({second.get('triggered_fraction_of_evaluation_steps', 0.0) * 100.0:.2f}%), "
                 f"accepted={second.get('accepted_count', 0)} "
                 f"({second.get('accepted_fraction_given_triggered', 0.0) * 100.0:.2f}% of triggered)"
+            )
+    if arm_controller == "mpc" and mpc_diagnostics["task_sample_count"]:
+        solver = mpc_diagnostics["solver"]
+        print(
+            "MPC solver success/fallback/current-q-outside fraction = "
+            f"{solver['success_fraction']:.3f}/"
+            f"{solver['fallback_fraction']:.3f}/"
+            f"{solver['current_q_violation_fraction']:.3f}"
+        )
+        task_total = mpc_diagnostics["weighted_task_cost_total"]
+        print(
+            "MPC one-step weighted task cost mean (model/actual/ratio) = "
+            f"{task_total['model_mean']:.4f}/"
+            f"{task_total['actual_mean']:.4f}/"
+            f"{task_total['ratio_actual_to_model_mean']:.3f}"
+        )
+        for name, label in (
+            ("linear_acceleration_decomposition", "linear acceleration"),
+            ("angular_acceleration_decomposition", "angular acceleration"),
+        ):
+            decomposition = mpc_diagnostics[name]
+            execution_rmse = np.linalg.norm(
+                decomposition["ddq_execution_effect"]["rmse"]
+            )
+            model_rmse = np.linalg.norm(
+                decomposition["remaining_task_model_error"]["rmse"]
+            )
+            print(
+                f"MPC {label} error-norm RMS "
+                f"(DDQ execution/task-model remainder) = "
+                f"{execution_rmse:.4f}/{model_rmse:.4f}"
+            )
+        template = mpc_diagnostics["disturbance_template"]
+        for name, label in (
+            ("acceleration", "a_B"),
+            ("angular_velocity", "omega_B"),
+            ("angular_acceleration", "alpha_B"),
+        ):
+            item = template[name]
+            anchor_rms = item["current_phase_absolute_match"][
+                "error_norm"
+            ]["rms"]
+            forecast_rms = item["anchored_one_step_prediction"][
+                "error_norm"
+            ]["rms"]
+            print(
+                f"MPC template {label} error-norm RMS "
+                f"(current match/one-step) = "
+                f"{anchor_rms:.4f}/{forecast_rms:.4f}"
             )
 
 

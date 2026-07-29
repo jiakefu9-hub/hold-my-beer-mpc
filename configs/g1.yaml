@@ -85,9 +85,11 @@ mpc_osqp_eps_abs: 0.001
 mpc_osqp_eps_rel: 0.001
 mpc_osqp_polishing: false
 mpc_failure_braking_gain: 4.0
-# 步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
+# H 系步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
+# 开启后第一完整周期只用于计算 H，约 0.8 s 后前馈开始生效。
 mpc_disturbance_feedforward_enabled: true
-# 可选：raw、half_smoothed、fully_smoothed。
+# 从 disturbance_model_new_heading/templates_heading 选择：
+# raw、half_smoothed、fully_smoothed。
 mpc_disturbance_template: fully_smoothed
 
 # ==============================

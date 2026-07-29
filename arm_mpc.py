@@ -240,7 +240,13 @@ class ArmMPCPolicy:
         dq_ref = np.clip(dq_ref, -self.max_dq, self.max_dq)
 
         one_step_prediction = self._build_one_step_diagnostics(
-            q, dq, q_ref, dq_ref, ddq_des, step_terms[0]
+            q,
+            dq,
+            q_ref,
+            dq_ref,
+            ddq_des,
+            acceleration_terms=step_terms[0],
+            end_state_terms=step_terms[1],
         )
         min_constraint_margins = self._constraint_margins(
             predicted_states, predicted_inputs
@@ -703,15 +709,31 @@ class ArmMPCPolicy:
             validated[name] = value.copy()
         return validated
 
-    def _build_one_step_diagnostics(self, q, dq, q_ref, dq_ref, ddq, terms):
+    def _build_one_step_diagnostics(
+        self,
+        q,
+        dq,
+        q_ref,
+        dq_ref,
+        ddq,
+        acceleration_terms,
+        end_state_terms,
+    ):
         x1 = np.concatenate([q_ref, dq_ref])
-        linear_acc = terms["D_acc"] + terms["C_acc"] @ dq + terms["B_acc"] @ ddq
-        angular_acc = (
-            terms["D_alpha"]
-            + terms["C_alpha"] @ dq
-            + terms["B_alpha"] @ ddq
+        # 区间加速度使用 k=0 的模型；区间末端重力使用 k=1 的预测姿态。
+        linear_acc = (
+            acceleration_terms["D_acc"]
+            + acceleration_terms["C_acc"] @ dq
+            + acceleration_terms["B_acc"] @ ddq
         )
-        gravity_error = terms["G_g"] @ x1 + terms["d_g"]
+        angular_acc = (
+            acceleration_terms["D_alpha"]
+            + acceleration_terms["C_alpha"] @ dq
+            + acceleration_terms["B_alpha"] @ ddq
+        )
+        gravity_error = (
+            end_state_terms["G_g"] @ x1 + end_state_terms["d_g"]
+        )
         posture_error = q_ref - self.default_q
         costs = {
             "linear_acceleration": float(
@@ -731,6 +753,18 @@ class ArmMPCPolicy:
             "ee_lin_acc": linear_acc.copy(),
             "ee_ang_acc": angular_acc.copy(),
             "gravity_error": gravity_error.copy(),
+            # 保存仿射模型，评估阶段可把 ddq_des 换成 ddq_real，
+            # 从而区分“DDQ 没执行出来”和“任务模型本身不准”。
+            "ee_lin_acc_offset": (
+                acceleration_terms["D_acc"]
+                + acceleration_terms["C_acc"] @ dq
+            ),
+            "ee_lin_acc_ddq_map": acceleration_terms["B_acc"].copy(),
+            "ee_ang_acc_offset": (
+                acceleration_terms["D_alpha"]
+                + acceleration_terms["C_alpha"] @ dq
+            ),
+            "ee_ang_acc_ddq_map": acceleration_terms["B_alpha"].copy(),
             "cost_terms": costs,
         }
 
@@ -788,6 +822,10 @@ class ArmMPCPolicy:
                 "ee_lin_acc": np.zeros(3, dtype=np.float64),
                 "ee_ang_acc": np.zeros(3, dtype=np.float64),
                 "gravity_error": np.zeros(2, dtype=np.float64),
+                "ee_lin_acc_offset": np.zeros(3, dtype=np.float64),
+                "ee_lin_acc_ddq_map": np.zeros((3, self.nu), dtype=np.float64),
+                "ee_ang_acc_offset": np.zeros(3, dtype=np.float64),
+                "ee_ang_acc_ddq_map": np.zeros((3, self.nu), dtype=np.float64),
                 "cost_terms": {name: 0.0 for name in self.COST_TERM_NAMES},
             },
         }
