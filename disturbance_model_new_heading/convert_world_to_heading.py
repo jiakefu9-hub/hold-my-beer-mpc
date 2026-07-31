@@ -36,6 +36,7 @@ REQUIRED_KEYS = (
     "phase",
     "torso_quaternion",
     "R_world_from_imu",
+    "torso_linear_velocity_world",
     "torso_linear_acceleration_world",
     "torso_angular_velocity_world",
     "torso_angular_acceleration_world",
@@ -74,6 +75,9 @@ def build_heading_data(source, source_path):
     rotation_W_B = np.asarray(
         source["R_world_from_imu"], dtype=np.float64
     )
+    linear_velocity_W = np.asarray(
+        source["torso_linear_velocity_world"], dtype=np.float64
+    )
     acc_W = np.asarray(
         source["torso_linear_acceleration_world"], dtype=np.float64
     )
@@ -90,6 +94,7 @@ def build_heading_data(source, source_path):
         phase,
         quaternion_W_B,
         rotation_W_B,
+        linear_velocity_W,
         acc_W,
         omega_W,
         alpha_W,
@@ -170,6 +175,9 @@ def build_heading_data(source, source_path):
         "nij,njk->nik", rotation_H_W, rotation_W_B
     )
     quaternion_H_B = rotmat_to_quaternion_wxyz(rotation_H_B)
+    linear_velocity_H = np.einsum(
+        "nij,nj->ni", rotation_H_W, linear_velocity_W
+    )
     acc_H = np.einsum("nij,nj->ni", rotation_H_W, acc_W)
     omega_H = np.einsum("nij,nj->ni", rotation_H_W, omega_W)
     alpha_H = np.einsum("nij,nj->ni", rotation_H_W, alpha_W)
@@ -179,6 +187,15 @@ def build_heading_data(source, source_path):
             np.linalg.norm(
                 np.einsum("nij,nj->ni", rotation_W_H, acc_H)
                 - acc_W,
+                axis=1,
+            )
+        ),
+        "roundtrip_linear_velocity_max_error": np.max(
+            np.linalg.norm(
+                np.einsum(
+                    "nij,nj->ni", rotation_W_H, linear_velocity_H
+                )
+                - linear_velocity_W,
                 axis=1,
             )
         ),
@@ -220,6 +237,7 @@ def build_heading_data(source, source_path):
         "R_heading_from_world": rotation_H_W,
         "R_heading_from_torso": rotation_H_B,
         "torso_quaternion_heading": quaternion_H_B,
+        "torso_linear_velocity_heading": linear_velocity_H,
         "torso_linear_acceleration_heading": acc_H,
         "torso_angular_velocity_heading": omega_H,
         "torso_angular_acceleration_heading": alpha_H,
@@ -258,6 +276,9 @@ def save_preview(data, path):
                 "heading_yaw",
                 "heading_concentration",
                 "heading_fallback",
+                "linear_velocity_H_x",
+                "linear_velocity_H_y",
+                "linear_velocity_H_z",
                 "acc_H_x",
                 "acc_H_y",
                 "acc_H_z",
@@ -285,6 +306,7 @@ def save_preview(data, path):
                     data["heading_yaw"][i],
                     data["heading_concentration"][i],
                     int(data["heading_fallback"][i]),
+                    *data["torso_linear_velocity_heading"][i],
                     *data["torso_linear_acceleration_heading"][i],
                     *data["torso_angular_velocity_heading"][i],
                     *data["torso_angular_acceleration_heading"][i],

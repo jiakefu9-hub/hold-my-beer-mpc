@@ -27,6 +27,14 @@ class DisturbanceInput:
     rot_world_body: Optional[np.ndarray] = None
 
 
+@dataclass(frozen=True)
+class DisturbanceHorizon:
+    """MPC 的节点扰动与控制区间扰动，两者时间语义不可混用。"""
+
+    nodes: tuple
+    intervals: tuple
+
+
 @dataclass
 class KinematicsCache:
     J_v: Optional[np.ndarray] = None
@@ -41,12 +49,21 @@ class ControllerHelpers:
     data: Any = None
     disturbance: Optional[DisturbanceInput] = None
     disturbance_prediction: Optional[tuple] = None
+    interval_disturbance_prediction: Optional[tuple] = None
     kinematics: Optional[KinematicsCache] = None
     torso_relative_position_reference: Optional[np.ndarray] = None
     compute_gravity_error: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None
     compute_lqr_terms: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, Optional[DisturbanceInput]], dict]] = None
     compute_mpc_terms: Optional[
-        Callable[[np.ndarray, np.ndarray, Optional[DisturbanceInput]], dict]
+        Callable[
+            [
+                np.ndarray,
+                np.ndarray,
+                Optional[DisturbanceInput],
+                Optional[DisturbanceInput],
+            ],
+            dict,
+        ]
     ] = None
 
 
@@ -129,6 +146,7 @@ class KinematicsHelper:
         data: Any,
         disturbance: Optional[DisturbanceInput] = None,
         disturbance_prediction: Optional[tuple] = None,
+        interval_disturbance_prediction: Optional[tuple] = None,
     ) -> ControllerHelpers:
         qpos_ref = np.asarray(data.qpos, dtype=np.float64).copy()
         position_reference = (
@@ -144,14 +162,17 @@ class KinematicsHelper:
             data=data,  # 当前仿真步的机器人状态 d（qpos/qvel 等）
             disturbance=disturbance,  # main_sim 中由世界系躯干 acc/omega/alpha/R 构建的完整扰动
             disturbance_prediction=disturbance_prediction,
+            interval_disturbance_prediction=(
+                interval_disturbance_prediction
+            ),
             kinematics=self.compute_kinematics_cache(data),  # 当前姿态下末端雅可比 J_v/J_w 及其导数
             torso_relative_position_reference=position_reference,
             compute_gravity_error=lambda q, W_R_I: self.compute_tilt_error(q, W_R_I, qpos_ref),
             compute_lqr_terms=lambda q, dq, W_R_I, dist=None: self.compute_lqr_terms(
                 q, dq, W_R_I, qpos_ref, dist, position_reference
             ),
-            compute_mpc_terms=lambda q, dq, dist=None: self.compute_mpc_terms(
-                q, dq, qpos_ref, dist
+            compute_mpc_terms=lambda q, dq, node_dist=None, interval_dist=None: self.compute_mpc_terms(
+                q, dq, qpos_ref, node_dist, interval_dist
             ),
         )
 
@@ -279,11 +300,12 @@ class KinematicsHelper:
         q_right_arm: np.ndarray,
         dq_right_arm: np.ndarray,
         qpos_reference: np.ndarray,
-        disturbance: Optional[DisturbanceInput] = None,
+        node_disturbance: Optional[DisturbanceInput] = None,
+        interval_disturbance: Optional[DisturbanceInput] = None,
     ) -> dict:
         """构造 MPC 单个预测步的局部仿射观测模型。
 
-        【核心代码】这里只提供末端线/角加速度与二维重力误差。
+        【核心代码】这里只提供末端线/角加速度、世界系角速度与二维重力误差。
         torso-relative 位置既不进入代价，也不进入约束。
         """
         q = np.asarray(q_right_arm, dtype=np.float64)
@@ -303,11 +325,27 @@ class KinematicsHelper:
             self._scratch.site_xmat[self.ee_site_id].reshape(3, 3).copy()
         )
 
-        omega_B = self._disturbance_vector(disturbance, "omega_world")
-        a_B = self._disturbance_vector(disturbance, "acc_world")
-        alpha_B = self._disturbance_vector(disturbance, "alpha_world")
+        # 【核心代码】节点量描述 t_k；区间量描述 u_k 将执行的
+        # [t_k,t_{k+1})。终端没有 u_N，未给区间量时兼容回退到节点量。
+        interval = (
+            node_disturbance
+            if interval_disturbance is None
+            else interval_disturbance
+        )
+        omega_B_node = self._disturbance_vector(
+            node_disturbance, "omega_world"
+        )
+        omega_B_interval = self._disturbance_vector(
+            interval, "omega_world"
+        )
+        a_B_interval = self._disturbance_vector(
+            interval, "acc_world"
+        )
+        alpha_B_interval = self._disturbance_vector(
+            interval, "alpha_world"
+        )
         W_R_B_predicted = self._disturbance_rotation(
-            disturbance, W_R_B_current
+            node_disturbance, W_R_B_current
         )
 
         # 【核心代码】scratch 中的 p_E-p_B 已是当前 base 姿态下的世界系杠杆臂。
@@ -329,16 +367,26 @@ class KinematicsHelper:
         gravity_error = gravity_end[:2]
 
         return {
-            "D_acc": a_B
-            + np.cross(alpha_B, r_BE)
+            "D_acc": a_B_interval
+            + np.cross(alpha_B_interval, r_BE)
             + np.cross(
-                omega_B, np.cross(omega_B, r_BE)
+                omega_B_interval,
+                np.cross(omega_B_interval, r_BE),
             ),
-            "C_acc": 2.0 * self._skew(omega_B) @ J_v + dJ_v,
+            "C_acc": (
+                2.0 * self._skew(omega_B_interval) @ J_v + dJ_v
+            ),
             "B_acc": J_v,
-            "D_alpha": alpha_B,
-            "C_alpha": self._skew(omega_B) @ J_w + dJ_w,
+            "D_alpha": alpha_B_interval,
+            "C_alpha": (
+                self._skew(omega_B_interval) @ J_w + dJ_w
+            ),
             "B_alpha": J_w,
+            # 【核心代码】世界系末端角速度：
+            # omega_E = omega_B + J_omega(q) dq。
+            # J_w 已在上面用 delta_R 修正到该预测步的 base 姿态。
+            "D_omega": omega_B_node,
+            "C_omega": J_w,
             "d_g": gravity_error - J_g @ q,
             "G_g": np.hstack([J_g, np.zeros_like(J_g)]),
             "gravity_error": gravity_error.copy(),

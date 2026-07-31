@@ -68,7 +68,10 @@ ddq_torso_alpha_limit: 40.0
 mpc_horizon: 12
 mpc_q_ee_acc: 1.0
 mpc_q_ee_alpha: 0.075
-mpc_q_gravity: 30.0
+# 世界系末端角速度权重；用于消除“角加速度为零但仍带已有转速”的盲区。
+mpc_q_ee_omega: 2.0
+# 六轮实验证明强行偏置 x/y 会增加关节盒回退，最终保留等权二维重力误差。
+mpc_q_gravity: [30.0, 30.0]
 # 五个关节趋近零位的正则权重；双层硬边界已经提供肩部运行裕量，
 # 因此比上一轮略微降低正则，避免过多挤占加速度和重力任务。
 mpc_q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
@@ -100,9 +103,17 @@ mpc_failure_max_ddq_scale: 0.5
 # H 系步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
 # 开启后第一完整周期只用于计算 H，约 0.8 s 后前馈开始生效。
 mpc_disturbance_feedforward_enabled: true
-# 从 disturbance_model_new_heading/templates_heading 选择：
-# raw、half_smoothed、fully_smoothed；同配置闭环 A/B 后默认采用 half_smoothed。
-mpc_disturbance_template: half_smoothed
+# 2 ms 相位网格上的未来 6 ms 滑动区间模板；u_k 与 interval[k] 配对。
+mpc_disturbance_template_dir: disturbance_model_new_heading/templates_heading_interval
+# raw、half_smoothed、fully_smoothed；本轮闭环对照选择 raw。
+mpc_disturbance_template: raw
+# 闭环 A/B 表明关闭后综合任务代价变差，因此保留长期模板修正量。
+mpc_disturbance_slow_bias_enabled: true
+# 快速周期量由模板负责，持续测量差通过该时间常数缓慢形成长期修正。
+mpc_disturbance_slow_bias_time_constant: 0.4
+# MPC 独立低延迟通道，不改变 LQR 继续使用的 ddq_torso_* 滤波参数。
+mpc_torso_acc_filter_alpha: 0.50
+mpc_torso_alpha_filter_alpha: 0.50
 
 # ==============================
 # DDQ 到力矩的共用执行层

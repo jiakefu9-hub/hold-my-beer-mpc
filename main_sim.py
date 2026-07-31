@@ -164,8 +164,16 @@ if __name__ == "__main__":
         arm_policy.get_cost_definition() if arm_controller == "mpc" else None
     )
     controller_meta = controller_setup.metadata
+    filter_keys = (
+        {
+            "acc_alpha_key": "mpc_torso_acc_filter_alpha",
+            "alpha_alpha_key": "mpc_torso_alpha_filter_alpha",
+        }
+        if arm_controller == "mpc"
+        else {}
+    )
     torso_acceleration_filter = TorsoAccelerationFilter(
-        config, enabled=acceleration_controller
+        config, enabled=acceleration_controller, **filter_keys
     )
     disturbance_predictor = None
     if arm_controller == "mpc" and bool(
@@ -174,8 +182,10 @@ if __name__ == "__main__":
         disturbance_predictor = PhaseDisturbancePredictor(
             template_dir=os.path.join(
                 repo_dir,
-                "disturbance_model_new_heading",
-                "templates_heading",
+                config.get(
+                    "mpc_disturbance_template_dir",
+                    "disturbance_model_new_heading/templates_heading_interval",
+                ),
             ),
             variant=config.get(
                 "mpc_disturbance_template", "fully_smoothed"
@@ -184,6 +194,14 @@ if __name__ == "__main__":
             horizon=arm_policy.horizon,
             acc_limit=torso_acceleration_filter.acc_limit,
             alpha_limit=torso_acceleration_filter.alpha_limit,
+            slow_bias_enabled=bool(
+                config.get("mpc_disturbance_slow_bias_enabled", True)
+            ),
+            slow_bias_time_constant=float(
+                config.get(
+                    "mpc_disturbance_slow_bias_time_constant", 0.4
+                )
+            ),
         )
         controller_meta["mpc_config"][
             "disturbance_feedforward"
@@ -354,7 +372,7 @@ if __name__ == "__main__":
             right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
             if counter % arm_control_decimation == 0:
                 perf_monitor.start_arm_control()
-                disturbance_prediction = (
+                disturbance_horizon = (
                     None
                     if disturbance_predictor is None
                     else disturbance_predictor.predict(
@@ -362,11 +380,24 @@ if __name__ == "__main__":
                         torso_disturbance,
                     )
                 )
+                disturbance_prediction = (
+                    None
+                    if disturbance_horizon is None
+                    else disturbance_horizon.nodes
+                )
+                interval_disturbance_prediction = (
+                    None
+                    if disturbance_horizon is None
+                    else disturbance_horizon.intervals
+                )
                 # right_arm_helpers 封装当前步的运动学量，以及 PID/LQR/MPC 各自的线性化回调。
                 right_arm_helpers = right_arm_helper.build_helpers(
                     d,
                     disturbance=torso_disturbance,
                     disturbance_prediction=disturbance_prediction,
+                    interval_disturbance_prediction=(
+                        interval_disturbance_prediction
+                    ),
                 )
                 right_ee_position_reference_torso = right_arm_helpers.torso_relative_position_reference.copy()
                 if acceleration_controller:

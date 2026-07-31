@@ -19,6 +19,7 @@ class ArmMPCPolicy:
     COST_TERM_NAMES = (
         "linear_acceleration",
         "angular_acceleration",
+        "angular_velocity",
         "gravity",
         "posture",
         "velocity",
@@ -46,6 +47,7 @@ class ArmMPCPolicy:
         horizon=12,
         q_ee_acc=1.0,
         q_ee_alpha=0.075,
+        q_ee_omega=0.0,
         q_gravity=30.0,
         q_posture=0.05,
         q_vel=0.02,
@@ -91,6 +93,8 @@ class ArmMPCPolicy:
 
         self.Q_ee_acc = self._make_weight(q_ee_acc, 3, "q_ee_acc")
         self.Q_ee_alpha = self._make_weight(q_ee_alpha, 3, "q_ee_alpha")
+        # 默认权重为零，因此未配置时与原 MPC 完全一致。
+        self.Q_ee_omega = self._make_weight(q_ee_omega, 3, "q_ee_omega")
         # MPC 使用末端系重力向量的 x/y 分量，因此这里严格是 2x2。
         self.Qg = self._make_weight(q_gravity, 2, "q_gravity")
         self.Qq = self._make_weight(q_posture, self.n, "q_posture")
@@ -170,8 +174,9 @@ class ArmMPCPolicy:
     def compute_action(self, arm_obs, helpers=None):
         """求解一轮 MPC，返回 ``q_ref, dq_ref, ddq_des``。
 
-        ``helpers.compute_mpc_terms(q, dq, disturbance)`` 必须返回：
-        ``D_acc/C_acc/B_acc/D_alpha/C_alpha/B_alpha/G_g/d_g/gravity_error``。
+        ``helpers.compute_mpc_terms(q, dq, node_dist, interval_dist)`` 必须返回：
+        ``D_acc/C_acc/B_acc/D_alpha/C_alpha/B_alpha/D_omega/C_omega/``
+        ``G_g/d_g/gravity_error``。
         其中 ``G_g`` 为 2x10，``d_g`` 和 ``gravity_error`` 均为 2 维。
         """
         q = np.asarray(self._obs_get(arm_obs, "current_q"), dtype=np.float64).reshape(-1)
@@ -191,7 +196,11 @@ class ArmMPCPolicy:
                 f"{self.control_dt} 不一致。"
             )
 
-        terms_fn, disturbance_prediction = self._resolve_terms_helper(helpers)
+        (
+            terms_fn,
+            disturbance_prediction,
+            interval_disturbance_prediction,
+        ) = self._resolve_terms_helper(helpers)
         x_measured = np.concatenate([q, dq])
 
         start_time = time.perf_counter()
@@ -200,16 +209,26 @@ class ArmMPCPolicy:
         working_inputs = self._shift_input_plan()
         working_states = self._rollout(x_measured, working_inputs)
 
-        # 【核心代码】关闭前馈时序列是当前测量的零阶保持；开启时每步使用
-        # 相位模板预测，并带有从当前姿态积分得到的 R_B,k。
+        # 【核心代码】u_k 的加速度项使用 [t_k,t_{k+1}) 区间扰动；
+        # 重力、姿态和角速度状态项仍使用节点扰动 d_k。
         step_terms = []
-        for k in range(self.horizon + 1):
+        for k in range(self.horizon):
             raw_terms = terms_fn(
                 working_states[k, : self.n],
                 working_states[k, self.n :],
                 disturbance_prediction[k],
+                interval_disturbance_prediction[k],
             )
             step_terms.append(self._validate_step_terms(raw_terms, k))
+        terminal_terms = terms_fn(
+            working_states[self.horizon, : self.n],
+            working_states[self.horizon, self.n :],
+            disturbance_prediction[self.horizon],
+            None,
+        )
+        step_terms.append(
+            self._validate_step_terms(terminal_terms, self.horizon)
+        )
 
         # 【核心代码】组装各阶段二次代价；这里没有 torso-relative 位置项。
         stage_hessians, linear_cost = self._build_cost(step_terms)
@@ -322,6 +341,11 @@ class ArmMPCPolicy:
             "disturbance_prediction": self._disturbance_diagnostics(
                 disturbance_prediction
             ),
+            "interval_disturbance_prediction": (
+                self._disturbance_diagnostics(
+                    interval_disturbance_prediction
+                )
+            ),
             "current_q_violation": float(
                 max(
                     np.max(self.joint_limits[:, 0] - q),
@@ -356,6 +380,7 @@ class ArmMPCPolicy:
             "term_names": self.COST_TERM_NAMES,
             "Q_ee_acc": self.Q_ee_acc.copy(),
             "Q_ee_alpha": self.Q_ee_alpha.copy(),
+            "Q_ee_omega": self.Q_ee_omega.copy(),
             "Qg": self.Qg.copy(),
             "Qq": self.Qq.copy(),
             "Qv": self.Qv.copy(),
@@ -406,10 +431,12 @@ class ArmMPCPolicy:
             terms = step_terms[k]
             E_acc = terms["C_acc"] @ self.Sv
             E_alpha = terms["C_alpha"] @ self.Sv
+            E_omega = terms["C_omega"] @ self.Sv
 
             Qxx = (
                 E_acc.T @ self.Q_ee_acc @ E_acc
                 + E_alpha.T @ self.Q_ee_alpha @ E_alpha
+                + E_omega.T @ self.Q_ee_omega @ E_omega
                 + terms["G_g"].T @ self.Qg @ terms["G_g"]
                 + self.Sq.T @ self.Qq @ self.Sq
                 + self.Sv.T @ self.Qv @ self.Sv
@@ -426,6 +453,7 @@ class ArmMPCPolicy:
             fx = (
                 E_acc.T @ self.Q_ee_acc @ terms["D_acc"]
                 + E_alpha.T @ self.Q_ee_alpha @ terms["D_alpha"]
+                + E_omega.T @ self.Q_ee_omega @ terms["D_omega"]
                 + terms["G_g"].T @ self.Qg @ terms["d_g"]
                 - self.Sq.T @ self.Qq @ self.default_q
             )
@@ -445,16 +473,24 @@ class ArmMPCPolicy:
 
         # 终端没有 u_N，也没有末端加速度项。
         terminal = step_terms[self.horizon]
+        Q_ee_omega_terminal = self.terminal_scale * self.Q_ee_omega
         Qg_terminal = self.terminal_scale * self.Qg
         Qq_terminal = self.terminal_scale * self.Qq
         Qv_terminal = self.terminal_scale * self.Qv
+        E_omega_terminal = terminal["C_omega"] @ self.Sv
         Qxx_terminal = (
-            terminal["G_g"].T @ Qg_terminal @ terminal["G_g"]
+            E_omega_terminal.T
+            @ Q_ee_omega_terminal
+            @ E_omega_terminal
+            + terminal["G_g"].T @ Qg_terminal @ terminal["G_g"]
             + self.Sq.T @ Qq_terminal @ self.Sq
             + self.Sv.T @ Qv_terminal @ self.Sv
         )
         fx_terminal = (
-            terminal["G_g"].T @ Qg_terminal @ terminal["d_g"]
+            E_omega_terminal.T
+            @ Q_ee_omega_terminal
+            @ terminal["D_omega"]
+            + terminal["G_g"].T @ Qg_terminal @ terminal["d_g"]
             - self.Sq.T @ Qq_terminal @ self.default_q
         )
         H_terminal = 2.0 * Qxx_terminal
@@ -817,6 +853,9 @@ class ArmMPCPolicy:
             terms_fn = helpers.get("compute_mpc_terms")
             disturbance = helpers.get("disturbance")
             prediction = helpers.get("disturbance_prediction")
+            interval_prediction = helpers.get(
+                "interval_disturbance_prediction"
+            )
         else:
             terms_fn = None if helpers is None else getattr(helpers, "compute_mpc_terms", None)
             disturbance = None if helpers is None else getattr(helpers, "disturbance", None)
@@ -824,6 +863,15 @@ class ArmMPCPolicy:
                 None
                 if helpers is None
                 else getattr(helpers, "disturbance_prediction", None)
+            )
+            interval_prediction = (
+                None
+                if helpers is None
+                else getattr(
+                    helpers,
+                    "interval_disturbance_prediction",
+                    None,
+                )
             )
         if not callable(terms_fn):
             raise ValueError("ArmMPCPolicy 需要 helpers.compute_mpc_terms(...) 支持。")
@@ -836,7 +884,16 @@ class ArmMPCPolicy:
                     "disturbance_prediction 必须包含 horizon+1 个预测步，"
                     f"当前为 {len(prediction)}。"
                 )
-        return terms_fn, prediction
+        if interval_prediction is None:
+            interval_prediction = prediction[: self.horizon]
+        else:
+            interval_prediction = tuple(interval_prediction)
+            if len(interval_prediction) != self.horizon:
+                raise ValueError(
+                    "interval_disturbance_prediction 必须包含 horizon "
+                    f"个控制区间，当前为 {len(interval_prediction)}。"
+                )
+        return terms_fn, prediction, interval_prediction
 
     @staticmethod
     def _disturbance_diagnostics(prediction):
@@ -877,6 +934,8 @@ class ArmMPCPolicy:
             "D_alpha": (3,),
             "C_alpha": (3, self.n),
             "B_alpha": (3, self.nu),
+            "D_omega": (3,),
+            "C_omega": (3, self.n),
             "G_g": (2, self.nx),
             "d_g": (2,),
             "gravity_error": (2,),
@@ -921,6 +980,12 @@ class ArmMPCPolicy:
         gravity_error = (
             end_state_terms["G_g"] @ x1 + end_state_terms["d_g"]
         )
+        # 角速度在区间末端 x1 上评估；u0 通过二阶积分器先改变 dq1，
+        # 再进入 omega_E = omega_B + J_omega dq1。
+        angular_velocity = (
+            end_state_terms["D_omega"]
+            + end_state_terms["C_omega"] @ dq_ref
+        )
         posture_error = q_ref - self.default_q
         costs = {
             "linear_acceleration": float(
@@ -928,6 +993,9 @@ class ArmMPCPolicy:
             ),
             "angular_acceleration": float(
                 angular_acc @ self.Q_ee_alpha @ angular_acc
+            ),
+            "angular_velocity": float(
+                angular_velocity @ self.Q_ee_omega @ angular_velocity
             ),
             "gravity": float(gravity_error @ self.Qg @ gravity_error),
             "posture": float(posture_error @ self.Qq @ posture_error),
@@ -939,6 +1007,7 @@ class ArmMPCPolicy:
             "dq": dq_ref.copy(),
             "ee_lin_acc": linear_acc.copy(),
             "ee_ang_acc": angular_acc.copy(),
+            "ee_ang_vel": angular_velocity.copy(),
             "gravity_error": gravity_error.copy(),
             # 保存仿射模型，评估阶段可把 ddq_des 换成 ddq_real，
             # 从而区分“DDQ 没执行出来”和“任务模型本身不准”。
@@ -1002,6 +1071,20 @@ class ArmMPCPolicy:
                     (self.horizon + 1, 3, 3), np.nan, dtype=np.float64
                 ),
             },
+            "interval_disturbance_prediction": {
+                "acc_world": np.zeros(
+                    (self.horizon, 3), dtype=np.float64
+                ),
+                "omega_world": np.zeros(
+                    (self.horizon, 3), dtype=np.float64
+                ),
+                "alpha_world": np.zeros(
+                    (self.horizon, 3), dtype=np.float64
+                ),
+                "rot_world_body": np.full(
+                    (self.horizon, 3, 3), np.nan, dtype=np.float64
+                ),
+            },
             "current_q_violation": 0.0,
             "current_q_safety_violation": 0.0,
             "recovery_active": False,
@@ -1010,6 +1093,7 @@ class ArmMPCPolicy:
                 "dq": np.zeros(self.n, dtype=np.float64),
                 "ee_lin_acc": np.zeros(3, dtype=np.float64),
                 "ee_ang_acc": np.zeros(3, dtype=np.float64),
+                "ee_ang_vel": np.zeros(3, dtype=np.float64),
                 "gravity_error": np.zeros(2, dtype=np.float64),
                 "ee_lin_acc_offset": np.zeros(3, dtype=np.float64),
                 "ee_lin_acc_ddq_map": np.zeros((3, self.nu), dtype=np.float64),

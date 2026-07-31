@@ -24,6 +24,14 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
     return (target_q - q) * kp + (target_dq - dq) * kd
 
 
+def get_site_velocity_world(model, data, site_id):
+    """与主仿真一致地计算 IMU site 的世界系线速度和角速度。"""
+    jacp = np.zeros((3, model.nv), dtype=np.float64)
+    jacr = np.zeros((3, model.nv), dtype=np.float64)
+    mujoco.mj_jacSite(model, data, jacp, jacr, site_id)
+    return jacp @ data.qvel, jacr @ data.qvel
+
+
 def normalize_quaternion_wxyz(q):
     q = np.asarray(q, dtype=np.float64)
     n = np.linalg.norm(q)
@@ -69,6 +77,7 @@ def save_csv(csv_path, data, yaw_fit):
             "lin_acc_local_x", "lin_acc_local_y", "lin_acc_local_z",
             "ang_vel_local_x", "ang_vel_local_y", "ang_vel_local_z",
             "ang_acc_local_x", "ang_acc_local_y", "ang_acc_local_z",
+            "lin_vel_world_x", "lin_vel_world_y", "lin_vel_world_z",
             "lin_acc_world_x", "lin_acc_world_y", "lin_acc_world_z",
             "ang_vel_world_x", "ang_vel_world_y", "ang_vel_world_z",
             "ang_acc_world_x", "ang_acc_world_y", "ang_acc_world_z",
@@ -82,6 +91,7 @@ def save_csv(csv_path, data, yaw_fit):
                 *data["torso_linear_acceleration_local"][i],
                 *data["torso_angular_velocity_local"][i],
                 *data["torso_angular_acceleration_local"][i],
+                *data["torso_linear_velocity_world"][i],
                 *data["torso_linear_acceleration_world"][i],
                 *data["torso_angular_velocity_world"][i],
                 *data["torso_angular_acceleration_world"][i],
@@ -227,6 +237,7 @@ def main():
         "torso_linear_acceleration_local": [],
         "torso_angular_velocity_local": [],
         "torso_angular_acceleration_local": [],
+        "torso_linear_velocity_world": [],
         "torso_linear_acceleration_world": [],
         "torso_angular_velocity_world": [],
         "torso_angular_acceleration_world": [],
@@ -257,6 +268,13 @@ def main():
     left_foot_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "left_ankle_roll_link")
     right_foot_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "right_ankle_roll_link")
     torso_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
+    imu_site_id = mujoco.mj_name2id(
+        m, mujoco.mjtObj.mjOBJ_SITE, "imu_in_torso"
+    )
+    if imu_site_id < 0:
+        raise ValueError("模型中找不到 imu_in_torso site。")
+    # 第一个 step 前样本也必须具有有效的 sensor/site 派生量。
+    mujoco.mj_forward(m, d)
 
     policy = torch.jit.load(policy_path)
 
@@ -292,21 +310,23 @@ def main():
             )
             d.ctrl[12:23] = tau_arm_waist
 
-            mujoco.mj_step(m, d)
-
-            # 收集 torso 原始扰动数据，并同步转换到世界系
+            # 【核心数据】在 mj_step 前、与主仿真 MPC 读取扰动完全相同的
+            # 物理时刻采样。旧采集器在 step 后读取却沿用 step 前相位，
+            # 会给模板带来固定 2 ms 相位偏移。
             phase = count % period / period
             linear_acc_local = d.sensordata[accel_adr:accel_adr + 3].copy()
-            angular_vel_local = d.sensordata[gyro_adr:gyro_adr + 3].copy()
+            linear_vel_world, angular_vel_world = get_site_velocity_world(
+                m, d, imu_site_id
+            )
+            R_W_IMU = d.site_xmat[imu_site_id].reshape(3, 3).copy()
+            angular_vel_local = R_W_IMU.T @ angular_vel_world
             angular_acc_local = np.zeros(3) if counter == 0 else (angular_vel_local - prev_omega_local) / simulation_dt
             prev_omega_local = angular_vel_local.copy()
 
-            quat = d.xquat[torso_id].copy()
+            quat = np.empty(4, dtype=np.float64)
+            mujoco.mju_mat2Quat(quat, R_W_IMU.reshape(-1))
             yaw = quat_to_yaw_wxyz(quat)
-            R_W_IMU = quat_wxyz_to_rotmat_world_from_imu(quat)
-            gravity_reaction_world = np.array([0.0, 0.0, 9.81], dtype=np.float64)
-            linear_acc_world = R_W_IMU @ linear_acc_local - gravity_reaction_world
-            angular_vel_world = R_W_IMU @ angular_vel_local
+            linear_acc_world = R_W_IMU @ linear_acc_local + m.opt.gravity
             angular_acc_world = np.zeros(3) if counter == 0 else (angular_vel_world - prev_omega_world) / simulation_dt
             prev_omega_world = angular_vel_world.copy()
 
@@ -315,6 +335,7 @@ def main():
             data["torso_linear_acceleration_local"].append(linear_acc_local)
             data["torso_angular_velocity_local"].append(angular_vel_local)
             data["torso_angular_acceleration_local"].append(angular_acc_local)
+            data["torso_linear_velocity_world"].append(linear_vel_world)
             data["torso_linear_acceleration_world"].append(linear_acc_world)
             data["torso_angular_velocity_world"].append(angular_vel_world)
             data["torso_angular_acceleration_world"].append(angular_acc_world)
@@ -329,6 +350,8 @@ def main():
                     f"[采集中] t={count:.2f}s | phase={phase:.2f} | "
                     f"yaw={yaw:.4f} rad | acc_local_z={linear_acc_local[2]:.2f} m/s² | acc_world_z={linear_acc_world[2]:.2f} m/s²"
                 )
+
+            mujoco.mj_step(m, d)
 
             counter += 1
             if counter % control_decimation == 0:
@@ -368,6 +391,7 @@ def main():
     data["torso_linear_acceleration_local"] = np.asarray(data["torso_linear_acceleration_local"], dtype=np.float64)
     data["torso_angular_velocity_local"] = np.asarray(data["torso_angular_velocity_local"], dtype=np.float64)
     data["torso_angular_acceleration_local"] = np.asarray(data["torso_angular_acceleration_local"], dtype=np.float64)
+    data["torso_linear_velocity_world"] = np.asarray(data["torso_linear_velocity_world"], dtype=np.float64)
     data["torso_linear_acceleration_world"] = np.asarray(data["torso_linear_acceleration_world"], dtype=np.float64)
     data["torso_angular_velocity_world"] = np.asarray(data["torso_angular_velocity_world"], dtype=np.float64)
     data["torso_angular_acceleration_world"] = np.asarray(data["torso_angular_acceleration_world"], dtype=np.float64)
