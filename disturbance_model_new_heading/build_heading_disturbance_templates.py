@@ -85,7 +85,7 @@ def _load_world_source(source):
         missing = [key for key in required if key not in world.files]
         if missing:
             raise KeyError(
-                "严格 6 ms 区间模板需要重新采集的速度字段，缺少: "
+                "严格控制区间模板需要重新采集的速度字段，缺少: "
                 f"{missing}"
             )
         return path, {key: world[key].copy() for key in world.files}
@@ -140,7 +140,7 @@ def _build_interval_samples(source, control_dt):
         (omega_W[end] - omega_W[start]) / control_dt,
     )
 
-    # 6 ms = 3 个 2 ms 子区间；复合梯形积分的归一化权重如下。
+    # 将控制区间拆成原始采样子区间；复合梯形积分的归一化权重如下。
     weights = np.ones(interval_steps + 1, dtype=np.float64)
     weights[[0, -1]] = 0.5
     weights /= np.sum(weights)
@@ -285,7 +285,7 @@ def build_raw_template(
     )
     if np.any(interval_counts == 0):
         missing = np.where(interval_counts == 0)[0].tolist()
-        raise ValueError(f"6 ms 区间模板存在空 phase bin: {missing}")
+        raise ValueError(f"控制区间模板存在空 phase bin: {missing}")
 
     return {
         "template_schema_version": np.array(2, dtype=np.int64),
@@ -404,7 +404,7 @@ def smooth_template(
     for key in interval_keys:
         raw_value = np.asarray(raw_template[key])
         out[key + "_raw"] = raw_value
-        # half-smoothed 有意保留区间冲击；fully-smoothed 只做 6 ms
+        # half-smoothed 有意保留区间冲击；fully-smoothed 只做一个控制区间
         # 宽度的小平滑，不再沿用旧模板约 40 ms 的削峰窗口。
         if fully_smoothed:
             out[key] = circular_moving_average(

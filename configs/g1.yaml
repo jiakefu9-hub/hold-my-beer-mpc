@@ -6,7 +6,7 @@ xml_path: "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml"
 simulation_dt: 0.002
 # Locomotion policy update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
 control_decimation: 10
-# Arm controller update frequency: simulation_dt * arm_control_decimation = 0.006; 166.7Hz
+# Arm controller period = simulation_dt * arm_control_decimation.
 arm_control_decimation: 3
 # 右臂控制方式："pid"、"lqr" 或 "mpc"
 arm_controller: mpc
@@ -76,7 +76,7 @@ mpc_q_gravity: [30.0, 30.0]
 # 因此比上一轮略微降低正则，避免过多挤占加速度和重力任务。
 mpc_q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
 mpc_q_vel: 0.02
-mpc_r_ddq: 0.25
+mpc_r_ddq: 0.0025
 mpc_terminal_scale: 2.0
 # 外层安全盒，顺序：shoulder pitch、roll、yaw、elbow、wrist roll。
 mpc_q_min_deg: [-5.0, -5.0, -20.0, -40.0, -40.0]
@@ -103,7 +103,7 @@ mpc_failure_max_ddq_scale: 0.5
 # H 系步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
 # 开启后第一完整周期只用于计算 H，约 0.8 s 后前馈开始生效。
 mpc_disturbance_feedforward_enabled: true
-# 2 ms 相位网格上的未来 6 ms 滑动区间模板；u_k 与 interval[k] 配对。
+# 2 ms 相位网格上的未来控制区间模板；u_k 与 interval[k] 配对。
 mpc_disturbance_template_dir: disturbance_model_new_heading/templates_heading_interval
 # raw、half_smoothed、fully_smoothed；本轮闭环对照选择 raw。
 mpc_disturbance_template: raw

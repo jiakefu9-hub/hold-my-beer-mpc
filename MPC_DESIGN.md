@@ -1371,11 +1371,11 @@ $$
 
 并用区间内角速度的复合梯形平均得到 ${}^W\bar\omega_{B,i}^{\mathrm{real}}$。这样比较的是同一物理量、同一 6 ms 区间和同一世界系，不再把“区间起点滤波值”与“随后区间平均值”混在一起。
 
-`mpc_diagnostics.json` 记录三种区间扰动的总体向量误差、误差相对实际 RMS 的百分比，以及 $\|\bar a_B\|>5\ \mathrm{m/s^2}$ 冲击样本中的误差；`mpc_interval_disturbance_tracking.png` 只画 evaluation 中间一个完整步态周期的预测/实际曲线，便于检查峰值幅度和相位。程序仍保留节点模板与当前测量、上一拍节点 $k=1$ 与下一拍节点测量的辅助比较，但它们只评价节点波形，不再作为 $u_k$ 所用区间扰动的主要质量指标。
+`mpc_diagnostics.json` 记录三种区间扰动的总体向量误差、误差相对实际 RMS 的百分比，以及 $\|\bar a_B\|>5\ \mathrm{m/s^2}$ 冲击样本中的误差；`base_disturbance_interval_template_prediction_vs_actual.png` 只画 evaluation 中间一个完整步态周期的 torso/base 未来 6 ms 区间模板预测与实际曲线，便于检查峰值幅度和相位。`base_disturbance_node_template_tracking.png` 另行比较当前节点测量、同相位节点模板以及上一拍对当前节点的 $k=1$ 预测；它们只评价瞬时节点波形，不再作为 $u_k$ 所用区间扰动的主要质量指标。
 
 第二层判断控制器一步模型结果。把实际采用的 $u_0=ddq_{\mathrm{des}}$ 和预测的 $x_1$ 代入仿射任务模型，记录一步末端线加速度、角速度、角加速度、二维重力误差，以及由 $Q_A,Q_\alpha,Q_\omega,Q_G,Q_q,Q_v,R$ 得到的七项加权代价。这组“一步七项代价”是为了对齐同一个真实控制区间而构造的诊断量，不是单独的阶段代价 $\ell_0$，也不是整个时域的 objective：线/角加速度来自 $(x_0,u_0)$，角速度、重力、姿态和关节速度来自 $x_1$，输入代价来自 $u_0$。实际末端角速度在下一次控制更新前直接读取 MuJoCo 世界系 site 角速度，只有线/角加速度使用 6 ms 区间的速度差分。只有 OSQP 成功时，这些量才是 QP 优化结果；求解失败时记录的是回退输入的一步模型预测，诊断图用红色标记回退样本，不能称为“MPC 理想值”。通用 `metrics.png` 在 MPC 实验中也把主重力范数明确画成 $x,y$ 二维，$z$ 只保留为不进入代价的诊断分量。
 
-真正的 MPC 任务诊断保存在 `mpc_diagnostics.json`、`mpc_diagnostics_preview.csv` 和 `mpc_model_vs_actual.png`。`mpc_tracking_diagnostics.json` 与 `mpc_tracking_preview.csv` 是历史命名的通用 DDQ/LQR 兼容输出，主要使用其中的 DDQ tracking；不要把其中未启用的旧 LQR cost 列当成 MPC 七项代价。
+真正的 MPC 末端任务诊断保存在 `mpc_diagnostics.json`、`mpc_diagnostics_preview.csv` 和 `mpc_end_effector_task_prediction_vs_actual.png`；该图覆盖整个 evaluation，与上述只画中间一个周期的 base 扰动图不是同一组数据的全程/局部关系。`mpc_tracking_diagnostics.json` 与 `mpc_tracking_preview.csv` 是历史命名的通用 DDQ/LQR 兼容输出，主要使用其中的 DDQ tracking；不要把其中未启用的旧 LQR cost 列当成 MPC 七项代价。
 
 第三层区分执行误差和任务模型误差。先由相邻控制拍前的关节速度差得到 $ddq_{\mathrm{real}}$，再把它回代到与 QP 完全相同、且已使用对应 6 ms 区间扰动的加速度仿射模型：
 

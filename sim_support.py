@@ -565,7 +565,7 @@ class PhaseDisturbancePredictor:
         self._last_prediction_diagnostics = self._empty_prediction_diagnostics()
 
     def predict(self, simulation_time, measured_disturbance):
-        """一次生成 N+1 个节点扰动和 N 个未来 6 ms 区间扰动。"""
+        """一次生成 N+1 个节点扰动和 N 个未来控制区间扰动。"""
         measured_acc = self._vector(measured_disturbance, "acc_world")
         measured_omega = self._vector(measured_disturbance, "omega_world")
         measured_alpha = self._vector(measured_disturbance, "alpha_world")
@@ -4148,7 +4148,10 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
     }
     interval_diagnostics = {
         "sample_count": int(np.sum(tracking_valid)),
-        "definition": "future 6 ms interval prediction versus realized interval average",
+        "definition": (
+            "future control-interval prediction versus realized "
+            "interval average"
+        ),
     }
     peak_mask = tracking_valid & (
         np.linalg.norm(interval_values["linear_acceleration"][1], axis=1)
@@ -4596,7 +4599,7 @@ def save_mpc_diagnostics(run_dir, diagnostics):
     return diagnostics_path
 
 
-def save_mpc_diagnostics_plot(
+def save_mpc_end_effector_task_prediction_plot(
     run_dir,
     trajectory_data,
     eval_start_time,
@@ -4637,27 +4640,29 @@ def save_mpc_diagnostics_plot(
 
     task_signals = (
         (
-            "Linear acceleration norm [m/s²]",
+            "End-effector linear acceleration norm [m/s²]",
             matrix("right_mpc_one_step_ee_lin_acc_model", 3),
             matrix("right_mpc_one_step_ee_lin_acc_actual", 3),
         ),
         (
-            "Angular acceleration norm [rad/s²]",
+            "End-effector angular acceleration norm [rad/s²]",
             matrix("right_mpc_one_step_ee_ang_acc_model", 3),
             matrix("right_mpc_one_step_ee_ang_acc_actual", 3),
         ),
         (
-            "Angular velocity norm [rad/s]",
+            "End-effector angular velocity norm [rad/s]",
             matrix("right_mpc_one_step_ee_ang_vel_model", 3),
             matrix("right_mpc_one_step_ee_ang_vel_actual", 3),
         ),
         (
-            "2D gravity-error norm [m/s²]",
+            "End-effector 2D gravity-error norm [m/s²]",
             matrix("right_mpc_one_step_gravity_error_model", 2),
             matrix("right_mpc_one_step_gravity_error_actual", 2),
         ),
     )
-    plot_path = os.path.join(run_dir, "mpc_model_vs_actual.png")
+    plot_path = os.path.join(
+        run_dir, "mpc_end_effector_task_prediction_vs_actual.png"
+    )
     fig, axes = plt.subplots(4, 1, figsize=(15, 14), sharex=True)
     for axis, (title, model_values, actual_values) in zip(axes, task_signals):
         model_norm = np.linalg.norm(model_values[tracking_valid], axis=1)
@@ -4671,13 +4676,13 @@ def save_mpc_diagnostics_plot(
             time_values[tracking_valid],
             model_norm,
             lw=1.2,
-            label="controller one-step model",
+            label="MPC one-step prediction",
         )
         axis.plot(
             time_values[tracking_valid],
             actual_norm,
             lw=1.0,
-            label="actual",
+            label="actual over the same control step",
         )
         if np.any(fallback_in_plot):
             axis.plot(
@@ -4691,14 +4696,14 @@ def save_mpc_diagnostics_plot(
                 label="QP fallback sample",
             )
         axis.set_title(
-            f"{title} | RMS: model={model_rms:.3f}, actual={actual_rms:.3f}, "
+            f"{title} | RMS: predicted={model_rms:.3f}, actual={actual_rms:.3f}, "
             f"actual is {level_difference_percent:+.1f}%"
         )
         axis.grid(True, alpha=0.3)
     axes[0].legend(loc="upper right")
-    axes[-1].set_xlabel("time [s]")
+    axes[-1].set_xlabel("control-interval start time [s]")
     fig.suptitle(
-        "Controller one-step model versus actual task quantities "
+        "MPC end-effector task prediction vs actual — full evaluation window "
         "(red x = QP fallback, not an optimized MPC solution)"
     )
     fig.tight_layout()
@@ -4707,14 +4712,14 @@ def save_mpc_diagnostics_plot(
     return plot_path
 
 
-def save_mpc_template_tracking_plot(
+def save_base_disturbance_node_template_tracking_plot(
     run_dir,
     trajectory_data,
     eval_start_time,
     eval_end_time,
     gait_period,
 ):
-    """用中间一个步态周期显示当前模板、一步预测与同拍实测量。"""
+    """用中间一个步态周期显示节点模板、一步节点预测与同拍实测量。"""
     time_values = np.asarray(
         trajectory_data.get("time", []), dtype=np.float64
     )
@@ -4781,7 +4786,9 @@ def save_mpc_template_tracking_plot(
         ),
     )
 
-    plot_path = os.path.join(run_dir, "mpc_template_tracking.png")
+    plot_path = os.path.join(
+        run_dir, "base_disturbance_node_template_tracking.png"
+    )
     fig, axes = plt.subplots(3, 1, figsize=(15, 11), sharex=True)
     for axis, (title, measured, current_template, forecast_error) in zip(
         axes, signals
@@ -4803,19 +4810,24 @@ def save_mpc_template_tracking_plot(
             time_values[valid],
             measured_norm,
             lw=1.2,
-            label="measured at current update",
+            label="measured current node",
+            zorder=4,
         )
         axis.plot(
             time_values[valid],
             template_norm,
-            lw=1.0,
-            label="template at current phase",
+            lw=2.0,
+            linestyle="--",
+            label="node template at current phase",
+            zorder=2,
         )
         axis.plot(
             time_values[valid],
             forecast_norm,
-            lw=1.0,
-            label="previous update's k=1 prediction for current update",
+            lw=2.0,
+            linestyle=":",
+            label="previous update's node k=1 prediction for current node",
+            zorder=3,
         )
         axis.set_title(
             f"{title} | error/measured RMS: "
@@ -4823,25 +4835,26 @@ def save_mpc_template_tracking_plot(
         )
         axis.grid(True, alpha=0.3)
     axes[0].legend(loc="upper right")
-    axes[-1].set_xlabel("time [s]")
+    axes[-1].set_xlabel("control-update time [s]")
     fig.suptitle(
-        "Disturbance template versus measured base motion — "
-        f"middle gait cycle [{plot_start_time:.3f}, {plot_end_time:.3f}) s"
+        "Base-disturbance node-template tracking — instantaneous node values, "
+        f"middle gait cycle [{plot_start_time:.3f}, {plot_end_time:.3f}) s",
+        y=0.995,
     )
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.965))
     fig.savefig(plot_path, dpi=170)
     plt.close(fig)
     return plot_path
 
 
-def save_mpc_interval_disturbance_plot(
+def save_base_disturbance_interval_template_prediction_plot(
     run_dir,
     trajectory_data,
     eval_start_time,
     eval_end_time,
     gait_period,
 ):
-    """【非核心代码】用中间一个步态周期核对 6 ms 区间扰动预测。"""
+    """【非核心代码】用中间一个步态周期核对控制区间扰动预测。"""
     time_values = np.asarray(
         trajectory_data.get("time", []), dtype=np.float64
     )
@@ -4877,6 +4890,21 @@ def save_mpc_interval_disturbance_plot(
     if not np.any(valid):
         return None
 
+    interval_dt = np.asarray(
+        trajectory_data.get("right_mpc_tracking_interval_dt", []),
+        dtype=np.float64,
+    )
+    if interval_dt.shape != (sample_count,):
+        return None
+    valid_interval_dt = interval_dt[valid]
+    valid_interval_dt = valid_interval_dt[
+        np.isfinite(valid_interval_dt) & (valid_interval_dt > 0.0)
+    ]
+    if valid_interval_dt.size == 0:
+        return None
+    interval_ms = 1000.0 * float(np.median(valid_interval_dt))
+    interval_label = f"{interval_ms:g} ms"
+
     def matrix(name):
         values = np.asarray(
             trajectory_data.get(name, []), dtype=np.float64
@@ -4887,24 +4915,25 @@ def save_mpc_interval_disturbance_plot(
 
     signals = (
         (
-            "Base linear acceleration [m/s²]",
+            "Base-disturbance linear acceleration [m/s²]",
             matrix("right_mpc_interval_acc_k0"),
             matrix("right_mpc_interval_acc_actual"),
         ),
         (
-            "Base angular velocity [rad/s]",
+            "Base-disturbance angular velocity [rad/s]",
             matrix("right_mpc_interval_omega_k0"),
             matrix("right_mpc_interval_omega_actual"),
         ),
         (
-            "Base angular acceleration [rad/s²]",
+            "Base-disturbance angular acceleration [rad/s²]",
             matrix("right_mpc_interval_alpha_k0"),
             matrix("right_mpc_interval_alpha_actual"),
         ),
     )
 
     plot_path = os.path.join(
-        run_dir, "mpc_interval_disturbance_tracking.png"
+        run_dir,
+        "base_disturbance_interval_template_prediction_vs_actual.png",
     )
     fig, axes = plt.subplots(3, 1, figsize=(15, 11), sharex=True)
     for axis, (title, prediction, actual) in zip(axes, signals):
@@ -4919,13 +4948,16 @@ def save_mpc_interval_disturbance_plot(
             time_values[valid],
             prediction_norm,
             lw=1.2,
-            label="predicted average for following 6 ms",
+            label=(
+                "runtime interval-template prediction "
+                f"(following {interval_label} average)"
+            ),
         )
         axis.plot(
             time_values[valid],
             actual_norm,
             lw=1.0,
-            label="realized average over following 6 ms",
+            label=f"actual (same following {interval_label} average)",
         )
         axis.set_title(
             f"{title} | vector-error RMS / actual RMS = "
@@ -4935,7 +4967,8 @@ def save_mpc_interval_disturbance_plot(
     axes[0].legend(loc="upper right")
     axes[-1].set_xlabel("control-interval start time [s]")
     fig.suptitle(
-        "MPC interval disturbance prediction versus realization — "
+        "Base-disturbance interval-template prediction vs actual — "
+        f"future {interval_label} interval averages, "
         f"middle gait cycle [{plot_start_time:.3f}, {plot_end_time:.3f}) s"
     )
     fig.tight_layout()
@@ -5136,7 +5169,7 @@ def save_lqr_ddq_tracking_plot(
     eval_end_time,
     controller_name="lqr",
 ):
-    """绘制评估区间内五关节 ddq_des 与 6 ms 速度差分 ddq_real。"""
+    """绘制评估区间内五关节 ddq_des 与控制区间速度差分 ddq_real。"""
     plot_path = os.path.join(run_dir, "ddq_tracking.png")
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
     valid = np.asarray(
@@ -6074,25 +6107,29 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
         run_dir, lqr_tracking_diagnostics, arm_controller
     )
     mpc_diagnostics_path = save_mpc_diagnostics(run_dir, mpc_diagnostics)
-    mpc_diagnostics_plot_path = save_mpc_diagnostics_plot(
+    mpc_end_effector_task_plot_path = save_mpc_end_effector_task_prediction_plot(
         run_dir,
         buffers.trajectory_data,
         eval_start_time,
         eval_end_time,
     )
-    mpc_template_plot_path = save_mpc_template_tracking_plot(
-        run_dir,
-        buffers.trajectory_data,
-        eval_start_time,
-        eval_end_time,
-        gait_period,
+    base_disturbance_node_template_plot_path = (
+        save_base_disturbance_node_template_tracking_plot(
+            run_dir,
+            buffers.trajectory_data,
+            eval_start_time,
+            eval_end_time,
+            gait_period,
+        )
     )
-    mpc_interval_plot_path = save_mpc_interval_disturbance_plot(
-        run_dir,
-        buffers.trajectory_data,
-        eval_start_time,
-        eval_end_time,
-        gait_period,
+    base_disturbance_interval_template_plot_path = (
+        save_base_disturbance_interval_template_prediction_plot(
+            run_dir,
+            buffers.trajectory_data,
+            eval_start_time,
+            eval_end_time,
+            gait_period,
+        )
     )
     mpc_diagnostics_preview_path = save_mpc_diagnostics_preview(
         run_dir,
@@ -6133,9 +6170,15 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     saved_paths["lqr_ddq_tracking_plot"] = lqr_ddq_tracking_plot_path
     saved_paths["lqr_tracking_preview"] = lqr_tracking_preview_path
     saved_paths["mpc_diagnostics"] = mpc_diagnostics_path
-    saved_paths["mpc_diagnostics_plot"] = mpc_diagnostics_plot_path
-    saved_paths["mpc_template_plot"] = mpc_template_plot_path
-    saved_paths["mpc_interval_disturbance_plot"] = mpc_interval_plot_path
+    saved_paths["mpc_end_effector_task_prediction_plot"] = (
+        mpc_end_effector_task_plot_path
+    )
+    saved_paths["base_disturbance_node_template_plot"] = (
+        base_disturbance_node_template_plot_path
+    )
+    saved_paths["base_disturbance_interval_template_prediction_plot"] = (
+        base_disturbance_interval_template_plot_path
+    )
     saved_paths["mpc_diagnostics_preview"] = mpc_diagnostics_preview_path
     saved_paths["control_preview"] = control_preview_path
     saved_paths["heading_control_plot"] = heading_plot_path
@@ -6250,6 +6293,10 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
                 f"{anchor_percent:.1f}%/{forecast_percent:.1f}%"
             )
         interval = mpc_diagnostics["interval_disturbance"]
+        interval_ms = 1000.0 * float(
+            mpc_diagnostics.get("interval_dt_mean", 0.0)
+        )
+        interval_label = f"{interval_ms:g} ms"
         for name, label in (
             ("linear_acceleration", "a_B"),
             ("angular_velocity", "omega_B"),
@@ -6263,7 +6310,7 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
             )
             peak_error_rms = item["peak_error_norm"]["rms"]
             print(
-                f"MPC 6 ms interval {label} prediction "
+                f"MPC {interval_label} interval {label} prediction "
                 f"(error RMS/actual RMS/relative/peak-error RMS) = "
                 f"{error_rms:.4f}/{actual_rms:.4f}/"
                 f"{error_percent:.1f}%/{peak_error_rms:.4f}"
