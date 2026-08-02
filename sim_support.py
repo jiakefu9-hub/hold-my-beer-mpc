@@ -190,6 +190,9 @@ class InverseDynamicsResult:
     elapsed_time: float = 0.0
     backend: str = "mujoco"
     core_elapsed_time: float = 0.0
+    rnea_elapsed_time: float = 0.0
+    backend_call_elapsed_time: float = 0.0
+    diagnostic_elapsed_time: float = 0.0
     tau_rnea: Optional[np.ndarray] = None
     tau_passive: Optional[np.ndarray] = None
     shadow_tau_ff: Optional[np.ndarray] = None
@@ -257,6 +260,11 @@ class ForwardDynamicsMappingResult:
     second_pass_time: float = 0.0
     rescue_time: float = 0.0
     hold_last_time: float = 0.0
+    backend: str = "python_mujoco"
+    core_elapsed_time: float = 0.0
+    full_forward_calls: int = 0
+    forward_skip_calls: int = 0
+    validated_pass_count: int = 0
 
 
 @dataclass
@@ -1554,6 +1562,7 @@ def build_right_arm_control_record(
     ee_position_reference_torso,
     inverse_result=None,
     mapping_result=None,
+    cpp_executor_result=None,
     lqr_one_step_prediction=None,
     mpc_diagnostics=None,
 ):
@@ -1561,6 +1570,39 @@ def build_right_arm_control_record(
     zeros = np.zeros(5, dtype=np.float64)
     nan_vector = np.full(5, np.nan, dtype=np.float64)
     zero_matrix = np.zeros((5, 5), dtype=np.float64)
+
+    if cpp_executor_result is None:
+        executor_values = {
+            "cpp_executor_pd_tau": zeros,
+            "cpp_executor_total_tau_raw": zeros,
+            "cpp_executor_total_tau_limited": zeros,
+            "cpp_executor_actuator_tau": zeros,
+            "cpp_executor_active": False,
+            "cpp_executor_flags": 0,
+            "cpp_executor_command_age_ns": 0,
+            "cpp_executor_state_age_ns": 0,
+            "cpp_executor_wall_time": 0.0,
+            "cpp_executor_core_time": 0.0,
+        }
+    else:
+        executor_values = {
+            "cpp_executor_pd_tau": cpp_executor_result.predicted_pd_tau,
+            "cpp_executor_total_tau_raw": (
+                cpp_executor_result.predicted_total_tau_raw
+            ),
+            "cpp_executor_total_tau_limited": (
+                cpp_executor_result.predicted_total_tau_limited
+            ),
+            "cpp_executor_actuator_tau": cpp_executor_result.actuator_tau_ff,
+            "cpp_executor_active": cpp_executor_result.mode == "active",
+            "cpp_executor_flags": cpp_executor_result.flags,
+            "cpp_executor_command_age_ns": (
+                cpp_executor_result.command_age_ns
+            ),
+            "cpp_executor_state_age_ns": cpp_executor_result.state_age_ns,
+            "cpp_executor_wall_time": cpp_executor_result.wall_elapsed_time,
+            "cpp_executor_core_time": cpp_executor_result.core_elapsed_time,
+        }
 
     if inverse_result is None:
         inverse_values = {
@@ -1578,6 +1620,7 @@ def build_right_arm_control_record(
             "inverse_dynamics_time": 0.0,
             "inverse_dynamics_backend_time": 0.0,
             "inverse_dynamics_core_time": 0.0,
+            "inverse_dynamics_rnea_time": 0.0,
             "inverse_dynamics_shadow_time": 0.0,
             "inverse_dynamics_shadow_valid": False,
         }
@@ -1620,6 +1663,7 @@ def build_right_arm_control_record(
             ),
             "inverse_dynamics_backend_time": inverse_result.elapsed_time,
             "inverse_dynamics_core_time": inverse_result.core_elapsed_time,
+            "inverse_dynamics_rnea_time": inverse_result.rnea_elapsed_time,
             "inverse_dynamics_shadow_time": inverse_result.shadow_elapsed_time,
             "inverse_dynamics_shadow_valid": inverse_result.shadow_valid,
         }
@@ -1754,6 +1798,7 @@ def build_right_arm_control_record(
         **inverse_values,
         "tau_pd": tau_pd,
         **mapping_values,
+        **executor_values,
         "tau_limit_lower": torque_limits[:, 0],
         "tau_limit_upper": torque_limits[:, 1],
         "torso_lin_vel_world": torso_state.lin_vel,
@@ -2091,6 +2136,82 @@ def pinocchio_inverse_dynamics_feedforward(
         core_elapsed_time=core_elapsed,
         tau_rnea=tau_rnea,
         tau_passive=tau_passive,
+    )
+
+
+def cpp_pinocchio_inverse_dynamics_feedforward(
+    model,
+    data,
+    cpp_rnea_backend,
+    desired_qacc,
+    qvel_indices,
+    friction_breakaway_steps=5.0,
+):
+    """用手写 C++ 桥接层执行 Pinocchio RNEA。
+
+    【核心代码】C++ 一次完成 MuJoCo→Pinocchio 状态映射、RNEA 和
+    摩擦方向处理；Python 只保留仿真诊断所需的 MuJoCo 约束拆分。
+    """
+
+    start_time = time.perf_counter()
+    qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
+    desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
+    if desired_qacc.shape != qvel_indices.shape:
+        raise ValueError("C++ Pinocchio RNEA 的 desired_qacc 维度不正确。")
+    if cpp_rnea_backend is None or not hasattr(
+        cpp_rnea_backend, "compute_feedforward"
+    ):
+        raise ValueError("C++ Pinocchio RNEA 后端未正确初始化。")
+
+    tau_passive = data.qfrc_passive[qvel_indices]
+    friction_loss = model.dof_frictionloss[qvel_indices]
+    native_result = cpp_rnea_backend.compute_feedforward(
+        data.qpos,
+        data.qvel,
+        desired_qacc,
+        tau_passive,
+        friction_loss,
+        model.opt.timestep,
+        friction_breakaway_steps,
+    )
+
+    diagnostic_start = time.perf_counter()
+    # 【非核心诊断】下面这些量只用于解释仿真中的接触/约束组成，
+    # 不进入 C++ RNEA 的最终 tau_ff 计算，也不会在真机执行器中复现。
+    tau_constraint_total = data.qfrc_constraint[qvel_indices].copy()
+    tau_contact = _constraint_generalized_force(
+        model, data, CONTACT_CONSTRAINT_TYPES
+    )[qvel_indices]
+    tau_constraint_friction = (
+        native_result.tau_constraint_friction.copy()
+    )
+    tau_constraint_noncontact = tau_constraint_total - tau_contact
+    tau_constraint_nonfriction = (
+        tau_constraint_total - tau_constraint_friction
+    )
+    tau_passive_copy = tau_passive.copy()
+    tau_inverse = (
+        native_result.tau_rnea
+        - tau_passive_copy
+        - tau_constraint_total
+    )
+    diagnostic_elapsed = time.perf_counter() - diagnostic_start
+    return InverseDynamicsResult(
+        tau_ff=native_result.tau_ff,
+        tau_inverse=tau_inverse,
+        tau_contact=tau_contact,
+        tau_constraint_total=tau_constraint_total,
+        tau_constraint_noncontact=tau_constraint_noncontact,
+        tau_constraint_nonfriction=tau_constraint_nonfriction,
+        tau_constraint_friction=tau_constraint_friction,
+        elapsed_time=time.perf_counter() - start_time,
+        backend="cpp_pinocchio",
+        core_elapsed_time=native_result.core_elapsed_time,
+        rnea_elapsed_time=native_result.rnea_elapsed_time,
+        backend_call_elapsed_time=native_result.wall_elapsed_time,
+        diagnostic_elapsed_time=diagnostic_elapsed,
+        tau_rnea=native_result.tau_rnea,
+        tau_passive=tau_passive_copy,
     )
 
 
@@ -2553,6 +2674,58 @@ def local_forward_dynamics_torque_mapping(
     return tau_cmd, mapping_result
 
 
+def cpp_local_forward_dynamics_torque_mapping(
+    cpp_ddq_mapper,
+    data,
+    fixed_ctrl,
+    desired_qacc,
+    tau_nominal,
+    previous_executed_tau=None,
+    perturbation=0.1,
+    regularization=5.0,
+    validation_scales=(1.0, 0.5, 0.25, 0.125),
+    second_pass_error_threshold=5.0,
+    max_joint_error=4.0,
+    max_abs_qacc=8.0,
+    enable_second_pass=True,
+    max_safety_rescue_passes=2,
+):
+    """调用 C++ 完成与 Python 参考实现等价的整段 MuJoCo 验收。"""
+    if cpp_ddq_mapper is None or not hasattr(cpp_ddq_mapper, "compute"):
+        raise ValueError("C++ DDQ→力矩 mapper 未正确初始化。")
+    native = cpp_ddq_mapper.compute(
+        data=data,
+        fixed_ctrl=fixed_ctrl,
+        desired_qacc=desired_qacc,
+        tau_nominal=tau_nominal,
+        previous_executed_tau=previous_executed_tau,
+        perturbation=perturbation,
+        regularization=regularization,
+        validation_scales=validation_scales,
+        second_pass_error_threshold=second_pass_error_threshold,
+        max_joint_error=max_joint_error,
+        max_abs_qacc=max_abs_qacc,
+        enable_second_pass=enable_second_pass,
+        max_safety_rescue_passes=max_safety_rescue_passes,
+    )
+    values = dict(native.values)
+    # C++ 直接返回最终候选力矩；ForwardDynamicsMappingResult 只保存
+    # Python 参考链原本就有的诊断字段，避免重复保存同一向量。
+    tau_cmd = np.asarray(values.pop("tau_cmd"), dtype=np.float64)
+    values.update(
+        {
+            "elapsed_time": native.wall_elapsed_time,
+            "backend": "cpp_mujoco",
+            "core_elapsed_time": native.core_elapsed_time,
+            "full_forward_calls": native.full_forward_calls,
+            "forward_skip_calls": native.forward_skip_calls,
+            "validated_pass_count": native.validated_pass_count,
+        }
+    )
+    mapping_result = ForwardDynamicsMappingResult(**values)
+    return tau_cmd, mapping_result
+
+
 def apply_computed_torque_control(
     model,
     data,
@@ -2570,6 +2743,9 @@ def apply_computed_torque_control(
     forward_dynamics_enable_hold_last_safe=False,
     inverse_dynamics_backend="mujoco",
     pinocchio_backend=None,
+    cpp_rnea_backend=None,
+    forward_dynamics_backend="python",
+    cpp_ddq_mapper=None,
     pinocchio_friction_breakaway_steps=5.0,
 ):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
@@ -2596,6 +2772,15 @@ def apply_computed_torque_control(
             friction_breakaway_steps=pinocchio_friction_breakaway_steps,
         )
         inverse_result = pin_result
+    elif inverse_backend_name == "cpp_pinocchio":
+        inverse_result = cpp_pinocchio_inverse_dynamics_feedforward(
+            model,
+            data,
+            cpp_rnea_backend,
+            desired_qacc,
+            id_index_scratch.qvel_indices,
+            friction_breakaway_steps=pinocchio_friction_breakaway_steps,
+        )
     elif inverse_backend_name == "pinocchio_shadow":
         # Shadow 绝不能影响主控制链：先完成 MuJoCo 名义力矩，
         # 再尝试 Pinocchio 比较。Pin 异常只会使本拍 shadow 无效。
@@ -2646,7 +2831,7 @@ def apply_computed_torque_control(
     else:
         raise ValueError(
             "inverse_dynamics_backend 必须是 "
-            "mujoco、pinocchio_shadow 或 pinocchio。"
+            "mujoco、pinocchio_shadow、pinocchio 或 cpp_pinocchio。"
         )
     tau_nominal = np.clip(
         inverse_result.tau_ff + tau_pd,
@@ -2658,25 +2843,45 @@ def apply_computed_torque_control(
         if forward_dynamics_enable_hold_last_safe and data.time > 0.0
         else None
     )
-    tau_cmd, mapping_result = local_forward_dynamics_torque_mapping(
-        model,
-        data,
-        id_index_scratch.forward_dynamics_data,
-        fixed_ctrl,
-        desired_qacc,
-        tau_nominal,
-        id_index_scratch.qvel_indices,
-        id_index_scratch.ctrl_indices,
-        id_index_scratch.torque_limits,
-        perturbation=forward_dynamics_perturbation,
-        regularization=forward_dynamics_regularization,
-        second_pass_error_threshold=forward_dynamics_second_pass_error_threshold,
-        max_joint_error=forward_dynamics_max_joint_error,
-        max_abs_qacc=forward_dynamics_max_abs_qacc,
-        enable_second_pass=forward_dynamics_enable_second_pass,
-        max_safety_rescue_passes=forward_dynamics_max_safety_rescue_passes,
-        previous_executed_tau=previous_executed_tau,
-    )
+    mapping_backend_name = str(forward_dynamics_backend).strip().lower()
+    mapping_kwargs = {
+        "perturbation": forward_dynamics_perturbation,
+        "regularization": forward_dynamics_regularization,
+        "second_pass_error_threshold": (
+            forward_dynamics_second_pass_error_threshold
+        ),
+        "max_joint_error": forward_dynamics_max_joint_error,
+        "max_abs_qacc": forward_dynamics_max_abs_qacc,
+        "enable_second_pass": forward_dynamics_enable_second_pass,
+        "max_safety_rescue_passes": (
+            forward_dynamics_max_safety_rescue_passes
+        ),
+        "previous_executed_tau": previous_executed_tau,
+    }
+    if mapping_backend_name == "python":
+        tau_cmd, mapping_result = local_forward_dynamics_torque_mapping(
+            model,
+            data,
+            id_index_scratch.forward_dynamics_data,
+            fixed_ctrl,
+            desired_qacc,
+            tau_nominal,
+            id_index_scratch.qvel_indices,
+            id_index_scratch.ctrl_indices,
+            id_index_scratch.torque_limits,
+            **mapping_kwargs,
+        )
+    elif mapping_backend_name == "cpp":
+        tau_cmd, mapping_result = cpp_local_forward_dynamics_torque_mapping(
+            cpp_ddq_mapper,
+            data,
+            fixed_ctrl,
+            desired_qacc,
+            tau_nominal,
+            **mapping_kwargs,
+        )
+    else:
+        raise ValueError("forward_dynamics_backend 必须是 python 或 cpp。")
     return tau_cmd, inverse_result, mapping_result
 
 
@@ -2756,6 +2961,8 @@ class PerformanceMonitor:
     current_interval_execution_calls: int = 0
     mpc_timing_samples: list = field(default_factory=list)
     ddq_execution_timing_samples: list = field(default_factory=list)
+    cpp_executor_timing_samples: list = field(default_factory=list)
+    window_cpp_executor_timing_samples: list = field(default_factory=list)
 
     def __post_init__(self):
         if self.arm_budget is None:
@@ -2864,10 +3071,37 @@ class PerformanceMonitor:
                 "inverse_core_time": float(
                     inverse_result.core_elapsed_time
                 ),
+                "inverse_rnea_time": float(
+                    inverse_result.rnea_elapsed_time
+                ),
+                "inverse_backend_call_time": float(
+                    inverse_result.backend_call_elapsed_time
+                ),
+                "inverse_diagnostic_time": float(
+                    inverse_result.diagnostic_elapsed_time
+                ),
                 "inverse_shadow_time": float(
                     inverse_result.shadow_elapsed_time
                 ),
                 "mapping_time": float(mapping_result.elapsed_time),
+                "mapping_core_time": float(
+                    mapping_result.core_elapsed_time
+                ),
+                "mapping_bridge_time": max(
+                    0.0,
+                    float(mapping_result.elapsed_time)
+                    - float(mapping_result.core_elapsed_time),
+                ),
+                "mapping_backend": str(mapping_result.backend),
+                "mapping_full_forward_calls": int(
+                    mapping_result.full_forward_calls
+                ),
+                "mapping_forward_skip_calls": int(
+                    mapping_result.forward_skip_calls
+                ),
+                "mapping_validated_pass_count": int(
+                    mapping_result.validated_pass_count
+                ),
                 "baseline_time": float(mapping_result.baseline_time),
                 "first_pass_time": float(mapping_result.first_pass_time),
                 "second_pass_time": float(mapping_result.second_pass_time),
@@ -2878,6 +3112,21 @@ class PerformanceMonitor:
                 ),
                 "rescue_used": bool(mapping_result.safety_fallback_used),
             }
+        )
+
+    def record_cpp_executor_timing(
+        self, wall_elapsed_time, core_elapsed_time, mode
+    ):
+        """记录每个 2 ms 物理拍调用 C++ 安全执行器的成本。"""
+        self.cpp_executor_timing_samples.append(
+            {
+                "wall_time": float(wall_elapsed_time),
+                "core_time": float(core_elapsed_time),
+                "mode": str(mode),
+            }
+        )
+        self.window_cpp_executor_timing_samples.append(
+            float(wall_elapsed_time)
         )
 
     def start_mj_step(self):
@@ -3027,6 +3276,7 @@ class PerformanceMonitor:
         self.window_execution_calls_per_interval.clear()
         self.window_arm_policy_samples.clear()
         self.window_computed_torque_samples.clear()
+        self.window_cpp_executor_timing_samples.clear()
 
     def _build_window_hardware_report(self):
         """窗口日志只显示完整真机相关链，避免旧的同拍局部和造成误解。"""
@@ -3062,6 +3312,7 @@ class PerformanceMonitor:
                 self.window_right_arm_interval_samples,
                 self.window_arm_policy_samples,
                 self.window_computed_torque_samples,
+                self.window_cpp_executor_timing_samples,
             ),
         }
 
@@ -3165,19 +3416,24 @@ class PerformanceMonitor:
             ),
             "interval_mean_composition": (
                 "exact mean decomposition of the complete right-arm interval; "
-                "all_ddq_to_torque_calls includes every execution call"
+                "all_ddq_to_torque_calls includes every execution call and "
+                "cpp_executor_bridge is the complete Python/C ABI bridge"
             ),
         }
 
     @staticmethod
     def _interval_mean_composition(
-        interval_samples, policy_samples, execution_samples
+        interval_samples,
+        policy_samples,
+        execution_samples,
+        executor_samples=(),
     ):
         interval_count = len(interval_samples)
         if interval_count == 0:
             return {
                 "mpc_policy_update": 0.0,
                 "all_ddq_to_torque_calls": 0.0,
+                "cpp_executor_bridge": 0.0,
                 "other_right_arm_path": 0.0,
                 "total": 0.0,
             }
@@ -3186,10 +3442,16 @@ class PerformanceMonitor:
         execution = float(
             np.sum(execution_samples) * 1000.0 / interval_count
         )
+        executor = float(
+            np.sum(executor_samples) * 1000.0 / interval_count
+        )
         return {
             "mpc_policy_update": policy,
             "all_ddq_to_torque_calls": execution,
-            "other_right_arm_path": max(0.0, total - policy - execution),
+            "cpp_executor_bridge": executor,
+            "other_right_arm_path": max(
+                0.0, total - policy - execution - executor
+            ),
             "total": total,
         }
 
@@ -3232,8 +3494,13 @@ class PerformanceMonitor:
             "inverse_time",
             "inverse_backend_time",
             "inverse_core_time",
+            "inverse_rnea_time",
+            "inverse_backend_call_time",
+            "inverse_diagnostic_time",
             "inverse_shadow_time",
             "mapping_time",
+            "mapping_core_time",
+            "mapping_bridge_time",
             "baseline_time",
             "first_pass_time",
             "second_pass_time",
@@ -3277,6 +3544,10 @@ class PerformanceMonitor:
                 self.right_arm_interval_samples,
                 self.arm_policy_samples,
                 self.computed_torque_samples,
+                [
+                    sample["wall_time"]
+                    for sample in self.cpp_executor_timing_samples
+                ],
             ),
             "mpc_breakdown": {
                 name: self._timing_field_distribution(
@@ -3300,6 +3571,61 @@ class PerformanceMonitor:
                 "safety_rescue": self._timing_field_distribution(
                     rescue_samples, "total_time"
                 ),
+            },
+            "ddq_mapping_native": {
+                "backend_counts": {
+                    backend: sum(
+                        sample.get("mapping_backend") == backend
+                        for sample in self.ddq_execution_timing_samples
+                    )
+                    for backend in sorted(
+                        {
+                            sample.get("mapping_backend", "unknown")
+                            for sample in self.ddq_execution_timing_samples
+                        }
+                    )
+                },
+                "full_forward_calls": self._sample_distribution(
+                    [
+                        sample.get("mapping_full_forward_calls", 0)
+                        for sample in self.ddq_execution_timing_samples
+                    ],
+                    scale=1.0,
+                ),
+                "forward_skip_calls": self._sample_distribution(
+                    [
+                        sample.get("mapping_forward_skip_calls", 0)
+                        for sample in self.ddq_execution_timing_samples
+                    ],
+                    scale=1.0,
+                ),
+                "validated_pass_count": self._sample_distribution(
+                    [
+                        sample.get("mapping_validated_pass_count", 0)
+                        for sample in self.ddq_execution_timing_samples
+                    ],
+                    scale=1.0,
+                ),
+            },
+            "cpp_executor": {
+                "wall_time": self._timing_field_distribution(
+                    self.cpp_executor_timing_samples, "wall_time"
+                ),
+                "core_time": self._timing_field_distribution(
+                    self.cpp_executor_timing_samples, "core_time"
+                ),
+                "mode_counts": {
+                    mode: sum(
+                        sample["mode"] == mode
+                        for sample in self.cpp_executor_timing_samples
+                    )
+                    for mode in sorted(
+                        {
+                            sample["mode"]
+                            for sample in self.cpp_executor_timing_samples
+                        }
+                    )
+                },
             },
         }
 
@@ -3387,6 +3713,7 @@ class PerformanceMonitor:
             print(
                 f"[INFO] 平均组成: MPC更新 {composition['mpc_policy_update']:.2f} + "
                 f"全部DDQ→力矩 {composition['all_ddq_to_torque_calls']:.2f} + "
+                f"C++执行桥 {composition['cpp_executor_bridge']:.2f} + "
                 f"其余右臂路径 {composition['other_right_arm_path']:.2f} = "
                 f"{composition['total']:.2f} ms；每区间执行 "
                 f"{calls['mean']:.2f} 次"
@@ -3613,6 +3940,7 @@ def init_eval_buffers():
             "right_arm_inverse_dynamics_time": [],
             "right_arm_inverse_dynamics_backend_time": [],
             "right_arm_inverse_dynamics_core_time": [],
+            "right_arm_inverse_dynamics_rnea_time": [],
             "right_arm_inverse_dynamics_shadow_time": [],
             "right_arm_inverse_dynamics_shadow_valid": [],
             "right_arm_tau_pd": [],
@@ -3623,6 +3951,16 @@ def init_eval_buffers():
             "right_arm_tau_limit_lower": [],
             "right_arm_tau_limit_upper": [],
             "right_arm_tau_saturation_mask": [],
+            "right_arm_cpp_executor_pd_tau": [],
+            "right_arm_cpp_executor_total_tau_raw": [],
+            "right_arm_cpp_executor_total_tau_limited": [],
+            "right_arm_cpp_executor_actuator_tau": [],
+            "right_arm_cpp_executor_active": [],
+            "right_arm_cpp_executor_flags": [],
+            "right_arm_cpp_executor_command_age_ns": [],
+            "right_arm_cpp_executor_state_age_ns": [],
+            "right_arm_cpp_executor_wall_time": [],
+            "right_arm_cpp_executor_core_time": [],
             "right_arm_actual_qfrc_bias": [],
             "right_arm_actual_qfrc_passive": [],
             "right_arm_actual_qfrc_constraint": [],
@@ -6621,6 +6959,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     inverse_dynamics_core_time = control_scalar(
         "inverse_dynamics_core_time"
     )
+    inverse_dynamics_rnea_time = control_scalar(
+        "inverse_dynamics_rnea_time"
+    )
     inverse_dynamics_shadow_time = control_scalar(
         "inverse_dynamics_shadow_time"
     )
@@ -6655,6 +6996,30 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     if tau_limit_upper.shape != tau_ff.shape:
         tau_limit_upper = np.full_like(tau_ff, np.inf)
     tau_saturation_mask = (tau_cmd_raw < (tau_limit_lower + RIGHT_ARM_TAU_SATURATION_EPS)) | (tau_cmd_raw > (tau_limit_upper - RIGHT_ARM_TAU_SATURATION_EPS))
+    cpp_executor_pd_tau = control_vector("cpp_executor_pd_tau", 5)
+    cpp_executor_total_tau_raw = control_vector(
+        "cpp_executor_total_tau_raw", 5
+    )
+    cpp_executor_total_tau_limited = control_vector(
+        "cpp_executor_total_tau_limited", 5
+    )
+    cpp_executor_actuator_tau = control_vector(
+        "cpp_executor_actuator_tau", 5
+    )
+    cpp_executor_active = bool(
+        right_arm_control.get("cpp_executor_active", False)
+    )
+    cpp_executor_flags = int(
+        right_arm_control.get("cpp_executor_flags", 0)
+    )
+    cpp_executor_command_age_ns = int(
+        right_arm_control.get("cpp_executor_command_age_ns", 0)
+    )
+    cpp_executor_state_age_ns = int(
+        right_arm_control.get("cpp_executor_state_age_ns", 0)
+    )
+    cpp_executor_wall_time = control_scalar("cpp_executor_wall_time", 0.0)
+    cpp_executor_core_time = control_scalar("cpp_executor_core_time", 0.0)
     torso_lin_vel = control_vector("torso_lin_vel_world", 3)
     torso_ang_vel = control_vector("torso_ang_vel_world", 3)
     torso_acc_raw = control_vector("torso_acc_world_raw", 3)
@@ -6821,6 +7186,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_inverse_dynamics_core_time"].append(
         inverse_dynamics_core_time
     )
+    buffers.trajectory_data["right_arm_inverse_dynamics_rnea_time"].append(
+        inverse_dynamics_rnea_time
+    )
     buffers.trajectory_data["right_arm_inverse_dynamics_shadow_time"].append(
         inverse_dynamics_shadow_time
     )
@@ -6835,6 +7203,36 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_tau_limit_lower"].append(tau_limit_lower)
     buffers.trajectory_data["right_arm_tau_limit_upper"].append(tau_limit_upper)
     buffers.trajectory_data["right_arm_tau_saturation_mask"].append(tau_saturation_mask)
+    buffers.trajectory_data["right_arm_cpp_executor_pd_tau"].append(
+        cpp_executor_pd_tau
+    )
+    buffers.trajectory_data["right_arm_cpp_executor_total_tau_raw"].append(
+        cpp_executor_total_tau_raw
+    )
+    buffers.trajectory_data[
+        "right_arm_cpp_executor_total_tau_limited"
+    ].append(cpp_executor_total_tau_limited)
+    buffers.trajectory_data["right_arm_cpp_executor_actuator_tau"].append(
+        cpp_executor_actuator_tau
+    )
+    buffers.trajectory_data["right_arm_cpp_executor_active"].append(
+        cpp_executor_active
+    )
+    buffers.trajectory_data["right_arm_cpp_executor_flags"].append(
+        cpp_executor_flags
+    )
+    buffers.trajectory_data["right_arm_cpp_executor_command_age_ns"].append(
+        cpp_executor_command_age_ns
+    )
+    buffers.trajectory_data["right_arm_cpp_executor_state_age_ns"].append(
+        cpp_executor_state_age_ns
+    )
+    buffers.trajectory_data["right_arm_cpp_executor_wall_time"].append(
+        cpp_executor_wall_time
+    )
+    buffers.trajectory_data["right_arm_cpp_executor_core_time"].append(
+        cpp_executor_core_time
+    )
     buffers.trajectory_data["right_arm_actual_qfrc_bias"].append(data.qfrc_bias[RIGHT_ARM_QVEL_SLICE].copy())
     buffers.trajectory_data["right_arm_actual_qfrc_passive"].append(data.qfrc_passive[RIGHT_ARM_QVEL_SLICE].copy())
     buffers.trajectory_data["right_arm_actual_qfrc_constraint"].append(data.qfrc_constraint[RIGHT_ARM_QVEL_SLICE].copy())

@@ -22,6 +22,7 @@ ddq_nominal_inverse_dynamics_backend: pinocchio
 ```
 
 第二项还可设为 `mujoco` 或 `pinocchio_shadow`；shadow 模式先完成 MuJoCo 主路径，再记录 `right_arm_tau_ff_shadow`、差值、有效标记和额外耗时，最终仍执行 MuJoCo 名义力矩。Pinocchio shadow 异常只使该对照无效，不改变控制输出。
+当第二项设为 `cpp_pinocchio` 时，Python 通过 C ABI 调用 C++ Pinocchio RNEA；`pinocchio` 仍保留为数值回归基准。
 
 active Pinocchio 在仿真中采用 fail-fast，且当前未把运行时 `qfrc_applied/xfrc_applied` 映射为 RNEA 外力；本项目当前仿真的这两项为零。
 
