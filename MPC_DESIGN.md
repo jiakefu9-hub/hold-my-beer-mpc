@@ -16,7 +16,7 @@
 
 当前 MPC 不进行整机接触力优化，也不把浮动基完整刚体动力学放进 QP。它是一个以关节加速度为输入、使用局部运动学观测模型的稀疏线性时变 QP。
 
-当前仓库已经实现 MPC、可选扰动前馈和第 10 节的 `ddq_des` 到力矩执行链。本文同时作为数学定义与当前实现说明。
+当前仓库已经实现 MPC、可选扰动前馈和第 10 节的 `ddq_des` 到力矩执行链。MPC 预测运动学可在同一接口下选择 MuJoCo 或 Pinocchio；当前配置使用 Pinocchio 计算位姿、$J$ 和 $\dot J$。名义逆动力学也可选择 MuJoCo、只比较不执行的 `pinocchio_shadow` 或 Pinocchio RNEA；无论选择哪一种，仿真中的接触、浮动基反作用、候选验收和安全回退仍由 MuJoCo 完成。本文同时作为数学定义与当前实现说明。
 
 ---
 
@@ -438,7 +438,7 @@ $$
 
 这里不是把整个非线性运动学严格积分 6 ms，而是采用“区间平均 base 扰动 + 区间起点运动学”的局部近似。它修正了原实现用起点瞬时、滞后滤波的 $a_B,\alpha_B$ 去比较随后 6 ms 平均末端加速度的主要时序错误，同时保持 QP 对 $x_k,u_k$ 的仿射结构。
 
-实现中直接沿用 LQR 的世界系位置差。对工作构型 $\bar q_k$ 做 MuJoCo scratch 前向运动学后，有
+实现中直接沿用 LQR 的世界系位置差。先以 MuJoCo 参考后端说明：对工作构型 $\bar q_k$ 做 scratch 前向运动学后，有
 
 $$
 {}^Wr_{BE,k}^{\mathrm{scratch}}
@@ -446,7 +446,7 @@ $$
 -{}^Wp_B^{\mathrm{scratch}} .
 $$
 
-$\mathrm{scratch}$ 只表示该量来自临时的 MuJoCo `MjData`，不是新的坐标系。每次 MPC 求解开始时，代码把当前整机 `qpos` 复制到 scratch；计算各预测步时只把右臂关节替换为 $\bar q_k$，其余关节以及 floating base 的位置、姿态均保持为 $k=0$ 的实测值。因此在同一轮预测中 ${}^Wp_B^{\mathrm{scratch}}$ 和 ${}^WR_{B,0}$ 不随 $k$ 变化，而 ${}^Wp_E^{\mathrm{scratch}}(\bar q_k)$、Jacobian 和末端姿态随 $\bar q_k$ 变化。下一次 MPC 求解会重新复制整机实测状态。
+$\mathrm{scratch}$ 只表示临时模型状态，不是新的坐标系。每次 MPC 求解开始时，后端读取当前整机 `qpos`；计算各预测步时只把右臂关节替换为 $\bar q_k$，其余关节以及 floating base 的位置、姿态均保持为 $k=0$ 的实测值。因此在同一轮预测中 ${}^Wp_B^{\mathrm{scratch}}$ 和 ${}^WR_{B,0}$ 不随 $k$ 变化，而 ${}^Wp_E^{\mathrm{scratch}}(\bar q_k)$、Jacobian 和末端姿态随 $\bar q_k$ 变化。下一次 MPC 求解会重新读取整机实测状态。当前 Pinocchio 后端读取与仿真完全相同的 MJCF，并采用相同冻结规则；100 个随机构型中，位置、$J$ 和 $\dot J$ 的最大差约为 $10^{-15}$，旋转角误差指标最大为 $2.98\times10^{-8}\ \mathrm{rad}$（主要是 `arccos` 在单位旋转附近放大浮点舍入），因此下面的数学关系不因换库而改变。
 
 $r_{BE}$ 只是上述位置差的简称，不是新的状态或模板通道。世界系平移在相减时严格抵消，因此模板不需要预测 $p_B$。
 
@@ -1150,9 +1150,9 @@ $$
 
 ### 10.2 逆动力学生成名义力矩
 
-在 MuJoCo 临时数据中复制当前整机状态，令非右臂期望加速度为零、右臂期望加速度为 `ddq_des`，调用 `mj_inverse`。
+当前提供三种配置：`mujoco`、`pinocchio_shadow` 和 `pinocchio`。三种方式都令非右臂期望加速度为零、右臂期望加速度为 `ddq_des`；shadow 先完成并执行 MuJoCo 结果，再尝试 Pinocchio 对照。对照成功时记录 `tau_ff_shadow`、差值、有效标记和额外耗时；Pinocchio 对照异常不会改变本拍 MuJoCo 力矩。
 
-当前采用非摩擦约束感知的名义前馈：
+MuJoCo 路径在临时数据中复制当前整机状态并调用 `mj_inverse`，采用非摩擦约束感知的名义前馈：
 
 $$
 \tau_{\mathrm{ff}}
@@ -1162,6 +1162,20 @@ qfrc_{\mathrm{inverse}}
 $$
 
 它加回 contact、joint/tendon limit 和 equality 等非摩擦约束，使执行器不主动对抗这些约束；`FRICTION_DOF` 和 `FRICTION_TENDON` 不加回，因此摩擦补偿仍保留在逆动力学结果中。
+
+Pinocchio 路径直接读取仿真所 include 的 `g1_23dof_rev_1_0.xml`，不能改用缺少抓持负载的旧 URDF。MuJoCo floating-base 四元数 `wxyz` 会转换为 Pinocchio 的 `xyzw`，世界系 base 线速度也会旋到 Pinocchio free-flyer 的局部表达。RNEA 名义力矩写成
+
+$$
+\tau_{\mathrm{ff}}
+=
+\tau_{\mathrm{RNEA}}
+-qfrc_{\mathrm{passive}}
+-\tau_{\mathrm{friction}}.
+$$
+
+它与上面的 MuJoCo 公式代数等价：非摩擦约束在 `qfrc_inverse` 与加回项之间相消。低速即将反向时，MuJoCo 的正则化干摩擦方向并不等于上一拍 sticking 约束；实现用配置的若干物理步速度变化判断 breakaway 方向。当前 `ddq_pinocchio_friction_breakaway_steps: 5.0` 在完整旧轨迹上把 Pinocchio/MuJoCo 名义力矩差的五维 RMS 从约 $0.110$ 降到 $0.028\ \mathrm{N\,m}$。该近似只影响初始名义力矩，随后仍由第 10.3--10.5 节的 MuJoCo 完整动力学映射和验收修正。日志中的 `tau_rnea`、`tau_passive_model` 和摩擦估计是 Pinocchio 路径最直接的分解；兼容保留的 constraint 字段混合了当前 MuJoCo 约束与预测摩擦，不应当成同一次 Pinocchio inverse 的独立物理分量。
+
+Pinocchio active 模式当前未把运行时 `qfrc_applied/xfrc_applied` 映射为 RNEA 外力；本仿真两者为零，因此不影响本轮。active 后端异常在仿真中采用 fail-fast，避免静默换模型污染实验；真机不能依赖这一行为，必须由独立执行循环处理上层超时或异常。
 
 名义力矩为
 
@@ -1399,9 +1413,9 @@ $ddq_{\mathrm{des}}$ 模型结果与上述回代结果的差主要反映 DDQ 执
 
 该报告同时给出完整区间、一次 MPC 更新和一次 DDQ 到力矩调用的 mean、p50、p95、p99、max，并用 `interval_mean_composition` 将完整区间平均值严格拆成 `mpc_policy_update + all_ddq_to_torque_calls + other_right_arm_path`。`mpc_breakdown` 继续拆分工作轨迹、运动学项、代价、约束、总组装、OSQP wall time 和后处理；`ddq_to_torque_breakdown` 拆分逆动力学、基线前向动力学、第一轮、第二轮、安全救援和上一拍力矩复验。这样不会再把“MPC 更新加同一 physics step 的一次执行”误称为完整 6 ms 控制耗时。
 
-`mj_step` 物理推进、评估记录/绘图、viewer/video 和实时 sleep 不属于真机控制算法，单独统计但不进入上述区间；仿真无法测到的传感器/总线、电机驱动通信、固件和目标计算机实时调度延迟也明确列在 `timing_scope.not_measurable_in_simulation`，真机预算必须在当前结果上另行加入。DDQ 验收目前使用 MuJoCo 模型；若真机改用 Pinocchio 或其他刚体动力学库，算法环节仍然存在，但绝对耗时必须在目标硬件重新测量。
+`mj_step` 物理推进、评估记录/绘图、viewer/video 和实时 sleep 不属于真机控制算法，单独统计但不进入上述区间；仿真无法测到的传感器/总线、电机驱动通信、固件和目标计算机实时调度延迟也明确列在 `timing_scope.not_measurable_in_simulation`，真机预算必须在当前结果上另行加入。当前预测运动学和名义逆动力学使用 Pinocchio，但 DDQ 局部映射与候选验收仍使用 MuJoCo；真机采用解析动力学和独立安全层后，绝对耗时必须在目标硬件重新测量。
 
-最终保留回合 `20260801_213823_round6_N12_exec3_kinematics_optimized` 的完整区间 mean/p95/p99/max 为 $10.01/12.10/15.47/27.55\ \mathrm{ms}$，仍无法满足 6 ms 硬实时预算。其平均组成约为一次 MPC 更新 $6.70\ \mathrm{ms}$、三次 DDQ 到力矩合计 $3.01\ \mathrm{ms}$、其余右臂路径 $0.30\ \mathrm{ms}$；因此当前仿真适合验证控制效果，但不能直接作为 6 ms 真机实现。
+最终保留回合 `20260802_152935_round5_equivalent_hot_path_optimization` 的完整区间 mean/p95/p99/max 为 $6.54/8.63/13.80/17.45\ \mathrm{ms}$。平均组成是一次 MPC 更新 $3.55\ \mathrm{ms}$、三次 DDQ 到力矩合计 $2.67\ \mathrm{ms}$、其余右臂路径 $0.33\ \mathrm{ms}$；MPC 内部运动学/任务预测项、代价组装和 OSQP wall time 平均分别为 $1.59/0.42/0.46\ \mathrm{ms}$。相对 `20260802_140802_round3_pin_full_zero_weight_pruned`，完整区间平均值下降 $18.2\%$，p95 下降 $13.8\%$；两回合之间的 p99 会受 Python/操作系统调度长尾影响而不单调。该回合 QP 成功率为 $100\%$，右端线加速度、角加速度和二维重力误差 RMS 仍为 $2.878\ \mathrm{m/s^2}$、$6.168\ \mathrm{rad/s^2}$ 和 $0.0128$。与上一轮闭环相比，整条物理轨迹、控制量和力矩逐元素完全相同；尽管平均值已接近预算，仍有 $66.09\%$ 的区间超过 6 ms，因此当前 Python 仿真实现仍不能直接作为 6 ms 硬实时最终力矩循环。
 
 ---
 
@@ -1424,10 +1438,10 @@ $$
 8. 如果需要主动接触、推压环境或严格处理浮动基耦合，应升级为包含整机动力学、接触力和摩擦锥的 whole-body MPC，而不是继续扩展当前运动学积分器。
 
 9. 扰动前馈关闭时并不是完全忽略 base 运动，而是每拍测量当前节点并在 72 ms 时域内零阶保持；模板开启后才提供未来节点变化和与每个 $u_k$ 对齐的 6 ms 区间平均扰动。因此开关实验的差值表示未来预测的附加收益，不是全部 base 补偿的收益。
-10. 即使模板完全准确，5 个关节 DDQ 也不能同时独立消除三维线加速度、三维角加速度、三维角速度和二维重力误差；关节盒、DQ/DDQ 上限和互相冲突的任务会留下不可消除残差。当前最佳闭环回合中，6 ms 区间线加速度和角加速度预测误差分别约为实际 RMS 的 29% 和 32%，也不是完全已知未来。
-11. 当前完整真机相关右臂控制链平均约 10.01 ms、p99 约 15.47 ms、最大约 27.55 ms，仍超过 6 ms 控制更新周期；这已经包含区间内三次 DDQ 到力矩，不应再用仅包含一次执行的旧 `arm_total_*` 判断实时性。实时部署前必须继续优化模型计算，或把上层控制周期放宽到经过目标硬件实测可满足的预算。
+10. 即使模板完全准确，5 个关节 DDQ 也不能同时独立消除三维线加速度、三维角加速度、三维角速度和二维重力误差；关节盒、DQ/DDQ 上限和互相冲突的任务会留下不可消除残差。当前保留回合中，6 ms 区间 base 线加速度和角加速度预测误差分别约为实际 RMS 的 14.0% 和 25.3%，也不是完全已知未来。
+11. 当前完整真机相关右臂控制链平均约 6.54 ms、p99 约 13.80 ms、最大约 17.45 ms，且 66.09% 的区间仍超过 6 ms；这已经包含区间内三次 DDQ 到力矩，不应再用仅包含一次执行的旧 `arm_total_*` 判断实时性。实时部署前必须继续优化批量预测项与执行层，采用 C++ 高频安全层，或把上层控制周期放宽到经过目标硬件实测可满足的预算。
 12. 当前角速度模型冻结 $J_\omega(\bar q_k)$，忽略 $\partial(J_\omega\dot q)/\partial q$。若以后角速度任务权重明显增大、关节运动范围放宽或模型/实际角速度开始出现显著偏差，应恢复完整的一阶线性化。
-13. 新区间前馈会在落脚前后更积极地使用 DDQ。当前最佳回合仍有 7 个控制区间的真实平均 DDQ 略高于 $8\ \mathrm{rad/s^2}$，最大约为 $8.334\ \mathrm{rad/s^2}$，多数伴随接触数量切换。真机前应为预测和候选验收增加内部安全裕量，并禁止执行已知不严格安全的“仅有进展”候选。
+13. 最终保留回合中，按“任一关节真实区间 DDQ 超过配置上限”的统一口径，超限区间为 0，真实 DDQ 最大绝对值为 $7.788\ \mathrm{rad/s^2}$。早期区间模板实验的 $7/8.334$ 只保留在开发日志中，不再作为当前结论。真机仍需保留独立硬限幅和执行层故障回退。
 
 ---
 

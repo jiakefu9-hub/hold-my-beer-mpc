@@ -78,12 +78,16 @@ class KinematicsHelper:
         joint_indices: np.ndarray,
         imu_site_name: str = "imu_in_torso",
         position_reference_q: Optional[np.ndarray] = None,
+        prediction_backend: Optional[Any] = None,
     ):
         self.model = model
         self.ee_site_name = ee_site_name
         self.imu_site_name = imu_site_name
         self.joint_indices = np.array(joint_indices, dtype=np.int32)
         self.qvel_indices = self.joint_indices - 1
+        # 【核心代码】MPC 预测运动学可以由 MuJoCo 或 Pinocchio 提供；
+        # LQR/PID 的既有 MuJoCo 路径保持不变。
+        self.prediction_backend = prediction_backend
         self.position_reference_q = None if position_reference_q is None else np.asarray(position_reference_q, dtype=np.float64).copy()
         if self.position_reference_q is not None and self.position_reference_q.shape != self.joint_indices.shape:
             raise ValueError("position_reference_q 必须与被控关节数量一致。")
@@ -158,6 +162,7 @@ class KinematicsHelper:
         disturbance: Optional[DisturbanceInput] = None,
         disturbance_prediction: Optional[tuple] = None,
         interval_disturbance_prediction: Optional[tuple] = None,
+        include_kinematics_cache: bool = True,
     ) -> ControllerHelpers:
         qpos_ref = np.asarray(data.qpos, dtype=np.float64).copy()
         position_reference = (
@@ -176,7 +181,11 @@ class KinematicsHelper:
             interval_disturbance_prediction=(
                 interval_disturbance_prediction
             ),
-            kinematics=self.compute_kinematics_cache(data),  # 当前姿态下末端雅可比 J_v/J_w 及其导数
+            kinematics=(
+                self.compute_kinematics_cache(data)
+                if include_kinematics_cache
+                else None
+            ),
             torso_relative_position_reference=position_reference,
             compute_gravity_error=lambda q, W_R_I: self.compute_tilt_error(q, W_R_I, qpos_ref),
             compute_lqr_terms=lambda q, dq, W_R_I, dist=None: self.compute_lqr_terms(
@@ -341,26 +350,44 @@ class KinematicsHelper:
         """
         q = np.asarray(q_right_arm, dtype=np.float64)
         dq = np.asarray(dq_right_arm, dtype=np.float64)
-        self._set_scratch_state(qpos_reference, q, dq)
-        J_v, J_w = self._site_jacobians_world()
-        # 【核心代码】Qa/Qalpha 同时为零时，未来节点的加速度模型不进入
-        # QP；只有 k=0 为运行诊断保留 mj_jacDot。跳过无效的 Jacobian
-        # 导数不会改变当前代价函数、约束或最优解。
-        if acceleration_required:
-            dJ_v, dJ_w = self._site_jacobian_dots_world()
+        if self.prediction_backend is None:
+            # 兼容旧调用：没有显式后端时继续使用本类原有的 MuJoCo scratch。
+            self._set_scratch_state(qpos_reference, q, dq)
+            J_v, J_w = self._site_jacobians_world()
+            if acceleration_required:
+                dJ_v, dJ_w = self._site_jacobian_dots_world()
+            else:
+                dJ_v = np.zeros_like(J_v)
+                dJ_w = np.zeros_like(J_w)
             p_E = self._scratch.site_xpos[self.ee_site_id].copy()
             p_B = self._scratch.site_xpos[self.imu_site_id].copy()
+            W_R_B_current = (
+                self._scratch.site_xmat[self.imu_site_id]
+                .reshape(3, 3)
+                .copy()
+            )
+            W_R_E_current = (
+                self._scratch.site_xmat[self.ee_site_id]
+                .reshape(3, 3)
+                .copy()
+            )
         else:
-            dJ_v = np.zeros_like(J_v)
-            dJ_w = np.zeros_like(J_w)
-            p_E = None
-            p_B = None
-        W_R_B_current = (
-            self._scratch.site_xmat[self.imu_site_id].reshape(3, 3).copy()
-        )
-        W_R_E_current = (
-            self._scratch.site_xmat[self.ee_site_id].reshape(3, 3).copy()
-        )
+            # 【核心代码】统一后端只返回同一组几何量，下面的扰动模型、
+            # 重力线性化和代价定义不因换库而改变。
+            prediction = self.prediction_backend.evaluate(
+                qpos_reference,
+                q,
+                dq,
+                acceleration_required=acceleration_required,
+            )
+            J_v = prediction.J_v_world
+            J_w = prediction.J_w_world
+            dJ_v = prediction.dJ_v_world
+            dJ_w = prediction.dJ_w_world
+            p_E = prediction.ee_position_world
+            p_B = prediction.imu_position_world
+            W_R_B_current = prediction.imu_rotation_world
+            W_R_E_current = prediction.ee_rotation_world
 
         # 【核心代码】节点量描述 t_k；区间量描述 u_k 将执行的
         # [t_k,t_{k+1})。终端没有 u_N，未给区间量时兼容回退到节点量。
@@ -372,15 +399,20 @@ class KinematicsHelper:
         omega_B_node = self._disturbance_vector(
             node_disturbance, "omega_world"
         )
-        omega_B_interval = self._disturbance_vector(
-            interval, "omega_world"
-        )
-        a_B_interval = self._disturbance_vector(
-            interval, "acc_world"
-        )
-        alpha_B_interval = self._disturbance_vector(
-            interval, "alpha_world"
-        )
+        if acceleration_required:
+            omega_B_interval = self._disturbance_vector(
+                interval, "omega_world"
+            )
+            a_B_interval = self._disturbance_vector(
+                interval, "acc_world"
+            )
+            alpha_B_interval = self._disturbance_vector(
+                interval, "alpha_world"
+            )
+        else:
+            omega_B_interval = np.zeros(3, dtype=np.float64)
+            a_B_interval = np.zeros(3, dtype=np.float64)
+            alpha_B_interval = np.zeros(3, dtype=np.float64)
         W_R_B_predicted = self._disturbance_rotation(
             node_disturbance, W_R_B_current
         )
@@ -394,10 +426,20 @@ class KinematicsHelper:
             if acceleration_required
             else np.zeros(3, dtype=np.float64)
         )
-        J_v = delta_R @ J_v
-        dJ_v = delta_R @ dJ_v
+        if acceleration_required:
+            J_v = delta_R @ J_v
+            dJ_v = delta_R @ dJ_v
+        else:
+            # Qa/Qalpha 关闭或终端节点时，这些量不进入代价；保留正确
+            # shape 的零矩阵供统一校验，避免无意义的 cross/skew 运算。
+            J_v = np.zeros_like(J_v)
+            dJ_v = np.zeros_like(dJ_v)
         J_w = delta_R @ J_w
-        dJ_w = delta_R @ dJ_w
+        dJ_w = (
+            delta_R @ dJ_w
+            if acceleration_required
+            else np.zeros_like(dJ_w)
+        )
         W_R_E = delta_R @ W_R_E_current
 
         # 【核心代码】解析式二维重力 Jacobian。
@@ -407,21 +449,32 @@ class KinematicsHelper:
         J_g = (W_R_E.T @ self._skew(gravity_world) @ J_w)[:2, :]
         gravity_error = gravity_end[:2]
 
-        return {
-            "D_acc": a_B_interval
-            + np.cross(alpha_B_interval, r_BE)
-            + np.cross(
+        if acceleration_required:
+            D_acc = a_B_interval + np.cross(
+                alpha_B_interval, r_BE
+            ) + np.cross(
                 omega_B_interval,
                 np.cross(omega_B_interval, r_BE),
-            ),
-            "C_acc": (
+            )
+            C_acc = (
                 2.0 * self._skew(omega_B_interval) @ J_v + dJ_v
-            ),
-            "B_acc": J_v,
-            "D_alpha": alpha_B_interval,
-            "C_alpha": (
+            )
+            D_alpha = alpha_B_interval
+            C_alpha = (
                 self._skew(omega_B_interval) @ J_w + dJ_w
-            ),
+            )
+        else:
+            D_acc = np.zeros(3, dtype=np.float64)
+            C_acc = np.zeros_like(J_v)
+            D_alpha = np.zeros(3, dtype=np.float64)
+            C_alpha = np.zeros_like(J_w)
+
+        return {
+            "D_acc": D_acc,
+            "C_acc": C_acc,
+            "B_acc": J_v,
+            "D_alpha": D_alpha,
+            "C_alpha": C_alpha,
             "B_alpha": J_w,
             # 【核心代码】世界系末端角速度：
             # omega_E = omega_B + J_omega(q) dq。

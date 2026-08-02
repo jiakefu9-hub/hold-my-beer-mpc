@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import nullcontext
 
 # viewer 使用 GLFW，离屏视频渲染改用独立 EGL 上下文，避免退出时 GLFW 重复销毁。
@@ -11,6 +12,7 @@ import torch
 import yaml
 
 from kinematics_helper import KinematicsHelper
+from robot_model_backend import create_prediction_backend
 from sim_support import (
     HeadingHoldController,
     PhaseDisturbancePredictor,
@@ -89,6 +91,35 @@ if __name__ == "__main__":
         mpc_ddq_execution_mode = str(
             config.get("mpc_ddq_execution_mode", "every_step")
         ).lower()
+        mpc_prediction_kinematics_backend = str(
+            config.get("mpc_prediction_kinematics_backend", "mujoco")
+        ).strip().lower()
+        ddq_nominal_inverse_dynamics_backend = str(
+            config.get("ddq_nominal_inverse_dynamics_backend", "mujoco")
+        ).strip().lower()
+        ddq_pinocchio_friction_breakaway_steps = float(
+            config.get("ddq_pinocchio_friction_breakaway_steps", 5.0)
+        )
+        if (
+            not np.isfinite(ddq_pinocchio_friction_breakaway_steps)
+            or ddq_pinocchio_friction_breakaway_steps < 0.0
+        ):
+            raise ValueError(
+                "ddq_pinocchio_friction_breakaway_steps 必须是有限非负数。"
+            )
+        if mpc_prediction_kinematics_backend not in {"mujoco", "pinocchio"}:
+            raise ValueError(
+                "mpc_prediction_kinematics_backend 必须是 mujoco 或 pinocchio。"
+            )
+        if ddq_nominal_inverse_dynamics_backend not in {
+            "mujoco",
+            "pinocchio_shadow",
+            "pinocchio",
+        }:
+            raise ValueError(
+                "ddq_nominal_inverse_dynamics_backend 必须是 "
+                "mujoco、pinocchio_shadow 或 pinocchio。"
+            )
         valid_execution_modes = {
             "every_step",
             "policy_update",
@@ -182,6 +213,23 @@ if __name__ == "__main__":
         controller_meta["mpc_config"]["ddq_execution_mode"] = (
             mpc_ddq_execution_mode
         )
+    controller_meta["robot_model_backends"] = {
+        "mpc_prediction_kinematics": (
+            mpc_prediction_kinematics_backend
+            if arm_controller == "mpc"
+            else "not_used"
+        ),
+        "ddq_nominal_inverse_dynamics": (
+            ddq_nominal_inverse_dynamics_backend
+            if acceleration_controller
+            else "not_used"
+        ),
+        "model_source": "matching_simulation_mjcf",
+        "mujoco_contact_validation_retained": True,
+        "pinocchio_friction_breakaway_steps": (
+            ddq_pinocchio_friction_breakaway_steps
+        ),
+    }
     filter_keys = (
         {
             "acc_alpha_key": "mpc_torso_acc_filter_alpha",
@@ -292,12 +340,47 @@ if __name__ == "__main__":
     right_arm_id_index_scratch = resolve_right_arm_control_context(m, run_metadata["right_arm_joint_names"])
     if arm_controller == "lqr":
         arm_policy.set_joint_limits(m.jnt_range[right_arm_id_index_scratch.joint_ids])
+    # 【核心代码】预测后端与名义逆动力学后端共用同一份 matching MJCF。
+    # Pinocchio 只替代无接触的模型计算；后面的 MuJoCo 候选验收不变。
+    prediction_backend = create_prediction_backend(
+        (
+            mpc_prediction_kinematics_backend
+            if arm_controller == "mpc"
+            else "mujoco"
+        ),
+        mujoco_model=m,
+        joint_names=right_arm_id_index_scratch.joint_names,
+        mjcf_path=xml_path,
+        ee_name="right_grasp_site",
+        imu_name="imu_in_torso",
+    )
+    pinocchio_backend = (
+        prediction_backend
+        if prediction_backend.backend_name == "pinocchio"
+        else None
+    )
+    if (
+        acceleration_controller
+        and ddq_nominal_inverse_dynamics_backend.startswith("pinocchio")
+        and pinocchio_backend is None
+    ):
+        pinocchio_backend = create_prediction_backend(
+            "pinocchio",
+            mujoco_model=m,
+            joint_names=right_arm_id_index_scratch.joint_names,
+            mjcf_path=xml_path,
+            ee_name="right_grasp_site",
+            imu_name="imu_in_torso",
+        )
     right_arm_helper = KinematicsHelper(
         m,
         ee_site_name="right_grasp_site",
         joint_indices=right_arm_id_index_scratch.qpos_indices,
         imu_site_name="imu_in_torso",
         position_reference_q=right_arm_target,
+        prediction_backend=(
+            prediction_backend if arm_controller == "mpc" else None
+        ),
     )
 
     # 行走策略仍接收 yaw-rate 命令；这里在它外层增加世界系航向保持。
@@ -396,6 +479,7 @@ if __name__ == "__main__":
             right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
             if arm_policy_update_due:
                 perf_monitor.start_arm_control()
+                disturbance_prediction_start = time.perf_counter()
                 disturbance_horizon = (
                     None
                     if disturbance_predictor is None
@@ -403,6 +487,9 @@ if __name__ == "__main__":
                         counter * simulation_dt,
                         torso_disturbance,
                     )
+                )
+                disturbance_prediction_time = (
+                    time.perf_counter() - disturbance_prediction_start
                 )
                 disturbance_prediction = (
                     None
@@ -415,6 +502,7 @@ if __name__ == "__main__":
                     else disturbance_horizon.intervals
                 )
                 # right_arm_helpers 封装当前步的运动学量，以及 PID/LQR/MPC 各自的线性化回调。
+                helper_construction_start = time.perf_counter()
                 right_arm_helpers = right_arm_helper.build_helpers(
                     d,
                     disturbance=torso_disturbance,
@@ -422,13 +510,23 @@ if __name__ == "__main__":
                     interval_disturbance_prediction=(
                         interval_disturbance_prediction
                     ),
+                    # MPC 直接按预测窗口求运动学；旧的单点 cache 没有消费者。
+                    include_kinematics_cache=(arm_controller != "mpc"),
+                )
+                helper_construction_time = (
+                    time.perf_counter() - helper_construction_start
                 )
                 right_ee_position_reference_torso = right_arm_helpers.torso_relative_position_reference.copy()
                 if acceleration_controller:
                     # 【核心代码】LQR/MPC 都输出 ddq_des，并复用同一条力矩执行链。
                     # - target_right_arm_q / dq：给下层 PD 跟踪的参考轨迹
                     # - desired_right_arm_ddq：期望关节加速度，后面用于 computed torque 前馈
+                    controller_compute_start = time.perf_counter()
                     target_right_arm_q, target_right_arm_dq, desired_right_arm_ddq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
+                    controller_compute_action_time = (
+                        time.perf_counter() - controller_compute_start
+                    )
+                    diagnostics_start = time.perf_counter()
                     controller_diagnostics = (
                         arm_policy.get_last_diagnostics(copy_data=False)
                         if arm_controller == "mpc"
@@ -443,6 +541,24 @@ if __name__ == "__main__":
                             mpc_diagnostics["disturbance_template_diagnostics"] = (
                                 disturbance_predictor.get_last_diagnostics()
                             )
+                    diagnostics_time = time.perf_counter() - diagnostics_start
+                    if arm_controller == "mpc":
+                        # 【非核心诊断】把上层控制拍拆开计时，确认优化真正作用于
+                        # 真机也会存在的扰动预测、helper 构造和 MPC 计算路径。
+                        controller_diagnostics.update(
+                            {
+                                "disturbance_prediction_time": (
+                                    disturbance_prediction_time
+                                ),
+                                "helper_construction_time": (
+                                    helper_construction_time
+                                ),
+                                "controller_compute_action_time": (
+                                    controller_compute_action_time
+                                ),
+                                "diagnostics_time": diagnostics_time,
+                            }
+                        )
                 else:
                     # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
                     target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
@@ -466,11 +582,12 @@ if __name__ == "__main__":
             ddq_execution_updated = False
             if acceleration_controller:
                 # 【核心代码】第二层执行（LQR/MPC 共用）：
-                # 用 desired_right_arm_ddq 作为右臂的期望关节加速度，调用 mj_inverse() 计算 tau_ff。
+                # 用 desired_right_arm_ddq 作为右臂期望加速度，由配置选择
+                # MuJoCo inverse 或 Pinocchio RNEA 计算 tau_ff。
                 # apply_computed_torque_control() 内部会：
                 # 1) 复制当前整机 qpos / qvel 到 scratch data
                 # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
-                # 3) 调用 mj_inverse()，生成“非摩擦约束不对抗”的名义力矩
+                # 3) 生成“非摩擦约束不对抗”的名义力矩
                 # 4) 固定腿、腰和左臂力矩：1 次完整 mj_forward 建立基线，
                 #    再用 5 次 mj_forwardSkip（每个右臂力矩各扰动一次）构建 G_tau
                 # 5) 通过一次阻尼最小二乘求右臂力矩修正
@@ -508,6 +625,13 @@ if __name__ == "__main__":
                         ),
                         forward_dynamics_enable_hold_last_safe=(
                             controller_setup.execution_hold_last_safe
+                        ),
+                        inverse_dynamics_backend=(
+                            ddq_nominal_inverse_dynamics_backend
+                        ),
+                        pinocchio_backend=pinocchio_backend,
+                        pinocchio_friction_breakaway_steps=(
+                            ddq_pinocchio_friction_breakaway_steps
                         ),
                     )
                     perf_monitor.finish_computed_torque_control()

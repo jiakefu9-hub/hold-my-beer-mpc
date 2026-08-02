@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import time
+import warnings
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -187,6 +188,15 @@ class InverseDynamicsResult:
     tau_constraint_nonfriction: np.ndarray
     tau_constraint_friction: np.ndarray
     elapsed_time: float = 0.0
+    backend: str = "mujoco"
+    core_elapsed_time: float = 0.0
+    tau_rnea: Optional[np.ndarray] = None
+    tau_passive: Optional[np.ndarray] = None
+    shadow_tau_ff: Optional[np.ndarray] = None
+    shadow_tau_ff_difference: Optional[np.ndarray] = None
+    shadow_elapsed_time: float = 0.0
+    shadow_valid: bool = False
+    shadow_error: str = ""
 
 
 @dataclass
@@ -630,22 +640,43 @@ class PhaseDisturbancePredictor:
             self._heading_yaw_world
         )
         phase_now = (float(simulation_time) / self.period) % 1.0
-        node_acc_now = rotation_world_heading @ self._sample(
-            self.node_acc_template, phase_now
+        phase_step = self.control_dt / self.period
+        node_phases = np.mod(
+            phase_now + phase_step * np.arange(self.horizon + 1),
+            1.0,
         )
-        node_omega_now = rotation_world_heading @ self._sample(
-            self.node_omega_template, phase_now
+        interval_phases = node_phases[: self.horizon]
+        midpoint_phases = np.mod(
+            interval_phases + 0.5 * phase_step,
+            1.0,
         )
-        node_alpha_now = rotation_world_heading @ self._sample(
-            self.node_alpha_template, phase_now
-        )
-        anchor_orientation_world = rotation_world_heading @ (
-            self._quaternion_to_rotation(
-                self._sample_quaternion(
-                    self.orientation_quaternion_template, phase_now
-                )
+
+        # 【核心提速代码】一次批量插值 N+1 个节点和 N 个区间，
+        # 避免每个量、每个预测步都重复 searchsorted 和分配临时数组。
+        node_acc_world = self._sample_many(
+            self.node_acc_template, node_phases
+        ) @ rotation_world_heading.T
+        node_omega_world = self._sample_many(
+            self.node_omega_template, node_phases
+        ) @ rotation_world_heading.T
+        node_alpha_world = self._sample_many(
+            self.node_alpha_template, node_phases
+        ) @ rotation_world_heading.T
+        node_orientation_heading = self._quaternions_to_rotations(
+            self._sample_quaternions_many(
+                self.orientation_quaternion_template,
+                node_phases,
             )
         )
+        node_orientation_world = np.einsum(
+            "ij,njk->nik",
+            rotation_world_heading,
+            node_orientation_heading,
+        )
+        node_acc_now = node_acc_world[0].copy()
+        node_omega_now = node_omega_world[0].copy()
+        node_alpha_now = node_alpha_world[0].copy()
+        anchor_orientation_world = node_orientation_world[0].copy()
 
         # 【核心代码】模板保留步态冲击等快速周期项；实测与 node 模板之差
         # 只经过慢 EMA 形成长期偏差，不再用滞后的 d0 平移整条预测曲线。
@@ -663,108 +694,86 @@ class PhaseDisturbancePredictor:
             + beta * (measured_alpha - node_alpha_now)
         )
 
-        node_prediction = []
-        for step in range(self.horizon + 1):
-            phase = (
-                phase_now + step * self.control_dt / self.period
-            ) % 1.0
-            template_acc_world = rotation_world_heading @ self._sample(
-                self.node_acc_template, phase
+        node_acc = np.clip(
+            node_acc_world + self._slow_bias_acc,
+            -self.acc_limit,
+            self.acc_limit,
+        )
+        node_omega = node_omega_world + self._slow_bias_omega
+        node_alpha = np.clip(
+            node_alpha_world + self._slow_bias_alpha,
+            -self.alpha_limit,
+            self.alpha_limit,
+        )
+        # 当前节点仍严格等于实测；只有未来节点使用模板预测。
+        node_acc[0] = measured_acc
+        node_omega[0] = measured_omega
+        node_alpha[0] = measured_alpha
+        anchor_correction = measured_rotation @ anchor_orientation_world.T
+        node_rotations = np.einsum(
+            "ij,njk->nik",
+            anchor_correction,
+            node_orientation_world,
+        )
+        node_prediction = tuple(
+            self._disturbance_type(
+                acc_world=node_acc[step].copy(),
+                omega_world=node_omega[step].copy(),
+                alpha_world=node_alpha[step].copy(),
+                rot_world_body=node_rotations[step].copy(),
             )
-            template_omega_world = rotation_world_heading @ self._sample(
-                self.node_omega_template, phase
-            )
-            template_alpha_world = rotation_world_heading @ self._sample(
-                self.node_alpha_template, phase
-            )
-            acc = template_acc_world + self._slow_bias_acc
-            omega = template_omega_world + self._slow_bias_omega
-            alpha = template_alpha_world + self._slow_bias_alpha
-            # 当前节点仍严格等于实测；只有未来节点不再被瞬时误差整体平移。
-            if step == 0:
-                acc = measured_acc.copy()
-                omega = measured_omega.copy()
-                alpha = measured_alpha.copy()
-            acc = np.clip(acc, -self.acc_limit, self.acc_limit)
-            alpha = np.clip(alpha, -self.alpha_limit, self.alpha_limit)
+            for step in range(self.horizon + 1)
+        )
 
-            template_orientation_world = rotation_world_heading @ (
-                self._quaternion_to_rotation(
-                    self._sample_quaternion(
-                        self.orientation_quaternion_template, phase
-                    )
-                )
+        interval_acc = self._sample_many(
+            self.interval_acc_template, interval_phases
+        ) @ rotation_world_heading.T
+        interval_omega = self._sample_many(
+            self.interval_omega_template, interval_phases
+        ) @ rotation_world_heading.T
+        interval_alpha = self._sample_many(
+            self.interval_alpha_template, interval_phases
+        ) @ rotation_world_heading.T
+        interval_acc = np.clip(
+            interval_acc + self._slow_bias_acc,
+            -self.acc_limit,
+            self.acc_limit,
+        )
+        interval_omega += self._slow_bias_omega
+        interval_alpha = np.clip(
+            interval_alpha + self._slow_bias_alpha,
+            -self.alpha_limit,
+            self.alpha_limit,
+        )
+        midpoint_orientation_heading = self._quaternions_to_rotations(
+            self._sample_quaternions_many(
+                self.orientation_quaternion_template,
+                midpoint_phases,
             )
-            # 姿态也先做 H→W，再以当前实测姿态锚定模板相对转动。
-            # 同一个 ^W R_H 在相对转动中会严格抵消，但保留显式转换更易核对。
-            rotation = (
-                measured_rotation
-                @ anchor_orientation_world.T
-                @ template_orientation_world
+        )
+        midpoint_orientation_world = np.einsum(
+            "ij,njk->nik",
+            rotation_world_heading,
+            midpoint_orientation_heading,
+        )
+        interval_rotations = np.einsum(
+            "ij,njk->nik",
+            anchor_correction,
+            midpoint_orientation_world,
+        )
+        interval_prediction = tuple(
+            self._disturbance_type(
+                acc_world=interval_acc[step].copy(),
+                omega_world=interval_omega[step].copy(),
+                alpha_world=interval_alpha[step].copy(),
+                rot_world_body=interval_rotations[step].copy(),
             )
-
-            node_prediction.append(
-                self._disturbance_type(
-                    acc_world=acc,
-                    omega_world=omega,
-                    alpha_world=alpha,
-                    rot_world_body=rotation.copy(),
-                )
-            )
-
-        interval_prediction = []
-        for step in range(self.horizon):
-            phase = (
-                phase_now + step * self.control_dt / self.period
-            ) % 1.0
-            midpoint_phase = (
-                phase + 0.5 * self.control_dt / self.period
-            ) % 1.0
-            interval_acc = rotation_world_heading @ self._sample(
-                self.interval_acc_template, phase
-            )
-            interval_omega = rotation_world_heading @ self._sample(
-                self.interval_omega_template, phase
-            )
-            interval_alpha = rotation_world_heading @ self._sample(
-                self.interval_alpha_template, phase
-            )
-            interval_acc = np.clip(
-                interval_acc + self._slow_bias_acc,
-                -self.acc_limit,
-                self.acc_limit,
-            )
-            interval_omega = interval_omega + self._slow_bias_omega
-            interval_alpha = np.clip(
-                interval_alpha + self._slow_bias_alpha,
-                -self.alpha_limit,
-                self.alpha_limit,
-            )
-            midpoint_orientation_world = rotation_world_heading @ (
-                self._quaternion_to_rotation(
-                    self._sample_quaternion(
-                        self.orientation_quaternion_template,
-                        midpoint_phase,
-                    )
-                )
-            )
-            interval_rotation = (
-                measured_rotation
-                @ anchor_orientation_world.T
-                @ midpoint_orientation_world
-            )
-            interval_prediction.append(
-                self._disturbance_type(
-                    acc_world=interval_acc,
-                    omega_world=interval_omega,
-                    alpha_world=interval_alpha,
-                    rot_world_body=interval_rotation,
-                )
-            )
+            for step in range(self.horizon)
+        )
 
         prediction = self._horizon_type(
-            nodes=tuple(node_prediction),
-            intervals=tuple(interval_prediction),
+            nodes=node_prediction,
+            intervals=interval_prediction,
         )
         self._last_prediction_diagnostics = self._build_prediction_diagnostics(
             simulation_time=simulation_time,
@@ -1071,6 +1080,14 @@ class PhaseDisturbancePredictor:
         lower, upper, fraction = self._phase_bracket(phase)
         return (1.0 - fraction) * values[lower] + fraction * values[upper]
 
+    def _sample_many(self, values, phases):
+        """批量周期线性插值；与逐点 ``_sample`` 数学等价。"""
+        lower, upper, fraction = self._phase_brackets_many(phases)
+        return (
+            (1.0 - fraction[:, None]) * values[lower]
+            + fraction[:, None] * values[upper]
+        )
+
     def _sample_quaternion(self, quaternions, phase):
         # 四元数不能直接线性插值；使用最短路径 SLERP，并处理 q/-q 二义性。
         lower, upper, fraction = self._phase_bracket(phase)
@@ -1090,6 +1107,38 @@ class PhaseDisturbancePredictor:
             np.sin((1.0 - fraction) * angle) * q0
             + np.sin(fraction * angle) * q1
         ) / scale
+
+    def _sample_quaternions_many(self, quaternions, phases):
+        """批量最短路径 SLERP，保留 q/-q 二义性处理。"""
+        lower, upper, fraction = self._phase_brackets_many(phases)
+        q0 = np.asarray(quaternions[lower], dtype=np.float64)
+        q1 = np.asarray(quaternions[upper], dtype=np.float64).copy()
+        dot = np.einsum("ni,ni->n", q0, q1)
+        negative = dot < 0.0
+        q1[negative] *= -1.0
+        dot[negative] *= -1.0
+        dot = np.clip(dot, -1.0, 1.0)
+
+        result = np.empty_like(q0)
+        linear = dot > 0.9995
+        if np.any(linear):
+            weight = fraction[linear, None]
+            linear_result = (
+                (1.0 - weight) * q0[linear] + weight * q1[linear]
+            )
+            result[linear] = linear_result / np.linalg.norm(
+                linear_result, axis=1, keepdims=True
+            )
+        spherical = ~linear
+        if np.any(spherical):
+            angle = np.arccos(dot[spherical])
+            scale = np.sin(angle)
+            weight = fraction[spherical]
+            result[spherical] = (
+                np.sin((1.0 - weight) * angle)[:, None] * q0[spherical]
+                + np.sin(weight * angle)[:, None] * q1[spherical]
+            ) / scale[:, None]
+        return result
 
     def _phase_bracket(self, phase):
         """周期插值任意相位，当前时刻无需对齐到 2 ms 模板网格。"""
@@ -1111,6 +1160,47 @@ class PhaseDisturbancePredictor:
             raise ValueError("模板 phase_centers 必须严格递增。")
         fraction = (value - lower_phase) / width
         return lower, upper, float(np.clip(fraction, 0.0, 1.0))
+
+    def _phase_brackets_many(self, phases):
+        """批量版周期相位区间定位。"""
+        centers = self.phase_centers
+        values = np.mod(np.asarray(phases, dtype=np.float64), 1.0)
+        if values.ndim != 1 or not np.all(np.isfinite(values)):
+            raise ValueError("phases 必须是有限一维数组。")
+        upper_unwrapped = np.searchsorted(centers, values, side="right")
+        lower = (upper_unwrapped - 1) % len(centers)
+        upper = upper_unwrapped % len(centers)
+        lower_phase = centers[lower].copy()
+        upper_phase = centers[upper].copy()
+        lower_phase[upper_unwrapped == 0] -= 1.0
+        upper_phase[upper_unwrapped == len(centers)] += 1.0
+        width = upper_phase - lower_phase
+        if np.any(width <= 0.0):
+            raise ValueError("模板 phase_centers 必须严格递增。")
+        fraction = np.clip((values - lower_phase) / width, 0.0, 1.0)
+        return lower, upper, fraction
+
+    @staticmethod
+    def _quaternions_to_rotations(quaternions):
+        """批量把 wxyz 四元数转为旋转矩阵。"""
+        values = np.asarray(quaternions, dtype=np.float64)
+        if values.ndim != 2 or values.shape[1] != 4:
+            raise ValueError("姿态四元数必须是 shape=(N, 4)。")
+        norms = np.linalg.norm(values, axis=1)
+        if not np.all(np.isfinite(values)) or np.any(norms < 1e-12):
+            raise ValueError("姿态四元数必须有限且范数非零。")
+        w, x, y, z = (values / norms[:, None]).T
+        rotations = np.empty((len(values), 3, 3), dtype=np.float64)
+        rotations[:, 0, 0] = 1.0 - 2.0 * (y * y + z * z)
+        rotations[:, 0, 1] = 2.0 * (x * y - z * w)
+        rotations[:, 0, 2] = 2.0 * (x * z + y * w)
+        rotations[:, 1, 0] = 2.0 * (x * y + z * w)
+        rotations[:, 1, 1] = 1.0 - 2.0 * (x * x + z * z)
+        rotations[:, 1, 2] = 2.0 * (y * z - x * w)
+        rotations[:, 2, 0] = 2.0 * (x * z - y * w)
+        rotations[:, 2, 1] = 2.0 * (y * z + x * w)
+        rotations[:, 2, 2] = 1.0 - 2.0 * (x * x + y * y)
+        return rotations
 
     @staticmethod
     def _vector(disturbance, name):
@@ -1237,6 +1327,8 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
         "forward_dynamics_candidate_evaluation": "mj_forwardSkip_mjSTAGE_VEL_skip_sensors",
         "forward_dynamics_candidate_selection": "model_ranked_then_best_real_safe_candidate_among_at_least_two_validations",
         "forward_dynamics_evaluations_per_pass": "5 torque perturbations plus 1-4 on-demand candidate validations",
+        "forward_dynamics_scratch_copy": "physical_state_warmstart_and_external_inputs_only_before_full_mj_forward",
+        "constraint_force_reconstruction": "mj_mulJacTVec_with_selected_constraint_rows",
     }
 
     lqr_cost_definition = None
@@ -1467,6 +1559,7 @@ def build_right_arm_control_record(
 ):
     """【非核心代码】把执行结果展开成 record_eval_step 所需的日志字典。"""
     zeros = np.zeros(5, dtype=np.float64)
+    nan_vector = np.full(5, np.nan, dtype=np.float64)
     zero_matrix = np.zeros((5, 5), dtype=np.float64)
 
     if inverse_result is None:
@@ -1478,9 +1571,37 @@ def build_right_arm_control_record(
             "tau_constraint_nonfriction": zeros,
             "tau_constraint_friction": zeros,
             "tau_ff": zeros,
+            "tau_rnea": nan_vector,
+            "tau_passive_model": nan_vector,
+            "tau_ff_shadow": nan_vector,
+            "tau_ff_shadow_difference": nan_vector,
             "inverse_dynamics_time": 0.0,
+            "inverse_dynamics_backend_time": 0.0,
+            "inverse_dynamics_core_time": 0.0,
+            "inverse_dynamics_shadow_time": 0.0,
+            "inverse_dynamics_shadow_valid": False,
         }
     else:
+        tau_rnea = (
+            nan_vector
+            if inverse_result.tau_rnea is None
+            else inverse_result.tau_rnea
+        )
+        tau_passive_model = (
+            nan_vector
+            if inverse_result.tau_passive is None
+            else inverse_result.tau_passive
+        )
+        tau_ff_shadow = (
+            nan_vector
+            if inverse_result.shadow_tau_ff is None
+            else inverse_result.shadow_tau_ff
+        )
+        tau_ff_shadow_difference = (
+            nan_vector
+            if inverse_result.shadow_tau_ff_difference is None
+            else inverse_result.shadow_tau_ff_difference
+        )
         inverse_values = {
             "tau_inverse": inverse_result.tau_inverse,
             "tau_contact": inverse_result.tau_contact,
@@ -1489,7 +1610,18 @@ def build_right_arm_control_record(
             "tau_constraint_nonfriction": inverse_result.tau_constraint_nonfriction,
             "tau_constraint_friction": inverse_result.tau_constraint_friction,
             "tau_ff": inverse_result.tau_ff,
-            "inverse_dynamics_time": inverse_result.elapsed_time,
+            "tau_rnea": tau_rnea,
+            "tau_passive_model": tau_passive_model,
+            "tau_ff_shadow": tau_ff_shadow,
+            "tau_ff_shadow_difference": tau_ff_shadow_difference,
+            "inverse_dynamics_time": (
+                inverse_result.elapsed_time
+                + inverse_result.shadow_elapsed_time
+            ),
+            "inverse_dynamics_backend_time": inverse_result.elapsed_time,
+            "inverse_dynamics_core_time": inverse_result.core_elapsed_time,
+            "inverse_dynamics_shadow_time": inverse_result.shadow_elapsed_time,
+            "inverse_dynamics_shadow_valid": inverse_result.shadow_valid,
         }
 
     if mapping_result is None:
@@ -1777,12 +1909,51 @@ def _constraint_generalized_force(model, scratch, constraint_types):
     """从 MuJoCo 约束行中重建指定类型的广义力。"""
     if scratch.nefc == 0:
         return np.zeros(model.nv, dtype=np.float64)
-    efc_jacobian = np.asarray(scratch.efc_J, dtype=np.float64).reshape(-1, model.nv)[:scratch.nefc]
     efc_type = np.asarray(scratch.efc_type[:scratch.nefc], dtype=np.int32)
-    selected_rows = np.isin(efc_type, constraint_types)
+    types = np.asarray(constraint_types, dtype=np.int32)
+    # 当前 contact 和 friction 枚举各自连续；连续区间判断比 np.isin 更轻。
+    selected_rows = (
+        (efc_type >= types[0]) & (efc_type <= types[-1])
+        if types.size > 0 and np.all(np.diff(types) == 1)
+        else np.isin(efc_type, types)
+    )
     if not np.any(selected_rows):
         return np.zeros(model.nv, dtype=np.float64)
-    return efc_jacobian[selected_rows].T @ scratch.efc_force[:scratch.nefc][selected_rows]
+    selected_force = np.zeros(scratch.nefc, dtype=np.float64)
+    selected_force[selected_rows] = scratch.efc_force[
+        : scratch.nefc
+    ][selected_rows]
+    generalized_force = np.empty(model.nv, dtype=np.float64)
+    # 由 MuJoCo 处理稠密/稀疏 efc_J，避免 Python fancy indexing 复制行块。
+    mujoco.mj_mulJacTVec(
+        model,
+        scratch,
+        generalized_force,
+        selected_force,
+    )
+    return generalized_force
+
+
+def _copy_forward_dynamics_inputs(model, source, target):
+    """只复制下一次 ``mj_forward`` 真正读取的状态和外部输入。"""
+    target.time = source.time
+    target.qpos[:] = source.qpos
+    target.qvel[:] = source.qvel
+    if model.na:
+        target.act[:] = source.act
+    target.qacc_warmstart[:] = source.qacc_warmstart
+    target.ctrl[:] = source.ctrl
+    target.qfrc_applied[:] = source.qfrc_applied
+    target.xfrc_applied[:] = source.xfrc_applied
+    if model.nmocap:
+        target.mocap_pos[:] = source.mocap_pos
+        target.mocap_quat[:] = source.mocap_quat
+    if model.neq:
+        target.eq_active[:] = source.eq_active
+    if model.nuserdata:
+        target.userdata[:] = source.userdata
+    if model.npluginstate:
+        target.plugin_state[:] = source.plugin_state
 
 
 def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indices):
@@ -1818,6 +1989,8 @@ def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indice
     )[qvel_indices]
     tau_constraint_noncontact = tau_constraint_total - tau_contact
     tau_constraint_nonfriction = tau_constraint_total - tau_constraint_friction
+    tau_passive = scratch.qfrc_passive[qvel_indices].copy()
+    tau_rnea = tau_inverse + tau_passive + tau_constraint_total
     # 加回 contact、limit、equality 等非摩擦约束，不让执行器主动抵消它们。
     # frictionloss 仍保留在 qfrc_inverse 中，由前馈力矩正常克服。
     tau_ff = tau_inverse + tau_constraint_nonfriction
@@ -1830,6 +2003,94 @@ def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indice
         tau_constraint_nonfriction=tau_constraint_nonfriction,
         tau_constraint_friction=tau_constraint_friction,
         elapsed_time=time.perf_counter() - start_time,
+        backend="mujoco",
+        tau_rnea=tau_rnea,
+        tau_passive=tau_passive,
+    )
+
+
+def pinocchio_inverse_dynamics_feedforward(
+    model,
+    data,
+    pinocchio_backend,
+    desired_qacc,
+    qvel_indices,
+    friction_breakaway_steps=5.0,
+):
+    """用 Pinocchio RNEA 生成名义前馈，接触验收仍留在 MuJoCo。
+
+    【核心代码】当前 MuJoCo 路径可化简为
+    ``tau_ff = RNEA - passive - friction_constraint``。非摩擦接触、
+    equality 和关节限位不会被执行器主动抵消。
+    """
+
+    start_time = time.perf_counter()
+    qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
+    desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
+    if desired_qacc.shape != qvel_indices.shape:
+        raise ValueError("Pinocchio RNEA 的 desired_qacc 维度不正确。")
+    if pinocchio_backend is None or not hasattr(
+        pinocchio_backend, "compute_right_arm_rnea"
+    ):
+        raise ValueError("Pinocchio 逆动力学后端未正确初始化。")
+
+    core_start = time.perf_counter()
+    tau_rnea = pinocchio_backend.compute_right_arm_rnea(
+        data.qpos, data.qvel, desired_qacc
+    )
+    core_elapsed = time.perf_counter() - core_start
+
+    tau_constraint_total = data.qfrc_constraint[qvel_indices].copy()
+    tau_contact = _constraint_generalized_force(
+        model, data, CONTACT_CONSTRAINT_TYPES
+    )[qvel_indices]
+    # 对 direct-drive hinge，MuJoCo sliding friction 的广义约束力为
+    # -frictionloss*sign(dq)。零速 breakaway 时改用 ddq_des 的方向；
+    # 这比复用上一物理拍的 sticking 约束更符合本轮逆动力学目标。
+    friction_loss = model.dof_frictionloss[qvel_indices]
+    friction_breakaway_steps = float(friction_breakaway_steps)
+    if (
+        not np.isfinite(friction_breakaway_steps)
+        or friction_breakaway_steps < 0.0
+    ):
+        raise ValueError("friction_breakaway_steps 必须是有限非负数。")
+    # MuJoCo inverse 的正则化摩擦约束会在低速、即将反向时提前采用
+    # ddq_des 的方向。用若干物理步的速度变化作为兼容阈值。
+    breakaway_velocity = (
+        friction_breakaway_steps
+        * float(model.opt.timestep)
+        * np.abs(desired_qacc)
+    )
+    near_zero_velocity = (
+        np.abs(data.qvel[qvel_indices]) < breakaway_velocity
+    )
+    friction_direction = np.where(
+        near_zero_velocity,
+        np.sign(desired_qacc),
+        np.sign(data.qvel[qvel_indices]),
+    )
+    tau_constraint_friction = -friction_loss * friction_direction
+    tau_constraint_noncontact = tau_constraint_total - tau_contact
+    tau_constraint_nonfriction = (
+        tau_constraint_total - tau_constraint_friction
+    )
+    tau_passive = data.qfrc_passive[qvel_indices].copy()
+    tau_ff = tau_rnea - tau_passive - tau_constraint_friction
+    # 保持诊断字段的原有代数关系：tau_inverse + nonfriction = tau_ff。
+    tau_inverse = tau_rnea - tau_passive - tau_constraint_total
+    return InverseDynamicsResult(
+        tau_ff=tau_ff,
+        tau_inverse=tau_inverse,
+        tau_contact=tau_contact,
+        tau_constraint_total=tau_constraint_total,
+        tau_constraint_noncontact=tau_constraint_noncontact,
+        tau_constraint_nonfriction=tau_constraint_nonfriction,
+        tau_constraint_friction=tau_constraint_friction,
+        elapsed_time=time.perf_counter() - start_time,
+        backend="pinocchio",
+        core_elapsed_time=core_elapsed,
+        tau_rnea=tau_rnea,
+        tau_passive=tau_passive,
     )
 
 
@@ -1898,11 +2159,12 @@ def local_forward_dynamics_torque_mapping(
 
     baseline_start = time.perf_counter()
     tau_nominal = np.clip(tau_nominal, torque_limits[:, 0], torque_limits[:, 1])
-    baseline_ctrl = fixed_ctrl.copy()
-    baseline_ctrl[ctrl_indices] = tau_nominal
-    mujoco.mj_copyData(scratch, model, data)
+    # 【核心提速】完整 mj_copyData 还会复制下一次 mj_forward 会重建的
+    # Jacobian、约束和传感器缓存；这里只复制物理状态、warm-start 与外部输入。
+    _copy_forward_dynamics_inputs(model, data, scratch)
     qacc_warmstart = scratch.qacc_warmstart.copy()
-    scratch.ctrl[:] = baseline_ctrl
+    scratch.ctrl[:] = fixed_ctrl
+    scratch.ctrl[ctrl_indices] = tau_nominal
     scratch.qacc_warmstart[:] = qacc_warmstart
     mujoco.mj_forward(model, scratch)
     qacc_baseline = scratch.qacc[qvel_indices].copy()
@@ -1910,14 +2172,13 @@ def local_forward_dynamics_torque_mapping(
 
     def solve_validated_pass(base_tau, base_qacc):
         """在指定力矩工作点重线性化，按需做动力学验收并返回安全候选中的最优项。"""
-        pass_ctrl = fixed_ctrl.copy()
-        pass_ctrl[ctrl_indices] = base_tau
         gain_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
         for column in range(joint_count):
             signed_perturbation = float(perturbation)
             if base_tau[column] + signed_perturbation > torque_limits[column, 1]:
                 signed_perturbation = -signed_perturbation
-            scratch.ctrl[:] = pass_ctrl
+            scratch.ctrl[:] = fixed_ctrl
+            scratch.ctrl[ctrl_indices] = base_tau
             scratch.ctrl[ctrl_indices[column]] += signed_perturbation
             scratch.qacc_warmstart[:] = qacc_warmstart
             mujoco.mj_forwardSkip(model, scratch, mujoco.mjtStage.mjSTAGE_VEL, 1)
@@ -1981,9 +2242,8 @@ def local_forward_dynamics_torque_mapping(
             scale = candidate_spec["scale"]
             candidate_tau_raw = candidate_spec["tau_raw"]
             candidate_tau = candidate_spec["tau"]
-            candidate_ctrl = pass_ctrl.copy()
-            candidate_ctrl[ctrl_indices] = candidate_tau
-            scratch.ctrl[:] = candidate_ctrl
+            scratch.ctrl[:] = fixed_ctrl
+            scratch.ctrl[ctrl_indices] = candidate_tau
             scratch.qacc_warmstart[:] = qacc_warmstart
             # qpos/qvel 在同一执行拍内不变；基线 mj_forward 已经生成位置和
             # 速度阶段缓存，所以这里只重算控制、加速度和约束阶段。
@@ -2150,9 +2410,8 @@ def local_forward_dynamics_torque_mapping(
             torque_limits[:, 0],
             torque_limits[:, 1],
         )
-        hold_ctrl = fixed_ctrl.copy()
-        hold_ctrl[ctrl_indices] = hold_tau
-        scratch.ctrl[:] = hold_ctrl
+        scratch.ctrl[:] = fixed_ctrl
+        scratch.ctrl[ctrl_indices] = hold_tau
         scratch.qacc_warmstart[:] = qacc_warmstart
         mujoco.mj_forwardSkip(
             model,
@@ -2309,19 +2568,86 @@ def apply_computed_torque_control(
     forward_dynamics_enable_second_pass=True,
     forward_dynamics_max_safety_rescue_passes=2,
     forward_dynamics_enable_hold_last_safe=False,
+    inverse_dynamics_backend="mujoco",
+    pinocchio_backend=None,
+    pinocchio_friction_breakaway_steps=5.0,
 ):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     if tau_pd.shape != id_index_scratch.qvel_indices.shape:
         raise ValueError(f"tau_pd shape {tau_pd.shape} 与控制关节数量 {id_index_scratch.qvel_indices.shape} 不一致。")
 
-    inverse_result = inverse_dynamics_feedforward(
-        model,
-        data,
-        id_index_scratch.inverse_dynamics_data,
-        desired_qacc,
-        id_index_scratch.qvel_indices,
-    )
+    inverse_backend_name = str(inverse_dynamics_backend).strip().lower()
+    if inverse_backend_name == "mujoco":
+        inverse_result = inverse_dynamics_feedforward(
+            model,
+            data,
+            id_index_scratch.inverse_dynamics_data,
+            desired_qacc,
+            id_index_scratch.qvel_indices,
+        )
+    elif inverse_backend_name == "pinocchio":
+        pin_result = pinocchio_inverse_dynamics_feedforward(
+            model,
+            data,
+            pinocchio_backend,
+            desired_qacc,
+            id_index_scratch.qvel_indices,
+            friction_breakaway_steps=pinocchio_friction_breakaway_steps,
+        )
+        inverse_result = pin_result
+    elif inverse_backend_name == "pinocchio_shadow":
+        # Shadow 绝不能影响主控制链：先完成 MuJoCo 名义力矩，
+        # 再尝试 Pinocchio 比较。Pin 异常只会使本拍 shadow 无效。
+        inverse_result = inverse_dynamics_feedforward(
+            model,
+            data,
+            id_index_scratch.inverse_dynamics_data,
+            desired_qacc,
+            id_index_scratch.qvel_indices,
+        )
+        inverse_result.backend = "pinocchio_shadow"
+        shadow_start = time.perf_counter()
+        try:
+            pin_result = pinocchio_inverse_dynamics_feedforward(
+                model,
+                data,
+                pinocchio_backend,
+                desired_qacc,
+                id_index_scratch.qvel_indices,
+                friction_breakaway_steps=pinocchio_friction_breakaway_steps,
+            )
+        except Exception as error:  # shadow 不得改变执行输出
+            inverse_result.shadow_elapsed_time = (
+                time.perf_counter() - shadow_start
+            )
+            inverse_result.shadow_error = (
+                f"{type(error).__name__}: {error}"
+            )
+            if not getattr(
+                pinocchio_backend, "_shadow_warning_emitted", False
+            ):
+                warnings.warn(
+                    "Pinocchio shadow 失败，本拍仍执行 MuJoCo "
+                    f"名义力矩：{inverse_result.shadow_error}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                if pinocchio_backend is not None:
+                    pinocchio_backend._shadow_warning_emitted = True
+        else:
+            inverse_result.shadow_tau_ff = pin_result.tau_ff.copy()
+            inverse_result.shadow_tau_ff_difference = (
+                pin_result.tau_ff - inverse_result.tau_ff
+            )
+            inverse_result.shadow_elapsed_time = pin_result.elapsed_time
+            inverse_result.core_elapsed_time = pin_result.core_elapsed_time
+            inverse_result.shadow_valid = True
+    else:
+        raise ValueError(
+            "inverse_dynamics_backend 必须是 "
+            "mujoco、pinocchio_shadow 或 pinocchio。"
+        )
     tau_nominal = np.clip(
         inverse_result.tau_ff + tau_pd,
         id_index_scratch.torque_limits[:, 0],
@@ -2495,6 +2821,10 @@ class PerformanceMonitor:
         if not isinstance(diagnostics, dict):
             return
         names = (
+            "disturbance_prediction_time",
+            "helper_construction_time",
+            "controller_compute_action_time",
+            "diagnostics_time",
             "rollout_time",
             "terms_time",
             "cost_time",
@@ -2522,7 +2852,21 @@ class PerformanceMonitor:
         self.ddq_execution_timing_samples.append(
             {
                 "total_time": float(self.computed_torque_elapsed),
-                "inverse_time": float(inverse_result.elapsed_time),
+                # shadow 是调试模式，但它确实占用当前进程时间；
+                # 所以总 inverse_time 不得遗漏 shadow 调用。
+                "inverse_time": float(
+                    inverse_result.elapsed_time
+                    + inverse_result.shadow_elapsed_time
+                ),
+                "inverse_backend_time": float(
+                    inverse_result.elapsed_time
+                ),
+                "inverse_core_time": float(
+                    inverse_result.core_elapsed_time
+                ),
+                "inverse_shadow_time": float(
+                    inverse_result.shadow_elapsed_time
+                ),
                 "mapping_time": float(mapping_result.elapsed_time),
                 "baseline_time": float(mapping_result.baseline_time),
                 "first_pass_time": float(mapping_result.first_pass_time),
@@ -2867,6 +3211,10 @@ class PerformanceMonitor:
         )
 
         mpc_breakdown_names = (
+            "disturbance_prediction_time",
+            "helper_construction_time",
+            "controller_compute_action_time",
+            "diagnostics_time",
             "rollout_time",
             "terms_time",
             "cost_time",
@@ -2882,6 +3230,9 @@ class PerformanceMonitor:
         ddq_breakdown_names = (
             "total_time",
             "inverse_time",
+            "inverse_backend_time",
+            "inverse_core_time",
+            "inverse_shadow_time",
             "mapping_time",
             "baseline_time",
             "first_pass_time",
@@ -3255,7 +3606,15 @@ def init_eval_buffers():
             "right_arm_tau_constraint_nonfriction": [],
             "right_arm_tau_constraint_friction": [],
             "right_arm_tau_ff": [],
+            "right_arm_tau_rnea": [],
+            "right_arm_tau_passive_model": [],
+            "right_arm_tau_ff_shadow": [],
+            "right_arm_tau_ff_shadow_difference": [],
             "right_arm_inverse_dynamics_time": [],
+            "right_arm_inverse_dynamics_backend_time": [],
+            "right_arm_inverse_dynamics_core_time": [],
+            "right_arm_inverse_dynamics_shadow_time": [],
+            "right_arm_inverse_dynamics_shadow_valid": [],
             "right_arm_tau_pd": [],
             "right_arm_tau_nominal": [],
             "right_arm_tau_mapping_correction_raw": [],
@@ -6125,6 +6484,14 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     tau_constraint_nonfriction = control_vector("tau_constraint_nonfriction", 5)
     tau_constraint_friction = control_vector("tau_constraint_friction", 5)
     tau_ff = control_vector("tau_ff", 5)
+    tau_rnea = control_vector("tau_rnea", 5, default=np.nan)
+    tau_passive_model = control_vector(
+        "tau_passive_model", 5, default=np.nan
+    )
+    tau_ff_shadow = control_vector("tau_ff_shadow", 5, default=np.nan)
+    tau_ff_shadow_difference = control_vector(
+        "tau_ff_shadow_difference", 5, default=np.nan
+    )
     tau_pd = control_vector("tau_pd", 5)
     tau_nominal = control_vector("tau_nominal", 5)
     tau_mapping_correction_raw = control_vector("tau_mapping_correction_raw", 5)
@@ -6248,6 +6615,18 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
         "forward_dynamics_hold_last_safe_qacc", 5
     )
     inverse_dynamics_time = control_scalar("inverse_dynamics_time")
+    inverse_dynamics_backend_time = control_scalar(
+        "inverse_dynamics_backend_time"
+    )
+    inverse_dynamics_core_time = control_scalar(
+        "inverse_dynamics_core_time"
+    )
+    inverse_dynamics_shadow_time = control_scalar(
+        "inverse_dynamics_shadow_time"
+    )
+    inverse_dynamics_shadow_valid = bool(
+        right_arm_control.get("inverse_dynamics_shadow_valid", False)
+    )
     forward_dynamics_mapping_time = control_scalar(
         "forward_dynamics_mapping_time"
     )
@@ -6423,8 +6802,30 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_tau_constraint_nonfriction"].append(tau_constraint_nonfriction)
     buffers.trajectory_data["right_arm_tau_constraint_friction"].append(tau_constraint_friction)
     buffers.trajectory_data["right_arm_tau_ff"].append(tau_ff)
+    buffers.trajectory_data["right_arm_tau_rnea"].append(tau_rnea)
+    buffers.trajectory_data["right_arm_tau_passive_model"].append(
+        tau_passive_model
+    )
+    buffers.trajectory_data["right_arm_tau_ff_shadow"].append(
+        tau_ff_shadow
+    )
+    buffers.trajectory_data["right_arm_tau_ff_shadow_difference"].append(
+        tau_ff_shadow_difference
+    )
     buffers.trajectory_data["right_arm_inverse_dynamics_time"].append(
         inverse_dynamics_time
+    )
+    buffers.trajectory_data["right_arm_inverse_dynamics_backend_time"].append(
+        inverse_dynamics_backend_time
+    )
+    buffers.trajectory_data["right_arm_inverse_dynamics_core_time"].append(
+        inverse_dynamics_core_time
+    )
+    buffers.trajectory_data["right_arm_inverse_dynamics_shadow_time"].append(
+        inverse_dynamics_shadow_time
+    )
+    buffers.trajectory_data["right_arm_inverse_dynamics_shadow_valid"].append(
+        inverse_dynamics_shadow_valid
     )
     buffers.trajectory_data["right_arm_tau_pd"].append(tau_pd)
     buffers.trajectory_data["right_arm_tau_nominal"].append(tau_nominal)
