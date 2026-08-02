@@ -86,6 +86,17 @@ if __name__ == "__main__":
                 f"arm_controller={arm_controller!r} 无效，只能选择 'pid'、'lqr' 或 'mpc'。"
             )
         arm_control_decimation = int(config.get("arm_control_decimation", 2))
+        mpc_ddq_execution_mode = str(
+            config.get("mpc_ddq_execution_mode", "every_step")
+        ).lower()
+        valid_execution_modes = {
+            "every_step",
+            "policy_update",
+        }
+        if mpc_ddq_execution_mode not in valid_execution_modes:
+            raise ValueError(
+                "mpc_ddq_execution_mode 必须是 every_step 或 policy_update。"
+            )
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
         heading_control_enabled = bool(config.get("heading_control_enabled", True))
         heading_filter_cycles = float(config.get("heading_filter_cycles", 1.0))
@@ -154,6 +165,9 @@ if __name__ == "__main__":
     right_ee_position_reference_torso = np.zeros(3, dtype=np.float64)
     lqr_one_step_prediction = None
     mpc_diagnostics = None
+    cached_right_arm_tau = None
+    cached_inverse_result = None
+    cached_mapping_result = None
     controller_setup = create_arm_controller(
         config, arm_controller, right_arm_target, arm_control_dt
     )
@@ -164,6 +178,10 @@ if __name__ == "__main__":
         arm_policy.get_cost_definition() if arm_controller == "mpc" else None
     )
     controller_meta = controller_setup.metadata
+    if arm_controller == "mpc":
+        controller_meta["mpc_config"]["ddq_execution_mode"] = (
+            mpc_ddq_execution_mode
+        )
     filter_keys = (
         {
             "acc_alpha_key": "mpc_torso_acc_filter_alpha",
@@ -349,6 +367,12 @@ if __name__ == "__main__":
             # 从上肢状态里切出右臂 5 个关节，作为右臂控制器的当前状态输入
             right_arm_q = arm_waist_q[6:11]
             right_arm_dq = arm_waist_dq[6:11]
+            arm_policy_update_due = counter % arm_control_decimation == 0
+            if arm_policy_update_due:
+                perf_monitor.begin_arm_interval()
+            # 真机相关右臂路径从当前状态处理开始，到最终力矩写入为止。
+            # 它不包含 MuJoCo 物理推进、评估绘图、视频或 sleep。
+            perf_monitor.start_right_arm_path()
 
             # torso 线加速度直接读取 MuJoCo IMU accelerometer，并转换到去重力后的世界系；
             # torso 角加速度仍由世界系角速度有限差分得到。
@@ -370,7 +394,7 @@ if __name__ == "__main__":
             
             # right_arm_obs 是上层右臂控制器看到的“当前观测”；其中包含右臂状态、torso 姿态与运动信息，以及右臂控制周期。
             right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
-            if counter % arm_control_decimation == 0:
+            if arm_policy_update_due:
                 perf_monitor.start_arm_control()
                 disturbance_horizon = (
                     None
@@ -405,7 +429,11 @@ if __name__ == "__main__":
                     # - target_right_arm_q / dq：给下层 PD 跟踪的参考轨迹
                     # - desired_right_arm_ddq：期望关节加速度，后面用于 computed torque 前馈
                     target_right_arm_q, target_right_arm_dq, desired_right_arm_ddq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
-                    controller_diagnostics = arm_policy.get_last_diagnostics()
+                    controller_diagnostics = (
+                        arm_policy.get_last_diagnostics(copy_data=False)
+                        if arm_controller == "mpc"
+                        else arm_policy.get_last_diagnostics()
+                    )
                     raw_right_arm_ddq = controller_diagnostics["ddq_raw"]
                     if arm_controller == "lqr":
                         lqr_one_step_prediction = controller_diagnostics["one_step_prediction"]
@@ -419,6 +447,8 @@ if __name__ == "__main__":
                     # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
                     target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
                 perf_monitor.finish_arm_control()
+                if arm_controller == "mpc":
+                    perf_monitor.record_mpc_timing(controller_diagnostics)
 
             # 把“固定的腰/左臂目标”和“在线计算的右臂目标”拼回完整上肢目标
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
@@ -433,6 +463,7 @@ if __name__ == "__main__":
             right_arm_tau_pd = tau_arm_waist[6:11].copy()
             inverse_result = None
             mapping_result = None
+            ddq_execution_updated = False
             if acceleration_controller:
                 # 【核心代码】第二层执行（LQR/MPC 共用）：
                 # 用 desired_right_arm_ddq 作为右臂的期望关节加速度，调用 mj_inverse() 计算 tau_ff。
@@ -440,40 +471,63 @@ if __name__ == "__main__":
                 # 1) 复制当前整机 qpos / qvel 到 scratch data
                 # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
                 # 3) 调用 mj_inverse()，生成“非摩擦约束不对抗”的名义力矩
-                # 4) 固定腿、腰和左臂力矩，用 1+5 次前向动力学构建 G_tau
+                # 4) 固定腿、腰和左臂力矩：1 次完整 mj_forward 建立基线，
+                #    再用 5 次 mj_forwardSkip（每个右臂力矩各扰动一次）构建 G_tau
                 # 5) 通过一次阻尼最小二乘求右臂力矩修正
-                # 6) 用完整 mj_forward 验收；失败时缩小修正，救援仍失败则验收上一拍实际力矩
+                # 6) 局部模型先对 1.0/0.5/0.25/0.125 四个修正尺度排序，
+                #    用 mj_forwardSkip 至少验收预测最优的两个，选真实误差更小者；都失败才继续
                 # 7) 验收后残差仍大于阈值时，在已接受力矩处重算 G_tau，并做一次同样受验收的二次修正
-                fixed_ctrl_for_mapping = d.ctrl.copy()
-                fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
-                perf_monitor.start_computed_torque_control()
-                right_arm_tau, inverse_result, mapping_result = apply_computed_torque_control(
-                    m,
-                    d,
-                    right_arm_id_index_scratch,
-                    desired_right_arm_ddq,
-                    right_arm_tau_pd,
-                    fixed_ctrl_for_mapping,
-                    forward_dynamics_perturbation=controller_setup.execution_perturbation,
-                    forward_dynamics_regularization=controller_setup.execution_regularization,
-                    forward_dynamics_second_pass_error_threshold=(
-                        controller_setup.execution_second_pass_error_threshold
-                    ),
-                    forward_dynamics_max_joint_error=controller_setup.execution_max_joint_error,
-                    forward_dynamics_max_abs_qacc=controller_setup.execution_max_abs_qacc,
-                    forward_dynamics_enable_second_pass=controller_setup.execution_enable_second_pass,
-                    forward_dynamics_max_safety_rescue_passes=(
-                        controller_setup.execution_safety_rescue_passes
-                    ),
-                    forward_dynamics_enable_hold_last_safe=(
-                        controller_setup.execution_hold_last_safe
-                    ),
-                )
-                perf_monitor.finish_computed_torque_control()
+                execution_update_due = True
+                if arm_controller == "mpc":
+                    if mpc_ddq_execution_mode == "policy_update":
+                        execution_update_due = arm_policy_update_due
+                if cached_right_arm_tau is None:
+                    execution_update_due = True
+
+                if execution_update_due:
+                    fixed_ctrl_for_mapping = d.ctrl.copy()
+                    fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
+                    perf_monitor.start_computed_torque_control()
+                    right_arm_tau, inverse_result, mapping_result = apply_computed_torque_control(
+                        m,
+                        d,
+                        right_arm_id_index_scratch,
+                        desired_right_arm_ddq,
+                        right_arm_tau_pd,
+                        fixed_ctrl_for_mapping,
+                        forward_dynamics_perturbation=controller_setup.execution_perturbation,
+                        forward_dynamics_regularization=controller_setup.execution_regularization,
+                        forward_dynamics_second_pass_error_threshold=(
+                            controller_setup.execution_second_pass_error_threshold
+                        ),
+                        forward_dynamics_max_joint_error=controller_setup.execution_max_joint_error,
+                        forward_dynamics_max_abs_qacc=controller_setup.execution_max_abs_qacc,
+                        forward_dynamics_enable_second_pass=controller_setup.execution_enable_second_pass,
+                        forward_dynamics_max_safety_rescue_passes=(
+                            controller_setup.execution_safety_rescue_passes
+                        ),
+                        forward_dynamics_enable_hold_last_safe=(
+                            controller_setup.execution_hold_last_safe
+                        ),
+                    )
+                    perf_monitor.finish_computed_torque_control()
+                    perf_monitor.record_ddq_execution_timing(
+                        inverse_result, mapping_result
+                    )
+                    ddq_execution_updated = True
+                    cached_right_arm_tau = right_arm_tau.copy()
+                    cached_inverse_result = inverse_result
+                    cached_mapping_result = mapping_result
+                else:
+                    # 低频实验只保持上一拍已经验收的最终力矩，不重复伪造验收。
+                    right_arm_tau = cached_right_arm_tau.copy()
+                    inverse_result = cached_inverse_result
+                    mapping_result = cached_mapping_result
                 # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
                 tau_arm_waist[6:11] = right_arm_tau
             # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
             d.ctrl[12:23] = tau_arm_waist
+            perf_monitor.finish_right_arm_path()
 
             # --- 7.3 写入力矩并推进物理【核心代码】---
             # 到这里 d.ctrl 已经准备好；mj_step 会真正让整机往前走一拍。
@@ -489,7 +543,8 @@ if __name__ == "__main__":
                 scene_ids,
                 buffers,
                 right_arm_control=build_right_arm_control_record(
-                    arm_policy_updated=counter % arm_control_decimation == 0,
+                    arm_policy_updated=arm_policy_update_due,
+                    ddq_execution_updated=ddq_execution_updated,
                     target_q=target_right_arm_q,
                     target_dq=target_right_arm_dq,
                     ddq_raw=raw_right_arm_ddq,
@@ -508,13 +563,13 @@ if __name__ == "__main__":
                     lqr_one_step_prediction=(
                         lqr_one_step_prediction
                         if arm_controller == "lqr"
-                        and counter % arm_control_decimation == 0
+                        and arm_policy_update_due
                         else None
                     ),
                     mpc_diagnostics=(
                         mpc_diagnostics
                         if arm_controller == "mpc"
-                        and counter % arm_control_decimation == 0
+                        and arm_policy_update_due
                         else None
                     ),
                 ),
@@ -577,6 +632,7 @@ if __name__ == "__main__":
                 viewer.sync()
             perf_monitor.finish_step(counter)
 
+        perf_monitor.finish_pending_arm_interval()
         perf_monitor.print_summary()
         close_renderer(renderer)
         renderer = None

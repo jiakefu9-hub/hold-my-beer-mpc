@@ -66,7 +66,8 @@ ddq_torso_alpha_limit: 40.0
 # MPC 参数
 # ==============================
 mpc_horizon: 12
-# 当前先保留为低 DDQ 权重下的端平基线；下一组实验再分别、逐级恢复两项。
+# 当前保留低 DDQ 权重下的端平基线；Qa=1.0、Qalpha=0.075
+# 的恢复实验会明显增加 QP 回退、DDQ 触顶和端平误差，因此不作为默认值。
 mpc_q_ee_acc: 0.0
 mpc_q_ee_alpha: 0.0
 # 世界系末端角速度权重；上扫实验中 8.0 明显优于 2.0，10.0 及以上会进入约束失稳区。
@@ -121,7 +122,8 @@ mpc_torso_alpha_filter_alpha: 0.50
 # ==============================
 # DDQ 到力矩的共用执行层
 # ==============================
-# 一轮包含：名义前向动力学、5 次力矩扰动和 4 个完整候选验收。
+# 一轮包含：1 次完整基线前向动力学、5 次力矩扰动，
+# 候选按局部模型排序后用 mj_forwardSkip 按需验收，正常 2 次、最多 4 次。
 ddq_execution_perturbation: 0.1
 ddq_execution_regularization: 5.0
 ddq_execution_second_pass_error_threshold: 5.0
@@ -133,6 +135,10 @@ lqr_execution_enable_second_pass: true
 lqr_execution_safety_rescue_passes: 2
 mpc_execution_enable_second_pass: true
 mpc_execution_safety_rescue_passes: 2
+# DDQ→力矩更新频率：every_step=每个 2 ms 物理步；policy_update=每个
+# 6 ms MPC 控制拍只算一次并在其余两步保持力矩。完整实验表明后者会
+# 明显恶化 DDQ 跟踪和端平，因此默认保留 every_step。
+mpc_ddq_execution_mode: every_step
 # 安全救援仍失败时，用当前状态完整验收上一仿真步实际执行的右臂力矩；
 # 只有验收后的瞬时 qacc 安全才保持该力矩。
 mpc_execution_hold_last_safe: true

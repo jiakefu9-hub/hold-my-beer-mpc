@@ -100,6 +100,15 @@ class ArmMPCPolicy:
         self.Qq = self._make_weight(q_posture, self.n, "q_posture")
         self.Qv = self._make_weight(q_vel, self.n, "q_vel")
         self.R = self._make_weight(r_ddq, self.nu, "r_ddq", positive_definite=True)
+        self._acceleration_cost_active = bool(
+            np.any(self.Q_ee_acc != 0.0) or np.any(self.Q_ee_alpha != 0.0)
+        )
+        self._linear_acceleration_cost_active = bool(
+            np.any(self.Q_ee_acc != 0.0)
+        )
+        self._angular_acceleration_cost_active = bool(
+            np.any(self.Q_ee_alpha != 0.0)
+        )
 
         self.terminal_scale = float(terminal_scale)
         self.reg = float(reg)
@@ -160,6 +169,11 @@ class ArmMPCPolicy:
         self.B = np.vstack([0.5 * dt * dt * eye, dt * eye])
         self.Sq = np.hstack([eye, zeros])
         self.Sv = np.hstack([zeros, eye])
+        self._state_regularization_hessian = (
+            self.Sq.T @ self.Qq @ self.Sq
+            + self.Sv.T @ self.Qv @ self.Sv
+        )
+        self._posture_linear_cost = -self.Sq.T @ self.Qq @ self.default_q
 
         self.num_variables = (self.horizon + 1) * self.nx + self.horizon * self.nu
         self._solver = None
@@ -169,12 +183,17 @@ class ArmMPCPolicy:
         # A_cons 的稀疏结构恒定；P 的每个阶段块使用固定的上三角稀疏结构。
         self._A_cons, self._l_template, self._u_template = self._build_constraints()
         self._p_rows, self._p_cols = self._build_hessian_pattern()
+        self._upper_triangle_indices = {
+            size: self._column_major_upper_triangle_indices(size)
+            for size in (self.stage_dim, self.nx)
+        }
         self._last_diagnostics = self._empty_diagnostics()
 
     def compute_action(self, arm_obs, helpers=None):
         """求解一轮 MPC，返回 ``q_ref, dq_ref, ddq_des``。
 
-        ``helpers.compute_mpc_terms(q, dq, node_dist, interval_dist)`` 必须返回：
+        ``helpers.compute_mpc_terms(q, dq, node_dist, interval_dist, acceleration_required)``
+        必须返回：
         ``D_acc/C_acc/B_acc/D_alpha/C_alpha/B_alpha/D_omega/C_omega/``
         ``G_g/d_g/gravity_error``。
         其中 ``G_g`` 为 2x10，``d_g`` 和 ``gravity_error`` 均为 2 维。
@@ -206,11 +225,14 @@ class ArmMPCPolicy:
         start_time = time.perf_counter()
 
         # 【核心代码】平移上一拍输入，并严格按二阶积分器生成本拍工作轨迹。
+        rollout_start = time.perf_counter()
         working_inputs = self._shift_input_plan()
         working_states = self._rollout(x_measured, working_inputs)
+        rollout_time = time.perf_counter() - rollout_start
 
         # 【核心代码】u_k 的加速度项使用 [t_k,t_{k+1}) 区间扰动；
         # 重力、姿态和角速度状态项仍使用节点扰动 d_k。
+        terms_start = time.perf_counter()
         step_terms = []
         for k in range(self.horizon):
             raw_terms = terms_fn(
@@ -218,6 +240,7 @@ class ArmMPCPolicy:
                 working_states[k, self.n :],
                 disturbance_prediction[k],
                 interval_disturbance_prediction[k],
+                self._acceleration_cost_active or k == 0,
             )
             step_terms.append(self._validate_step_terms(raw_terms, k))
         terminal_terms = terms_fn(
@@ -225,21 +248,30 @@ class ArmMPCPolicy:
             working_states[self.horizon, self.n :],
             disturbance_prediction[self.horizon],
             None,
+            False,
         )
         step_terms.append(
             self._validate_step_terms(terminal_terms, self.horizon)
         )
+        terms_time = time.perf_counter() - terms_start
 
         # 【核心代码】组装各阶段二次代价；这里没有 torso-relative 位置项。
+        cost_start = time.perf_counter()
         stage_hessians, linear_cost = self._build_cost(step_terms)
         p_values = self._pack_upper_triangles(stage_hessians)
-        P = sparse.csc_matrix(
-            (p_values, (self._p_rows, self._p_cols)),
-            shape=(self.num_variables, self.num_variables),
-        )
-        if P.nnz != len(self._p_rows):
-            raise RuntimeError("MPC Hessian 的固定稀疏结构发生变化。")
+        # OSQP 首次 setup 后只需要更新固定稀疏结构中的数值，不再每拍
+        # 重建相同的 scipy.sparse.csc_matrix。
+        P = None
+        if self._solver is None:
+            P = sparse.csc_matrix(
+                (p_values, (self._p_rows, self._p_cols)),
+                shape=(self.num_variables, self.num_variables),
+            )
+            if P.nnz != len(self._p_rows):
+                raise RuntimeError("MPC Hessian 的固定稀疏结构发生变化。")
+        cost_time = time.perf_counter() - cost_start
 
+        constraints_start = time.perf_counter()
         (
             lower,
             upper,
@@ -255,8 +287,10 @@ class ArmMPCPolicy:
             recovery_states if recovery_active else working_states,
             recovery_inputs if recovery_active else working_inputs,
         )
+        constraints_time = time.perf_counter() - constraints_start
         assembly_time = time.perf_counter() - start_time
 
+        solver_wall_start = time.perf_counter()
         result, solver_error = self._solve_qp(
             P, p_values, linear_cost, lower, upper, warm_start
         )
@@ -267,6 +301,8 @@ class ArmMPCPolicy:
             solver_status_val,
             max_violation,
         ) = self._check_result(result, lower, upper)
+        solver_wall_time = time.perf_counter() - solver_wall_start
+        postprocess_start = time.perf_counter()
 
         fallback_used = not solved
         fallback_feasible = True
@@ -310,7 +346,7 @@ class ArmMPCPolicy:
             predicted_states, predicted_inputs
         )
         info = None if result is None else result.info
-        self._last_diagnostics = {
+        diagnostics = {
             "solved": bool(solved),
             "success": bool(solved),
             "fallback_used": bool(fallback_used),
@@ -326,6 +362,11 @@ class ArmMPCPolicy:
             "max_constraint_violation": float(max_violation),
             "min_constraint_margins": min_constraint_margins,
             "assembly_time": float(assembly_time),
+            "rollout_time": float(rollout_time),
+            "terms_time": float(terms_time),
+            "cost_time": float(cost_time),
+            "constraints_time": float(constraints_time),
+            "solver_wall_time": float(solver_wall_time),
             "solver_run_time": self._info_value(info, "run_time", 0.0),
             "solver_setup_time": self._info_value(info, "setup_time", 0.0),
             "solver_update_time": self._info_value(info, "update_time", 0.0),
@@ -363,6 +404,13 @@ class ArmMPCPolicy:
             "recovery_active": bool(recovery_active),
             "one_step_prediction": one_step_prediction,
         }
+        diagnostics["postprocess_time"] = float(
+            time.perf_counter() - postprocess_start
+        )
+        diagnostics["policy_core_time"] = float(
+            time.perf_counter() - start_time
+        )
+        self._last_diagnostics = diagnostics
 
         return (
             q_ref.astype(np.float32),
@@ -370,9 +418,13 @@ class ArmMPCPolicy:
             ddq_des.astype(np.float32),
         )
 
-    def get_last_diagnostics(self):
+    def get_last_diagnostics(self, copy_data=True):
         """【非核心代码】返回最近一次 MPC 的求解、预测和回退信息。"""
-        return self._copy_nested(self._last_diagnostics)
+        return (
+            self._copy_nested(self._last_diagnostics)
+            if copy_data
+            else self._last_diagnostics
+        )
 
     def get_cost_definition(self):
         """【非核心代码】返回实际使用的代价权重，便于实验记录。"""
@@ -429,38 +481,46 @@ class ArmMPCPolicy:
 
         for k in range(self.horizon):
             terms = step_terms[k]
-            E_acc = terms["C_acc"] @ self.Sv
-            E_alpha = terms["C_alpha"] @ self.Sv
             E_omega = terms["C_omega"] @ self.Sv
 
+            # 【核心代码】零权重任务不做矩阵乘法。该分支只删去严格为零
+            # 的代数项，不是近似，也不会改变 Hessian 或线性项。
             Qxx = (
-                E_acc.T @ self.Q_ee_acc @ E_acc
-                + E_alpha.T @ self.Q_ee_alpha @ E_alpha
+                self._state_regularization_hessian.copy()
                 + E_omega.T @ self.Q_ee_omega @ E_omega
                 + terms["G_g"].T @ self.Qg @ terms["G_g"]
-                + self.Sq.T @ self.Qq @ self.Sq
-                + self.Sv.T @ self.Qv @ self.Sv
             )
-            Qxu = (
-                E_acc.T @ self.Q_ee_acc @ terms["B_acc"]
-                + E_alpha.T @ self.Q_ee_alpha @ terms["B_alpha"]
-            )
-            Quu = (
-                terms["B_acc"].T @ self.Q_ee_acc @ terms["B_acc"]
-                + terms["B_alpha"].T @ self.Q_ee_alpha @ terms["B_alpha"]
-                + self.R
-            )
+            Qxu = np.zeros((self.nx, self.nu), dtype=np.float64)
+            Quu = self.R.copy()
             fx = (
-                E_acc.T @ self.Q_ee_acc @ terms["D_acc"]
-                + E_alpha.T @ self.Q_ee_alpha @ terms["D_alpha"]
+                self._posture_linear_cost.copy()
                 + E_omega.T @ self.Q_ee_omega @ terms["D_omega"]
                 + terms["G_g"].T @ self.Qg @ terms["d_g"]
-                - self.Sq.T @ self.Qq @ self.default_q
             )
-            fu = (
-                terms["B_acc"].T @ self.Q_ee_acc @ terms["D_acc"]
-                + terms["B_alpha"].T @ self.Q_ee_alpha @ terms["D_alpha"]
-            )
+            fu = np.zeros(self.nu, dtype=np.float64)
+
+            if self._linear_acceleration_cost_active:
+                E_acc = terms["C_acc"] @ self.Sv
+                Qxx += E_acc.T @ self.Q_ee_acc @ E_acc
+                Qxu += E_acc.T @ self.Q_ee_acc @ terms["B_acc"]
+                Quu += terms["B_acc"].T @ self.Q_ee_acc @ terms["B_acc"]
+                fx += E_acc.T @ self.Q_ee_acc @ terms["D_acc"]
+                fu += terms["B_acc"].T @ self.Q_ee_acc @ terms["D_acc"]
+            if self._angular_acceleration_cost_active:
+                E_alpha = terms["C_alpha"] @ self.Sv
+                Qxx += E_alpha.T @ self.Q_ee_alpha @ E_alpha
+                Qxu += E_alpha.T @ self.Q_ee_alpha @ terms["B_alpha"]
+                Quu += (
+                    terms["B_alpha"].T
+                    @ self.Q_ee_alpha
+                    @ terms["B_alpha"]
+                )
+                fx += E_alpha.T @ self.Q_ee_alpha @ terms["D_alpha"]
+                fu += (
+                    terms["B_alpha"].T
+                    @ self.Q_ee_alpha
+                    @ terms["D_alpha"]
+                )
 
             local_hessian = 2.0 * np.block([[Qxx, Qxu], [Qxu.T, Quu]])
             local_hessian = 0.5 * (local_hessian + local_hessian.T)
@@ -562,7 +622,6 @@ class ArmMPCPolicy:
         外，shoulder 对应方向临时开放到外层安全盒；每个真实控制拍重新
         计算，状态返回后自动恢复内层边界。这里没有 QP 松弛变量。
         """
-        recovery_states, recovery_inputs = self._build_recovery_trajectory(q, dq)
         lower = self._l_template.copy()
         upper = self._u_template.copy()
         q_row_start = (self.horizon + 1) * self.nx
@@ -619,6 +678,15 @@ class ArmMPCPolicy:
             np.any(recovery_lower < self.joint_limits[:, 0] - 1e-12)
             or np.any(recovery_upper > self.joint_limits[:, 1] + 1e-12)
         )
+
+        # 绝大多数正常控制拍不需要恢复 warm-start；只有实际开放到安全盒
+        # 时才生成 N 步恢复轨迹。
+        recovery_states = None
+        recovery_inputs = None
+        if recovery_active:
+            recovery_states, recovery_inputs = self._build_recovery_trajectory(
+                q, dq
+            )
 
         for k in range(1, self.horizon + 1):
             row = q_row_start + (k - 1) * self.n
@@ -680,12 +748,21 @@ class ArmMPCPolicy:
         return np.asarray(rows, dtype=np.int32), np.asarray(cols, dtype=np.int32)
 
     @staticmethod
-    def _pack_upper_triangles(hessians):
-        values = []
+    def _column_major_upper_triangle_indices(size):
+        """返回与 CSC 上三角结构一致的局部行、列索引。"""
+        cols = np.repeat(np.arange(size, dtype=np.int32), np.arange(1, size + 1))
+        rows = np.concatenate(
+            [np.arange(col + 1, dtype=np.int32) for col in range(size)]
+        )
+        return rows, cols
+
+    def _pack_upper_triangles(self, hessians):
+        """【半核心代码】按 OSQP 固定 CSC 顺序批量抽取 Hessian 数值。"""
+        packed = []
         for hessian in hessians:
-            for col in range(hessian.shape[1]):
-                values.extend(hessian[: col + 1, col])
-        return np.asarray(values, dtype=np.float64)
+            rows, cols = self._upper_triangle_indices[hessian.shape[0]]
+            packed.append(hessian[rows, cols])
+        return np.concatenate(packed)
 
     def _solve_qp(self, P, p_values, linear, lower, upper, warm_start):
         try:
@@ -1045,6 +1122,13 @@ class ArmMPCPolicy:
                 "ddq": np.nan,
             },
             "assembly_time": 0.0,
+            "rollout_time": 0.0,
+            "terms_time": 0.0,
+            "cost_time": 0.0,
+            "constraints_time": 0.0,
+            "solver_wall_time": 0.0,
+            "postprocess_time": 0.0,
+            "policy_core_time": 0.0,
             "solver_run_time": 0.0,
             "solver_setup_time": 0.0,
             "solver_update_time": 0.0,

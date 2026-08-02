@@ -186,6 +186,7 @@ class InverseDynamicsResult:
     tau_constraint_noncontact: np.ndarray
     tau_constraint_nonfriction: np.ndarray
     tau_constraint_friction: np.ndarray
+    elapsed_time: float = 0.0
 
 
 @dataclass
@@ -240,6 +241,12 @@ class ForwardDynamicsMappingResult:
     hold_last_safe_used: bool
     hold_last_safe_satisfied: bool
     hold_last_safe_qacc: np.ndarray
+    elapsed_time: float = 0.0
+    baseline_time: float = 0.0
+    first_pass_time: float = 0.0
+    second_pass_time: float = 0.0
+    rescue_time: float = 0.0
+    hold_last_time: float = 0.0
 
 
 @dataclass
@@ -1227,6 +1234,9 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
         "forward_dynamics_enable_second_pass": enable_second_pass,
         "forward_dynamics_safety_rescue_passes": safety_rescue_passes,
         "forward_dynamics_hold_last_safe": hold_last_safe,
+        "forward_dynamics_candidate_evaluation": "mj_forwardSkip_mjSTAGE_VEL_skip_sensors",
+        "forward_dynamics_candidate_selection": "model_ranked_then_best_real_safe_candidate_among_at_least_two_validations",
+        "forward_dynamics_evaluations_per_pass": "5 torque perturbations plus 1-4 on-demand candidate validations",
     }
 
     lqr_cost_definition = None
@@ -1271,10 +1281,10 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
                 "constraint_aware_tau_formula": "qfrc_inverse + qfrc_constraint_nonfriction",
                 "constraints_added_back": "contact + joint/tendon limit + equality",
                 "constraints_excluded_from_addback": "FRICTION_DOF + FRICTION_TENDON",
-                "forward_dynamics_mapping": "ddq_right ~= ddq_baseline + G_tau * delta_tau, then evaluate every full mj_forward candidate and select the minimum-error safe candidate",
+                "forward_dynamics_mapping": "ddq_right ~= ddq_baseline + G_tau * delta_tau, then rank candidates with the local model and validate on demand with mj_forwardSkip",
                 "forward_dynamics_validation_scales": [1.0, 0.5, 0.25, 0.125],
-                "forward_dynamics_candidate_selection": "minimum total error among candidates that improve total error and satisfy joint-error/qacc limits",
-                "forward_dynamics_evaluations_per_step": "10; plus 9 when the second pass triggers; up to two additional 9-evaluation safety-rescue passes only if final qacc exceeds the limit",
+                "forward_dynamics_candidate_selection": "rank with local model, validate at least two candidates, then select the minimum-error real-safe candidate; continue only when both fail",
+                "forward_dynamics_evaluations_per_step": "8-10 in the first pass (1 full baseline plus 5 perturbations plus 2-4 validations); plus 7-9 when the second pass triggers; up to two additional 7-9-evaluation safety-rescue passes only if final qacc exceeds the limit",
                 "uncontrolled_qacc_assumption": 0.0,
                 "gravity_error": "directed_3d",
                 "position_reference_q": np.asarray(default_q).copy(),
@@ -1436,6 +1446,7 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
 def build_right_arm_control_record(
     *,
     arm_policy_updated,
+    ddq_execution_updated,
     target_q,
     target_dq,
     ddq_raw,
@@ -1467,6 +1478,7 @@ def build_right_arm_control_record(
             "tau_constraint_nonfriction": zeros,
             "tau_constraint_friction": zeros,
             "tau_ff": zeros,
+            "inverse_dynamics_time": 0.0,
         }
     else:
         inverse_values = {
@@ -1477,6 +1489,7 @@ def build_right_arm_control_record(
             "tau_constraint_nonfriction": inverse_result.tau_constraint_nonfriction,
             "tau_constraint_friction": inverse_result.tau_constraint_friction,
             "tau_ff": inverse_result.tau_ff,
+            "inverse_dynamics_time": inverse_result.elapsed_time,
         }
 
     if mapping_result is None:
@@ -1531,6 +1544,12 @@ def build_right_arm_control_record(
             "forward_dynamics_hold_last_safe_used": False,
             "forward_dynamics_hold_last_safe_satisfied": False,
             "forward_dynamics_hold_last_safe_qacc": zeros,
+            "forward_dynamics_mapping_time": 0.0,
+            "forward_dynamics_baseline_time": 0.0,
+            "forward_dynamics_first_pass_time": 0.0,
+            "forward_dynamics_second_pass_time": 0.0,
+            "forward_dynamics_rescue_time": 0.0,
+            "forward_dynamics_hold_last_time": 0.0,
         }
     else:
         mapping_values = {
@@ -1584,10 +1603,17 @@ def build_right_arm_control_record(
             "forward_dynamics_hold_last_safe_used": mapping_result.hold_last_safe_used,
             "forward_dynamics_hold_last_safe_satisfied": mapping_result.hold_last_safe_satisfied,
             "forward_dynamics_hold_last_safe_qacc": mapping_result.hold_last_safe_qacc,
+            "forward_dynamics_mapping_time": mapping_result.elapsed_time,
+            "forward_dynamics_baseline_time": mapping_result.baseline_time,
+            "forward_dynamics_first_pass_time": mapping_result.first_pass_time,
+            "forward_dynamics_second_pass_time": mapping_result.second_pass_time,
+            "forward_dynamics_rescue_time": mapping_result.rescue_time,
+            "forward_dynamics_hold_last_time": mapping_result.hold_last_time,
         }
 
     return {
         "arm_policy_updated": bool(arm_policy_updated),
+        "ddq_execution_updated": bool(ddq_execution_updated),
         "target_q": target_q,
         "target_dq": target_dq,
         "ddq_raw": ddq_raw,
@@ -1761,6 +1787,7 @@ def _constraint_generalized_force(model, scratch, constraint_types):
 
 def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indices):
     """计算不对抗非摩擦约束、同时保留摩擦补偿的逆动力学前馈。"""
+    start_time = time.perf_counter()
     qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     if desired_qacc.shape != qvel_indices.shape:
@@ -1802,6 +1829,7 @@ def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indice
         tau_constraint_noncontact=tau_constraint_noncontact,
         tau_constraint_nonfriction=tau_constraint_nonfriction,
         tau_constraint_friction=tau_constraint_friction,
+        elapsed_time=time.perf_counter() - start_time,
     )
 
 
@@ -1825,7 +1853,8 @@ def local_forward_dynamics_torque_mapping(
     max_safety_rescue_passes=2,
     previous_executed_tau=None,
 ):
-    """局部线性求力矩；高残差时在已验收力矩处重线性化一次。"""
+    """局部线性求力矩；候选按模型排序并按需验收。"""
+    mapping_start = time.perf_counter()
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
     tau_nominal = np.asarray(tau_nominal, dtype=np.float64)
     qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
@@ -1867,6 +1896,7 @@ def local_forward_dynamics_torque_mapping(
     if not validation_scales or any(scale <= 0.0 or scale > 1.0 for scale in validation_scales):
         raise ValueError("validation_scales 必须是位于 (0, 1] 的非空序列。")
 
+    baseline_start = time.perf_counter()
     tau_nominal = np.clip(tau_nominal, torque_limits[:, 0], torque_limits[:, 1])
     baseline_ctrl = fixed_ctrl.copy()
     baseline_ctrl[ctrl_indices] = tau_nominal
@@ -1876,9 +1906,10 @@ def local_forward_dynamics_torque_mapping(
     scratch.qacc_warmstart[:] = qacc_warmstart
     mujoco.mj_forward(model, scratch)
     qacc_baseline = scratch.qacc[qvel_indices].copy()
+    baseline_time = time.perf_counter() - baseline_start
 
     def solve_validated_pass(base_tau, base_qacc):
-        """在指定力矩工作点重线性化，完整检查候选并返回安全候选中的最优项。"""
+        """在指定力矩工作点重线性化，按需做动力学验收并返回安全候选中的最优项。"""
         pass_ctrl = fixed_ctrl.copy()
         pass_ctrl[ctrl_indices] = base_tau
         gain_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
@@ -1911,15 +1942,57 @@ def local_forward_dynamics_torque_mapping(
         best_error_norm = np.inf
         best_qacc_safe = None
         best_progress = None
+        candidate_specs = []
         for scale in validation_scales:
-            validation_attempts += 1
             candidate_tau_raw = base_tau + scale * correction_raw
-            candidate_tau = np.clip(candidate_tau_raw, torque_limits[:, 0], torque_limits[:, 1])
+            candidate_tau = np.clip(
+                candidate_tau_raw,
+                torque_limits[:, 0],
+                torque_limits[:, 1],
+            )
+            predicted_qacc = base_qacc + gain_matrix @ (candidate_tau - base_tau)
+            predicted_error = predicted_qacc - desired_qacc
+            predicted_safe = bool(
+                np.max(np.abs(predicted_error)) <= float(max_joint_error)
+                and np.max(np.abs(predicted_qacc)) <= float(max_abs_qacc)
+            )
+            candidate_specs.append(
+                {
+                    "scale": scale,
+                    "tau_raw": candidate_tau_raw,
+                    "tau": candidate_tau,
+                    "predicted_safe": predicted_safe,
+                    "predicted_error_norm": float(np.linalg.norm(predicted_error)),
+                }
+            )
+
+        # 【核心提速代码】先验收局部模型预测最好的比例。正常至少比较两个
+        # 真实候选并取其中误差更小者；都不安全才继续第三、第四个。
+        candidate_specs.sort(
+            key=lambda item: (
+                not item["predicted_safe"],
+                item["predicted_error_norm"],
+                -item["scale"],
+            )
+        )
+        minimum_candidate_validations = min(2, len(candidate_specs))
+        for candidate_spec in candidate_specs:
+            validation_attempts += 1
+            scale = candidate_spec["scale"]
+            candidate_tau_raw = candidate_spec["tau_raw"]
+            candidate_tau = candidate_spec["tau"]
             candidate_ctrl = pass_ctrl.copy()
             candidate_ctrl[ctrl_indices] = candidate_tau
             scratch.ctrl[:] = candidate_ctrl
             scratch.qacc_warmstart[:] = qacc_warmstart
-            mujoco.mj_forward(model, scratch)
+            # qpos/qvel 在同一执行拍内不变；基线 mj_forward 已经生成位置和
+            # 速度阶段缓存，所以这里只重算控制、加速度和约束阶段。
+            mujoco.mj_forwardSkip(
+                model,
+                scratch,
+                mujoco.mjtStage.mjSTAGE_VEL,
+                1,
+            )
             candidate_qacc = scratch.qacc[qvel_indices].copy()
             candidate_error = candidate_qacc - desired_qacc
             candidate_error_norm = float(np.linalg.norm(candidate_error))
@@ -1931,17 +2004,12 @@ def local_forward_dynamics_torque_mapping(
             qacc_limit_rejections += int(not qacc_safe)
             if total_error_improved and joint_error_safe and qacc_safe:
                 safe_candidate_count += 1
-            if (
-                total_error_improved
-                and joint_error_safe
-                and qacc_safe
-                and candidate_error_norm < best_error_norm
-            ):
-                validation_scale = scale
-                tau_cmd = candidate_tau
-                tau_cmd_raw = candidate_tau_raw
-                qacc_validated = candidate_qacc
-                best_error_norm = candidate_error_norm
+                if candidate_error_norm < best_error_norm:
+                    validation_scale = scale
+                    tau_cmd = candidate_tau
+                    tau_cmd_raw = candidate_tau_raw
+                    qacc_validated = candidate_qacc
+                    best_error_norm = candidate_error_norm
             if total_error_improved and qacc_safe:
                 qacc_safe_key = (float(np.max(np.abs(candidate_error))), candidate_error_norm)
                 if best_qacc_safe is None or qacc_safe_key < best_qacc_safe[0]:
@@ -1962,6 +2030,11 @@ def local_forward_dynamics_torque_mapping(
                     candidate_tau_raw,
                     candidate_qacc,
                 )
+            if (
+                safe_candidate_count > 0
+                and validation_attempts >= minimum_candidate_validations
+            ):
+                break
 
         # 严格候选不可行时仍沿改善方向建立第二轮工作点；优先保住 qacc 硬上限。
         tracking_safety_satisfied = safe_candidate_count > 0
@@ -2000,7 +2073,9 @@ def local_forward_dynamics_torque_mapping(
             "qacc_limit_rejections": qacc_limit_rejections,
         }
 
+    first_pass_start = time.perf_counter()
     first_pass = solve_validated_pass(tau_nominal, qacc_baseline)
+    first_pass_time = time.perf_counter() - first_pass_start
     first_pass_residual_norm = float(np.linalg.norm(first_pass["qacc_validation_error"]))
     second_pass_triggered = bool(
         enable_second_pass
@@ -2011,12 +2086,15 @@ def local_forward_dynamics_torque_mapping(
         )
     )
     second_pass = None
+    second_pass_time = 0.0
     if second_pass_triggered:
         # 第一轮候选可能已经进入新的摩擦/接触模式；在该力矩处重算 G，再修正一次剩余残差。
+        second_pass_start = time.perf_counter()
         second_pass = solve_validated_pass(
             first_pass["tau_cmd"],
             first_pass["qacc_validated"],
         )
+        second_pass_time = time.perf_counter() - second_pass_start
 
     if second_pass is not None and second_pass["tracking_safety_satisfied"]:
         final_pass = second_pass
@@ -2035,9 +2113,11 @@ def local_forward_dynamics_torque_mapping(
     safety_fallback_used = False
     safety_fallback_satisfied = final_pass["qacc_safety_satisfied"]
     safety_fallback_attempts = 0
+    rescue_time = 0.0
     if not safety_fallback_satisfied and max_safety_rescue_passes > 0:
         # 【半核心代码】可选安全救援；MPC 初版在配置中设为 0，只记录第一轮结果。
         safety_fallback_used = True
+        rescue_start = time.perf_counter()
         for _ in range(max_safety_rescue_passes):
             safety_fallback_attempts += 1
             rescue_pass = solve_validated_pass(
@@ -2050,9 +2130,10 @@ def local_forward_dynamics_torque_mapping(
             if final_pass["qacc_safety_satisfied"]:
                 break
         safety_fallback_satisfied = final_pass["qacc_safety_satisfied"]
+        rescue_time = time.perf_counter() - rescue_start
 
     # 【核心安全代码】救援仍失败时，重新验收上一仿真步实际执行的力矩。
-    # 状态和接触模式可能已经改变，所以不能未经本拍 mj_forward 就直接复用。
+    # 状态和接触模式可能已经改变，所以不能未经本拍动力学验收就直接复用。
     # 这里的 available 表示“本拍确实需要并能够尝试”，便于统计救援失败次数，
     # 而不是笼统表示上一拍力矩存在（除首拍外它几乎总是存在）。
     hold_last_safe_available = bool(
@@ -2061,7 +2142,9 @@ def local_forward_dynamics_torque_mapping(
     hold_last_safe_used = False
     hold_last_safe_satisfied = False
     hold_last_safe_qacc = np.zeros(joint_count, dtype=np.float64)
+    hold_last_time = 0.0
     if not safety_fallback_satisfied and hold_last_safe_available:
+        hold_last_start = time.perf_counter()
         hold_tau = np.clip(
             previous_executed_tau,
             torque_limits[:, 0],
@@ -2071,7 +2154,12 @@ def local_forward_dynamics_torque_mapping(
         hold_ctrl[ctrl_indices] = hold_tau
         scratch.ctrl[:] = hold_ctrl
         scratch.qacc_warmstart[:] = qacc_warmstart
-        mujoco.mj_forward(model, scratch)
+        mujoco.mj_forwardSkip(
+            model,
+            scratch,
+            mujoco.mjtStage.mjSTAGE_VEL,
+            1,
+        )
         hold_last_safe_qacc = scratch.qacc[qvel_indices].copy()
         hold_last_safe_satisfied = bool(
             np.max(np.abs(hold_last_safe_qacc)) <= float(max_abs_qacc)
@@ -2079,6 +2167,7 @@ def local_forward_dynamics_torque_mapping(
         if hold_last_safe_satisfied:
             hold_last_safe_used = True
             safety_fallback_satisfied = True
+        hold_last_time = time.perf_counter() - hold_last_start
 
     zero_vector = np.zeros(joint_count, dtype=np.float64)
     zero_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
@@ -2108,7 +2197,7 @@ def local_forward_dynamics_torque_mapping(
     gain_matrix = final_pass["gain_matrix"]
     singular_values = final_pass["singular_values"]
     condition_number = final_pass["condition_number"]
-    return tau_cmd, ForwardDynamicsMappingResult(
+    mapping_result = ForwardDynamicsMappingResult(
         tau_nominal=tau_nominal,
         tau_correction_raw=first_pass["correction_raw"],
         tau_correction=tau_correction,
@@ -2195,7 +2284,14 @@ def local_forward_dynamics_torque_mapping(
         hold_last_safe_used=hold_last_safe_used,
         hold_last_safe_satisfied=hold_last_safe_satisfied,
         hold_last_safe_qacc=hold_last_safe_qacc,
+        baseline_time=baseline_time,
+        first_pass_time=first_pass_time,
+        second_pass_time=second_pass_time,
+        rescue_time=rescue_time,
+        hold_last_time=hold_last_time,
     )
+    mapping_result.elapsed_time = time.perf_counter() - mapping_start
+    return tau_cmd, mapping_result
 
 
 def apply_computed_torque_control(
@@ -2317,6 +2413,23 @@ class PerformanceMonitor:
     window_arm_updates: int = 0
     window_computed_torque_updates: int = 0
     window_reports: list = field(default_factory=list)
+    right_arm_path_start: float = 0.0
+    right_arm_path_elapsed: float = 0.0
+    right_arm_path_ran: bool = False
+    right_arm_step_samples: list = field(default_factory=list)
+    arm_policy_samples: list = field(default_factory=list)
+    computed_torque_samples: list = field(default_factory=list)
+    right_arm_interval_samples: list = field(default_factory=list)
+    execution_calls_per_interval: list = field(default_factory=list)
+    window_right_arm_interval_samples: list = field(default_factory=list)
+    window_execution_calls_per_interval: list = field(default_factory=list)
+    window_arm_policy_samples: list = field(default_factory=list)
+    window_computed_torque_samples: list = field(default_factory=list)
+    current_interval_elapsed: float = 0.0
+    current_interval_steps: int = 0
+    current_interval_execution_calls: int = 0
+    mpc_timing_samples: list = field(default_factory=list)
+    ddq_execution_timing_samples: list = field(default_factory=list)
 
     def __post_init__(self):
         if self.arm_budget is None:
@@ -2326,6 +2439,40 @@ class PerformanceMonitor:
 
     def start_step(self):
         self.step_start = time.perf_counter()
+
+    def begin_arm_interval(self):
+        """在新的上层控制拍开始前，封存上一完整控制区间。"""
+        self._finish_current_arm_interval()
+
+    def finish_pending_arm_interval(self):
+        """仿真结束时封存最后一个控制区间。"""
+        self._finish_current_arm_interval()
+
+    def _finish_current_arm_interval(self):
+        if self.current_interval_steps <= 0:
+            return
+        self.right_arm_interval_samples.append(self.current_interval_elapsed)
+        self.execution_calls_per_interval.append(
+            self.current_interval_execution_calls
+        )
+        self.window_right_arm_interval_samples.append(
+            self.current_interval_elapsed
+        )
+        self.window_execution_calls_per_interval.append(
+            self.current_interval_execution_calls
+        )
+        self.current_interval_elapsed = 0.0
+        self.current_interval_steps = 0
+        self.current_interval_execution_calls = 0
+
+    def start_right_arm_path(self):
+        self.right_arm_path_start = time.perf_counter()
+        self.right_arm_path_ran = True
+
+    def finish_right_arm_path(self):
+        self.right_arm_path_elapsed = (
+            time.perf_counter() - self.right_arm_path_start
+        )
 
     def start_arm_control(self):
         self.arm_control_start = time.perf_counter()
@@ -2339,7 +2486,55 @@ class PerformanceMonitor:
         self.computed_torque_ran = True
 
     def finish_computed_torque_control(self):
-        self.computed_torque_elapsed += time.perf_counter() - self.computed_torque_start
+        elapsed = time.perf_counter() - self.computed_torque_start
+        self.computed_torque_elapsed += elapsed
+        return elapsed
+
+    def record_mpc_timing(self, diagnostics):
+        """记录 MPC 内部阶段；单位统一保留为秒，输出时转换为 ms。"""
+        if not isinstance(diagnostics, dict):
+            return
+        names = (
+            "rollout_time",
+            "terms_time",
+            "cost_time",
+            "constraints_time",
+            "assembly_time",
+            "solver_wall_time",
+            "postprocess_time",
+            "policy_core_time",
+            "solve_time",
+        )
+        sample = {
+            name: float(diagnostics.get(name, 0.0)) for name in names
+        }
+        sample["policy_update_time"] = float(self.arm_control_elapsed)
+        sample["outside_policy_core_time"] = max(
+            0.0,
+            sample["policy_update_time"] - sample["policy_core_time"],
+        )
+        self.mpc_timing_samples.append(sample)
+
+    def record_ddq_execution_timing(self, inverse_result, mapping_result):
+        """记录一次真正执行的 DDQ→力矩调用及其分支。"""
+        if inverse_result is None or mapping_result is None:
+            return
+        self.ddq_execution_timing_samples.append(
+            {
+                "total_time": float(self.computed_torque_elapsed),
+                "inverse_time": float(inverse_result.elapsed_time),
+                "mapping_time": float(mapping_result.elapsed_time),
+                "baseline_time": float(mapping_result.baseline_time),
+                "first_pass_time": float(mapping_result.first_pass_time),
+                "second_pass_time": float(mapping_result.second_pass_time),
+                "rescue_time": float(mapping_result.rescue_time),
+                "hold_last_time": float(mapping_result.hold_last_time),
+                "second_pass_triggered": bool(
+                    mapping_result.second_pass_triggered
+                ),
+                "rescue_used": bool(mapping_result.safety_fallback_used),
+            }
+        )
 
     def start_mj_step(self):
         self.mj_step_start = time.perf_counter()
@@ -2383,6 +2578,8 @@ class PerformanceMonitor:
             arm_total_elapsed = self.arm_control_elapsed + self.computed_torque_elapsed
             self.total_arm_updates += 1
             self.total_arm_elapsed += self.arm_control_elapsed
+            self.arm_policy_samples.append(self.arm_control_elapsed)
+            self.window_arm_policy_samples.append(self.arm_control_elapsed)
             self.total_arm_total_elapsed += arm_total_elapsed
             self.max_arm_elapsed = max(self.max_arm_elapsed, self.arm_control_elapsed)
             self.max_arm_total_elapsed = max(self.max_arm_total_elapsed, arm_total_elapsed)
@@ -2401,6 +2598,12 @@ class PerformanceMonitor:
         if self.computed_torque_ran:
             self.total_computed_torque_updates += 1
             self.total_computed_torque_elapsed += self.computed_torque_elapsed
+            self.computed_torque_samples.append(
+                self.computed_torque_elapsed
+            )
+            self.window_computed_torque_samples.append(
+                self.computed_torque_elapsed
+            )
             self.max_computed_torque_elapsed = max(self.max_computed_torque_elapsed, self.computed_torque_elapsed)
             self.window_computed_torque_updates += 1
             self.window_computed_torque_elapsed += self.computed_torque_elapsed
@@ -2409,11 +2612,21 @@ class PerformanceMonitor:
                 self.computed_torque_overruns += 1
                 self.window_computed_torque_overruns += 1
 
+        if self.right_arm_path_ran:
+            self.right_arm_step_samples.append(self.right_arm_path_elapsed)
+            self.current_interval_elapsed += self.right_arm_path_elapsed
+            self.current_interval_steps += 1
+            self.current_interval_execution_calls += int(
+                self.computed_torque_ran
+            )
+
         self.arm_control_ran = False
         self.computed_torque_ran = False
         self.arm_control_elapsed = 0.0
         self.computed_torque_elapsed = 0.0
         self.mj_step_elapsed = 0.0
+        self.right_arm_path_ran = False
+        self.right_arm_path_elapsed = 0.0
 
     def print_window_summary_if_needed(self, counter):
         if counter % self.warn_interval != 0 or self.window_steps == 0:
@@ -2442,6 +2655,9 @@ class PerformanceMonitor:
             self.window_loop_overruns,
         )
         report["end_step"] = int(counter)
+        report["real_hardware_control"] = (
+            self._build_window_hardware_report()
+        )
         self.window_reports.append(report)
         self._print_report(report)
         self.window_steps = 0
@@ -2463,6 +2679,47 @@ class PerformanceMonitor:
         self.window_arm_total_overruns = 0
         self.window_computed_torque_overruns = 0
         self.window_loop_overruns = 0
+        self.window_right_arm_interval_samples.clear()
+        self.window_execution_calls_per_interval.clear()
+        self.window_arm_policy_samples.clear()
+        self.window_computed_torque_samples.clear()
+
+    def _build_window_hardware_report(self):
+        """窗口日志只显示完整真机相关链，避免旧的同拍局部和造成误解。"""
+        interval_stats = self._sample_distribution(
+            self.window_right_arm_interval_samples
+        )
+        interval_values = np.asarray(
+            self.window_right_arm_interval_samples, dtype=np.float64
+        )
+        interval_stats["budget_ms"] = float(self.arm_budget * 1000.0)
+        interval_stats["overrun_count"] = int(
+            np.count_nonzero(interval_values > self.arm_budget)
+        )
+        interval_stats["overrun_fraction"] = (
+            float(np.mean(interval_values > self.arm_budget))
+            if interval_values.size
+            else 0.0
+        )
+        return {
+            "units": "milliseconds except execution_calls_per_interval",
+            "definitions": self._hardware_timing_definitions(),
+            "right_arm_interval": interval_stats,
+            "mpc_policy_update": self._sample_distribution(
+                self.window_arm_policy_samples
+            ),
+            "ddq_to_torque_call": self._sample_distribution(
+                self.window_computed_torque_samples
+            ),
+            "execution_calls_per_interval": self._sample_distribution(
+                self.window_execution_calls_per_interval, scale=1.0
+            ),
+            "interval_mean_composition": self._interval_mean_composition(
+                self.window_right_arm_interval_samples,
+                self.window_arm_policy_samples,
+                self.window_computed_torque_samples,
+            ),
+        }
 
     def print_summary(self):
         if self.total_steps == 0:
@@ -2470,7 +2727,7 @@ class PerformanceMonitor:
         self._print_report(self.build_total_report())
 
     def build_total_report(self):
-        return self._build_report(
+        report = self._build_report(
             "perf total",
             self.total_steps,
             self.total_arm_updates,
@@ -2492,6 +2749,208 @@ class PerformanceMonitor:
             self.computed_torque_overruns,
             self.loop_overruns,
         )
+        report["real_hardware_control"] = self._build_real_hardware_report()
+        report["timing_scope"] = {
+            "included": [
+                "torso/right-arm state preprocessing",
+                "disturbance prediction and helper construction",
+                "MPC assembly, OSQP and postprocess",
+                "joint-space PD",
+                "all DDQ-to-torque executions inside each arm-control interval",
+            ],
+            "excluded_simulation_only": [
+                "MuJoCo mj_step physics propagation",
+                "evaluation logging and plotting",
+                "viewer/video rendering",
+                "real-time sleep",
+            ],
+            "not_measurable_in_simulation": [
+                "hardware sensor/fieldbus latency",
+                "motor-driver communication and low-level firmware",
+                "real-time OS scheduling jitter on the target computer",
+            ],
+            "legacy_arm_total_note": (
+                "arm_total_* is retained only for old-file compatibility and "
+                "contains the policy plus the DDQ-to-torque call on the same "
+                "physics step; use real_hardware_control.right_arm_interval "
+                "for the complete arm-control interval"
+            ),
+        }
+        return report
+
+    @staticmethod
+    def _sample_distribution(samples, scale=1000.0):
+        values = np.asarray(samples, dtype=np.float64)
+        values = values[np.isfinite(values)] * float(scale)
+        if not values.size:
+            return {
+                "count": 0,
+                "mean": 0.0,
+                "p50": 0.0,
+                "p95": 0.0,
+                "p99": 0.0,
+                "max": 0.0,
+            }
+        return {
+            "count": int(values.size),
+            "mean": float(np.mean(values)),
+            "p50": float(np.percentile(values, 50.0)),
+            "p95": float(np.percentile(values, 95.0)),
+            "p99": float(np.percentile(values, 99.0)),
+            "max": float(np.max(values)),
+        }
+
+    def _timing_field_distribution(self, samples, name):
+        return self._sample_distribution(
+            [sample.get(name, 0.0) for sample in samples]
+        )
+
+    @staticmethod
+    def _hardware_timing_definitions():
+        return {
+            "right_arm_interval": (
+                "sum from right-arm state preprocessing through final torque "
+                "write across every 2 ms step in one upper-level control interval"
+            ),
+            "mpc_policy_update": (
+                "one update including disturbance prediction, helper construction, "
+                "ArmMPCPolicy and diagnostics"
+            ),
+            "ddq_to_torque_call": (
+                "one inverse-dynamics plus local forward-dynamics validation call"
+            ),
+            "interval_mean_composition": (
+                "exact mean decomposition of the complete right-arm interval; "
+                "all_ddq_to_torque_calls includes every execution call"
+            ),
+        }
+
+    @staticmethod
+    def _interval_mean_composition(
+        interval_samples, policy_samples, execution_samples
+    ):
+        interval_count = len(interval_samples)
+        if interval_count == 0:
+            return {
+                "mpc_policy_update": 0.0,
+                "all_ddq_to_torque_calls": 0.0,
+                "other_right_arm_path": 0.0,
+                "total": 0.0,
+            }
+        total = float(np.sum(interval_samples) * 1000.0 / interval_count)
+        policy = float(np.sum(policy_samples) * 1000.0 / interval_count)
+        execution = float(
+            np.sum(execution_samples) * 1000.0 / interval_count
+        )
+        return {
+            "mpc_policy_update": policy,
+            "all_ddq_to_torque_calls": execution,
+            "other_right_arm_path": max(0.0, total - policy - execution),
+            "total": total,
+        }
+
+    def _build_real_hardware_report(self):
+        interval_stats = self._sample_distribution(
+            self.right_arm_interval_samples
+        )
+        interval_values = np.asarray(
+            self.right_arm_interval_samples, dtype=np.float64
+        )
+        interval_stats["budget_ms"] = float(self.arm_budget * 1000.0)
+        interval_stats["overrun_count"] = int(
+            np.count_nonzero(interval_values > self.arm_budget)
+        )
+        interval_stats["overrun_fraction"] = (
+            float(np.mean(interval_values > self.arm_budget))
+            if interval_values.size
+            else 0.0
+        )
+
+        mpc_breakdown_names = (
+            "rollout_time",
+            "terms_time",
+            "cost_time",
+            "constraints_time",
+            "assembly_time",
+            "solver_wall_time",
+            "postprocess_time",
+            "policy_core_time",
+            "outside_policy_core_time",
+            "policy_update_time",
+            "solve_time",
+        )
+        ddq_breakdown_names = (
+            "total_time",
+            "inverse_time",
+            "mapping_time",
+            "baseline_time",
+            "first_pass_time",
+            "second_pass_time",
+            "rescue_time",
+            "hold_last_time",
+        )
+        second_pass_samples = [
+            sample
+            for sample in self.ddq_execution_timing_samples
+            if sample["second_pass_triggered"] and not sample["rescue_used"]
+        ]
+        rescue_samples = [
+            sample
+            for sample in self.ddq_execution_timing_samples
+            if sample["rescue_used"]
+        ]
+        first_pass_only_samples = [
+            sample
+            for sample in self.ddq_execution_timing_samples
+            if not sample["second_pass_triggered"]
+            and not sample["rescue_used"]
+        ]
+        calls = self._sample_distribution(
+            self.execution_calls_per_interval, scale=1.0
+        )
+        return {
+            "units": "milliseconds except execution_calls_per_interval",
+            "definitions": self._hardware_timing_definitions(),
+            "right_arm_interval": interval_stats,
+            "right_arm_step": self._sample_distribution(
+                self.right_arm_step_samples
+            ),
+            "mpc_policy_update": self._sample_distribution(
+                self.arm_policy_samples
+            ),
+            "ddq_to_torque_call": self._sample_distribution(
+                self.computed_torque_samples
+            ),
+            "execution_calls_per_interval": calls,
+            "interval_mean_composition": self._interval_mean_composition(
+                self.right_arm_interval_samples,
+                self.arm_policy_samples,
+                self.computed_torque_samples,
+            ),
+            "mpc_breakdown": {
+                name: self._timing_field_distribution(
+                    self.mpc_timing_samples, name
+                )
+                for name in mpc_breakdown_names
+            },
+            "ddq_to_torque_breakdown": {
+                name: self._timing_field_distribution(
+                    self.ddq_execution_timing_samples, name
+                )
+                for name in ddq_breakdown_names
+            },
+            "ddq_call_path": {
+                "first_pass_only": self._timing_field_distribution(
+                    first_pass_only_samples, "total_time"
+                ),
+                "second_pass_without_rescue": self._timing_field_distribution(
+                    second_pass_samples, "total_time"
+                ),
+                "safety_rescue": self._timing_field_distribution(
+                    rescue_samples, "total_time"
+                ),
+            },
+        }
 
     def save_report(self, run_dir):
         total_report = self.build_total_report()
@@ -2561,13 +3020,39 @@ class PerformanceMonitor:
 
     def _print_report(self, report):
         level = "WARN" if report["arm_overruns"] or report["arm_total_overruns"] or report["computed_torque_overruns"] or report["loop_overruns"] else "INFO"
+        hardware = report.get("real_hardware_control")
+        if hardware is not None:
+            interval = hardware["right_arm_interval"]
+            policy = hardware["mpc_policy_update"]
+            execution = hardware["ddq_to_torque_call"]
+            calls = hardware["execution_calls_per_interval"]
+            composition = hardware["interval_mean_composition"]
+            print(
+                f"[{level}] 真机相关右臂完整 {self.arm_budget * 1000.0:.1f} ms 区间: "
+                f"avg/p95/p99/max={interval['mean']:.2f}/{interval['p95']:.2f}/"
+                f"{interval['p99']:.2f}/{interval['max']:.2f} ms, "
+                f"超时={interval['overrun_count']}/{interval['count']}"
+            )
+            print(
+                f"[INFO] 平均组成: MPC更新 {composition['mpc_policy_update']:.2f} + "
+                f"全部DDQ→力矩 {composition['all_ddq_to_torque_calls']:.2f} + "
+                f"其余右臂路径 {composition['other_right_arm_path']:.2f} = "
+                f"{composition['total']:.2f} ms；每区间执行 "
+                f"{calls['mean']:.2f} 次"
+            )
+            print(
+                f"[INFO] 长尾分项: MPC更新 p99/max={policy['p99']:.2f}/"
+                f"{policy['max']:.2f} ms；DDQ→力矩单次 p99/max="
+                f"{execution['p99']:.3f}/{execution['max']:.3f} ms"
+            )
+            return
         print(
-            f"[{level}] {report['label']}: steps={report['steps']}, budget={report['budget_ms']:.2f} ms, arm_budget={report['arm_budget_ms']:.2f} ms, arm_updates={report['arm_updates']}, "
-            f"arm policy avg/max={report['arm_avg_ms']:.2f}/{report['arm_max_ms']:.2f} ms, arm policy overruns={report['arm_overruns']}, "
-            f"arm total avg/max={report['arm_total_avg_ms']:.2f}/{report['arm_total_max_ms']:.2f} ms, arm total overruns={report['arm_total_overruns']}, "
-            f"computed torque updates={report['computed_torque_updates']}, avg/max={report['computed_torque_avg_ms']:.3f}/{report['computed_torque_max_ms']:.3f} ms, overruns={report['computed_torque_overruns']}, "
-            f"mj_step avg/max={report['mj_step_avg_ms']:.2f}/{report['mj_step_max_ms']:.2f} ms, other avg/max={report['other_avg_ms']:.2f}/{report['other_max_ms']:.2f} ms, "
-            f"loop avg/max={report['loop_avg_ms']:.2f}/{report['loop_max_ms']:.2f} ms, loop overruns={report['loop_overruns']}"
+            f"[{level}] {report['label']}: MPC/arm更新 {report['arm_updates']} 次，"
+            f"avg/max={report['arm_avg_ms']:.2f}/{report['arm_max_ms']:.2f} ms；"
+            f"DDQ→力矩 {report['computed_torque_updates']} 次，avg/max="
+            f"{report['computed_torque_avg_ms']:.3f}/{report['computed_torque_max_ms']:.3f} ms；"
+            f"仿真整步（含 mj_step/记录等）avg/max={report['loop_avg_ms']:.2f}/"
+            f"{report['loop_max_ms']:.2f} ms"
         )
 
 
@@ -2770,6 +3255,7 @@ def init_eval_buffers():
             "right_arm_tau_constraint_nonfriction": [],
             "right_arm_tau_constraint_friction": [],
             "right_arm_tau_ff": [],
+            "right_arm_inverse_dynamics_time": [],
             "right_arm_tau_pd": [],
             "right_arm_tau_nominal": [],
             "right_arm_tau_mapping_correction_raw": [],
@@ -2828,6 +3314,12 @@ def init_eval_buffers():
             "right_arm_forward_dynamics_hold_last_safe_used": [],
             "right_arm_forward_dynamics_hold_last_safe_satisfied": [],
             "right_arm_forward_dynamics_hold_last_safe_qacc": [],
+            "right_arm_forward_dynamics_mapping_time": [],
+            "right_arm_forward_dynamics_baseline_time": [],
+            "right_arm_forward_dynamics_first_pass_time": [],
+            "right_arm_forward_dynamics_second_pass_time": [],
+            "right_arm_forward_dynamics_rescue_time": [],
+            "right_arm_forward_dynamics_hold_last_time": [],
             "torso_lin_vel_world": [],
             "torso_ang_vel_world": [],
             "torso_acc_world_raw": [],
@@ -2864,6 +3356,13 @@ def init_eval_buffers():
             "right_mpc_dual_residual": [],
             "right_mpc_objective": [],
             "right_mpc_assembly_time": [],
+            "right_mpc_rollout_time": [],
+            "right_mpc_terms_time": [],
+            "right_mpc_cost_time": [],
+            "right_mpc_constraints_time": [],
+            "right_mpc_solver_wall_time": [],
+            "right_mpc_postprocess_time": [],
+            "right_mpc_policy_core_time": [],
             "right_mpc_solve_time": [],
             "right_mpc_max_constraint_violation": [],
             "right_mpc_fallback_used": [],
@@ -2918,6 +3417,7 @@ def init_eval_buffers():
             "right_mpc_template_one_step_alpha_error": [],
             "right_mpc_template_one_step_rotation_error_angle": [],
             "arm_policy_updated": [],
+            "ddq_execution_updated": [],
             "contact_count": [],
         },
         prev_left_lin_vel=np.zeros(3),
@@ -3567,6 +4067,13 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
         "interval_dt_mean": float(np.mean(interval_dt[valid])) if sample_count else 0.0,
     }
     eval_step_mask = (time_values >= eval_start_time) & (time_values < eval_end_time)
+    execution_updated = np.asarray(
+        trajectory_data.get("ddq_execution_updated", []), dtype=bool
+    )
+    if execution_updated.shape == time_values.shape:
+        # 低频执行实验中，保持力矩的物理步没有重新运行候选验收，不能把
+        # 上一拍缓存的诊断重复统计成一次新验收。
+        eval_step_mask &= execution_updated
     first_scale = np.asarray(
         trajectory_data.get("right_arm_forward_dynamics_validation_scale", []),
         dtype=np.float64,
@@ -3653,7 +4160,7 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
         return float(np.mean(values[mask])) if values.shape == mask.shape and np.any(mask) else 0.0
 
     diagnostics["forward_dynamics_validation"] = {
-        "definition": "all candidate scales are evaluated; select the minimum-total-error candidate that improves the baseline and satisfies per-joint-error/qacc safety limits",
+        "definition": "rank candidates with the local model; validate at least two with mj_forwardSkip and select the minimum-error real-safe candidate, evaluating more only when needed",
         "first_pass": {
             **first_pass_validation,
             "safety": first_pass_safety,
@@ -4371,6 +4878,38 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     qacc_mapping_linearization_error = matrix("right_arm_qacc_mapping_linearization_error", n)
     qacc_mapping_model_error = matrix("right_arm_qacc_mapping_model_error", n)
     forward_dynamics_singular_values = matrix("right_arm_forward_dynamics_singular_values", n)
+    execution_updated = np.asarray(
+        trajectory_data.get("ddq_execution_updated", []), dtype=bool
+    )
+    execution_mask = (
+        execution_updated
+        if execution_updated.shape == (qacc.shape[0],)
+        else np.ones(qacc.shape[0], dtype=bool)
+    )
+    # 只在真正重新计算 DDQ→力矩的物理步评价逆动力学与局部映射；保持上一
+    # 拍力矩的步仍参与实际 ctrl/qacc/DDQ tracking，但不重复计算缓存诊断。
+    if execution_mask.shape == (tau_inverse.shape[0],):
+        tau_inverse = tau_inverse[execution_mask]
+        tau_constraint = tau_constraint[execution_mask]
+        tau_contact = tau_contact[execution_mask]
+        tau_constraint_total = tau_constraint_total[execution_mask]
+        tau_constraint_noncontact = tau_constraint_noncontact[execution_mask]
+        tau_constraint_nonfriction = tau_constraint_nonfriction[execution_mask]
+        tau_constraint_friction = tau_constraint_friction[execution_mask]
+        tau_ff = tau_ff[execution_mask]
+        tau_nominal = tau_nominal[execution_mask]
+        tau_mapping_correction_raw = tau_mapping_correction_raw[execution_mask]
+        tau_mapping_correction = tau_mapping_correction[execution_mask]
+        qacc_mapping_baseline = qacc_mapping_baseline[execution_mask]
+        qacc_mapping_predicted = qacc_mapping_predicted[execution_mask]
+        qacc_mapping_prediction_error = qacc_mapping_prediction_error[execution_mask]
+        qacc_mapping_validated = qacc_mapping_validated[execution_mask]
+        qacc_mapping_validation_error = qacc_mapping_validation_error[execution_mask]
+        qacc_mapping_linearization_error = qacc_mapping_linearization_error[execution_mask]
+        qacc_mapping_model_error = qacc_mapping_model_error[execution_mask]
+        forward_dynamics_singular_values = forward_dynamics_singular_values[
+            execution_mask
+        ]
     tau_raw = matrix("right_arm_tau_cmd_raw", n)
     tau_low = matrix("right_arm_tau_limit_lower", n)
     tau_high = matrix("right_arm_tau_limit_upper", n)
@@ -4474,6 +5013,8 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         trajectory_data.get("right_arm_forward_dynamics_condition_number", []),
         dtype=np.float64,
     )
+    if condition_number.shape == execution_mask.shape:
+        condition_number = condition_number[execution_mask]
     finite_condition = condition_number[np.isfinite(condition_number)]
     diagnostics["right_arm_forward_dynamics_condition_number_mean"] = np.array(
         np.mean(finite_condition) if finite_condition.size else np.inf
@@ -4496,6 +5037,10 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         trajectory_data.get("right_arm_forward_dynamics_validation_improved", []),
         dtype=bool,
     )
+    if validation_scale.shape == execution_mask.shape:
+        validation_scale = validation_scale[execution_mask]
+        validation_attempts = validation_attempts[execution_mask]
+        validation_improved = validation_improved[execution_mask]
     diagnostics["right_arm_forward_dynamics_validation_scale_mean"] = np.array(
         np.mean(validation_scale) if validation_scale.size else 0.0
     )
@@ -5435,6 +5980,14 @@ def save_control_preview(run_dir, trajectory_data):
         ("right_ee_gravity_error_end", ("x", "y", "z")),
     ]
     scalar_signals = [
+        "ddq_execution_updated",
+        "right_arm_inverse_dynamics_time",
+        "right_arm_forward_dynamics_mapping_time",
+        "right_arm_forward_dynamics_baseline_time",
+        "right_arm_forward_dynamics_first_pass_time",
+        "right_arm_forward_dynamics_second_pass_time",
+        "right_arm_forward_dynamics_rescue_time",
+        "right_arm_forward_dynamics_hold_last_time",
         "right_arm_forward_dynamics_condition_number",
         "right_arm_forward_dynamics_validation_scale",
         "right_arm_forward_dynamics_validation_attempts",
@@ -5472,6 +6025,15 @@ def save_control_preview(run_dir, trajectory_data):
         "heading_command_saturated",
         "right_ee_upright_alignment",
         "arm_policy_updated",
+        "right_mpc_assembly_time",
+        "right_mpc_rollout_time",
+        "right_mpc_terms_time",
+        "right_mpc_cost_time",
+        "right_mpc_constraints_time",
+        "right_mpc_solver_wall_time",
+        "right_mpc_postprocess_time",
+        "right_mpc_policy_core_time",
+        "right_mpc_solve_time",
         "contact_count",
     ]
     arrays = []
@@ -5685,6 +6247,25 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     forward_dynamics_hold_last_safe_qacc = control_vector(
         "forward_dynamics_hold_last_safe_qacc", 5
     )
+    inverse_dynamics_time = control_scalar("inverse_dynamics_time")
+    forward_dynamics_mapping_time = control_scalar(
+        "forward_dynamics_mapping_time"
+    )
+    forward_dynamics_baseline_time = control_scalar(
+        "forward_dynamics_baseline_time"
+    )
+    forward_dynamics_first_pass_time = control_scalar(
+        "forward_dynamics_first_pass_time"
+    )
+    forward_dynamics_second_pass_time = control_scalar(
+        "forward_dynamics_second_pass_time"
+    )
+    forward_dynamics_rescue_time = control_scalar(
+        "forward_dynamics_rescue_time"
+    )
+    forward_dynamics_hold_last_time = control_scalar(
+        "forward_dynamics_hold_last_time"
+    )
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
     tau_limit_upper = np.asarray(right_arm_control.get("tau_limit_upper", np.full(5, np.inf)), dtype=np.float64).copy()
@@ -5821,6 +6402,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     gravity_error = tilt_error_from_rot(right_rot, model.opt.gravity)
     upright_alignment = upright_alignment_from_rot(right_rot, model.opt.gravity)
     arm_policy_updated = bool(right_arm_control.get("arm_policy_updated", False))
+    ddq_execution_updated = bool(
+        right_arm_control.get("ddq_execution_updated", False)
+    )
     buffers.trajectory_data["right_arm_q"].append(data.qpos[RIGHT_ARM_QPOS_SLICE].copy())
     buffers.trajectory_data["right_arm_dq"].append(data.qvel[RIGHT_ARM_QVEL_SLICE].copy())
     buffers.trajectory_data["right_arm_qacc"].append(data.qacc[RIGHT_ARM_QVEL_SLICE].copy())
@@ -5839,6 +6423,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_tau_constraint_nonfriction"].append(tau_constraint_nonfriction)
     buffers.trajectory_data["right_arm_tau_constraint_friction"].append(tau_constraint_friction)
     buffers.trajectory_data["right_arm_tau_ff"].append(tau_ff)
+    buffers.trajectory_data["right_arm_inverse_dynamics_time"].append(
+        inverse_dynamics_time
+    )
     buffers.trajectory_data["right_arm_tau_pd"].append(tau_pd)
     buffers.trajectory_data["right_arm_tau_nominal"].append(tau_nominal)
     buffers.trajectory_data["right_arm_tau_mapping_correction_raw"].append(tau_mapping_correction_raw)
@@ -5897,6 +6484,24 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_used"].append(forward_dynamics_hold_last_safe_used)
     buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_satisfied"].append(forward_dynamics_hold_last_safe_satisfied)
     buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_qacc"].append(forward_dynamics_hold_last_safe_qacc)
+    buffers.trajectory_data["right_arm_forward_dynamics_mapping_time"].append(
+        forward_dynamics_mapping_time
+    )
+    buffers.trajectory_data["right_arm_forward_dynamics_baseline_time"].append(
+        forward_dynamics_baseline_time
+    )
+    buffers.trajectory_data["right_arm_forward_dynamics_first_pass_time"].append(
+        forward_dynamics_first_pass_time
+    )
+    buffers.trajectory_data["right_arm_forward_dynamics_second_pass_time"].append(
+        forward_dynamics_second_pass_time
+    )
+    buffers.trajectory_data["right_arm_forward_dynamics_rescue_time"].append(
+        forward_dynamics_rescue_time
+    )
+    buffers.trajectory_data["right_arm_forward_dynamics_hold_last_time"].append(
+        forward_dynamics_hold_last_time
+    )
     buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
     buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)
     buffers.trajectory_data["torso_acc_world_raw"].append(torso_acc_raw)
@@ -5935,6 +6540,27 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_mpc_dual_residual"].append(mpc_scalar("dual_residual"))
     buffers.trajectory_data["right_mpc_objective"].append(mpc_scalar("objective"))
     buffers.trajectory_data["right_mpc_assembly_time"].append(mpc_scalar("assembly_time"))
+    buffers.trajectory_data["right_mpc_rollout_time"].append(
+        mpc_scalar("rollout_time")
+    )
+    buffers.trajectory_data["right_mpc_terms_time"].append(
+        mpc_scalar("terms_time")
+    )
+    buffers.trajectory_data["right_mpc_cost_time"].append(
+        mpc_scalar("cost_time")
+    )
+    buffers.trajectory_data["right_mpc_constraints_time"].append(
+        mpc_scalar("constraints_time")
+    )
+    buffers.trajectory_data["right_mpc_solver_wall_time"].append(
+        mpc_scalar("solver_wall_time")
+    )
+    buffers.trajectory_data["right_mpc_postprocess_time"].append(
+        mpc_scalar("postprocess_time")
+    )
+    buffers.trajectory_data["right_mpc_policy_core_time"].append(
+        mpc_scalar("policy_core_time")
+    )
     buffers.trajectory_data["right_mpc_solve_time"].append(mpc_scalar("solve_time"))
     buffers.trajectory_data["right_mpc_max_constraint_violation"].append(
         mpc_scalar("max_constraint_violation")
@@ -6072,6 +6698,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
         "right_mpc_template_one_step_rotation_error_angle"
     ].append(template_scalar("one_step_rotation_error_angle"))
     buffers.trajectory_data["arm_policy_updated"].append(arm_policy_updated)
+    buffers.trajectory_data["ddq_execution_updated"].append(
+        ddq_execution_updated
+    )
     buffers.trajectory_data["contact_count"].append(int(data.ncon))
     buffers.eval_data["time"].append(t)
     buffers.eval_data["torso_yaw"].append(torso_yaw)
