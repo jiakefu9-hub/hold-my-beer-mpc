@@ -1,0 +1,619 @@
+{
+  "comparison": "heading_template_vs_world_template_rotated_to_heading",
+  "heading_yaw_reference_rad": -0.02290250747353933,
+  "heading_yaw_reference_deg": -1.3122170185006294,
+  "thresholds": {
+    "acceleration_relative_rmse": 0.1,
+    "angular_velocity_relative_rmse": 0.1,
+    "angular_acceleration_relative_rmse": 0.15,
+    "minimum_trend_correlation": 0.95,
+    "maximum_circular_lag_bins": 2,
+    "orientation_mean_geodesic_deg": 0.5
+  },
+  "variants": {
+    "raw": {
+      "vectors": {
+        "acceleration": {
+          "rmse_axis": [
+            1.7668044435257083e-06,
+            6.855775355822783e-07,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.4911286824391338,
+            1.577770562322234,
+            1.7886114206171002
+          ],
+          "relative_rmse": 7.782669089777049e-07,
+          "trend_correlation": 0.9999999999996977,
+          "correlation_axis": [
+            0.9999999999936179,
+            0.9999999999999064,
+            1.0000000000000002
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999936179,
+            0.9999999999999064,
+            1.0000000000000002
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_velocity": {
+          "rmse_axis": [
+            7.904670055063673e-08,
+            3.3863957174639633e-07,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.3624967360516278,
+            0.0849117393297178,
+            0.06997080103234837
+          ],
+          "relative_rmse": 9.179468173282678e-07,
+          "trend_correlation": 0.999999999999579,
+          "correlation_axis": [
+            0.9999999999999764,
+            0.9999999999920498,
+            1.0
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999999764,
+            0.9999999999920498,
+            1.0
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_acceleration": {
+          "rmse_axis": [
+            3.947738153083521e-06,
+            1.558088837908965e-05,
+            0.0
+          ],
+          "reference_rms_axis": [
+            6.198424405437124,
+            2.9377723246493823,
+            4.095730421713591
+          ],
+          "relative_rmse": 2.011890842283357e-06,
+          "trend_correlation": 0.9999999999979763,
+          "correlation_axis": [
+            0.999999999999797,
+            0.9999999999859429,
+            0.9999999999999999
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.999999999999797,
+            0.9999999999859429,
+            0.9999999999999999
+          ],
+          "maximum_absolute_lag_bins": 0
+        }
+      },
+      "direct_stored_frame_vectors": {
+        "acceleration": {
+          "rmse_axis": [
+            0.0361522483592273,
+            0.011189442654478667,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.48662909480062516,
+            1.5791641631377475,
+            1.7886114206171002
+          ],
+          "relative_rmse": 0.015541174138395829,
+          "trend_correlation": 0.9998792359467696,
+          "correlation_axis": [
+            0.9973080551564075,
+            0.9999752641424771,
+            1.0000000000000002
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9973080551564075,
+            0.9999752641424771,
+            1.0000000000000002
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_velocity": {
+          "rmse_axis": [
+            0.0019248204884708402,
+            0.008306533010370203,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.362855234759579,
+            0.08336645447452085,
+            0.06997080103234837
+          ],
+          "relative_rmse": 0.022507986926356003,
+          "trend_correlation": 0.999746694717737,
+          "correlation_axis": [
+            0.9999864066673119,
+            0.9952945121970244,
+            1.0
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999864066673119,
+            0.9952945121970244,
+            1.0
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_acceleration": {
+          "rmse_axis": [
+            0.06718754691363465,
+            0.1420017710259407,
+            0.0
+          ],
+          "reference_rms_axis": [
+            6.201676956791866,
+            2.9308999070236355,
+            4.095730421713591
+          ],
+          "relative_rmse": 0.01966355909824191,
+          "trend_correlation": 0.9998066722248583,
+          "correlation_axis": [
+            0.999941421513769,
+            0.99883179293032,
+            0.9999999999999999
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.999941421513769,
+            0.99883179293032,
+            0.9999999999999999
+          ],
+          "maximum_absolute_lag_bins": 0
+        }
+      },
+      "orientation": {
+        "mean_geodesic_deg": 4.292757527398823e-05,
+        "rms_geodesic_deg": 4.827514336294188e-05,
+        "max_geodesic_deg": 9.850638909441134e-05,
+        "direct_stored_frame_mean_geodesic_deg": 1.3122169481943808
+      },
+      "checks": {
+        "acceleration_relative_rmse": true,
+        "angular_velocity_relative_rmse": true,
+        "angular_acceleration_relative_rmse": true,
+        "minimum_trend_correlation": true,
+        "maximum_circular_lag_bins": true,
+        "orientation_mean_geodesic_deg": true
+      },
+      "passed": true
+    },
+    "half_smoothed": {
+      "vectors": {
+        "acceleration": {
+          "rmse_axis": [
+            1.7668044435257083e-06,
+            6.855775355822783e-07,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.4911286824391338,
+            1.577770562322234,
+            1.7886114206171002
+          ],
+          "relative_rmse": 7.782669089777049e-07,
+          "trend_correlation": 0.9999999999996977,
+          "correlation_axis": [
+            0.9999999999936179,
+            0.9999999999999064,
+            1.0000000000000002
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999936179,
+            0.9999999999999064,
+            1.0000000000000002
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_velocity": {
+          "rmse_axis": [
+            2.786049293291848e-08,
+            7.754259753136688e-08,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.3563415928370679,
+            0.0791941067002898,
+            0.059095120517574776
+          ],
+          "relative_rmse": 2.228188301976235e-07,
+          "trend_correlation": 0.999999999999976,
+          "correlation_axis": [
+            0.9999999999999972,
+            0.999999999999528,
+            0.9999999999999999
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999999972,
+            0.999999999999528,
+            0.9999999999999999
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_acceleration": {
+          "rmse_axis": [
+            1.1064320497493245e-06,
+            3.3389280212164464e-06,
+            0.0
+          ],
+          "reference_rms_axis": [
+            5.031795667334961,
+            2.094276579970879,
+            1.646699730822623
+          ],
+          "relative_rmse": 6.177993413118399e-07,
+          "trend_correlation": 0.9999999999998093,
+          "correlation_axis": [
+            0.9999999999999759,
+            0.9999999999987301,
+            1.0
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999999759,
+            0.9999999999987301,
+            1.0
+          ],
+          "maximum_absolute_lag_bins": 0
+        }
+      },
+      "direct_stored_frame_vectors": {
+        "acceleration": {
+          "rmse_axis": [
+            0.0361522483592273,
+            0.011189442654478667,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.48662909480062516,
+            1.5791641631377475,
+            1.7886114206171002
+          ],
+          "relative_rmse": 0.015541174138395829,
+          "trend_correlation": 0.9998792359467696,
+          "correlation_axis": [
+            0.9973080551564075,
+            0.9999752641424771,
+            1.0000000000000002
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9973080551564075,
+            0.9999752641424771,
+            1.0000000000000002
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_velocity": {
+          "rmse_axis": [
+            0.0017927155479340736,
+            0.008165582512864242,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.35670198527906644,
+            0.07755469695439604,
+            0.059095120517574776
+          ],
+          "relative_rmse": 0.02260769574437425,
+          "trend_correlation": 0.999744445455645,
+          "correlation_axis": [
+            0.9999878705265378,
+            0.9947900618246673,
+            0.9999999999999999
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999878705265378,
+            0.9947900618246673,
+            0.9999999999999999
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_acceleration": {
+          "rmse_axis": [
+            0.047953648719606355,
+            0.1152427951941858,
+            0.0
+          ],
+          "reference_rms_axis": [
+            5.031605164671835,
+            2.094734230892577,
+            1.646699730822623
+          ],
+          "relative_rmse": 0.02192332627259313,
+          "trend_correlation": 0.9997596838824042,
+          "correlation_axis": [
+            0.9999545873434188,
+            0.9984863419509018,
+            1.0
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999545873434188,
+            0.9984863419509018,
+            1.0
+          ],
+          "maximum_absolute_lag_bins": 0
+        }
+      },
+      "orientation": {
+        "mean_geodesic_deg": 9.178930048581576e-06,
+        "rms_geodesic_deg": 1.0733126690060702e-05,
+        "max_geodesic_deg": 3.304445943986035e-05,
+        "direct_stored_frame_mean_geodesic_deg": 1.3122169481834465
+      },
+      "checks": {
+        "acceleration_relative_rmse": true,
+        "angular_velocity_relative_rmse": true,
+        "angular_acceleration_relative_rmse": true,
+        "minimum_trend_correlation": true,
+        "maximum_circular_lag_bins": true,
+        "orientation_mean_geodesic_deg": true
+      },
+      "passed": true
+    },
+    "fully_smoothed": {
+      "vectors": {
+        "acceleration": {
+          "rmse_axis": [
+            5.170004846670262e-07,
+            1.863146282737846e-07,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.46983194648993093,
+            1.39088923603464,
+            1.3162733486127318
+          ],
+          "relative_rmse": 2.7870731104360676e-07,
+          "trend_correlation": 0.9999999999999621,
+          "correlation_axis": [
+            0.9999999999994431,
+            0.9999999999999923,
+            1.0000000000000002
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999994431,
+            0.9999999999999923,
+            1.0000000000000002
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_velocity": {
+          "rmse_axis": [
+            2.786049293291848e-08,
+            7.754259753136688e-08,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.3563415928370679,
+            0.0791941067002898,
+            0.059095120517574776
+          ],
+          "relative_rmse": 2.228188301976235e-07,
+          "trend_correlation": 0.999999999999976,
+          "correlation_axis": [
+            0.9999999999999972,
+            0.999999999999528,
+            0.9999999999999999
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999999972,
+            0.999999999999528,
+            0.9999999999999999
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_acceleration": {
+          "rmse_axis": [
+            1.1064320497493245e-06,
+            3.3389280212164464e-06,
+            0.0
+          ],
+          "reference_rms_axis": [
+            5.031795667334961,
+            2.094276579970879,
+            1.646699730822623
+          ],
+          "relative_rmse": 6.177993413118399e-07,
+          "trend_correlation": 0.9999999999998093,
+          "correlation_axis": [
+            0.9999999999999759,
+            0.9999999999987301,
+            1.0
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999999999999759,
+            0.9999999999987301,
+            1.0
+          ],
+          "maximum_absolute_lag_bins": 0
+        }
+      },
+      "direct_stored_frame_vectors": {
+        "acceleration": {
+          "rmse_axis": [
+            0.03187631224910478,
+            0.010694224630633048,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.46455073775399347,
+            1.3926620325519619,
+            1.3162733486127318
+          ],
+          "relative_rmse": 0.017051857298560815,
+          "trend_correlation": 0.9998546170589503,
+          "correlation_axis": [
+            0.9977361803852582,
+            0.9999712902300325,
+            1.0000000000000002
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9977361803852582,
+            0.9999712902300325,
+            1.0000000000000002
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_velocity": {
+          "rmse_axis": [
+            0.0017927155479340736,
+            0.008165582512864242,
+            0.0
+          ],
+          "reference_rms_axis": [
+            0.35670198527906644,
+            0.07755469695439604,
+            0.059095120517574776
+          ],
+          "relative_rmse": 0.02260769574437425,
+          "trend_correlation": 0.999744445455645,
+          "correlation_axis": [
+            0.9999878705265378,
+            0.9947900618246673,
+            0.9999999999999999
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999878705265378,
+            0.9947900618246673,
+            0.9999999999999999
+          ],
+          "maximum_absolute_lag_bins": 0
+        },
+        "angular_acceleration": {
+          "rmse_axis": [
+            0.047953648719606355,
+            0.1152427951941858,
+            0.0
+          ],
+          "reference_rms_axis": [
+            5.031605164671835,
+            2.094734230892577,
+            1.646699730822623
+          ],
+          "relative_rmse": 0.02192332627259313,
+          "trend_correlation": 0.9997596838824042,
+          "correlation_axis": [
+            0.9999545873434188,
+            0.9984863419509018,
+            1.0
+          ],
+          "best_circular_lag_bins_axis": [
+            0,
+            0,
+            0
+          ],
+          "best_circular_correlation_axis": [
+            0.9999545873434188,
+            0.9984863419509018,
+            1.0
+          ],
+          "maximum_absolute_lag_bins": 0
+        }
+      },
+      "orientation": {
+        "mean_geodesic_deg": 9.178930048581576e-06,
+        "rms_geodesic_deg": 1.0733126690060702e-05,
+        "max_geodesic_deg": 3.304445943986035e-05,
+        "direct_stored_frame_mean_geodesic_deg": 1.3122169481834465
+      },
+      "checks": {
+        "acceleration_relative_rmse": true,
+        "angular_velocity_relative_rmse": true,
+        "angular_acceleration_relative_rmse": true,
+        "minimum_trend_correlation": true,
+        "maximum_circular_lag_bins": true,
+        "orientation_mean_geodesic_deg": true
+      },
+      "passed": true
+    }
+  },
+  "overall_passed": true
+}

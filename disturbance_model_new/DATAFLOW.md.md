@@ -298,13 +298,15 @@ python /home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model_new/build_world_distur
 
 - `count`
 - `phase`
+- `torso_quaternion`
+- `R_world_from_imu`（用于校验四元数的坐标约定）
 - `torso_linear_acceleration_world`
 - `torso_angular_velocity_world`
 - `left_foot_z`
 - `right_foot_z`
 - `gait_period`
 
-也就是说，这一步是**只基于 world 数据**建模板。
+其中四元数表示 torso/IMU 到 world 的姿态，其余运动量也都在 world 系中。
 
 ---
 
@@ -341,6 +343,7 @@ $$
 
 - `acc_W` 均值和标准差
 - `omega_W` 均值和标准差
+- torso 姿态的 Markley 四元数均值和角度离散度
 - 左右脚高度均值和标准差
 
 得到：
@@ -349,6 +352,12 @@ $$
 - `torso_linear_acceleration_std`
 - `torso_angular_velocity_template`
 - `torso_angular_velocity_std`
+- `torso_orientation_quaternion_template`
+- `torso_orientation_rotation_matrix_template`
+- `torso_orientation_dispersion_rad`
+
+姿态不能对旋转矩阵逐元素求均值，否则结果一般不再是正交矩阵。这里先用
+Markley 方法对 `wxyz` 四元数做符号不变的 SO(3) 均值，再由平均四元数严格生成旋转矩阵。因此模板同时保存四元数和旋转矩阵，但两者表示的是同一姿态。
 
 ### 11.4 角加速度模板不是直接平均出来的
 
@@ -381,6 +390,7 @@ $$
 - `acc_W`：直接用原始均值模板
 - `omega_W`：直接用原始均值模板
 - `alpha_W`：由原始 `omega_W` 模板差分得到
+- `orientation`：每个 bin 的 Markley 四元数均值
 
 输出：
 - `world_disturbance_template.npz`
@@ -392,6 +402,7 @@ $$
 - `acc_W`：保留 raw
 - `omega_W`：做轻度环形滑动平均
 - `alpha_W`：由平滑后的 `omega_W` 求导得到
+- `orientation`：对 raw 姿态做 5-bin 环形 Markley 均值
 
 输出：
 - `world_disturbance_template_half_smoothed.npz`
@@ -403,6 +414,7 @@ $$
 - `acc_W`：轻度平滑
 - `omega_W`：轻度平滑
 - `alpha_W`：由平滑后的 `omega_W` 求导得到
+- `orientation`：对 raw 姿态做 5-bin 环形 Markley 均值
 
 输出：
 - `world_disturbance_template_fully_smoothed.npz`
@@ -429,7 +441,7 @@ $$
 
 ## 14. 第二步的图片是怎么来的
 
-`build_world_disturbance_templates.py` 会直接模仿旧的 `inspect_disturbance_template.py`，生成一个 `3 x 3` 的对比图：
+`build_world_disturbance_templates.py` 会生成一个 `4 x 3` 的对比图：
 
 - 列：
   - Raw
@@ -439,6 +451,7 @@ $$
   - 世界系线加速度
   - 世界系角速度
   - 世界系角加速度
+  - world-from-torso 姿态的 roll/pitch/yaw（仅用于画图；模板仍保存和插值四元数）
 
 图片文件：
 - `World_Disturbance_Template_Comparison.png`
