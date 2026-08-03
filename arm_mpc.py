@@ -974,31 +974,31 @@ class ArmMPCPolicy:
 
     @staticmethod
     def _disturbance_diagnostics(prediction):
-        def vector(item, name):
-            value = None if item is None else getattr(item, name, None)
-            return (
-                np.zeros(3, dtype=np.float64)
-                if value is None
-                else np.asarray(value, dtype=np.float64).copy()
-            )
-
-        def rotation(item):
-            value = None if item is None else getattr(item, "rot_world_body", None)
-            return (
-                np.full((3, 3), np.nan, dtype=np.float64)
-                if value is None
-                else np.asarray(value, dtype=np.float64).copy()
-            )
+        def matrix(name, default):
+            # 【非核心提速】旧写法先逐项 copy，再由 stack 整体 copy 一次。
+            # 这里直接构造最终连续数组，记录内容和缺省语义保持不变。
+            return np.asarray(
+                [
+                    default
+                    if item is None or getattr(item, name, None) is None
+                    else getattr(item, name)
+                    for item in prediction
+                ],
+                dtype=np.float64,
+            ).copy()
 
         return {
-            "acc_world": np.stack([vector(item, "acc_world") for item in prediction]),
-            "omega_world": np.stack(
-                [vector(item, "omega_world") for item in prediction]
+            "acc_world": matrix("acc_world", np.zeros(3, dtype=np.float64)),
+            "omega_world": matrix(
+                "omega_world", np.zeros(3, dtype=np.float64)
             ),
-            "alpha_world": np.stack(
-                [vector(item, "alpha_world") for item in prediction]
+            "alpha_world": matrix(
+                "alpha_world", np.zeros(3, dtype=np.float64)
             ),
-            "rot_world_body": np.stack([rotation(item) for item in prediction]),
+            "rot_world_body": matrix(
+                "rot_world_body",
+                np.full((3, 3), np.nan, dtype=np.float64),
+            ),
         }
 
     def _validate_step_terms(self, terms, step):
@@ -1027,9 +1027,18 @@ class ArmMPCPolicy:
                     f"第 {step} 步 {name} 应为 shape={expected_shape}，"
                     f"当前为 {value.shape}。"
                 )
-            if not np.all(np.isfinite(value)):
-                raise ValueError(f"第 {step} 步 {name} 包含 NaN 或 Inf。")
-            validated[name] = value.copy()
+            validated[name] = value
+        # 【半核心提速】一次检查本节点全部数值，避免 11 次小数组
+        # isfinite 和随后 11 次冗余 copy；若失败再定位具体字段以保留报错质量。
+        all_values = np.concatenate(
+            [value.reshape(-1) for value in validated.values()]
+        )
+        if not np.all(np.isfinite(all_values)):
+            for name, value in validated.items():
+                if not np.all(np.isfinite(value)):
+                    raise ValueError(
+                        f"第 {step} 步 {name} 包含 NaN 或 Inf。"
+                    )
         return validated
 
     def _build_one_step_diagnostics(

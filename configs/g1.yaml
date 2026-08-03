@@ -65,7 +65,10 @@ ddq_torso_alpha_limit: 40.0
 # ==============================
 # MPC 参数
 # ==============================
-mpc_horizon: 12
+mpc_horizon: 9
+# MPC 预测窗口运动学后端：mujoco / pinocchio。两者读取同一份 MJCF；
+# Pinocchio 只替代位姿、J 和 Jdot，不参与仿真接触求解。
+mpc_prediction_kinematics_backend: pinocchio
 # 当前保留低 DDQ 权重下的端平基线；Qa=1.0、Qalpha=0.075
 # 的恢复实验会明显增加 QP 回退、DDQ 触顶和端平误差，因此不作为默认值。
 mpc_q_ee_acc: 0.0
@@ -122,6 +125,19 @@ mpc_torso_alpha_filter_alpha: 0.50
 # ==============================
 # DDQ 到力矩的共用执行层
 # ==============================
+# 名义逆动力学：mujoco / pinocchio_shadow / pinocchio / cpp_pinocchio。
+# shadow 仍执行 MuJoCo 力矩，只用于逐拍对比；Pinocchio active 后，
+# MuJoCo 的局部映射、候选验收、第二轮和安全回退仍全部保留。
+# 最终在线路径使用窄 C ABI 调用 C++ Pinocchio；Python pinocchio 仍是回归基准。
+ddq_nominal_inverse_dynamics_backend: cpp_pinocchio
+# 仿真接触/浮动基局部映射与候选验收：python / cpp。两者使用同一
+# MuJoCo 模型和算法；cpp 减少 Python 循环及多次 FFI 开销。
+# 该后端是仿真接触验收，不是真机可直接复用的接触求解器。
+ddq_forward_dynamics_backend: cpp
+# 低速即将反向时，用未来若干个 2 ms 物理步的速度变化判断干摩擦方向；
+# 对上一轮完整轨迹，5 步把 Pin/MuJoCo 名义力矩差的 5 维 RMS
+# 从约 0.110 Nm 降到 0.028 Nm。
+ddq_pinocchio_friction_breakaway_steps: 5.0
 # 一轮包含：1 次完整基线前向动力学、5 次力矩扰动，
 # 候选按局部模型排序后用 mj_forwardSkip 按需验收，正常 2 次、最多 4 次。
 ddq_execution_perturbation: 0.1
@@ -135,13 +151,28 @@ lqr_execution_enable_second_pass: true
 lqr_execution_safety_rescue_passes: 2
 mpc_execution_enable_second_pass: true
 mpc_execution_safety_rescue_passes: 2
-# DDQ→力矩更新频率：every_step=每个 2 ms 物理步；policy_update=每个
-# 6 ms MPC 控制拍只算一次并在其余两步保持力矩。完整实验表明后者会
-# 明显恶化 DDQ 跟踪和端平，因此默认保留 every_step。
-mpc_ddq_execution_mode: every_step
+# DDQ→力矩更新频率：every_step=每个 2 ms 物理步；
+# twice_per_interval=每个 6 ms 区间在 0/4 ms 各验收一次；
+# policy_update=只在 0 ms 验收一次。未验收的中间拍保持前馈，
+# C++ 执行器仍用最新 q/dq 每 2 ms 更新 PD。
+mpc_ddq_execution_mode: twice_per_interval
 # 安全救援仍失败时，用当前状态完整验收上一仿真步实际执行的右臂力矩；
 # 只有验收后的瞬时 qacc 安全才保持该力矩。
 mpc_execution_hold_last_safe: true
+
+# ==============================
+# C++ 2 ms 右臂安全执行器
+# ==============================
+# cpp 在每个 2 ms 物理拍读取最新 q/dq，合成一次 PD，并负责参考/力矩
+# 限幅、命令/状态超时和 NaN 回退；python 仅用于回归对照。
+right_arm_executor_backend: cpp
+# 仿真与“主机算完整力矩”真机模式使用 host_full_torque；此时发送给
+# 电机的 kp/kd 必须为 0。device_pd 模式则只发送纯前馈和 PD 参数。
+right_arm_executor_output_semantics: host_full_torque
+right_arm_executor_command_timeout_ms: 30.0
+right_arm_executor_state_timeout_ms: 10.0
+right_arm_executor_timeout_damping: [5.0, 5.0, 3.0, 2.0, 1.0]
+right_arm_executor_dq_ref_abs_max: [1.0, 1.0, 1.0, 1.0, 1.0]
 
 kps: [100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40]
 kds: [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2]
