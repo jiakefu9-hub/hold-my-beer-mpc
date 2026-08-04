@@ -17,6 +17,11 @@ record_video: true
 warmup_cycles: 3
 evaluation_cycles: 8
 cooldown_cycles: 2
+# 性能报告只统计完全落在 evaluation 内的完整 6 ms 控制区间。
+performance_measure_evaluation_only: true
+# 进入主控制循环前完成一次回收，随后暂停 Python 循环垃圾回收；
+# NumPy/Python 对象仍按引用计数正常释放，结束仿真后重新启用。
+performance_disable_gc_during_control: true
 
 # ==============================
 # PID 参数
@@ -125,6 +130,9 @@ mpc_disturbance_slow_bias_time_constant: 0.4
 # MPC 独立低延迟通道，不改变 LQR 继续使用的 ddq_torso_* 滤波参数。
 mpc_torso_acc_filter_alpha: 0.50
 mpc_torso_alpha_filter_alpha: 0.50
+# 状态采样到整份 q_ref/dq_ref/ddq_des 命令在 2 ms 执行拍激活的延迟。
+# 0.0 是现有无延迟基线；A/B 实验优先用命令行覆盖，不改控制权重。
+mpc_command_delay_ms: 0.0
 
 # ==============================
 # DDQ 到力矩的共用执行层

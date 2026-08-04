@@ -1,3 +1,4 @@
+import gc
 import os
 import time
 from contextlib import nullcontext
@@ -11,16 +12,30 @@ import numpy as np
 import torch
 import yaml
 
+# run.sh 已在导入原生数值库前固定线程环境；这里再明确限制 Torch
+# intra-op/inter-op，避免策略推理为很小的网络启动额外工作线程。
+_runtime_torch_threads = max(
+    1, int(os.environ.get("MPC_CONTROL_NUM_THREADS", "1"))
+)
+torch.set_num_threads(_runtime_torch_threads)
+try:
+    torch.set_num_interop_threads(1)
+except RuntimeError:
+    # 同一解释器中若已有并行工作启动，Torch 不允许再次修改 inter-op。
+    pass
+
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import CppRightArmRneaBackend, create_prediction_backend
 from right_arm_runtime import CppDdqTorqueMapper, CppRightArmExecutor
 from sim_support import (
+    ArmCommandDelayLine,
     HeadingHoldController,
     PhaseDisturbancePredictor,
     PerformanceMonitor,
     RneaOtherAccelerationEstimator,
     TorsoAccelerationFilter,
     apply_computed_torque_control,
+    build_performance_runtime_config,
     build_right_arm_control_record,
     build_right_arm_observation,
     build_run_metadata,
@@ -56,6 +71,17 @@ if __name__ == "__main__":
     parser.add_argument("--no-video", action="store_true", help="不创建离屏视频")
     parser.add_argument("--smoke-test", action="store_true", help="只运行一个步态周期并关闭 viewer/video")
     parser.add_argument("--run-label", default="", help="追加到评估目录名的简短实验标签")
+    parser.add_argument(
+        "--evaluation-group",
+        default="",
+        help="把多组 A/B 运行收进同一个 evaluation 子目录",
+    )
+    parser.add_argument(
+        "--mpc-command-delay-ms",
+        type=float,
+        default=None,
+        help="覆盖 MPC 命令从状态采样到 2 ms 执行拍激活的仿真延迟",
+    )
     args = parser.parse_args()
     config_file = args.config_file
     repo_dir = os.path.dirname(os.path.abspath(__file__))
@@ -137,6 +163,11 @@ if __name__ == "__main__":
                 "host_full_torque",
             )
         ).strip().lower()
+        mpc_command_delay_ms = float(
+            config.get("mpc_command_delay_ms", 0.0)
+            if args.mpc_command_delay_ms is None
+            else args.mpc_command_delay_ms
+        )
         if right_arm_executor_backend not in {"python", "cpp"}:
             raise ValueError(
                 "right_arm_executor_backend 必须是 python 或 cpp。"
@@ -149,6 +180,10 @@ if __name__ == "__main__":
                 "right_arm_executor_output_semantics 必须是 "
                 "host_full_torque 或 device_pd。"
             )
+        if not np.isfinite(mpc_command_delay_ms) or mpc_command_delay_ms < 0.0:
+            raise ValueError("mpc_command_delay_ms 必须是有限非负数。")
+        if arm_controller != "mpc" and mpc_command_delay_ms > 0.0:
+            raise ValueError("当前命令延迟实验只允许 arm_controller=mpc。")
         if (
             not np.isfinite(ddq_pinocchio_friction_breakaway_steps)
             or ddq_pinocchio_friction_breakaway_steps < 0.0
@@ -226,8 +261,11 @@ if __name__ == "__main__":
         if character.isalnum() or character in {"_", "-"}
     )
     experiment_name = f"left_fixed_right_{arm_controller}"
-    if run_label:
-        experiment_name += f"_{run_label}"
+    evaluation_group = "".join(
+        character
+        for character in str(args.evaluation_group).strip().lower().replace(" ", "_")
+        if character.isalnum() or character in {"_", "-"}
+    ) or experiment_name
     buffers = init_eval_buffers()
 
     # ==============================
@@ -279,6 +317,20 @@ if __name__ == "__main__":
     cached_right_arm_tau_ff = None
     cached_inverse_result = None
     cached_mapping_result = None
+    mpc_command_delay_line = (
+        ArmCommandDelayLine(
+            step_dt=simulation_dt,
+            requested_delay=mpc_command_delay_ms * 1e-3,
+            initial_q=target_right_arm_q,
+            initial_dq=target_right_arm_dq,
+            initial_ddq=desired_right_arm_ddq,
+        )
+        if arm_controller == "mpc"
+        else None
+    )
+    active_command_source_time = 0.0
+    command_activation = None
+    last_mpc_command_activation_counter = None
     controller_setup = create_arm_controller(
         config, arm_controller, right_arm_target, arm_control_dt
     )
@@ -292,6 +344,9 @@ if __name__ == "__main__":
     if arm_controller == "mpc":
         controller_meta["mpc_config"]["ddq_execution_mode"] = (
             mpc_ddq_execution_mode
+        )
+        controller_meta["mpc_config"]["command_delay"] = (
+            mpc_command_delay_line.metadata()
         )
     controller_meta["robot_model_backends"] = {
         "mpc_prediction_kinematics": (
@@ -384,6 +439,19 @@ if __name__ == "__main__":
         "yaw_rate_feedforward": float(cmd_nominal[2]),
         "max_abs_yaw_rate": heading_max_yaw_rate,
     }
+    performance_runtime = build_performance_runtime_config(
+        config=config,
+        arm_control_dt=arm_control_dt,
+        eval_start_time=eval_start_time,
+        eval_end_time=eval_end_time,
+        run_end_time=eval_duration,
+        warmup_cycles=warmup_cycles,
+        torch_num_threads=torch.get_num_threads(),
+        torch_num_interop_threads=torch.get_num_interop_threads(),
+    )
+    controller_meta["runtime_timing_environment"] = (
+        performance_runtime.metadata
+    )
     # ==============================
     # 5. 创建实验输出目录与视频录制器【非核心代码】
     # 每次 run 都单独保存 metadata、轨迹、评估图和视频，方便横向对比。
@@ -402,7 +470,12 @@ if __name__ == "__main__":
         evaluation_cycles,
         cooldown_cycles,
     )
-    run_dir = create_eval_run_dir(os.path.join(repo_dir, "evaluation"), experiment_name, run_metadata)
+    run_dir = create_eval_run_dir(
+        os.path.join(repo_dir, "evaluation"),
+        evaluation_group,
+        run_metadata,
+        run_label=run_label,
+    )
     video_path = os.path.join(run_dir, "rollout.mp4")
     video_fps = 30
     video_stride = max(1, int(round(1.0 / (simulation_dt * video_fps))))
@@ -568,7 +641,13 @@ if __name__ == "__main__":
     cmd_runtime = cmd_nominal.copy()
     heading_yaw_rate_command_runtime = float(cmd_runtime[2])
 
-    perf_monitor = PerformanceMonitor(step_budget=simulation_dt, arm_budget=arm_control_dt)
+    perf_monitor = PerformanceMonitor(
+        step_budget=simulation_dt,
+        arm_budget=arm_control_dt,
+        measurement_start_time=performance_runtime.measurement_start_time,
+        measurement_end_time=performance_runtime.measurement_end_time,
+        runtime_environment=performance_runtime.metadata,
+    )
 
     # ==============================
     # 7. 主仿真循环【核心代码】
@@ -576,6 +655,10 @@ if __name__ == "__main__":
     #   腿部控制 -> 上肢状态读取与右臂控制 -> 写入力矩 -> mj_step 推进物理 -> 记录评估 -> RL 更新 -> 可视化与计时
     # 这里是整个文件最需要看懂的部分，因为真正的控制数据流都发生在这里。
     # ==============================
+    gc_was_enabled = gc.isenabled()
+    if performance_runtime.disable_gc_during_control:
+        gc.collect()
+        gc.disable()
     viewer_context = mujoco.viewer.launch_passive(m, d) if viewer_enabled else nullcontext(None)
     with viewer_context as viewer:
         # viewer 和离屏 renderer 分别使用 GLFW/EGL。后创建 renderer，
@@ -590,11 +673,8 @@ if __name__ == "__main__":
         display_mode = "交互显示" if viewer is not None else "headless"
         print(f"运行模式 = {display_mode} | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
         while (viewer is None or viewer.is_running()) and counter * simulation_dt < eval_duration:
-            perf_monitor.start_step()
-            rnea_reference_qacc = rnea_other_acceleration_estimator.update(
-                d.qacc
-            )
-            
+            perf_monitor.start_step(counter * simulation_dt)
+
             # --- 7.1 腿部控制【半核心】---
             # 这部分是已有 locomotion 执行链；需要知道它负责下肢，不需要像右臂控制那样细抠每个细节。
             # 位置向量第 7 到 18 项为腿部的 12 个关节，速度向量第 6 到 17 项为对应的速度
@@ -614,6 +694,16 @@ if __name__ == "__main__":
             #    - LQR/MPC 额外项：配置的逆动力学先生成名义力矩，再用局部前向动力学
             #      映射反求使右臂实际加速度接近 ddq_des 的最终力矩。
 
+            arm_policy_update_due = counter % arm_control_decimation == 0
+            if arm_policy_update_due:
+                perf_monitor.begin_arm_interval(counter * simulation_dt)
+            # 真机相关右臂路径从整机参考加速度和当前状态处理开始，
+            # 到最终力矩写入为止；不包含腿部 PD、MuJoCo 物理推进和画图。
+            perf_monitor.start_right_arm_path()
+            rnea_reference_qacc = rnea_other_acceleration_estimator.update(
+                d.qacc
+            )
+
             # 当前上肢的真实状态（腰 + 左臂 + 右臂），后面 PD 会用它和目标状态做误差反馈
             arm_waist_q = d.qpos[19:30]
             arm_waist_dq = d.qvel[18:29]
@@ -625,12 +715,6 @@ if __name__ == "__main__":
             # 从上肢状态里切出右臂 5 个关节，作为右臂控制器的当前状态输入
             right_arm_q = arm_waist_q[6:11]
             right_arm_dq = arm_waist_dq[6:11]
-            arm_policy_update_due = counter % arm_control_decimation == 0
-            if arm_policy_update_due:
-                perf_monitor.begin_arm_interval()
-            # 真机相关右臂路径从当前状态处理开始，到最终力矩写入为止。
-            # 它不包含 MuJoCo 物理推进、评估绘图、视频或 sleep。
-            perf_monitor.start_right_arm_path()
 
             # torso 线加速度直接读取 MuJoCo IMU accelerometer，并转换到去重力后的世界系；
             # torso 角加速度仍由世界系角速度有限差分得到。
@@ -697,7 +781,13 @@ if __name__ == "__main__":
                     # - target_right_arm_q / dq：给下层 PD 跟踪的参考轨迹
                     # - desired_right_arm_ddq：期望关节加速度，后面用于 computed torque 前馈
                     controller_compute_start = time.perf_counter()
-                    target_right_arm_q, target_right_arm_dq, desired_right_arm_ddq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
+                    (
+                        generated_target_right_arm_q,
+                        generated_target_right_arm_dq,
+                        generated_desired_right_arm_ddq,
+                    ) = arm_policy.compute_action(
+                        right_arm_obs, right_arm_helpers
+                    )
                     controller_compute_action_time = (
                         time.perf_counter() - controller_compute_start
                     )
@@ -707,10 +797,27 @@ if __name__ == "__main__":
                         if arm_controller == "mpc"
                         else arm_policy.get_last_diagnostics()
                     )
-                    raw_right_arm_ddq = controller_diagnostics["ddq_raw"]
+                    generated_raw_right_arm_ddq = controller_diagnostics[
+                        "ddq_raw"
+                    ]
                     if arm_controller == "lqr":
+                        target_right_arm_q = generated_target_right_arm_q
+                        target_right_arm_dq = generated_target_right_arm_dq
+                        desired_right_arm_ddq = (
+                            generated_desired_right_arm_ddq
+                        )
+                        raw_right_arm_ddq = generated_raw_right_arm_ddq
                         lqr_one_step_prediction = controller_diagnostics["one_step_prediction"]
                     else:
+                        # 【核心延迟模型】同一次 MPC 求解的 q/dq/ddq 必须
+                        # 作为一个命令包发布，不能只延迟其中某一项。
+                        mpc_command_delay_line.publish(
+                            counter * simulation_dt,
+                            generated_target_right_arm_q,
+                            generated_target_right_arm_dq,
+                            generated_raw_right_arm_ddq,
+                            generated_desired_right_arm_ddq,
+                        )
                         mpc_diagnostics = controller_diagnostics
                         if disturbance_predictor is not None:
                             mpc_diagnostics["disturbance_template_diagnostics"] = (
@@ -740,6 +847,19 @@ if __name__ == "__main__":
                 perf_monitor.finish_arm_control()
                 if arm_controller == "mpc":
                     perf_monitor.record_mpc_timing(controller_diagnostics)
+
+            if mpc_command_delay_line is not None:
+                command_activation = mpc_command_delay_line.activate_ready(
+                    counter * simulation_dt
+                )
+                active_packet = command_activation.packet
+                target_right_arm_q = active_packet.target_q
+                target_right_arm_dq = active_packet.target_dq
+                raw_right_arm_ddq = active_packet.ddq_raw
+                desired_right_arm_ddq = active_packet.ddq_des
+                active_command_source_time = active_packet.source_time
+                if command_activation.activated:
+                    last_mpc_command_activation_counter = counter
 
             # 把“固定的腰/左臂目标”和“在线计算的右臂目标”拼回完整上肢目标
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
@@ -773,7 +893,29 @@ if __name__ == "__main__":
                 # 7) 验收后残差仍大于阈值时，在已接受力矩处重算 G_tau，并做一次同样受验收的二次修正
                 execution_update_due = True
                 if arm_controller == "mpc":
-                    if mpc_ddq_execution_mode == "policy_update":
+                    delayed_grid_active = (
+                        mpc_command_delay_line.quantized_delay > 0.0
+                    )
+                    if delayed_grid_active:
+                        # 命令可能在原 6 ms 区间的 2 ms 相位到达。到达
+                        # 当拍必须立刻重算，第二次验收相对该激活拍后移 4 ms。
+                        activated_now = bool(
+                            command_activation is not None
+                            and command_activation.activated
+                        )
+                        steps_since_activation = (
+                            None
+                            if last_mpc_command_activation_counter is None
+                            else counter - last_mpc_command_activation_counter
+                        )
+                        if mpc_ddq_execution_mode == "policy_update":
+                            execution_update_due = activated_now
+                        elif mpc_ddq_execution_mode == "twice_per_interval":
+                            execution_update_due = activated_now or (
+                                steps_since_activation
+                                == arm_control_decimation - 1
+                            )
+                    elif mpc_ddq_execution_mode == "policy_update":
                         execution_update_due = arm_policy_update_due
                     elif mpc_ddq_execution_mode == "twice_per_interval":
                         interval_phase = counter % arm_control_decimation
@@ -825,9 +967,13 @@ if __name__ == "__main__":
                             rnea_reference_qacc
                         ),
                     )
-                    perf_monitor.finish_computed_torque_control()
+                    ddq_execution_elapsed = (
+                        perf_monitor.finish_computed_torque_control()
+                    )
                     perf_monitor.record_ddq_execution_timing(
-                        inverse_result, mapping_result
+                        inverse_result,
+                        mapping_result,
+                        call_elapsed=ddq_execution_elapsed,
                     )
                     ddq_execution_updated = True
                     # 低频映射模式只保持验收后的前馈部分；2 ms C++
@@ -855,9 +1001,14 @@ if __name__ == "__main__":
                 pre_executor_tau = tau_arm_waist[6:11].copy()
                 executor_tau_ff = pre_executor_tau - right_arm_tau_pd
                 simulated_now_ns = int(round(float(d.time) * 1e9))
+                command_source_ns = (
+                    simulated_now_ns
+                    if mpc_command_delay_line is None
+                    else int(round(float(active_command_source_time) * 1e9))
+                )
                 cpp_executor_result = cpp_right_arm_executor.step(
                     now_ns=simulated_now_ns,
-                    command_timestamp_ns=simulated_now_ns,
+                    command_timestamp_ns=command_source_ns,
                     state_timestamp_ns=simulated_now_ns,
                     q=arm_waist_q[6:11],
                     dq=arm_waist_dq[6:11],
@@ -993,6 +1144,9 @@ if __name__ == "__main__":
         close_renderer(renderer)
         renderer = None
 
+    if performance_runtime.disable_gc_during_control and gc_was_enabled:
+        gc.enable()
+
     # ==============================
     # 8. 收尾保存【非核心代码】
     # renderer 和 viewer 都已按正确顺序释放，这里只做轨迹、评估指标、视频和性能统计的文件保存。
@@ -1024,6 +1178,10 @@ if __name__ == "__main__":
         mpc_cost_definition=mpc_cost_definition,
         arm_controller=arm_controller,
     )
+    if mpc_command_delay_line is not None:
+        mpc_command_delay_line.save_report(
+            run_dir, eval_start_time, eval_end_time
+        )
     # 【非核心收尾】显式释放原生 handle，避免同一 Python 进程
     # 重复创建仿真时依赖解析器退出顺序或进程回收。
     closed_native_backends = set()

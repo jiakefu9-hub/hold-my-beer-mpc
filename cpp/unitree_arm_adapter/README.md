@@ -94,6 +94,24 @@ cpp/unitree_arm_adapter/build_and_test.sh
   --iterations 2000 --synthetic-input
 ```
 
+需要观察 wall-clock 长尾时，可先预热，再把逐拍原始计时写到 CSV：
+
+```bash
+/tmp/hold-my-beer-mpc-unitree-arm-adapter-build/unitree_arm_adapter_dry_run \
+  --warmup-iterations 1000 --iterations 30000 --synthetic-input \
+  --csv /tmp/unitree_arm_2ms_timing.csv
+```
+
+`iterations` 只表示正式统计拍数，预热拍不进入汇总和 CSV。CSV 在循环
+结束后统一写盘，不把文件 I/O 混进 2 ms 热路径。`work_time` 从线程被唤醒
+后开始，到一次 status seqlock 写完为止；`completion_lateness` 是完成时刻
+减去本拍 deadline，负值表示仍有余量；`period_jitter` 是相邻实际启动间隔
+相对 2 ms 的绝对偏差。`deadline_miss_event` 表示该拍是否完成超时，
+`skipped_periods` 则记录唤醒时已经跨过的完整周期，二者不能混为同一统计。
+这个干运行不含 DDS 传输，也尚不含缺少 floating-base 输入的 C++ RNEA，
+因此只能评价当前共享内存、安全计划和周期调度路径，不能直接等同于真机
+端到端延迟。
+
 DDS 只读干运行（订阅状态，但不发布命令）：
 
 ```bash

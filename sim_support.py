@@ -86,6 +86,194 @@ class TorsoMotionState:
 
 
 @dataclass(frozen=True)
+class ArmCommandPacket:
+    """一次 MPC 求解产生的、必须整体延迟和整体激活的右臂命令。"""
+
+    command_id: int
+    source_time: float
+    ready_time: float
+    target_q: np.ndarray
+    target_dq: np.ndarray
+    ddq_raw: np.ndarray
+    ddq_des: np.ndarray
+
+
+@dataclass(frozen=True)
+class ArmCommandActivation:
+    packet: ArmCommandPacket
+    activated: bool
+    activation_time: float
+    effective_delay: float
+    tick_wait: float
+    dropped_count: int
+
+
+class ArmCommandDelayLine:
+    """在 2 ms 仿真拍上复现“状态采样 -> 命令可用”的计算延迟。
+
+    【核心时序】延迟的是同一次 MPC 求解的 q/dq/ddq 命令包。命令到达
+    后，后续 RNEA、MuJoCo 验收和 PD 仍读取激活时刻的最新真实状态。
+    """
+
+    def __init__(
+        self,
+        *,
+        step_dt,
+        requested_delay,
+        initial_q,
+        initial_dq,
+        initial_ddq,
+    ):
+        self.step_dt = float(step_dt)
+        self.requested_delay = float(requested_delay)
+        if not np.isfinite(self.step_dt) or self.step_dt <= 0.0:
+            raise ValueError("命令延迟线 step_dt 必须是有限正数。")
+        if (
+            not np.isfinite(self.requested_delay)
+            or self.requested_delay < 0.0
+        ):
+            raise ValueError("MPC 命令延迟必须是有限非负数。")
+        # 延迟只能在下一次 2 ms 执行拍生效，因此统一向上量化。
+        self.delay_ticks = int(
+            np.ceil(self.requested_delay / self.step_dt - 1e-12)
+        )
+        self.quantized_delay = self.delay_ticks * self.step_dt
+        initial_q = self._vector(initial_q, "initial_q")
+        initial_dq = self._vector(initial_dq, "initial_dq")
+        initial_ddq = self._vector(initial_ddq, "initial_ddq")
+        self._active = ArmCommandPacket(
+            command_id=0,
+            source_time=0.0,
+            ready_time=0.0,
+            target_q=initial_q,
+            target_dq=initial_dq,
+            ddq_raw=initial_ddq.copy(),
+            ddq_des=initial_ddq,
+        )
+        self._pending = deque()
+        self._next_command_id = 1
+        self._events = []
+
+    @staticmethod
+    def _vector(values, name):
+        result = np.asarray(values, dtype=np.float64)
+        if result.shape != (5,) or not np.all(np.isfinite(result)):
+            raise ValueError(f"{name} 必须是有限的 5 维数组。")
+        return result.copy()
+
+    def publish(self, source_time, target_q, target_dq, ddq_raw, ddq_des):
+        """发布一份完整命令；返回其稳定 command_id。"""
+        source_time = float(source_time)
+        if not np.isfinite(source_time) or source_time < 0.0:
+            raise ValueError("命令 source_time 必须是有限非负数。")
+        packet = ArmCommandPacket(
+            command_id=self._next_command_id,
+            source_time=source_time,
+            ready_time=source_time + self.quantized_delay,
+            target_q=self._vector(target_q, "target_q"),
+            target_dq=self._vector(target_dq, "target_dq"),
+            ddq_raw=self._vector(ddq_raw, "ddq_raw"),
+            ddq_des=self._vector(ddq_des, "ddq_des"),
+        )
+        self._next_command_id += 1
+        self._pending.append(packet)
+        return packet.command_id
+
+    def activate_ready(self, now):
+        """激活截至本拍已到达的最新命令，过期的较旧命令不再执行。"""
+        now = float(now)
+        ready = []
+        while self._pending and self._pending[0].ready_time <= now + 1e-12:
+            ready.append(self._pending.popleft())
+        activated = bool(ready)
+        dropped = max(0, len(ready) - 1)
+        if activated:
+            self._active = ready[-1]
+            effective_delay = max(0.0, now - self._active.source_time)
+            tick_wait = max(0.0, now - self._active.ready_time)
+            self._events.append(
+                {
+                    "command_id": self._active.command_id,
+                    "source_time_s": self._active.source_time,
+                    "ready_time_s": self._active.ready_time,
+                    "activation_time_s": now,
+                    "requested_delay_ms": self.requested_delay * 1000.0,
+                    "quantized_delay_ms": self.quantized_delay * 1000.0,
+                    "effective_delay_ms": effective_delay * 1000.0,
+                    "tick_wait_ms": tick_wait * 1000.0,
+                    "older_ready_commands_dropped": dropped,
+                }
+            )
+        else:
+            effective_delay = max(0.0, now - self._active.source_time)
+            tick_wait = 0.0
+        return ArmCommandActivation(
+            packet=self._active,
+            activated=activated,
+            activation_time=now,
+            effective_delay=effective_delay,
+            tick_wait=tick_wait,
+            dropped_count=dropped,
+        )
+
+    def metadata(self):
+        return {
+            "definition": "source-state time to command activation on 2 ms grid",
+            "requested_delay_ms": self.requested_delay * 1000.0,
+            "quantized_delay_ms": self.quantized_delay * 1000.0,
+            "delay_ticks": self.delay_ticks,
+            "delayed_fields": ["q_ref", "dq_ref", "ddq_des"],
+            "torque_recomputed_from_latest_activation_state": True,
+        }
+
+    def save_report(self, run_dir, evaluation_start, evaluation_end):
+        """保存命令级延迟证据；控制效果统计仍由 evaluation 文件负责。"""
+        path = os.path.join(run_dir, "mpc_command_delay.csv")
+        if self._events:
+            with open(path, "w", newline="", encoding="utf-8") as stream:
+                writer = csv.DictWriter(
+                    stream, fieldnames=list(self._events[0].keys())
+                )
+                writer.writeheader()
+                writer.writerows(self._events)
+        evaluation_events = [
+            event
+            for event in self._events
+            if float(evaluation_start) - 1e-12
+            <= event["activation_time_s"]
+            < float(evaluation_end) - 1e-12
+        ]
+        effective = np.asarray(
+            [event["effective_delay_ms"] for event in evaluation_events],
+            dtype=np.float64,
+        )
+        summary = {
+            **self.metadata(),
+            "event_count_total": len(self._events),
+            "event_count_evaluation": len(evaluation_events),
+            "dropped_count_evaluation": int(
+                sum(
+                    event["older_ready_commands_dropped"]
+                    for event in evaluation_events
+                )
+            ),
+            "effective_delay_ms_evaluation": {
+                "mean": float(np.mean(effective)) if effective.size else 0.0,
+                "p99": (
+                    float(np.percentile(effective, 99))
+                    if effective.size
+                    else 0.0
+                ),
+                "max": float(np.max(effective)) if effective.size else 0.0,
+            },
+        }
+        summary_path = os.path.join(run_dir, "mpc_command_delay_summary.json")
+        with open(summary_path, "w", encoding="utf-8") as stream:
+            json.dump(summary, stream, indent=2, ensure_ascii=False)
+        return path if self._events else None, summary_path
+
+
+@dataclass(frozen=True)
 class HeadingControlOutput:
     reference_world: float
     yaw_unwrapped: float
@@ -3100,10 +3288,89 @@ def apply_computed_torque_control(
 # 如果继续做第二轮整理，应将整个 PerformanceMonitor 区块后移，
 # 让 right_arm 执行层与逆动力学前馈整体进入文件前半部分。
 # ==============================
+@dataclass(frozen=True)
+class PerformanceRuntimeConfig:
+    measurement_start_time: float
+    measurement_end_time: float
+    disable_gc_during_control: bool
+    metadata: dict
+
+
+def build_performance_runtime_config(
+    config,
+    arm_control_dt,
+    eval_start_time,
+    eval_end_time,
+    run_end_time,
+    warmup_cycles,
+    torch_num_threads,
+    torch_num_interop_threads,
+):
+    """集中整理性能采样时间窗和运行环境，避免主控制循环混入装配细节。"""
+    evaluation_only = bool(
+        config.get("performance_measure_evaluation_only", True)
+    )
+    disable_gc = bool(
+        config.get("performance_disable_gc_during_control", True)
+    )
+    start_time = float(eval_start_time if evaluation_only else 0.0)
+    requested_end_time = float(
+        eval_end_time if evaluation_only else run_end_time
+    )
+    complete_interval_count = int(
+        np.floor(
+            (requested_end_time - start_time) / float(arm_control_dt)
+            + 1e-9
+        )
+    )
+    end_time = start_time + complete_interval_count * float(arm_control_dt)
+    affinity = (
+        sorted(int(cpu) for cpu in os.sched_getaffinity(0))
+        if hasattr(os, "sched_getaffinity")
+        else []
+    )
+    metadata = {
+        "measurement_scope": (
+            "complete_intervals_fully_inside_evaluation"
+            if evaluation_only
+            else "complete_run"
+        ),
+        "gc_disabled_during_control_loop": disable_gc,
+        "cpu_affinity": affinity,
+        "thread_environment": {
+            name: os.environ.get(name, "")
+            for name in (
+                "OMP_NUM_THREADS",
+                "OPENBLAS_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "NUMEXPR_NUM_THREADS",
+                "VECLIB_MAXIMUM_THREADS",
+                "BLIS_NUM_THREADS",
+            )
+        },
+        "torch_num_threads": int(torch_num_threads),
+        "torch_num_interop_threads": int(torch_num_interop_threads),
+        "warmup_cycles_before_measurement": int(warmup_cycles),
+        "requested_measurement_start_time_s": start_time,
+        "requested_measurement_end_time_s": requested_end_time,
+        "aligned_measurement_end_time_s": end_time,
+        "complete_interval_count_expected": complete_interval_count,
+    }
+    return PerformanceRuntimeConfig(
+        measurement_start_time=start_time,
+        measurement_end_time=end_time,
+        disable_gc_during_control=disable_gc,
+        metadata=metadata,
+    )
+
+
 @dataclass
 class PerformanceMonitor:
     step_budget: float
     arm_budget: Optional[float] = None
+    measurement_start_time: float = 0.0
+    measurement_end_time: Optional[float] = None
+    runtime_environment: dict = field(default_factory=dict)
     warn_interval: Optional[int] = None
     step_start: float = 0.0
     arm_control_start: float = 0.0
@@ -3172,19 +3439,49 @@ class PerformanceMonitor:
     ddq_execution_timing_samples: list = field(default_factory=list)
     cpp_executor_timing_samples: list = field(default_factory=list)
     window_cpp_executor_timing_samples: list = field(default_factory=list)
+    interval_records: list = field(default_factory=list)
+    measurement_active: bool = False
+    current_step_simulation_time: float = 0.0
+    current_interval_start_time: Optional[float] = None
+    current_interval_policy_sample: Optional[dict] = None
+    current_interval_ddq_samples: list = field(default_factory=list)
+    current_interval_cpp_executor_elapsed: float = 0.0
 
     def __post_init__(self):
         if self.arm_budget is None:
             self.arm_budget = self.step_budget
         if self.warn_interval is None:
             self.warn_interval = max(1, int(round(1.0 / self.step_budget)))
+        self.measurement_start_time = float(self.measurement_start_time)
+        if self.measurement_end_time is not None:
+            self.measurement_end_time = float(self.measurement_end_time)
+            if self.measurement_end_time <= self.measurement_start_time:
+                raise ValueError("性能采样结束时间必须晚于开始时间。")
+        self.expected_steps_per_interval = max(
+            1, int(round(self.arm_budget / self.step_budget))
+        )
 
-    def start_step(self):
+    def start_step(self, simulation_time=0.0):
         self.step_start = time.perf_counter()
+        self.current_step_simulation_time = float(simulation_time)
+        self.measurement_active = (
+            self.current_step_simulation_time + 1e-12
+            >= self.measurement_start_time
+            and (
+                self.measurement_end_time is None
+                or self.current_step_simulation_time
+                < self.measurement_end_time - 1e-12
+            )
+        )
 
-    def begin_arm_interval(self):
+    def begin_arm_interval(self, simulation_time=None):
         """在新的上层控制拍开始前，封存上一完整控制区间。"""
         self._finish_current_arm_interval()
+        self.current_interval_start_time = (
+            float(self.current_step_simulation_time)
+            if simulation_time is None
+            else float(simulation_time)
+        )
 
     def finish_pending_arm_interval(self):
         """仿真结束时封存最后一个控制区间。"""
@@ -3192,20 +3489,87 @@ class PerformanceMonitor:
 
     def _finish_current_arm_interval(self):
         if self.current_interval_steps <= 0:
+            self._reset_current_interval_details()
             return
-        self.right_arm_interval_samples.append(self.current_interval_elapsed)
-        self.execution_calls_per_interval.append(
-            self.current_interval_execution_calls
-        )
-        self.window_right_arm_interval_samples.append(
-            self.current_interval_elapsed
-        )
-        self.window_execution_calls_per_interval.append(
-            self.current_interval_execution_calls
-        )
+        # evaluation 末端可能切到一个不足 3 个物理拍的残余区间；它不是
+        # 完整 6 ms 控制周期，不能混入实时预算统计。
+        if self.current_interval_steps == self.expected_steps_per_interval:
+            self.right_arm_interval_samples.append(
+                self.current_interval_elapsed
+            )
+            self.execution_calls_per_interval.append(
+                self.current_interval_execution_calls
+            )
+            self.window_right_arm_interval_samples.append(
+                self.current_interval_elapsed
+            )
+            self.window_execution_calls_per_interval.append(
+                self.current_interval_execution_calls
+            )
+            self.interval_records.append(self._build_interval_record())
+        self._reset_current_interval_details()
+
+    def _reset_current_interval_details(self):
         self.current_interval_elapsed = 0.0
         self.current_interval_steps = 0
         self.current_interval_execution_calls = 0
+        self.current_interval_start_time = None
+        self.current_interval_policy_sample = None
+        self.current_interval_ddq_samples.clear()
+        self.current_interval_cpp_executor_elapsed = 0.0
+
+    def _build_interval_record(self):
+        policy = self.current_interval_policy_sample or {}
+        ddq_samples = self.current_interval_ddq_samples
+        ddq_times = [float(sample.get("total_time", 0.0)) for sample in ddq_samples]
+        policy_time = float(policy.get("policy_update_time", 0.0))
+        ddq_total = float(np.sum(ddq_times))
+        executor_time = float(self.current_interval_cpp_executor_elapsed)
+        total = float(self.current_interval_elapsed)
+        start_time = float(
+            self.current_interval_start_time
+            if self.current_interval_start_time is not None
+            else 0.0
+        )
+        record = {
+            "simulation_start_time_s": start_time,
+            "simulation_end_time_s": (
+                start_time + self.current_interval_steps * self.step_budget
+            ),
+            "complete_interval_ms": total * 1000.0,
+            "budget_ms": self.arm_budget * 1000.0,
+            "overrun": bool(total > self.arm_budget),
+            "mpc_policy_update_ms": policy_time * 1000.0,
+            "mpc_assembly_ms": float(policy.get("assembly_time", 0.0)) * 1000.0,
+            "mpc_terms_ms": float(policy.get("terms_time", 0.0)) * 1000.0,
+            "mpc_cost_ms": float(policy.get("cost_time", 0.0)) * 1000.0,
+            "mpc_constraints_ms": float(policy.get("constraints_time", 0.0)) * 1000.0,
+            "mpc_solver_wall_ms": float(policy.get("solver_wall_time", 0.0)) * 1000.0,
+            "mpc_postprocess_ms": float(policy.get("postprocess_time", 0.0)) * 1000.0,
+            "ddq_call_count": len(ddq_times),
+            "ddq_total_ms": ddq_total * 1000.0,
+            "ddq_max_ms": (max(ddq_times) if ddq_times else 0.0) * 1000.0,
+            "ddq_second_pass_count": sum(
+                bool(sample.get("second_pass_triggered", False))
+                for sample in ddq_samples
+            ),
+            "ddq_rescue_count": sum(
+                bool(sample.get("rescue_used", False))
+                for sample in ddq_samples
+            ),
+            "cpp_executor_bridge_ms": executor_time * 1000.0,
+            "other_right_arm_path_ms": max(
+                0.0,
+                (total - policy_time - ddq_total - executor_time) * 1000.0,
+            ),
+        }
+        for index in range(3):
+            record[f"ddq_call_{index + 1}_ms"] = (
+                ddq_times[index] * 1000.0
+                if index < len(ddq_times)
+                else 0.0
+            )
+        return record
 
     def start_right_arm_path(self):
         self.right_arm_path_start = time.perf_counter()
@@ -3234,7 +3598,7 @@ class PerformanceMonitor:
 
     def record_mpc_timing(self, diagnostics):
         """记录 MPC 内部阶段；单位统一保留为秒，输出时转换为 ms。"""
-        if not isinstance(diagnostics, dict):
+        if not self.measurement_active or not isinstance(diagnostics, dict):
             return
         names = (
             "disturbance_prediction_time",
@@ -3260,14 +3624,25 @@ class PerformanceMonitor:
             sample["policy_update_time"] - sample["policy_core_time"],
         )
         self.mpc_timing_samples.append(sample)
+        self.current_interval_policy_sample = sample
 
-    def record_ddq_execution_timing(self, inverse_result, mapping_result):
+    def record_ddq_execution_timing(
+        self, inverse_result, mapping_result, call_elapsed=None
+    ):
         """记录一次真正执行的 DDQ→力矩调用及其分支。"""
-        if inverse_result is None or mapping_result is None:
+        if (
+            not self.measurement_active
+            or inverse_result is None
+            or mapping_result is None
+        ):
             return
-        self.ddq_execution_timing_samples.append(
-            {
-                "total_time": float(self.computed_torque_elapsed),
+        measured_call_elapsed = float(
+            self.computed_torque_elapsed
+            if call_elapsed is None
+            else call_elapsed
+        )
+        sample = {
+                "total_time": measured_call_elapsed,
                 # shadow 是调试模式，但它确实占用当前进程时间；
                 # 所以总 inverse_time 不得遗漏 shadow 调用。
                 "inverse_time": float(
@@ -3321,12 +3696,15 @@ class PerformanceMonitor:
                 ),
                 "rescue_used": bool(mapping_result.safety_fallback_used),
             }
-        )
+        self.ddq_execution_timing_samples.append(sample)
+        self.current_interval_ddq_samples.append(sample)
 
     def record_cpp_executor_timing(
         self, wall_elapsed_time, core_elapsed_time, mode
     ):
         """记录每个 2 ms 物理拍调用 C++ 安全执行器的成本。"""
+        if not self.measurement_active:
+            return
         self.cpp_executor_timing_samples.append(
             {
                 "wall_time": float(wall_elapsed_time),
@@ -3336,6 +3714,9 @@ class PerformanceMonitor:
         )
         self.window_cpp_executor_timing_samples.append(
             float(wall_elapsed_time)
+        )
+        self.current_interval_cpp_executor_elapsed += float(
+            wall_elapsed_time
         )
 
     def start_mj_step(self):
@@ -3356,6 +3737,15 @@ class PerformanceMonitor:
 
     def record_step(self, loop_elapsed):
         other_elapsed = max(0.0, loop_elapsed - self.arm_control_elapsed - self.computed_torque_elapsed - self.mj_step_elapsed)
+        if not self.measurement_active:
+            self.arm_control_ran = False
+            self.computed_torque_ran = False
+            self.arm_control_elapsed = 0.0
+            self.computed_torque_elapsed = 0.0
+            self.mj_step_elapsed = 0.0
+            self.right_arm_path_ran = False
+            self.right_arm_path_elapsed = 0.0
+            return
         self.total_steps += 1
         self.total_mj_step_elapsed += self.mj_step_elapsed
         self.total_other_elapsed += other_elapsed
@@ -3555,6 +3945,15 @@ class PerformanceMonitor:
         )
         report["real_hardware_control"] = self._build_real_hardware_report()
         report["timing_scope"] = {
+            "measurement_window": {
+                "start_time_s": self.measurement_start_time,
+                "end_time_s": self.measurement_end_time,
+                "complete_interval_count": len(
+                    self.right_arm_interval_samples
+                ),
+                "partial_intervals_excluded": True,
+            },
+            "runtime_environment": self.runtime_environment,
             "included": [
                 "torso/right-arm state preprocessing",
                 "disturbance prediction and helper construction",
@@ -3842,6 +4241,7 @@ class PerformanceMonitor:
         total_report = self.build_total_report()
         summary_path = os.path.join(run_dir, "perf_summary.json")
         windows_path = os.path.join(run_dir, "perf_windows.csv")
+        intervals_path = os.path.join(run_dir, "perf_intervals.csv")
         with open(summary_path, "w", encoding="utf-8") as f:
             json.dump({"total": total_report, "warn_interval": self.warn_interval, "window_count": len(self.window_reports)}, f, indent=2, ensure_ascii=False)
         if self.window_reports:
@@ -3849,7 +4249,18 @@ class PerformanceMonitor:
                 writer = csv.DictWriter(f, fieldnames=list(self.window_reports[0].keys()))
                 writer.writeheader()
                 writer.writerows(self.window_reports)
-        return summary_path, windows_path if self.window_reports else None
+        if self.interval_records:
+            with open(intervals_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(
+                    f, fieldnames=list(self.interval_records[0].keys())
+                )
+                writer.writeheader()
+                writer.writerows(self.interval_records)
+        return (
+            summary_path,
+            windows_path if self.window_reports else None,
+            intervals_path if self.interval_records else None,
+        )
 
     def _build_report(
         self,
@@ -4077,9 +4488,17 @@ def _to_serializable(value):
     return value
 
 
-def create_eval_run_dir(base_dir, experiment_name, run_metadata):
+def create_eval_run_dir(
+    base_dir, experiment_name, run_metadata, run_label=""
+):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(base_dir, experiment_name, timestamp)
+    safe_label = "".join(
+        character
+        for character in str(run_label).strip().lower().replace(" ", "_")
+        if character.isalnum() or character in {"_", "-"}
+    )
+    directory_name = timestamp + (f"_{safe_label}" if safe_label else "")
+    run_dir = os.path.join(base_dir, experiment_name, directory_name)
     os.makedirs(run_dir, exist_ok=False)
     with open(os.path.join(run_dir, "run_metadata.json"), "w", encoding="utf-8") as f:
         json.dump(_to_serializable(run_metadata), f, indent=2, ensure_ascii=False)
@@ -8012,11 +8431,16 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
         eval_end_time,
     )
     write_video(video_path, video_frames, video_fps)
-    perf_summary_path, perf_windows_path = (None, None) if perf_monitor is None else perf_monitor.save_report(run_dir)
+    perf_summary_path, perf_windows_path, perf_intervals_path = (
+        (None, None, None)
+        if perf_monitor is None
+        else perf_monitor.save_report(run_dir)
+    )
     walk_distance = float(np.linalg.norm(data.xpos[scene_ids.torso_id][:2] - buffers.torso_xy_start)) if buffers.torso_xy_start is not None else 0.0
     stats, saved_paths = save_eval(run_dir, buffers.eval_data, eval_start_time, eval_end_time, walk_distance, total_cycles, warmup_cycles, evaluation_cycles, cooldown_cycles, gait_period, experiment_name, extra_stats=heading_stats)
     saved_paths["perf_summary"] = perf_summary_path
     saved_paths["perf_windows"] = perf_windows_path
+    saved_paths["perf_intervals"] = perf_intervals_path
     saved_paths["right_arm_diagnostics"] = right_arm_diagnostics_path
     saved_paths["lqr_tracking_diagnostics"] = lqr_tracking_diagnostics_path
     saved_paths["lqr_ddq_tracking_plot"] = lqr_ddq_tracking_plot_path
