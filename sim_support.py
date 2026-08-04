@@ -2528,6 +2528,148 @@ def pinocchio_inverse_dynamics_feedforward(
     )
 
 
+def inverse_dynamics_result_from_cpp_rnea_response(
+    native_result,
+    *,
+    tau_passive,
+    tau_constraint_total,
+    tau_contact,
+    elapsed_time=None,
+    backend_call_elapsed_time=None,
+    diagnostic_elapsed_time=0.0,
+    backend="cpp_pinocchio",
+):
+    """把一次 C++ RNEA 响应转换为统一的逆动力学结果。
+
+    【半核心转换层】同步共享库调用和独立进程会返回同一组物理量，
+    区别只在传输方式。这里不调用动力学后端，只恢复仿真日志需要的
+    MuJoCo 约束拆分和原有代数关系，避免两条路径各写一份转换逻辑。
+    """
+
+    response = getattr(native_result, "rnea_output", native_result)
+    # 独立进程的共享内存槽会被下一拍覆盖，转换后必须持有自己的数组。
+    tau_rnea = np.array(response.tau_rnea, dtype=np.float64, copy=True)
+    tau_constraint_friction = np.array(
+        response.tau_constraint_friction,
+        dtype=np.float64,
+        copy=True,
+    )
+    tau_ff = np.array(response.tau_ff, dtype=np.float64, copy=True)
+    tau_passive = np.array(tau_passive, dtype=np.float64, copy=True)
+    tau_constraint_total = np.array(
+        tau_constraint_total,
+        dtype=np.float64,
+        copy=True,
+    )
+    tau_contact = np.array(tau_contact, dtype=np.float64, copy=True)
+    expected_shape = tau_ff.shape
+    if expected_shape != (5,) or any(
+        values.shape != expected_shape
+        for values in (
+            tau_rnea,
+            tau_constraint_friction,
+            tau_passive,
+            tau_constraint_total,
+            tau_contact,
+        )
+    ):
+        raise ValueError("C++ RNEA 响应及诊断量都必须是五维右臂向量。")
+    if not all(
+        np.all(np.isfinite(values))
+        for values in (
+            tau_rnea,
+            tau_constraint_friction,
+            tau_ff,
+            tau_passive,
+            tau_constraint_total,
+            tau_contact,
+        )
+    ):
+        raise ValueError("C++ RNEA 响应或诊断量包含非有限值。")
+
+    tau_constraint_noncontact = tau_constraint_total - tau_contact
+    tau_constraint_nonfriction = (
+        tau_constraint_total - tau_constraint_friction
+    )
+    tau_inverse = tau_rnea - tau_passive - tau_constraint_total
+    if backend_call_elapsed_time is None:
+        backend_wall_time = float(
+            getattr(native_result, "wall_elapsed_time", 0.0)
+        )
+    else:
+        backend_wall_time = float(backend_call_elapsed_time)
+    core_elapsed_time = float(
+        getattr(
+            response,
+            "core_elapsed_time",
+            float(getattr(response, "core_elapsed_ns", 0)) * 1e-9,
+        )
+    )
+    rnea_elapsed_time = float(
+        getattr(
+            response,
+            "rnea_elapsed_time",
+            float(getattr(response, "rnea_elapsed_ns", 0)) * 1e-9,
+        )
+    )
+    total_elapsed_time = (
+        backend_wall_time + float(diagnostic_elapsed_time)
+        if elapsed_time is None
+        else float(elapsed_time)
+    )
+    return InverseDynamicsResult(
+        tau_ff=tau_ff,
+        tau_inverse=tau_inverse,
+        tau_contact=tau_contact,
+        tau_constraint_total=tau_constraint_total,
+        tau_constraint_noncontact=tau_constraint_noncontact,
+        tau_constraint_nonfriction=tau_constraint_nonfriction,
+        tau_constraint_friction=tau_constraint_friction,
+        elapsed_time=total_elapsed_time,
+        backend=str(backend),
+        core_elapsed_time=core_elapsed_time,
+        rnea_elapsed_time=rnea_elapsed_time,
+        backend_call_elapsed_time=backend_wall_time,
+        diagnostic_elapsed_time=float(diagnostic_elapsed_time),
+        tau_rnea=tau_rnea,
+        tau_passive=tau_passive,
+    )
+
+
+def inverse_dynamics_result_from_sim_process(
+    model,
+    data,
+    qvel_indices,
+    process_response,
+):
+    """从独立进程RNEA响应恢复与同步仿真相同的诊断对象。
+
+    【非核心诊断】接触/约束拆分只用于画图和记录，不参与C++进程已经
+    完成的力矩计算；仍在主MuJoCo状态上计算，保证新旧路径日志同义。
+    """
+
+    diagnostic_start = time.perf_counter()
+    qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
+    tau_constraint_total = data.qfrc_constraint[qvel_indices].copy()
+    tau_contact = _constraint_generalized_force(
+        model, data, CONTACT_CONSTRAINT_TYPES
+    )[qvel_indices]
+    tau_passive = data.qfrc_passive[qvel_indices].copy()
+    diagnostic_elapsed = time.perf_counter() - diagnostic_start
+    response = getattr(process_response, "rnea_output", process_response)
+    core_elapsed = float(getattr(response, "core_elapsed_ns", 0)) * 1e-9
+    return inverse_dynamics_result_from_cpp_rnea_response(
+        response,
+        tau_passive=tau_passive,
+        tau_constraint_total=tau_constraint_total,
+        tau_contact=tau_contact,
+        elapsed_time=core_elapsed + diagnostic_elapsed,
+        backend_call_elapsed_time=core_elapsed,
+        diagnostic_elapsed_time=diagnostic_elapsed,
+        backend="cpp_process_pinocchio",
+    )
+
+
 def cpp_pinocchio_inverse_dynamics_feedforward(
     model,
     data,
@@ -2573,36 +2715,16 @@ def cpp_pinocchio_inverse_dynamics_feedforward(
     tau_contact = _constraint_generalized_force(
         model, data, CONTACT_CONSTRAINT_TYPES
     )[qvel_indices]
-    tau_constraint_friction = (
-        native_result.tau_constraint_friction.copy()
-    )
-    tau_constraint_noncontact = tau_constraint_total - tau_contact
-    tau_constraint_nonfriction = (
-        tau_constraint_total - tau_constraint_friction
-    )
     tau_passive_copy = tau_passive.copy()
-    tau_inverse = (
-        native_result.tau_rnea
-        - tau_passive_copy
-        - tau_constraint_total
-    )
     diagnostic_elapsed = time.perf_counter() - diagnostic_start
-    return InverseDynamicsResult(
-        tau_ff=native_result.tau_ff,
-        tau_inverse=tau_inverse,
-        tau_contact=tau_contact,
+    return inverse_dynamics_result_from_cpp_rnea_response(
+        native_result,
+        tau_passive=tau_passive_copy,
         tau_constraint_total=tau_constraint_total,
-        tau_constraint_noncontact=tau_constraint_noncontact,
-        tau_constraint_nonfriction=tau_constraint_nonfriction,
-        tau_constraint_friction=tau_constraint_friction,
+        tau_contact=tau_contact,
         elapsed_time=time.perf_counter() - start_time,
         backend="cpp_pinocchio",
-        core_elapsed_time=native_result.core_elapsed_time,
-        rnea_elapsed_time=native_result.rnea_elapsed_time,
-        backend_call_elapsed_time=native_result.wall_elapsed_time,
         diagnostic_elapsed_time=diagnostic_elapsed,
-        tau_rnea=native_result.tau_rnea,
-        tau_passive=tau_passive_copy,
     )
 
 
@@ -3065,6 +3187,146 @@ def local_forward_dynamics_torque_mapping(
     return tau_cmd, mapping_result
 
 
+def forward_dynamics_result_from_cpp_mapper_response(
+    native_result,
+    *,
+    wall_elapsed_time=None,
+    backend="cpp_mujoco",
+):
+    """把完整 C++ mapper 响应转换为统一的前向动力学结果。
+
+    【半核心转换层】响应可以来自当前同步 C ABI，也可以来自独立进程；
+    只要提供 ``values``、耗时和调用计数，就能进入同一日志与控制路径。
+    返回值保留现有接口的 ``(tau_cmd, mapping_result)`` 形式。
+    """
+
+    response = getattr(native_result, "mapper_output", native_result)
+    if hasattr(response, "values"):
+        values = dict(response.values)
+    else:
+        vector_names = (
+            "tau_cmd",
+            "tau_nominal",
+            "tau_correction_raw",
+            "tau_correction",
+            "tau_cmd_raw",
+            "qacc_baseline",
+            "qacc_predicted",
+            "qacc_prediction_error",
+            "qacc_validated",
+            "qacc_validation_error",
+            "qacc_linearization_error",
+            "singular_values",
+            "first_pass_qacc_validated",
+            "first_pass_qacc_validation_error",
+            "second_pass_tau_correction_raw",
+            "second_pass_tau_correction",
+            "second_pass_qacc_predicted",
+            "second_pass_qacc_validated",
+            "second_pass_qacc_validation_error",
+            "second_pass_qacc_linearization_error",
+            "second_pass_singular_values",
+            "hold_last_safe_qacc",
+        )
+        matrix_names = ("gain_matrix", "second_pass_gain_matrix")
+        float_names = (
+            "condition_number",
+            "validation_scale",
+            "second_pass_condition_number",
+            "second_pass_validation_scale",
+        )
+        int_names = (
+            "validation_attempts",
+            "validation_safe_candidate_count",
+            "validation_total_error_rejections",
+            "validation_joint_error_rejections",
+            "validation_qacc_limit_rejections",
+            "second_pass_validation_attempts",
+            "second_pass_safe_candidate_count",
+            "second_pass_total_error_rejections",
+            "second_pass_joint_error_rejections",
+            "second_pass_qacc_limit_rejections",
+            "safety_fallback_attempts",
+        )
+        bool_names = (
+            "validation_improved",
+            "validation_tracking_safety_satisfied",
+            "validation_qacc_safety_satisfied",
+            "second_pass_triggered",
+            "second_pass_accepted",
+            "second_pass_tracking_safety_satisfied",
+            "second_pass_qacc_safety_satisfied",
+            "safety_fallback_used",
+            "safety_fallback_satisfied",
+            "hold_last_safe_available",
+            "hold_last_safe_used",
+            "hold_last_safe_satisfied",
+        )
+        values = {
+            name: np.array(
+                getattr(response, name),
+                dtype=np.float64,
+                copy=True,
+            )
+            for name in vector_names
+        }
+        values.update(
+            {
+                name: np.array(
+                    getattr(response, name),
+                    dtype=np.float64,
+                    copy=True,
+                ).reshape(5, 5)
+                for name in matrix_names
+            }
+        )
+        values.update(
+            {name: float(getattr(response, name)) for name in float_names}
+        )
+        values.update(
+            {name: int(getattr(response, name)) for name in int_names}
+        )
+        values.update(
+            {name: bool(getattr(response, name)) for name in bool_names}
+        )
+        for field, native_name in (
+            ("baseline_time", "baseline_elapsed_ns"),
+            ("first_pass_time", "first_pass_elapsed_ns"),
+            ("second_pass_time", "second_pass_elapsed_ns"),
+            ("rescue_time", "rescue_elapsed_ns"),
+            ("hold_last_time", "hold_last_elapsed_ns"),
+        ):
+            values[field] = float(getattr(response, native_name)) * 1e-9
+    if "tau_cmd" not in values:
+        raise ValueError("C++ mapper 响应缺少最终 tau_cmd。")
+    tau_cmd = np.array(values.pop("tau_cmd"), dtype=np.float64, copy=True)
+    if tau_cmd.shape != (5,) or not np.all(np.isfinite(tau_cmd)):
+        raise ValueError("C++ mapper 的 tau_cmd 必须是有限五维向量。")
+    mapper_wall_time = (
+        float(getattr(native_result, "wall_elapsed_time", 0.0))
+        if wall_elapsed_time is None
+        else float(wall_elapsed_time)
+    )
+    mapper_core_time = float(
+        getattr(
+            response,
+            "core_elapsed_time",
+            float(getattr(response, "total_elapsed_ns", 0)) * 1e-9,
+        )
+    )
+    values.update(
+        {
+            "elapsed_time": mapper_wall_time,
+            "backend": str(backend),
+            "core_elapsed_time": mapper_core_time,
+            "full_forward_calls": int(response.full_forward_calls),
+            "forward_skip_calls": int(response.forward_skip_calls),
+            "validated_pass_count": int(response.validated_pass_count),
+        }
+    )
+    return tau_cmd, ForwardDynamicsMappingResult(**values)
+
+
 def cpp_local_forward_dynamics_torque_mapping(
     cpp_ddq_mapper,
     data,
@@ -3099,22 +3361,12 @@ def cpp_local_forward_dynamics_torque_mapping(
         enable_second_pass=enable_second_pass,
         max_safety_rescue_passes=max_safety_rescue_passes,
     )
-    values = dict(native.values)
-    # C++ 直接返回最终候选力矩；ForwardDynamicsMappingResult 只保存
-    # Python 参考链原本就有的诊断字段，避免重复保存同一向量。
-    tau_cmd = np.asarray(values.pop("tau_cmd"), dtype=np.float64)
-    values.update(
-        {
-            "elapsed_time": native.wall_elapsed_time,
-            "backend": "cpp_mujoco",
-            "core_elapsed_time": native.core_elapsed_time,
-            "full_forward_calls": native.full_forward_calls,
-            "forward_skip_calls": native.forward_skip_calls,
-            "validated_pass_count": native.validated_pass_count,
-        }
+    # C++ 直接返回最终候选力矩；转换层只恢复 Python
+    # 原有诊断对象，不参与候选选择或改变数值。
+    return forward_dynamics_result_from_cpp_mapper_response(
+        native,
+        backend="cpp_mujoco",
     )
-    mapping_result = ForwardDynamicsMappingResult(**values)
-    return tau_cmd, mapping_result
 
 
 def apply_computed_torque_control(
@@ -3438,6 +3690,7 @@ class PerformanceMonitor:
     mpc_timing_samples: list = field(default_factory=list)
     ddq_execution_timing_samples: list = field(default_factory=list)
     cpp_executor_timing_samples: list = field(default_factory=list)
+    sim_process_timing_samples: list = field(default_factory=list)
     window_cpp_executor_timing_samples: list = field(default_factory=list)
     interval_records: list = field(default_factory=list)
     measurement_active: bool = False
@@ -3719,6 +3972,48 @@ class PerformanceMonitor:
             wall_elapsed_time
         )
 
+    def record_sim_process_timing(
+        self,
+        *,
+        roundtrip_elapsed_time,
+        worker_elapsed_time,
+        queue_elapsed_time,
+        executor_core_elapsed_time,
+        mapping_updated,
+        include_in_interval_composition=True,
+    ):
+        """记录独立C++进程的IPC和内部耗时，避免把两者混成一个数。"""
+
+        if not self.measurement_active:
+            return
+        sample = {
+            "roundtrip_time": float(roundtrip_elapsed_time),
+            "worker_time": float(worker_elapsed_time),
+            "queue_time": float(queue_elapsed_time),
+            "ipc_and_copy_time": max(
+                0.0,
+                float(roundtrip_elapsed_time) - float(worker_elapsed_time),
+            ),
+            "executor_core_time": float(executor_core_elapsed_time),
+            "mapping_updated": bool(mapping_updated),
+        }
+        self.sim_process_timing_samples.append(sample)
+        # 更新DDQ映射的拍已经完整计入computed_torque；这里只把其余
+        # 2 ms拍的“缓存前馈+最新状态Executor”往返加入区间分解。
+        if not mapping_updated and include_in_interval_composition:
+            self.current_interval_cpp_executor_elapsed += sample[
+                "roundtrip_time"
+            ]
+            executor_sample = {
+                "wall_time": sample["roundtrip_time"],
+                "core_time": sample["executor_core_time"],
+                "mode": "process_cached_executor",
+            }
+            self.cpp_executor_timing_samples.append(executor_sample)
+            self.window_cpp_executor_timing_samples.append(
+                sample["roundtrip_time"]
+            )
+
     def start_mj_step(self):
         self.mj_step_start = time.perf_counter()
 
@@ -3972,6 +4267,10 @@ class PerformanceMonitor:
                 "motor-driver communication and low-level firmware",
                 "real-time OS scheduling jitter on the target computer",
             ],
+            "independent_process_note": (
+                "sim_process roundtrip includes shared-memory copy, pipe "
+                "notification, C++ worker computation and response copy"
+            ),
             "legacy_arm_total_note": (
                 "arm_total_* is retained only for old-file compatibility and "
                 "contains the policy plus the DDQ-to-torque call on the same "
@@ -4234,6 +4533,35 @@ class PerformanceMonitor:
                         }
                     )
                 },
+            },
+            "independent_cpp_process": {
+                "roundtrip_time": self._timing_field_distribution(
+                    self.sim_process_timing_samples, "roundtrip_time"
+                ),
+                "worker_time": self._timing_field_distribution(
+                    self.sim_process_timing_samples, "worker_time"
+                ),
+                "queue_time": self._timing_field_distribution(
+                    self.sim_process_timing_samples, "queue_time"
+                ),
+                "ipc_and_copy_time": self._timing_field_distribution(
+                    self.sim_process_timing_samples, "ipc_and_copy_time"
+                ),
+                "executor_core_time": self._timing_field_distribution(
+                    self.sim_process_timing_samples, "executor_core_time"
+                ),
+                "mapping_update_count": int(
+                    sum(
+                        sample["mapping_updated"]
+                        for sample in self.sim_process_timing_samples
+                    )
+                ),
+                "cached_executor_only_count": int(
+                    sum(
+                        not sample["mapping_updated"]
+                        for sample in self.sim_process_timing_samples
+                    )
+                ),
             },
         }
 

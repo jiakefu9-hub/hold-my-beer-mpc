@@ -187,6 +187,12 @@ mpc_execution_hold_last_safe: true
 # ==============================
 # C++ 2 ms 右臂安全执行器
 # ==============================
+# LQR/MPC 默认把完整 qpos/qvel、整机参考 qacc、当前非右臂力矩、
+# q_ref/dq_ref/ddq_des 和时间戳交给独立 C++ external-step 进程；进程依次
+# 完成 RNEA、MuJoCo 候选验收和最终执行器，再把 final_tau 返回主仿真。
+# sync 保留为冻结回归基线，shadow 会同拍运行两条路径并要求逐项一致。
+# PID 没有 ddq_des，因此即使这里是 process，也自动继续使用同步 C++ PD。
+right_arm_execution_runtime: process
 # cpp 在每个 2 ms 物理拍读取最新 q/dq，合成一次 PD，并负责参考/力矩
 # 限幅、命令/状态超时和 NaN 回退；python 仅用于回归对照。
 right_arm_executor_backend: cpp

@@ -26,7 +26,12 @@ except RuntimeError:
 
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import CppRightArmRneaBackend, create_prediction_backend
-from right_arm_runtime import CppDdqTorqueMapper, CppRightArmExecutor
+from right_arm_runtime import (
+    CppDdqTorqueMapper,
+    CppRightArmExecutor,
+    RightArmSimProcess,
+    SimProcessShadowValidator,
+)
 from sim_support import (
     ArmCommandDelayLine,
     HeadingHoldController,
@@ -44,8 +49,10 @@ from sim_support import (
     create_eval_run_dir,
     draw_debug_axes,
     finalize_run,
+    forward_dynamics_result_from_cpp_mapper_response,
     get_gravity_orientation,
     init_eval_buffers,
+    inverse_dynamics_result_from_sim_process,
     make_video_camera,
     make_video_renderer,
     pd_control,
@@ -81,6 +88,12 @@ if __name__ == "__main__":
         type=float,
         default=None,
         help="覆盖 MPC 命令从状态采样到 2 ms 执行拍激活的仿真延迟",
+    )
+    parser.add_argument(
+        "--right-arm-runtime-mode",
+        choices=("sync", "process", "shadow"),
+        default=None,
+        help="覆盖右臂执行结构：同步C ABI、独立C++进程或逐拍shadow",
     )
     args = parser.parse_args()
     config_file = args.config_file
@@ -150,6 +163,11 @@ if __name__ == "__main__":
         right_arm_executor_backend = str(
             config.get("right_arm_executor_backend", "python")
         ).strip().lower()
+        requested_right_arm_execution_runtime = str(
+            config.get("right_arm_execution_runtime", "sync")
+            if args.right_arm_runtime_mode is None
+            else args.right_arm_runtime_mode
+        ).strip().lower()
         ddq_forward_dynamics_backend = str(
             config.get("ddq_forward_dynamics_backend", "python")
         ).strip().lower()
@@ -171,6 +189,14 @@ if __name__ == "__main__":
         if right_arm_executor_backend not in {"python", "cpp"}:
             raise ValueError(
                 "right_arm_executor_backend 必须是 python 或 cpp。"
+            )
+        if requested_right_arm_execution_runtime not in {
+            "sync",
+            "process",
+            "shadow",
+        }:
+            raise ValueError(
+                "right_arm_execution_runtime 必须是 sync、process 或 shadow。"
             )
         if right_arm_executor_output_semantics not in {
             "host_full_torque",
@@ -329,6 +355,7 @@ if __name__ == "__main__":
         else None
     )
     active_command_source_time = 0.0
+    active_acceleration_command_id = 0
     command_activation = None
     last_mpc_command_activation_counter = None
     controller_setup = create_arm_controller(
@@ -336,6 +363,14 @@ if __name__ == "__main__":
     )
     arm_policy = controller_setup.policy
     acceleration_controller = controller_setup.acceleration_controller
+    # process/shadow 承载的是 ddq_des -> 力矩链，只适用于 LQR/MPC。
+    # PID 没有 ddq_des，继续走原同步 C++ PD 执行器，避免全局配置为
+    # process 时意外绕过 PID 的既有最终力矩路径。
+    right_arm_execution_runtime = (
+        requested_right_arm_execution_runtime
+        if acceleration_controller
+        else "sync"
+    )
     lqr_cost_definition = controller_setup.lqr_cost_definition
     mpc_cost_definition = (
         arm_policy.get_cost_definition() if arm_controller == "mpc" else None
@@ -374,6 +409,10 @@ if __name__ == "__main__":
             "measured_blend": ddq_rnea_other_qacc_blend,
         },
         "right_arm_executor": right_arm_executor_backend,
+        "right_arm_execution_runtime": right_arm_execution_runtime,
+        "right_arm_execution_runtime_requested": (
+            requested_right_arm_execution_runtime
+        ),
         "ddq_forward_dynamics_mapping": ddq_forward_dynamics_backend,
         "right_arm_executor_output_semantics": (
             right_arm_executor_output_semantics
@@ -556,6 +595,7 @@ if __name__ == "__main__":
         CppDdqTorqueMapper(xml_path)
         if acceleration_controller
         and ddq_forward_dynamics_backend == "cpp"
+        and right_arm_execution_runtime in {"sync", "shadow"}
         else None
     )
     if arm_controller == "mpc":
@@ -615,6 +655,76 @@ if __name__ == "__main__":
             output_semantics=right_arm_executor_output_semantics,
         )
         if right_arm_executor_backend == "cpp"
+        and right_arm_execution_runtime in {"sync", "shadow"}
+        else None
+    )
+    if (
+        acceleration_controller
+        and right_arm_execution_runtime in {"process", "shadow"}
+        and (
+            ddq_nominal_inverse_dynamics_backend != "cpp_pinocchio"
+            or ddq_forward_dynamics_backend != "cpp"
+            or right_arm_executor_backend != "cpp"
+        )
+    ):
+        raise ValueError(
+            "独立C++进程当前要求 cpp_pinocchio RNEA、cpp mapper "
+            "和cpp executor，避免出现两套不同执行定义。"
+        )
+    right_arm_sim_process = (
+        RightArmSimProcess(
+            xml_path,
+            nq=m.nq,
+            nv=m.nv,
+            nu=m.nu,
+            nbody=m.nbody,
+            kp=arm_waist_kps[6:11],
+            kd=arm_waist_kds[6:11],
+            timeout_damping=np.asarray(
+                config.get(
+                    "right_arm_executor_timeout_damping",
+                    arm_waist_kds[6:11],
+                ),
+                dtype=np.float64,
+            ),
+            q_ref_min=executor_q_min,
+            q_ref_max=executor_q_max,
+            dq_ref_abs_max=executor_dq_ref_abs_max,
+            tau_min=right_arm_id_index_scratch.torque_limits[:, 0],
+            tau_max=right_arm_id_index_scratch.torque_limits[:, 1],
+            command_timeout_ms=float(
+                config.get("right_arm_executor_command_timeout_ms", 30.0)
+            ),
+            state_timeout_ms=float(
+                config.get("right_arm_executor_state_timeout_ms", 10.0)
+            ),
+            output_semantics=right_arm_executor_output_semantics,
+            mapper_perturbation=controller_setup.execution_perturbation,
+            mapper_regularization=controller_setup.execution_regularization,
+            mapper_second_pass_error_threshold=(
+                controller_setup.execution_second_pass_error_threshold
+            ),
+            mapper_max_joint_error=(
+                controller_setup.execution_max_joint_error
+            ),
+            mapper_max_abs_qacc=(
+                controller_setup.execution_max_abs_qacc
+            ),
+            mapper_enable_second_pass=(
+                controller_setup.execution_enable_second_pass
+            ),
+            mapper_max_safety_rescue_passes=(
+                controller_setup.execution_safety_rescue_passes
+            ),
+        )
+        if acceleration_controller
+        and right_arm_execution_runtime in {"process", "shadow"}
+        else None
+    )
+    process_shadow_validator = (
+        SimProcessShadowValidator(absolute_tolerance=1e-9)
+        if acceleration_controller
+        and right_arm_execution_runtime == "shadow"
         else None
     )
     right_arm_helper = KinematicsHelper(
@@ -801,6 +911,10 @@ if __name__ == "__main__":
                         "ddq_raw"
                     ]
                     if arm_controller == "lqr":
+                        # 同一次 LQR 更新在随后三个 2 ms 执行拍中必须保留
+                        # 相同的来源时间和命令编号，C++ 才能看到真实命令年龄。
+                        active_command_source_time = counter * simulation_dt
+                        active_acceleration_command_id += 1
                         target_right_arm_q = generated_target_right_arm_q
                         target_right_arm_dq = generated_target_right_arm_dq
                         desired_right_arm_ddq = (
@@ -875,6 +989,7 @@ if __name__ == "__main__":
             inverse_result = None
             mapping_result = None
             cpp_executor_result = None
+            process_result = None
             ddq_execution_updated = False
             if acceleration_controller:
                 # 【核心代码】第二层执行（LQR/MPC 共用）：
@@ -926,73 +1041,194 @@ if __name__ == "__main__":
                 if cached_right_arm_tau_ff is None:
                     execution_update_due = True
 
-                if execution_update_due:
-                    fixed_ctrl_for_mapping = d.ctrl.copy()
-                    fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
-                    perf_monitor.start_computed_torque_control()
-                    right_arm_tau, inverse_result, mapping_result = apply_computed_torque_control(
-                        m,
-                        d,
-                        right_arm_id_index_scratch,
-                        desired_right_arm_ddq,
-                        right_arm_tau_pd,
-                        fixed_ctrl_for_mapping,
-                        forward_dynamics_perturbation=controller_setup.execution_perturbation,
-                        forward_dynamics_regularization=controller_setup.execution_regularization,
-                        forward_dynamics_second_pass_error_threshold=(
-                            controller_setup.execution_second_pass_error_threshold
-                        ),
-                        forward_dynamics_max_joint_error=controller_setup.execution_max_joint_error,
-                        forward_dynamics_max_abs_qacc=controller_setup.execution_max_abs_qacc,
-                        forward_dynamics_enable_second_pass=controller_setup.execution_enable_second_pass,
-                        forward_dynamics_max_safety_rescue_passes=(
-                            controller_setup.execution_safety_rescue_passes
-                        ),
-                        forward_dynamics_enable_hold_last_safe=(
-                            controller_setup.execution_hold_last_safe
-                        ),
-                        inverse_dynamics_backend=(
-                            ddq_nominal_inverse_dynamics_backend
-                        ),
-                        pinocchio_backend=pinocchio_backend,
-                        cpp_rnea_backend=cpp_rnea_backend,
-                        forward_dynamics_backend=(
-                            ddq_forward_dynamics_backend
-                        ),
-                        cpp_ddq_mapper=cpp_ddq_mapper,
-                        pinocchio_friction_breakaway_steps=(
+                fixed_ctrl_for_mapping = d.ctrl.copy()
+                fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
+                previous_executed_tau = (
+                    d.ctrl[right_arm_id_index_scratch.ctrl_indices].copy()
+                    if controller_setup.execution_hold_last_safe
+                    and d.time > 0.0
+                    else None
+                )
+
+                # sync是冻结基线；shadow先跑sync再逐拍核对独立进程。
+                if right_arm_execution_runtime in {"sync", "shadow"}:
+                    if execution_update_due:
+                        perf_monitor.start_computed_torque_control()
+                        right_arm_tau, inverse_result, mapping_result = apply_computed_torque_control(
+                            m,
+                            d,
+                            right_arm_id_index_scratch,
+                            desired_right_arm_ddq,
+                            right_arm_tau_pd,
+                            fixed_ctrl_for_mapping,
+                            forward_dynamics_perturbation=controller_setup.execution_perturbation,
+                            forward_dynamics_regularization=controller_setup.execution_regularization,
+                            forward_dynamics_second_pass_error_threshold=(
+                                controller_setup.execution_second_pass_error_threshold
+                            ),
+                            forward_dynamics_max_joint_error=controller_setup.execution_max_joint_error,
+                            forward_dynamics_max_abs_qacc=controller_setup.execution_max_abs_qacc,
+                            forward_dynamics_enable_second_pass=controller_setup.execution_enable_second_pass,
+                            forward_dynamics_max_safety_rescue_passes=(
+                                controller_setup.execution_safety_rescue_passes
+                            ),
+                            forward_dynamics_enable_hold_last_safe=(
+                                controller_setup.execution_hold_last_safe
+                            ),
+                            inverse_dynamics_backend=(
+                                ddq_nominal_inverse_dynamics_backend
+                            ),
+                            pinocchio_backend=pinocchio_backend,
+                            cpp_rnea_backend=cpp_rnea_backend,
+                            forward_dynamics_backend=(
+                                ddq_forward_dynamics_backend
+                            ),
+                            cpp_ddq_mapper=cpp_ddq_mapper,
+                            pinocchio_friction_breakaway_steps=(
+                                ddq_pinocchio_friction_breakaway_steps
+                            ),
+                            inverse_dynamics_reference_qacc=(
+                                rnea_reference_qacc
+                            ),
+                        )
+                        ddq_execution_elapsed = (
+                            perf_monitor.finish_computed_torque_control()
+                        )
+                        perf_monitor.record_ddq_execution_timing(
+                            inverse_result,
+                            mapping_result,
+                            call_elapsed=ddq_execution_elapsed,
+                        )
+                        ddq_execution_updated = True
+                        cached_right_arm_tau_ff = (
+                            right_arm_tau - right_arm_tau_pd
+                        )
+                        cached_inverse_result = inverse_result
+                        cached_mapping_result = mapping_result
+                    else:
+                        right_arm_tau = (
+                            cached_right_arm_tau_ff + right_arm_tau_pd
+                        )
+                        inverse_result = cached_inverse_result
+                        mapping_result = cached_mapping_result
+                    tau_arm_waist[6:11] = right_arm_tau
+
+                if right_arm_sim_process is not None:
+                    process_command_timestamp = (
+                        float(active_command_source_time)
+                        if mpc_command_delay_line is not None
+                        else float(active_command_source_time)
+                    )
+                    process_command_id = (
+                        int(active_packet.command_id) + 1
+                        if mpc_command_delay_line is not None
+                        else active_acceleration_command_id
+                    )
+                    process_source_state_id = (
+                        int(round(process_command_timestamp / simulation_dt))
+                        + 1
+                    )
+                    if (
+                        right_arm_execution_runtime == "process"
+                        and execution_update_due
+                    ):
+                        perf_monitor.start_computed_torque_control()
+                    process_result = right_arm_sim_process.execute(
+                        simulation_time=d.time,
+                        command_timestamp=process_command_timestamp,
+                        command_id=process_command_id,
+                        command_source_state_id=process_source_state_id,
+                        execution_state_id=counter + 1,
+                        mapping_update_due=execution_update_due,
+                        mujoco_timestep=m.opt.timestep,
+                        friction_breakaway_steps=(
                             ddq_pinocchio_friction_breakaway_steps
                         ),
-                        inverse_dynamics_reference_qacc=(
-                            rnea_reference_qacc
+                        qpos=d.qpos,
+                        qvel=d.qvel,
+                        reference_qacc=rnea_reference_qacc,
+                        fixed_ctrl=fixed_ctrl_for_mapping,
+                        qacc_warmstart=d.qacc_warmstart,
+                        qfrc_applied=d.qfrc_applied,
+                        xfrc_applied=d.xfrc_applied,
+                        right_arm_q=right_arm_q,
+                        right_arm_dq=right_arm_dq,
+                        q_ref=target_right_arm_q,
+                        dq_ref=target_right_arm_dq,
+                        ddq_des=desired_right_arm_ddq,
+                        tau_passive=d.qfrc_passive[
+                            right_arm_id_index_scratch.qvel_indices
+                        ],
+                        friction_loss=m.dof_frictionloss[
+                            right_arm_id_index_scratch.qvel_indices
+                        ],
+                        tau_pd=right_arm_tau_pd,
+                        previous_executed_tau=previous_executed_tau,
+                    )
+                    perf_monitor.record_sim_process_timing(
+                        roundtrip_elapsed_time=(
+                            process_result.roundtrip_elapsed_time
+                        ),
+                        worker_elapsed_time=(
+                            process_result.worker_elapsed_time
+                        ),
+                        queue_elapsed_time=(
+                            process_result.queue_elapsed_time
+                        ),
+                        executor_core_elapsed_time=(
+                            process_result.executor_result.core_elapsed_time
+                        ),
+                        mapping_updated=process_result.mapping_updated,
+                        include_in_interval_composition=(
+                            right_arm_execution_runtime == "process"
                         ),
                     )
-                    ddq_execution_elapsed = (
-                        perf_monitor.finish_computed_torque_control()
-                    )
-                    perf_monitor.record_ddq_execution_timing(
-                        inverse_result,
-                        mapping_result,
-                        call_elapsed=ddq_execution_elapsed,
-                    )
-                    ddq_execution_updated = True
-                    # 低频映射模式只保持验收后的前馈部分；2 ms C++
-                    # 执行器仍使用最新 q/dq 重算 PD，不能把完整最终力矩
-                    # 在整个 6 ms 区间内原样保持。
-                    cached_right_arm_tau_ff = (
-                        right_arm_tau - right_arm_tau_pd
-                    )
-                    cached_inverse_result = inverse_result
-                    cached_mapping_result = mapping_result
-                else:
-                    # 不重复伪造验收；保持前馈并叠加当前 2 ms 的 PD。
-                    right_arm_tau = (
-                        cached_right_arm_tau_ff + right_arm_tau_pd
-                    )
-                    inverse_result = cached_inverse_result
-                    mapping_result = cached_mapping_result
-                # 用 computed torque 的结果替换右臂原来的纯 PD 力矩
-                tau_arm_waist[6:11] = right_arm_tau
+                    if right_arm_execution_runtime == "process":
+                        if execution_update_due:
+                            inverse_result = (
+                                inverse_dynamics_result_from_sim_process(
+                                    m,
+                                    d,
+                                    right_arm_id_index_scratch.qvel_indices,
+                                    process_result,
+                                )
+                            )
+                            mapper_core_elapsed = (
+                                float(
+                                    process_result.mapper_output.total_elapsed_ns
+                                )
+                                * 1e-9
+                            )
+                            right_arm_tau, mapping_result = (
+                                forward_dynamics_result_from_cpp_mapper_response(
+                                    process_result,
+                                    wall_elapsed_time=mapper_core_elapsed,
+                                    backend="cpp_process_mujoco",
+                                )
+                            )
+                            cached_right_arm_tau_ff = (
+                                process_result.validated_tau_ff.copy()
+                            )
+                            cached_inverse_result = inverse_result
+                            cached_mapping_result = mapping_result
+                            ddq_execution_elapsed = (
+                                perf_monitor.finish_computed_torque_control()
+                            )
+                            perf_monitor.record_ddq_execution_timing(
+                                inverse_result,
+                                mapping_result,
+                                call_elapsed=ddq_execution_elapsed,
+                            )
+                            ddq_execution_updated = True
+                        else:
+                            right_arm_tau = (
+                                process_result.validated_tau_ff
+                                + right_arm_tau_pd
+                            )
+                            inverse_result = cached_inverse_result
+                            mapping_result = cached_mapping_result
+                        tau_arm_waist[6:11] = right_arm_tau
+                        cpp_executor_result = process_result.executor_result
             if cpp_right_arm_executor is not None:
                 # 【核心代码】C++ 每个 2 ms 仿真拍都读取最新右臂 q/dq，
                 # 只在这一处合成 PD、执行参考/力矩限幅及超时/NaN 保护。
@@ -1002,9 +1238,9 @@ if __name__ == "__main__":
                 executor_tau_ff = pre_executor_tau - right_arm_tau_pd
                 simulated_now_ns = int(round(float(d.time) * 1e9))
                 command_source_ns = (
-                    simulated_now_ns
-                    if mpc_command_delay_line is None
-                    else int(round(float(active_command_source_time) * 1e9))
+                    int(round(float(active_command_source_time) * 1e9))
+                    if acceleration_controller
+                    else simulated_now_ns
                 )
                 cpp_executor_result = cpp_right_arm_executor.step(
                     now_ns=simulated_now_ns,
@@ -1031,6 +1267,23 @@ if __name__ == "__main__":
                     tau_arm_waist[6:11] = (
                         cpp_executor_result.predicted_total_tau_limited
                     )
+            if process_result is not None:
+                if process_shadow_validator is not None:
+                    # 【核心验收】先比较三层力矩和mapper分支；任何一拍
+                    # 超过1e-9都立即停止，不能用相似轨迹掩盖错帧或错分支。
+                    process_shadow_validator.validate(
+                        process_result,
+                        inverse_result=inverse_result,
+                        mapping_result=mapping_result,
+                        pre_executor_tau=pre_executor_tau,
+                        final_tau=tau_arm_waist[6:11],
+                        tau_pd=right_arm_tau_pd,
+                        mapping_update_due=execution_update_due,
+                    )
+                # process和shadow最终都执行独立进程返回的力矩；shadow已在
+                # 上一行证明它与冻结同步链相同。
+                tau_arm_waist[6:11] = process_result.final_tau
+                cpp_executor_result = process_result.executor_result
             # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
             d.ctrl[12:23] = tau_arm_waist
             perf_monitor.finish_right_arm_path()
@@ -1182,6 +1435,12 @@ if __name__ == "__main__":
         mpc_command_delay_line.save_report(
             run_dir, eval_start_time, eval_end_time
         )
+    if process_shadow_validator is not None:
+        shadow_path = process_shadow_validator.save(run_dir)
+        print(
+            "独立C++进程逐拍shadow通过："
+            f"{process_shadow_validator.summary()} | {shadow_path}"
+        )
     # 【非核心收尾】显式释放原生 handle，避免同一 Python 进程
     # 重复创建仿真时依赖解析器退出顺序或进程回收。
     closed_native_backends = set()
@@ -1190,6 +1449,7 @@ if __name__ == "__main__":
         cpp_rnea_backend,
         prediction_backend,
         cpp_right_arm_executor,
+        right_arm_sim_process,
     ):
         if (
             native_backend is not None
