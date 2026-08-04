@@ -66,6 +66,18 @@ class ControllerHelpers:
             dict,
         ]
     ] = None
+    compute_mpc_terms_batch: Optional[
+        Callable[
+            [
+                np.ndarray,
+                np.ndarray,
+                tuple,
+                tuple,
+                np.ndarray,
+            ],
+            tuple,
+        ]
+    ] = None
 
 
 class KinematicsHelper:
@@ -170,6 +182,24 @@ class KinematicsHelper:
             if self.torso_relative_position_reference is None
             else self.torso_relative_position_reference.copy()
         )
+        compute_mpc_terms_batch = None
+        if callable(getattr(self.prediction_backend, "evaluate_batch", None)):
+            def compute_mpc_terms_batch(
+                q_batch,
+                dq_batch,
+                node_dist,
+                interval_dist,
+                acceleration_required,
+            ):
+                return self.compute_mpc_terms_batch(
+                    q_batch,
+                    dq_batch,
+                    qpos_ref,
+                    node_dist,
+                    interval_dist,
+                    acceleration_required,
+                )
+
         # 【半核心代码】统一打包各控制器所需的运动学回调。
         # PID/MPC 使用二维重力误差；现有 LQR 仍通过 compute_lqr_terms 使用三维误差，
         # 因此不能直接把底层三维函数改掉。
@@ -199,6 +229,7 @@ class KinematicsHelper:
                 interval_dist,
                 acceleration_required,
             ),
+            compute_mpc_terms_batch=compute_mpc_terms_batch,
         )
 
     def compute_gravity_error(self, q_right_arm: np.ndarray, _W_R_I: np.ndarray, qpos_reference: np.ndarray) -> np.ndarray:
@@ -389,6 +420,192 @@ class KinematicsHelper:
             W_R_B_current = prediction.imu_rotation_world
             W_R_E_current = prediction.ee_rotation_world
 
+        return self._assemble_mpc_terms(
+            q,
+            node_disturbance,
+            interval_disturbance,
+            acceleration_required,
+            J_v,
+            J_w,
+            dJ_v,
+            dJ_w,
+            p_E,
+            p_B,
+            W_R_B_current,
+            W_R_E_current,
+        )
+
+    def compute_mpc_terms_batch(
+        self,
+        q_right_arm: np.ndarray,
+        dq_right_arm: np.ndarray,
+        qpos_reference: np.ndarray,
+        node_disturbances: tuple,
+        interval_disturbances: tuple,
+        acceleration_required: np.ndarray,
+    ) -> tuple:
+        """一次消费完整 MPC 预测窗口的运动学结果。
+
+        【核心提速】后端在一次 ``evaluate_batch`` 中计算所有节点；
+        本函数只按节点组装与单点路径完全相同的任务项字典。
+        """
+        evaluate_batch = getattr(self.prediction_backend, "evaluate_batch", None)
+        if not callable(evaluate_batch):
+            raise RuntimeError("MPC 预测后端不支持 evaluate_batch。")
+
+        q_batch = np.asarray(q_right_arm, dtype=np.float64)
+        dq_batch = np.asarray(dq_right_arm, dtype=np.float64)
+        required = np.asarray(acceleration_required, dtype=bool)
+        expected_width = len(self.joint_indices)
+        if (
+            q_batch.ndim != 2
+            or q_batch.shape[1] != expected_width
+            or dq_batch.shape != q_batch.shape
+            or required.shape != (q_batch.shape[0],)
+        ):
+            raise ValueError("MPC 批量 q/dq/acceleration_required 维度不正确。")
+        node_disturbances = tuple(node_disturbances)
+        interval_disturbances = tuple(interval_disturbances)
+        node_count = q_batch.shape[0]
+        if len(node_disturbances) != node_count:
+            raise ValueError("MPC 批量节点扰动数量与状态节点数不一致。")
+        if len(interval_disturbances) != node_count - 1:
+            raise ValueError("MPC 批量区间扰动数量必须比节点数少 1。")
+
+        prediction = evaluate_batch(
+            qpos_reference,
+            q_batch,
+            dq_batch,
+            acceleration_required=required,
+        )
+        batch_fields = (
+            prediction.J_v_world,
+            prediction.J_w_world,
+            prediction.dJ_v_world,
+            prediction.dJ_w_world,
+            prediction.ee_position_world,
+            prediction.imu_position_world,
+            prediction.imu_rotation_world,
+            prediction.ee_rotation_world,
+        )
+        if any(np.asarray(value).shape[0] != node_count for value in batch_fields):
+            raise ValueError("evaluate_batch 返回的节点数量不正确。")
+
+        # 【核心提速】以下所有运动学和扰动公式都把第一维当作预测节点，
+        # 避免 N+1 次 Python 小矩阵运算。返回值仍是逐节点字典 tuple，
+        # 因而代价函数、诊断和单点回退接口均无需改变。
+        node_omega = self._disturbance_vectors_batch(
+            node_disturbances, "omega_world"
+        )
+        interval_sources = interval_disturbances + (node_disturbances[-1],)
+        interval_omega = self._disturbance_vectors_batch(
+            interval_sources, "omega_world"
+        )
+        interval_acc = self._disturbance_vectors_batch(
+            interval_sources, "acc_world"
+        )
+        interval_alpha = self._disturbance_vectors_batch(
+            interval_sources, "alpha_world"
+        )
+
+        W_R_B_current = np.asarray(
+            prediction.imu_rotation_world, dtype=np.float64
+        )
+        W_R_B_predicted = self._disturbance_rotations_batch(
+            node_disturbances, W_R_B_current
+        )
+        delta_R = W_R_B_predicted @ np.swapaxes(W_R_B_current, 1, 2)
+
+        J_v = delta_R @ np.asarray(prediction.J_v_world, dtype=np.float64)
+        dJ_v = delta_R @ np.asarray(prediction.dJ_v_world, dtype=np.float64)
+        J_w = delta_R @ np.asarray(prediction.J_w_world, dtype=np.float64)
+        dJ_w = delta_R @ np.asarray(prediction.dJ_w_world, dtype=np.float64)
+        inactive = ~required
+        if np.any(inactive):
+            J_v[inactive] = 0.0
+            dJ_v[inactive] = 0.0
+            dJ_w[inactive] = 0.0
+
+        W_R_E = delta_R @ np.asarray(
+            prediction.ee_rotation_world, dtype=np.float64
+        )
+        gravity_world = np.asarray(self.model.opt.gravity, dtype=np.float64)
+        gravity_end = np.einsum(
+            "nji,j->ni", W_R_E, gravity_world, optimize=False
+        )
+        gravity_skew = self._skew(gravity_world)
+        J_g = (
+            np.swapaxes(W_R_E, 1, 2) @ gravity_skew @ J_w
+        )[:, :2, :]
+        gravity_error = gravity_end[:, :2]
+
+        r_BE = np.einsum(
+            "nij,nj->ni",
+            delta_R,
+            np.asarray(prediction.ee_position_world, dtype=np.float64)
+            - np.asarray(prediction.imu_position_world, dtype=np.float64),
+            optimize=False,
+        )
+        r_BE[inactive] = 0.0
+        interval_omega[inactive] = 0.0
+        interval_acc[inactive] = 0.0
+        interval_alpha[inactive] = 0.0
+        omega_skew = self._skew_batch(interval_omega)
+
+        D_acc = (
+            interval_acc
+            + np.cross(interval_alpha, r_BE)
+            + np.cross(
+                interval_omega,
+                np.cross(interval_omega, r_BE),
+            )
+        )
+        C_acc = 2.0 * (omega_skew @ J_v) + dJ_v
+        D_alpha = interval_alpha
+        C_alpha = omega_skew @ J_w + dJ_w
+        C_acc[inactive] = 0.0
+        C_alpha[inactive] = 0.0
+
+        d_g = gravity_error - np.einsum(
+            "nij,nj->ni", J_g, q_batch, optimize=False
+        )
+        G_g = np.zeros((node_count, 2, 2 * expected_width), dtype=np.float64)
+        G_g[:, :, :expected_width] = J_g
+
+        fields = {
+            "D_acc": D_acc,
+            "C_acc": C_acc,
+            "B_acc": J_v,
+            "D_alpha": D_alpha,
+            "C_alpha": C_alpha,
+            "B_alpha": J_w,
+            "D_omega": node_omega,
+            "C_omega": J_w,
+            "d_g": d_g,
+            "G_g": G_g,
+            "gravity_error": gravity_error.copy(),
+        }
+        return tuple(
+            {name: value[k] for name, value in fields.items()}
+            for k in range(node_count)
+        )
+
+    def _assemble_mpc_terms(
+        self,
+        q: np.ndarray,
+        node_disturbance: Optional[DisturbanceInput],
+        interval_disturbance: Optional[DisturbanceInput],
+        acceleration_required: bool,
+        J_v: np.ndarray,
+        J_w: np.ndarray,
+        dJ_v: np.ndarray,
+        dJ_w: np.ndarray,
+        p_E: np.ndarray,
+        p_B: np.ndarray,
+        W_R_B_current: np.ndarray,
+        W_R_E_current: np.ndarray,
+    ) -> dict:
+        """由单节点运动学量组装 MPC 任务项，供单点/批量路径共用。"""
         # 【核心代码】节点量描述 t_k；区间量描述 u_k 将执行的
         # [t_k,t_{k+1})。终端没有 u_N，未给区间量时兼容回退到节点量。
         interval = (
@@ -511,6 +728,66 @@ class KinematicsHelper:
                 "disturbance.rot_world_body 必须是有效的 3x3 旋转矩阵。"
             )
         return rotation
+
+    @staticmethod
+    def _disturbance_vectors_batch(
+        disturbances: tuple,
+        name: str,
+    ) -> np.ndarray:
+        """把一组可选三维扰动直接整理成连续 ``(N, 3)`` 数组。"""
+        result = np.zeros((len(disturbances), 3), dtype=np.float64)
+        for index, disturbance in enumerate(disturbances):
+            if disturbance is None:
+                continue
+            value = getattr(disturbance, name, None)
+            if value is not None:
+                result[index] = np.asarray(value, dtype=np.float64)
+        return result
+
+    @staticmethod
+    def _disturbance_rotations_batch(
+        disturbances: tuple,
+        default_rotations: np.ndarray,
+    ) -> np.ndarray:
+        """批量读取并一次验证预测姿态；合法输入语义与单点路径一致。"""
+        rotations = np.asarray(default_rotations, dtype=np.float64).copy()
+        for index, disturbance in enumerate(disturbances):
+            if disturbance is None or disturbance.rot_world_body is None:
+                continue
+            rotation = np.asarray(disturbance.rot_world_body, dtype=np.float64)
+            if rotation.shape != (3, 3):
+                raise ValueError(
+                    "disturbance.rot_world_body 必须是有效的 3x3 旋转矩阵。"
+                )
+            rotations[index] = rotation
+
+        gram = np.swapaxes(rotations, 1, 2) @ rotations
+        determinant = np.linalg.det(rotations)
+        if (
+            not np.all(np.isfinite(rotations))
+            or not np.allclose(gram, np.eye(3), atol=1e-6)
+            or not np.all(np.isclose(determinant, 1.0, atol=1e-6))
+        ):
+            raise ValueError(
+                "disturbance.rot_world_body 必须是有效的 3x3 旋转矩阵。"
+            )
+        return rotations
+
+    @staticmethod
+    def _skew_batch(vectors: np.ndarray) -> np.ndarray:
+        """构造一批叉乘矩阵，输入/输出分别为 ``(N,3)``/``(N,3,3)``。"""
+        vectors = np.asarray(vectors, dtype=np.float64)
+        result = np.zeros((vectors.shape[0], 3, 3), dtype=np.float64)
+        x = vectors[:, 0]
+        y = vectors[:, 1]
+        z = vectors[:, 2]
+        result[:, 0, 1] = -z
+        result[:, 0, 2] = y
+        result[:, 1, 0] = z
+        result[:, 1, 2] = -x
+        result[:, 2, 0] = -y
+        result[:, 2, 1] = x
+        return result
 
     @staticmethod
     def _skew(v: np.ndarray) -> np.ndarray:

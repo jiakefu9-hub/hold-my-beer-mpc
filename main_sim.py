@@ -18,6 +18,7 @@ from sim_support import (
     HeadingHoldController,
     PhaseDisturbancePredictor,
     PerformanceMonitor,
+    RneaOtherAccelerationEstimator,
     TorsoAccelerationFilter,
     apply_computed_torque_control,
     build_right_arm_control_record,
@@ -54,6 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("--headless", action="store_true", help="不启动交互 viewer，适合服务器和自动测试")
     parser.add_argument("--no-video", action="store_true", help="不创建离屏视频")
     parser.add_argument("--smoke-test", action="store_true", help="只运行一个步态周期并关闭 viewer/video")
+    parser.add_argument("--run-label", default="", help="追加到评估目录名的简短实验标签")
     args = parser.parse_args()
     config_file = args.config_file
     repo_dir = os.path.dirname(os.path.abspath(__file__))
@@ -101,6 +103,24 @@ if __name__ == "__main__":
         ddq_pinocchio_friction_breakaway_steps = float(
             config.get("ddq_pinocchio_friction_breakaway_steps", 5.0)
         )
+        ddq_rnea_other_qacc_mode = str(
+            config.get("ddq_rnea_other_qacc_mode", "zero")
+        ).strip().lower()
+        ddq_rnea_other_qacc_filter_alpha = float(
+            config.get("ddq_rnea_other_qacc_filter_alpha", 0.5)
+        )
+        ddq_rnea_other_qacc_trend_window = int(
+            config.get("ddq_rnea_other_qacc_trend_window", 4)
+        )
+        ddq_rnea_other_qacc_trend_lead_steps = float(
+            config.get("ddq_rnea_other_qacc_trend_lead_steps", 1.0)
+        )
+        ddq_rnea_other_qacc_limit = float(
+            config.get("ddq_rnea_other_qacc_limit", 100.0)
+        )
+        ddq_rnea_other_qacc_blend = float(
+            config.get("ddq_rnea_other_qacc_blend", 1.0)
+        )
         right_arm_executor_backend = str(
             config.get("right_arm_executor_backend", "python")
         ).strip().lower()
@@ -136,9 +156,14 @@ if __name__ == "__main__":
             raise ValueError(
                 "ddq_pinocchio_friction_breakaway_steps 必须是有限非负数。"
             )
-        if mpc_prediction_kinematics_backend not in {"mujoco", "pinocchio"}:
+        if mpc_prediction_kinematics_backend not in {
+            "mujoco",
+            "pinocchio",
+            "cpp_pinocchio",
+        }:
             raise ValueError(
-                "mpc_prediction_kinematics_backend 必须是 mujoco 或 pinocchio。"
+                "mpc_prediction_kinematics_backend 必须是 "
+                "mujoco、pinocchio 或 cpp_pinocchio。"
             )
         if ddq_nominal_inverse_dynamics_backend not in {
             "mujoco",
@@ -195,7 +220,14 @@ if __name__ == "__main__":
     eval_start_time = warmup_cycles * gait_period
     eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
     eval_duration = total_cycles * gait_period
+    run_label = "".join(
+        character
+        for character in str(args.run_label).strip().lower().replace(" ", "_")
+        if character.isalnum() or character in {"_", "-"}
+    )
     experiment_name = f"left_fixed_right_{arm_controller}"
+    if run_label:
+        experiment_name += f"_{run_label}"
     buffers = init_eval_buffers()
 
     # ==============================
@@ -208,6 +240,22 @@ if __name__ == "__main__":
     m.opt.timestep = simulation_dt
     # 初始化 site_xmat/xpos 等派生运动学量；扰动前馈第 0 拍需要有效的 torso 姿态。
     mujoco.mj_forward(m, d)
+    free_joint_ids = np.flatnonzero(
+        m.jnt_type == int(mujoco.mjtJoint.mjJNT_FREE)
+    )
+    if free_joint_ids.size != 1:
+        raise ValueError("当前 RNEA 加速度实验要求模型恰好包含一个 floating base。")
+    free_v_start = int(m.jnt_dofadr[int(free_joint_ids[0])])
+    rnea_other_acceleration_estimator = RneaOtherAccelerationEstimator(
+        m.nv,
+        mode=ddq_rnea_other_qacc_mode,
+        filter_alpha=ddq_rnea_other_qacc_filter_alpha,
+        trend_window=ddq_rnea_other_qacc_trend_window,
+        trend_lead_steps=ddq_rnea_other_qacc_trend_lead_steps,
+        acceleration_limit=ddq_rnea_other_qacc_limit,
+        base_qacc_indices=np.arange(free_v_start, free_v_start + 6),
+        measured_blend=ddq_rnea_other_qacc_blend,
+    )
 
     # --- 调试打印：如需检查关节、速度和驱动器的索引映射，可在这里临时添加打印 ---
     
@@ -261,6 +309,15 @@ if __name__ == "__main__":
         "pinocchio_friction_breakaway_steps": (
             ddq_pinocchio_friction_breakaway_steps
         ),
+        "nominal_inverse_dynamics_other_qacc": {
+            "mode": ddq_rnea_other_qacc_mode,
+            "source": "latest_causal_mujoco_qacc_from_previous_physics_step",
+            "filter_alpha": ddq_rnea_other_qacc_filter_alpha,
+            "trend_window": ddq_rnea_other_qacc_trend_window,
+            "trend_lead_steps": ddq_rnea_other_qacc_trend_lead_steps,
+            "absolute_limit": ddq_rnea_other_qacc_limit,
+            "measured_blend": ddq_rnea_other_qacc_blend,
+        },
         "right_arm_executor": right_arm_executor_backend,
         "ddq_forward_dynamics_mapping": ddq_forward_dynamics_backend,
         "right_arm_executor_output_semantics": (
@@ -409,12 +466,19 @@ if __name__ == "__main__":
             ee_name="right_grasp_site",
             imu_name="imu_in_torso",
         )
+    # 预测窗口和 RNEA 都选择 C++ Pinocchio 时复用同一个 Model/Data
+    # handle，避免重复解析模型和维护两套本地状态。
     cpp_rnea_backend = (
-        CppRightArmRneaBackend(xml_path)
-        if acceleration_controller
-        and ddq_nominal_inverse_dynamics_backend == "cpp_pinocchio"
+        prediction_backend
+        if prediction_backend.backend_name == "cpp_pinocchio"
         else None
     )
+    if (
+        acceleration_controller
+        and ddq_nominal_inverse_dynamics_backend == "cpp_pinocchio"
+        and cpp_rnea_backend is None
+    ):
+        cpp_rnea_backend = CppRightArmRneaBackend(xml_path)
     cpp_ddq_mapper = (
         CppDdqTorqueMapper(xml_path)
         if acceleration_controller
@@ -527,6 +591,9 @@ if __name__ == "__main__":
         print(f"运行模式 = {display_mode} | 实验 = {experiment_name} | 运行 {total_cycles} 个周期 = {eval_duration:.1f}s，其中 warm-up {warmup_cycles} 周期、evaluation {evaluation_cycles} 周期、cooldown {cooldown_cycles} 周期")
         while (viewer is None or viewer.is_running()) and counter * simulation_dt < eval_duration:
             perf_monitor.start_step()
+            rnea_reference_qacc = rnea_other_acceleration_estimator.update(
+                d.qacc
+            )
             
             # --- 7.1 腿部控制【半核心】---
             # 这部分是已有 locomotion 执行链；需要知道它负责下肢，不需要像右臂控制那样细抠每个细节。
@@ -695,7 +762,8 @@ if __name__ == "__main__":
                 # MuJoCo inverse 或 Pinocchio RNEA 计算 tau_ff。
                 # apply_computed_torque_control() 内部会：
                 # 1) 复制当前整机 qpos / qvel 到 scratch data
-                # 2) 在 scratch.qacc 中只给右臂 5 个自由度填入 desired_right_arm_ddq
+                # 2) 按配置填入上一物理拍的整机参考加速度，再把右臂 5 维
+                #    覆盖为 desired_right_arm_ddq；zero 模式则退化为旧实现
                 # 3) 生成“非摩擦约束不对抗”的名义力矩
                 # 4) 固定腿、腰和左臂力矩：1 次完整 mj_forward 建立基线，
                 #    再用 5 次 mj_forwardSkip（每个右臂力矩各扰动一次）构建 G_tau
@@ -752,6 +820,9 @@ if __name__ == "__main__":
                         cpp_ddq_mapper=cpp_ddq_mapper,
                         pinocchio_friction_breakaway_steps=(
                             ddq_pinocchio_friction_breakaway_steps
+                        ),
+                        inverse_dynamics_reference_qacc=(
+                            rnea_reference_qacc
                         ),
                     )
                     perf_monitor.finish_computed_torque_control()
@@ -955,10 +1026,17 @@ if __name__ == "__main__":
     )
     # 【非核心收尾】显式释放原生 handle，避免同一 Python 进程
     # 重复创建仿真时依赖解析器退出顺序或进程回收。
+    closed_native_backends = set()
     for native_backend in (
         cpp_ddq_mapper,
         cpp_rnea_backend,
+        prediction_backend,
         cpp_right_arm_executor,
     ):
-        if native_backend is not None:
+        if (
+            native_backend is not None
+            and hasattr(native_backend, "close")
+            and id(native_backend) not in closed_native_backends
+        ):
             native_backend.close()
+            closed_native_backends.add(id(native_backend))

@@ -25,7 +25,9 @@ RIGHT_ARM_JOINT_NAMES = (
     "right_wrist_roll_joint",
 )
 JOINT_COUNT = len(RIGHT_ARM_JOINT_NAMES)
+KINEMATICS_MAX_STATES = 32
 DOUBLE_PTR = ctypes.POINTER(ctypes.c_double)
+UINT8_PTR = ctypes.POINTER(ctypes.c_uint8)
 
 
 class COutput(ctypes.Structure):
@@ -38,6 +40,33 @@ class COutput(ctypes.Structure):
     ]
 
 
+class CKinematicsBatchOutput(ctypes.Structure):
+    _fields_ = [
+        ("state_count", ctypes.c_int32),
+        ("ee_position_world", ctypes.c_double * (KINEMATICS_MAX_STATES * 3)),
+        ("ee_rotation_world", ctypes.c_double * (KINEMATICS_MAX_STATES * 9)),
+        ("imu_position_world", ctypes.c_double * (KINEMATICS_MAX_STATES * 3)),
+        ("imu_rotation_world", ctypes.c_double * (KINEMATICS_MAX_STATES * 9)),
+        (
+            "J_v_world",
+            ctypes.c_double * (KINEMATICS_MAX_STATES * 3 * JOINT_COUNT),
+        ),
+        (
+            "J_w_world",
+            ctypes.c_double * (KINEMATICS_MAX_STATES * 3 * JOINT_COUNT),
+        ),
+        (
+            "dJ_v_world",
+            ctypes.c_double * (KINEMATICS_MAX_STATES * 3 * JOINT_COUNT),
+        ),
+        (
+            "dJ_w_world",
+            ctypes.c_double * (KINEMATICS_MAX_STATES * 3 * JOINT_COUNT),
+        ),
+        ("core_elapsed_ns", ctypes.c_uint64),
+    ]
+
+
 class NativeRnea:
     """【半核心】只负责 ctypes 类型边界和 handle 生命周期。"""
 
@@ -45,7 +74,7 @@ class NativeRnea:
         self.handle = None
         self.library = ctypes.CDLL(str(library_path))
         self._configure_signatures()
-        if int(self.library.right_arm_rnea_abi_version()) != 1:
+        if int(self.library.right_arm_rnea_abi_version()) != 3:
             raise RuntimeError("right_arm_rnea C ABI 版本不兼容")
         error = ctypes.create_string_buffer(1024)
         self.handle = self.library.right_arm_rnea_create(
@@ -57,11 +86,12 @@ class NativeRnea:
         self.nv = int(self.library.right_arm_rnea_mujoco_nv(self.handle))
 
     def assert_c_abi_rejects_bad_qpos_count(
-        self, qpos, qvel, ddq, passive, friction, timestep, breakaway
+        self, qpos, qvel, reference_qacc, ddq, passive, friction, timestep, breakaway
     ):
         """直接越过 Python shape 检查，确认 C ABI 自己拒绝错误维度。"""
         qpos = np.ascontiguousarray(qpos, dtype=np.float64)
         qvel = np.ascontiguousarray(qvel, dtype=np.float64)
+        reference_qacc = np.ascontiguousarray(reference_qacc, dtype=np.float64)
         ddq = np.ascontiguousarray(ddq, dtype=np.float64)
         passive = np.ascontiguousarray(passive, dtype=np.float64)
         friction = np.ascontiguousarray(friction, dtype=np.float64)
@@ -73,6 +103,8 @@ class NativeRnea:
             qpos.size - 1,
             qvel.ctypes.data_as(DOUBLE_PTR),
             qvel.size,
+            reference_qacc.ctypes.data_as(DOUBLE_PTR),
+            reference_qacc.size,
             ddq.ctypes.data_as(DOUBLE_PTR),
             ddq.size,
             passive.ctypes.data_as(DOUBLE_PTR),
@@ -117,6 +149,8 @@ class NativeRnea:
             ctypes.c_size_t,
             DOUBLE_PTR,
             ctypes.c_size_t,
+            DOUBLE_PTR,
+            ctypes.c_size_t,
             ctypes.c_double,
             ctypes.c_double,
             ctypes.POINTER(COutput),
@@ -124,6 +158,19 @@ class NativeRnea:
             ctypes.c_size_t,
         ]
         lib.right_arm_rnea_compute.restype = ctypes.c_int
+        lib.right_arm_kinematics_batch_compute.argtypes = [
+            ctypes.c_void_p,
+            DOUBLE_PTR,
+            ctypes.c_size_t,
+            DOUBLE_PTR,
+            DOUBLE_PTR,
+            UINT8_PTR,
+            ctypes.c_size_t,
+            ctypes.POINTER(CKinematicsBatchOutput),
+            ctypes.c_char_p,
+            ctypes.c_size_t,
+        ]
+        lib.right_arm_kinematics_batch_compute.restype = ctypes.c_int
         lib.right_arm_rnea_abi_version.argtypes = []
         lib.right_arm_rnea_abi_version.restype = ctypes.c_uint32
 
@@ -134,9 +181,12 @@ class NativeRnea:
             raise ValueError(f"输入维度应为 {expected_shape}，实际 {result.shape}")
         return result
 
-    def compute(self, qpos, qvel, ddq, passive, friction, timestep, breakaway):
+    def compute(
+        self, qpos, qvel, reference_qacc, ddq, passive, friction, timestep, breakaway
+    ):
         qpos = self._array(qpos, (self.nq,))
         qvel = self._array(qvel, (self.nv,))
+        reference_qacc = self._array(reference_qacc, (self.nv,))
         ddq = self._array(ddq, (JOINT_COUNT,))
         passive = self._array(passive, (JOINT_COUNT,))
         friction = self._array(friction, (JOINT_COUNT,))
@@ -148,6 +198,8 @@ class NativeRnea:
             qpos.size,
             qvel.ctypes.data_as(DOUBLE_PTR),
             qvel.size,
+            reference_qacc.ctypes.data_as(DOUBLE_PTR),
+            reference_qacc.size,
             ddq.ctypes.data_as(DOUBLE_PTR),
             ddq.size,
             passive.ctypes.data_as(DOUBLE_PTR),
@@ -176,6 +228,110 @@ class NativeRnea:
             "core_elapsed_ns": int(output.core_elapsed_ns),
             "rnea_elapsed_ns": int(output.rnea_elapsed_ns),
         }
+
+    def compute_kinematics_batch(
+        self, qpos_reference, q_arm, dq_arm, acceleration_required
+    ):
+        qpos = self._array(qpos_reference, (self.nq,))
+        q_arm = np.ascontiguousarray(q_arm, dtype=np.float64)
+        dq_arm = np.ascontiguousarray(dq_arm, dtype=np.float64)
+        acceleration_required = np.ascontiguousarray(
+            acceleration_required, dtype=np.uint8
+        )
+        if q_arm.ndim != 2 or q_arm.shape[1:] != (JOINT_COUNT,):
+            raise ValueError("q_arm 必须为 state_count x 5")
+        if dq_arm.shape != q_arm.shape:
+            raise ValueError("dq_arm 维度必须与 q_arm 相同")
+        if acceleration_required.shape != (q_arm.shape[0],):
+            raise ValueError("acceleration_required 维度必须为 state_count")
+
+        output = CKinematicsBatchOutput()
+        error = ctypes.create_string_buffer(1024)
+        status = self.library.right_arm_kinematics_batch_compute(
+            self.handle,
+            qpos.ctypes.data_as(DOUBLE_PTR),
+            qpos.size,
+            q_arm.ctypes.data_as(DOUBLE_PTR),
+            dq_arm.ctypes.data_as(DOUBLE_PTR),
+            acceleration_required.ctypes.data_as(UINT8_PTR),
+            q_arm.shape[0],
+            ctypes.byref(output),
+            error,
+            len(error),
+        )
+        if status != 0:
+            raise RuntimeError(
+                f"C++ batch kinematics status={status}: "
+                f"{error.value.decode(errors='replace')}"
+            )
+        count = int(output.state_count)
+
+        def array(name, tail_shape):
+            source = np.ctypeslib.as_array(getattr(output, name))
+            return source[: count * int(np.prod(tail_shape))].reshape(
+                (count, *tail_shape)
+            ).copy()
+
+        return {
+            "ee_position_world": array("ee_position_world", (3,)),
+            "ee_rotation_world": array("ee_rotation_world", (3, 3)),
+            "imu_position_world": array("imu_position_world", (3,)),
+            "imu_rotation_world": array("imu_rotation_world", (3, 3)),
+            "J_v_world": array("J_v_world", (3, JOINT_COUNT)),
+            "J_w_world": array("J_w_world", (3, JOINT_COUNT)),
+            "dJ_v_world": array("dJ_v_world", (3, JOINT_COUNT)),
+            "dJ_w_world": array("dJ_w_world", (3, JOINT_COUNT)),
+            "core_elapsed_ns": int(output.core_elapsed_ns),
+        }
+
+    def assert_batch_c_abi_rejects_invalid_inputs(
+        self, qpos_reference, q_arm, dq_arm, acceleration_required
+    ):
+        """确认批接口自己拒绝越界节点数和非 0/1 标志。"""
+        qpos = np.ascontiguousarray(qpos_reference, dtype=np.float64)
+        q_arm = np.ascontiguousarray(q_arm, dtype=np.float64)
+        dq_arm = np.ascontiguousarray(dq_arm, dtype=np.float64)
+        flags = np.ascontiguousarray(acceleration_required, dtype=np.uint8)
+        output = CKinematicsBatchOutput()
+        error = ctypes.create_string_buffer(1024)
+
+        status = self.library.right_arm_kinematics_batch_compute(
+            self.handle,
+            qpos.ctypes.data_as(DOUBLE_PTR),
+            qpos.size,
+            q_arm.ctypes.data_as(DOUBLE_PTR),
+            dq_arm.ctypes.data_as(DOUBLE_PTR),
+            flags.ctypes.data_as(UINT8_PTR),
+            0,
+            ctypes.byref(output),
+            error,
+            len(error),
+        )
+        if status != 2:
+            raise AssertionError(
+                f"零节点应返回 dimension_mismatch=2，实际 {status}: "
+                f"{error.value.decode(errors='replace')}"
+            )
+
+        bad_flags = flags.copy()
+        bad_flags[0] = 2
+        status = self.library.right_arm_kinematics_batch_compute(
+            self.handle,
+            qpos.ctypes.data_as(DOUBLE_PTR),
+            qpos.size,
+            q_arm.ctypes.data_as(DOUBLE_PTR),
+            dq_arm.ctypes.data_as(DOUBLE_PTR),
+            bad_flags.ctypes.data_as(UINT8_PTR),
+            q_arm.shape[0],
+            ctypes.byref(output),
+            error,
+            len(error),
+        )
+        if status != 1:
+            raise AssertionError(
+                f"非法 acceleration flag 应返回 invalid_argument=1，实际 "
+                f"{status}: {error.value.decode(errors='replace')}"
+            )
 
     def close(self):
         if self.handle:
@@ -273,6 +429,7 @@ def main():
         data.qpos[:3] += rng.uniform(-0.5, 0.5, size=3)
         data.qpos[3:7] = _random_unit_quaternion_wxyz(rng)
         data.qvel[:] = rng.uniform(-1.0, 1.0, size=model.nv)
+        reference_qacc = rng.uniform(-20.0, 20.0, size=model.nv)
         desired = rng.uniform(-8.0, 8.0, size=JOINT_COUNT)
         if sample_index == 0:
             # 显式覆盖零速 breakaway 分支，不能只依赖随机样本碰巧接近零。
@@ -283,7 +440,10 @@ def main():
         passive = data.qfrc_passive[arm_v].copy()
         friction_loss = model.dof_frictionloss[arm_v].copy()
         python_tau = backend.compute_right_arm_rnea(
-            data.qpos, data.qvel, desired
+            data.qpos,
+            data.qvel,
+            desired,
+            reference_qacc=reference_qacc,
         )
         breakaway_velocity = (
             args.friction_breakaway_steps
@@ -300,6 +460,7 @@ def main():
         candidate = native.compute(
             data.qpos,
             data.qvel,
+            reference_qacc,
             desired,
             passive,
             friction_loss,
@@ -333,6 +494,7 @@ def main():
             (
                 data.qpos.copy(),
                 data.qvel.copy(),
+                reference_qacc.copy(),
                 desired.copy(),
                 passive,
                 friction_loss,
@@ -348,6 +510,65 @@ def main():
             f"C++ parity 失败：误差超过 {args.tolerance:.1e} N m"
         )
 
+    # 【核心批处理一致性】同一个冻结整机状态下随机生成完整预测窗口，
+    # 同时覆盖需要/不需要 Jacobian 导数的节点。
+    batch_count = min(KINEMATICS_MAX_STATES, max(2, min(args.samples, 13)))
+    qpos_reference = cases[0][0]
+    q_arm = np.empty((batch_count, JOINT_COUNT), dtype=np.float64)
+    for joint, joint_id in enumerate(joint_ids):
+        if model.jnt_limited[joint_id]:
+            lower, upper = model.jnt_range[joint_id]
+            q_arm[:, joint] = rng.uniform(lower, upper, size=batch_count)
+        else:
+            q_arm[:, joint] = rng.uniform(-0.5, 0.5, size=batch_count)
+    dq_arm = rng.uniform(-1.0, 1.0, size=(batch_count, JOINT_COUNT))
+    acceleration_required = (np.arange(batch_count) % 2 == 0).astype(np.uint8)
+    native_batch = native.compute_kinematics_batch(
+        qpos_reference, q_arm, dq_arm, acceleration_required
+    )
+    reference_batch = {
+        name: []
+        for name in (
+            "ee_position_world",
+            "ee_rotation_world",
+            "imu_position_world",
+            "imu_rotation_world",
+            "J_v_world",
+            "J_w_world",
+            "dJ_v_world",
+            "dJ_w_world",
+        )
+    }
+    for state in range(batch_count):
+        reference = backend.evaluate(
+            qpos_reference,
+            q_arm[state],
+            dq_arm[state],
+            acceleration_required=bool(acceleration_required[state]),
+        )
+        for name in reference_batch:
+            reference_batch[name].append(np.asarray(getattr(reference, name)))
+
+    batch_errors = {}
+    for name, values in reference_batch.items():
+        expected = np.stack(values, axis=0)
+        batch_errors[name] = float(
+            np.max(np.abs(native_batch[name] - expected))
+        )
+    max_batch_error = max(batch_errors.values())
+    print("\nPython/C++ 批运动学一致性：")
+    print(f"  预测节点: {batch_count}")
+    for name, error in batch_errors.items():
+        print(f"  {name:22s}: max_abs={error:.3e}")
+    if max_batch_error > args.tolerance:
+        raise SystemExit(
+            f"C++ batch kinematics parity 失败：最大误差 "
+            f"{max_batch_error:.3e} > {args.tolerance:.1e}"
+        )
+    native.assert_batch_c_abi_rejects_invalid_inputs(
+        qpos_reference, q_arm, dq_arm, acceleration_required
+    )
+
     # 维度错误必须由 C ABI 自身拒绝，而不是越界读取。
     native.assert_c_abi_rejects_bad_qpos_count(
         *cases[0], model.opt.timestep, args.friction_breakaway_steps
@@ -358,14 +579,27 @@ def main():
     native_core = []
     native_rnea = []
     for index in range(args.repeats):
-        qpos, qvel, desired, passive, friction_loss = cases[index % len(cases)]
+        (
+            qpos,
+            qvel,
+            reference_qacc,
+            desired,
+            passive,
+            friction_loss,
+        ) = cases[index % len(cases)]
         start = time.perf_counter_ns()
-        backend.compute_right_arm_rnea(qpos, qvel, desired)
+        backend.compute_right_arm_rnea(
+            qpos,
+            qvel,
+            desired,
+            reference_qacc=reference_qacc,
+        )
         python_wall.append((time.perf_counter_ns() - start) * 1e-9)
         start = time.perf_counter_ns()
         result = native.compute(
             qpos,
             qvel,
+            reference_qacc,
             desired,
             passive,
             friction_loss,

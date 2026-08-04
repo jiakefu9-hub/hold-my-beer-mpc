@@ -45,6 +45,10 @@ void set_error(char* buffer, const int32_t capacity, const std::string& message)
   if (buffer == nullptr || capacity <= 0) {
     return;
   }
+  if (message.empty()) {
+    buffer[0] = '\0';
+    return;
+  }
   std::snprintf(buffer, static_cast<std::size_t>(capacity), "%s", message.c_str());
 }
 
@@ -121,6 +125,9 @@ struct PassResult {
   int total_error_rejections = 0;
   int joint_error_rejections = 0;
   int qacc_limit_rejections = 0;
+  // 下一轮 forwardSkip 使用本轮已验收工作点的完整 qacc 作为约束求解
+  // warm-start；右臂 5 维输出仍由 qacc_validated 单独保存。
+  std::vector<double> qacc_validated_full;
 };
 
 struct Candidate {
@@ -141,14 +148,12 @@ struct DdqTorqueMapperHandle {
   Vector5 torque_lower = Vector5::Zero();
   Vector5 torque_upper = Vector5::Zero();
 
-  // 【非核心缓存】避免每拍为固定 ctrl 和 warm-start 重新分配内存。
-  std::vector<double> fixed_ctrl;
+  // 【非核心缓存】避免每拍为 warm-start 重新分配内存。
   std::vector<double> warmstart;
 
   DdqTorqueMapperHandle(mjModel* raw_model, mjData* raw_data)
       : model(raw_model),
         scratch(raw_data),
-        fixed_ctrl(static_cast<std::size_t>(raw_model->nu), 0.0),
         warmstart(static_cast<std::size_t>(raw_model->nv), 0.0) {}
 };
 
@@ -257,20 +262,32 @@ void copy_state_inputs(DdqTorqueMapperHandle& handle,
   mju_copy(data->ctrl, state.ctrl, model->nu);
   mju_copy(data->qfrc_applied, state.qfrc_applied, model->nv);
   mju_copy(data->xfrc_applied, state.xfrc_applied, 6 * model->nbody);
-  std::copy(state.ctrl, state.ctrl + model->nu, handle.fixed_ctrl.begin());
   std::copy(state.qacc_warmstart,
             state.qacc_warmstart + model->nv,
             handle.warmstart.begin());
 }
 
-void prepare_ctrl(DdqTorqueMapperHandle& handle, const Vector5& arm_tau) {
+void prepare_ctrl(DdqTorqueMapperHandle& handle,
+                  const Vector5& arm_tau,
+                  const std::vector<double>& warmstart) {
   mjModel* model = handle.model.get();
   mjData* data = handle.scratch.get();
-  mju_copy(data->ctrl, handle.fixed_ctrl.data(), model->nu);
+  if (warmstart.size() != static_cast<std::size_t>(model->nv)) {
+    throw std::runtime_error("forwardSkip warm-start 维度与模型不一致");
+  }
+  // copy_state_inputs 已安装本拍完整 ctrl，MuJoCo forward/forwardSkip 不会
+  // 改写 ctrl；各次试算只覆盖五个右臂执行器，避免重复复制完整 nu 向量。
   for (int index = 0; index < kArmDof; ++index) {
     data->ctrl[handle.ctrl_indices[index]] = arm_tau[index];
   }
-  mju_copy(data->qacc_warmstart, handle.warmstart.data(), model->nv);
+  mju_copy(data->qacc_warmstart, warmstart.data(), model->nv);
+}
+
+void copy_full_qacc(const DdqTorqueMapperHandle& handle,
+                    std::vector<double>& output) {
+  const mjModel* model = handle.model.get();
+  output.resize(static_cast<std::size_t>(model->nv));
+  mju_copy(output.data(), handle.scratch->qacc, model->nv);
 }
 
 Vector5 read_right_arm_qacc(const DdqTorqueMapperHandle& handle) {
@@ -285,11 +302,13 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
                                 const Vector5& desired_qacc,
                                 const Vector5& base_tau,
                                 const Vector5& base_qacc,
+                                const std::vector<double>& base_warmstart,
                                 const DdqTorqueMapperParams& params,
                                 int& forward_skip_calls,
                                 int& validated_pass_count) {
   ++validated_pass_count;
   PassResult result;
+  result.qacc_validated_full = base_warmstart;
   mjModel* model = handle.model.get();
   mjData* data = handle.scratch.get();
 
@@ -302,7 +321,7 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
     }
     Vector5 perturbed_tau = base_tau;
     perturbed_tau[column] += signed_perturbation;
-    prepare_ctrl(handle, perturbed_tau);
+    prepare_ctrl(handle, perturbed_tau, base_warmstart);
     mj_forwardSkip(model, data, mjSTAGE_VEL, 1);
     ++forward_skip_calls;
     result.gain_matrix.col(column) =
@@ -335,15 +354,16 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
   double best_qacc_safe_error_norm = std::numeric_limits<double>::infinity();
   Candidate best_qacc_safe;
   Vector5 best_qacc_safe_qacc = Vector5::Zero();
+  std::vector<double> best_qacc_safe_warmstart;
   bool has_best_progress = false;
   double best_progress_error_norm = std::numeric_limits<double>::infinity();
   Candidate best_progress;
   Vector5 best_progress_qacc = Vector5::Zero();
+  std::vector<double> best_progress_warmstart;
 
-  std::vector<Candidate> candidates;
-  candidates.reserve(static_cast<std::size_t>(params.validation_scale_count));
+  std::array<Candidate, DDQ_TORQUE_MAPPER_MAX_VALIDATION_SCALES> candidates{};
   for (int index = 0; index < params.validation_scale_count; ++index) {
-    Candidate candidate;
+    Candidate& candidate = candidates[static_cast<std::size_t>(index)];
     candidate.scale = params.validation_scales[index];
     candidate.tau_raw = base_tau + candidate.scale * result.correction_raw;
     candidate.tau =
@@ -355,26 +375,41 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
         max_abs(predicted_error) <= params.max_joint_error &&
         max_abs(predicted_qacc) <= params.max_abs_qacc;
     candidate.predicted_error_norm = predicted_error.norm();
-    candidates.push_back(candidate);
   }
-  std::stable_sort(candidates.begin(), candidates.end(),
-                   [](const Candidate& left, const Candidate& right) {
-                     if (left.predicted_safe != right.predicted_safe) {
-                       return left.predicted_safe && !right.predicted_safe;
-                     }
-                     if (left.predicted_error_norm != right.predicted_error_norm) {
-                       return left.predicted_error_norm < right.predicted_error_norm;
-                     }
-                     return left.scale > right.scale;
-                   });
+  const auto candidate_less = [](const Candidate& left, const Candidate& right) {
+    if (left.predicted_safe != right.predicted_safe) {
+      return left.predicted_safe && !right.predicted_safe;
+    }
+    if (left.predicted_error_norm != right.predicted_error_norm) {
+      return left.predicted_error_norm < right.predicted_error_norm;
+    }
+    return left.scale > right.scale;
+  };
+  // 最多 8 个元素，用稳定插入排序避免 stable_sort 的临时堆缓冲。
+  for (int index = 1; index < params.validation_scale_count; ++index) {
+    Candidate value = candidates[static_cast<std::size_t>(index)];
+    int insertion = index;
+    while (insertion > 0 &&
+           candidate_less(value,
+                          candidates[static_cast<std::size_t>(insertion - 1)])) {
+      candidates[static_cast<std::size_t>(insertion)] =
+          candidates[static_cast<std::size_t>(insertion - 1)];
+      --insertion;
+    }
+    candidates[static_cast<std::size_t>(insertion)] = value;
+  }
 
   // 【核心代码】正常至少真实验收两个候选；已有安全候选便停止，
   // 否则继续较保守比例。该顺序与 Python candidate_specs 排序一致。
   const int minimum_validations =
-      std::min(2, static_cast<int>(candidates.size()));
-  for (const Candidate& candidate : candidates) {
+      std::min(2, params.validation_scale_count);
+  for (int candidate_index = 0;
+       candidate_index < params.validation_scale_count;
+       ++candidate_index) {
+    const Candidate& candidate =
+        candidates[static_cast<std::size_t>(candidate_index)];
     ++result.validation_attempts;
-    prepare_ctrl(handle, candidate.tau);
+    prepare_ctrl(handle, candidate.tau, base_warmstart);
     mj_forwardSkip(model, data, mjSTAGE_VEL, 1);
     ++forward_skip_calls;
     const Vector5 candidate_qacc = read_right_arm_qacc(handle);
@@ -394,10 +429,12 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
         result.tau_cmd = candidate.tau;
         result.tau_cmd_raw = candidate.tau_raw;
         result.qacc_validated = candidate_qacc;
+        copy_full_qacc(handle, result.qacc_validated_full);
         best_error_norm = candidate_error_norm;
       }
     }
-    if (total_error_improved && qacc_safe) {
+    // 一旦存在完整安全候选，两个降级候选不会再参与最终选择。
+    if (result.safe_candidate_count == 0 && total_error_improved && qacc_safe) {
       const double joint_error = max_abs(candidate_error);
       if (!has_best_qacc_safe || joint_error < best_qacc_safe_joint_error ||
           (joint_error == best_qacc_safe_joint_error &&
@@ -407,14 +444,19 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
         best_qacc_safe_error_norm = candidate_error_norm;
         best_qacc_safe = candidate;
         best_qacc_safe_qacc = candidate_qacc;
+        copy_full_qacc(handle, best_qacc_safe_warmstart);
       }
     }
-    if (total_error_improved &&
+    // qacc-safe 降级候选的优先级高于 progress 候选；存在前者后无需再
+    // 复制后者的完整 nv warm-start。
+    if (result.safe_candidate_count == 0 && !has_best_qacc_safe &&
+        total_error_improved &&
         (!has_best_progress || candidate_error_norm < best_progress_error_norm)) {
       has_best_progress = true;
       best_progress_error_norm = candidate_error_norm;
       best_progress = candidate;
       best_progress_qacc = candidate_qacc;
+      copy_full_qacc(handle, best_progress_warmstart);
     }
     if (result.safe_candidate_count > 0 &&
         result.validation_attempts >= minimum_validations) {
@@ -428,11 +470,13 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
     result.tau_cmd = best_qacc_safe.tau;
     result.tau_cmd_raw = best_qacc_safe.tau_raw;
     result.qacc_validated = best_qacc_safe_qacc;
+    result.qacc_validated_full = std::move(best_qacc_safe_warmstart);
   } else if (!result.tracking_safety_satisfied && has_best_progress) {
     result.validation_scale = best_progress.scale;
     result.tau_cmd = best_progress.tau;
     result.tau_cmd_raw = best_progress.tau_raw;
     result.qacc_validated = best_progress_qacc;
+    result.qacc_validated_full = std::move(best_progress_warmstart);
   }
   result.qacc_safety_satisfied =
       max_abs(result.qacc_validated) <= params.max_abs_qacc;
@@ -582,10 +626,12 @@ int32_t ddq_torque_mapper_compute(
     // 【核心代码】唯一一次完整 forward：复制当前物理状态后，
     // 以名义力矩建立约束、位置/速度缓存和右臂基线加速度。
     const auto baseline_start = Clock::now();
-    prepare_ctrl(*handle, tau_nominal);
+    prepare_ctrl(*handle, tau_nominal, handle->warmstart);
     mj_forward(handle->model.get(), handle->scratch.get());
     output->full_forward_calls = 1;
     const Vector5 qacc_baseline = read_right_arm_qacc(*handle);
+    std::vector<double> baseline_warmstart;
+    copy_full_qacc(*handle, baseline_warmstart);
     output->baseline_elapsed_ns = elapsed_ns(baseline_start);
 
     int forward_skip_calls = 0;
@@ -596,6 +642,7 @@ int32_t ddq_torque_mapper_compute(
                              desired_qacc,
                              tau_nominal,
                              qacc_baseline,
+                             baseline_warmstart,
                              *params,
                              forward_skip_calls,
                              validated_pass_count);
@@ -615,6 +662,7 @@ int32_t ddq_torque_mapper_compute(
                                          desired_qacc,
                                          first_pass.tau_cmd,
                                          first_pass.qacc_validated,
+                                         first_pass.qacc_validated_full,
                                          *params,
                                          forward_skip_calls,
                                          validated_pass_count);
@@ -649,6 +697,7 @@ int32_t ddq_torque_mapper_compute(
                                  desired_qacc,
                                  final_pass.tau_cmd,
                                  final_pass.qacc_validated,
+                                 final_pass.qacc_validated_full,
                                  *params,
                                  forward_skip_calls,
                                  validated_pass_count);
@@ -677,7 +726,7 @@ int32_t ddq_torque_mapper_compute(
       hold_tau = clip_vector(load_vector5(request->previous_executed_tau),
                              handle->torque_lower,
                              handle->torque_upper);
-      prepare_ctrl(*handle, hold_tau);
+      prepare_ctrl(*handle, hold_tau, final_pass.qacc_validated_full);
       mj_forwardSkip(handle->model.get(), handle->scratch.get(), mjSTAGE_VEL, 1);
       ++forward_skip_calls;
       hold_last_safe_qacc = read_right_arm_qacc(*handle);

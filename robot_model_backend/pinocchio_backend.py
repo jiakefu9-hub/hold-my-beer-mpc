@@ -245,7 +245,11 @@ class PinocchioPredictionBackend(PredictionKinematicsBackend):
         )
 
     def compute_right_arm_rnea(
-        self, qpos_mujoco, qvel_mujoco, desired_arm_qacc
+        self,
+        qpos_mujoco,
+        qvel_mujoco,
+        desired_arm_qacc,
+        reference_qacc=None,
     ):
         """计算整机 RNEA 后取右臂 5 维；不包含被动力和接触约束。"""
 
@@ -258,7 +262,16 @@ class PinocchioPredictionBackend(PredictionKinematicsBackend):
             raise ValueError("RNEA qvel 维度不正确。")
         if desired.shape != (len(self.joint_names),):
             raise ValueError("RNEA 右臂 qacc 维度不正确。")
-        if not all(np.all(np.isfinite(x)) for x in (qpos, qvel, desired)):
+        reference = (
+            np.zeros(self.mujoco_model.nv, dtype=np.float64)
+            if reference_qacc is None
+            else np.asarray(reference_qacc, dtype=np.float64)
+        )
+        if reference.shape != (self.mujoco_model.nv,):
+            raise ValueError("RNEA reference_qacc 维度不正确。")
+        if not all(
+            np.all(np.isfinite(x)) for x in (qpos, qvel, desired, reference)
+        ):
             raise ValueError("RNEA 输入包含 NaN 或 Inf。")
 
         q_pin = self._q_work
@@ -290,12 +303,21 @@ class PinocchioPredictionBackend(PredictionKinematicsBackend):
 
         a_pin = self._a_work
         a_pin.fill(0.0)
-        # MuJoCo 的世界系 base 线加速度为零时，Pin 的 body-frame 空间
-        # 加速度还包含坐标导数项 -omega x v。
-        a_pin[pin_free_v : pin_free_v + 3] = -np.cross(
+        a_pin[self._pin_scalar_v_indices] = reference[
+            self._mj_scalar_v_indices
+        ]
+        # MuJoCo free-joint 平动加速度是世界系导数；Pinocchio 使用 body
+        # 空间加速度，因此还需旋转并减去 omega x v 的坐标导数项。
+        a_pin[pin_free_v : pin_free_v + 3] = (
+            R_world_base.T @ reference[mj_free_v : mj_free_v + 3]
+            - np.cross(
             v_pin[pin_free_v + 3 : pin_free_v + 6],
             v_pin[pin_free_v : pin_free_v + 3],
+            )
         )
+        a_pin[pin_free_v + 3 : pin_free_v + 6] = reference[
+            mj_free_v + 3 : mj_free_v + 6
+        ]
         a_pin[self.pin_arm_v_indices] = desired
         tau = pin.rnea(
             self.model, self.inverse_data, q_pin, v_pin, a_pin

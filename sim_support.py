@@ -347,9 +347,110 @@ class TorsoAccelerationFilter:
         return raw_acc, raw_alpha
 
 
+class RneaOtherAccelerationEstimator:
+    """为名义 RNEA 构造右臂之外自由度的因果加速度参考。
+
+    ``MjData.qacc`` 是上一物理步完成后最新可用的整机加速度。估计器只
+    处理这个已知历史；右臂五维会在 RNEA 后端内被 MPC 的 ``ddq_des``
+    覆盖，因而不会形成“用当前输出预测当前输出”的代数环。
+    """
+
+    VALID_MODES = {"zero", "base_measured", "measured", "filtered", "trend"}
+
+    def __init__(
+        self,
+        nv,
+        mode="zero",
+        filter_alpha=0.5,
+        trend_window=4,
+        trend_lead_steps=1.0,
+        acceleration_limit=100.0,
+        base_qacc_indices=(),
+        measured_blend=1.0,
+    ):
+        self.nv = int(nv)
+        self.mode = str(mode).strip().lower()
+        if self.mode not in self.VALID_MODES:
+            raise ValueError(
+                "ddq_rnea_other_qacc_mode 必须是 zero、measured、"
+                "base_measured、filtered 或 trend。"
+            )
+        self.filter_alpha = float(filter_alpha)
+        self.trend_window = int(trend_window)
+        self.trend_lead_steps = float(trend_lead_steps)
+        self.acceleration_limit = float(acceleration_limit)
+        self.base_qacc_indices = np.asarray(
+            base_qacc_indices, dtype=np.int32
+        )
+        self.measured_blend = float(measured_blend)
+        if self.base_qacc_indices.ndim != 1 or np.any(
+            (self.base_qacc_indices < 0) | (self.base_qacc_indices >= self.nv)
+        ):
+            raise ValueError("base_qacc_indices 必须是有效的一维自由度索引。")
+        if not 0.0 < self.filter_alpha <= 1.0:
+            raise ValueError("ddq_rnea_other_qacc_filter_alpha 必须位于 (0, 1]。")
+        if self.trend_window < 2:
+            raise ValueError("ddq_rnea_other_qacc_trend_window 不能小于 2。")
+        if self.trend_lead_steps < 0.0 or not np.isfinite(self.trend_lead_steps):
+            raise ValueError("ddq_rnea_other_qacc_trend_lead_steps 必须是有限非负数。")
+        if self.acceleration_limit <= 0.0 or not np.isfinite(self.acceleration_limit):
+            raise ValueError("ddq_rnea_other_qacc_limit 必须是有限正数。")
+        if not 0.0 <= self.measured_blend <= 1.0:
+            raise ValueError("ddq_rnea_other_qacc_blend 必须位于 [0, 1]。")
+        self.filtered = np.zeros(self.nv, dtype=np.float64)
+        self.initialized = False
+        self.history = deque(maxlen=self.trend_window)
+
+    def update(self, measured_qacc):
+        """返回本物理拍供 RNEA 使用的整机参考加速度。"""
+        measured = np.asarray(measured_qacc, dtype=np.float64)
+        if measured.shape != (self.nv,) or not np.all(np.isfinite(measured)):
+            raise ValueError("RNEA 其他自由度加速度测量维度错误或包含非有限值。")
+        measured = np.clip(
+            measured,
+            -self.acceleration_limit,
+            self.acceleration_limit,
+        )
+        if not self.initialized:
+            self.filtered[:] = measured
+            self.initialized = True
+        else:
+            self.filtered += self.filter_alpha * (measured - self.filtered)
+        self.history.append(measured.copy())
+
+        if self.mode == "zero":
+            return np.zeros(self.nv, dtype=np.float64)
+        if self.mode == "base_measured":
+            result = np.zeros(self.nv, dtype=np.float64)
+            result[self.base_qacc_indices] = (
+                self.measured_blend * measured[self.base_qacc_indices]
+            )
+            return result
+        if self.mode == "measured":
+            return self.measured_blend * measured
+        if self.mode == "filtered":
+            return self.measured_blend * self.filtered
+
+        # 【半核心实验】对最近若干个 2 ms 样本做逐自由度直线拟合，外推
+        # trend_lead_steps 个物理拍；输出仍受统一上限保护。
+        history = np.asarray(self.history, dtype=np.float64)
+        if history.shape[0] < 2:
+            return measured.copy()
+        sample_axis = np.arange(history.shape[0], dtype=np.float64)
+        centered = sample_axis - np.mean(sample_axis)
+        slope = (centered @ history) / float(centered @ centered)
+        prediction = history[-1] + self.trend_lead_steps * slope
+        return self.measured_blend * np.clip(
+            prediction,
+            -self.acceleration_limit,
+            self.acceleration_limit,
+        )
+
+
 class PhaseDisturbancePredictor:
     """按步态相位插值 H 系模板，并输出世界系 MPC 扰动预测。"""
 
+    _IDENTITY_ROTATION = np.eye(3, dtype=np.float64)
     TEMPLATE_FILES = {
         "raw": "heading_disturbance_template.npz",
         "half_smoothed": "heading_disturbance_template_half_smoothed.npz",
@@ -570,6 +671,10 @@ class PhaseDisturbancePredictor:
             if self.slow_bias_enabled
             else 0.0
         )
+        # 【核心提速】仿真中的 6 ms MPC 拍严格落在 2 ms 模板网格上。
+        # 初始化时把 400 个起始 bin 各自的完整预测窗口展开；在线只查一行。
+        # 真机时间戳若没有落在网格上，predict() 会自动回退到连续相位插值。
+        self._aligned_horizon_lut = self._build_aligned_horizon_lut()
         self._slow_bias_acc = np.zeros(3, dtype=np.float64)
         self._slow_bias_omega = np.zeros(3, dtype=np.float64)
         self._slow_bias_alpha = np.zeros(3, dtype=np.float64)
@@ -607,7 +712,7 @@ class PhaseDisturbancePredictor:
             or not np.all(np.isfinite(measured_rotation))
             or not np.allclose(
                 measured_rotation.T @ measured_rotation,
-                np.eye(3),
+                self._IDENTITY_ROTATION,
                 atol=1e-6,
             )
             or not np.isclose(
@@ -644,139 +749,156 @@ class PhaseDisturbancePredictor:
             return prediction
 
         # ^W R_H 只含上一完整周期平均 yaw，z 轴始终与 W 系重力轴重合。
-        rotation_world_heading = self._rotation_z(
-            self._heading_yaw_world
-        )
-        phase_now = (float(simulation_time) / self.period) % 1.0
-        phase_step = self.control_dt / self.period
-        node_phases = np.mod(
-            phase_now + phase_step * np.arange(self.horizon + 1),
-            1.0,
-        )
-        interval_phases = node_phases[: self.horizon]
-        midpoint_phases = np.mod(
-            interval_phases + 0.5 * phase_step,
-            1.0,
-        )
-
-        # 【核心提速代码】一次批量插值 N+1 个节点和 N 个区间，
-        # 避免每个量、每个预测步都重复 searchsorted 和分配临时数组。
-        node_acc_world = self._sample_many(
-            self.node_acc_template, node_phases
-        ) @ rotation_world_heading.T
-        node_omega_world = self._sample_many(
-            self.node_omega_template, node_phases
-        ) @ rotation_world_heading.T
-        node_alpha_world = self._sample_many(
-            self.node_alpha_template, node_phases
-        ) @ rotation_world_heading.T
-        node_orientation_heading = self._quaternions_to_rotations(
-            self._sample_quaternions_many(
-                self.orientation_quaternion_template,
-                node_phases,
+        rotation_world_heading = self._rotation_z(self._heading_yaw_world)
+        aligned_bin = self._aligned_start_bin(simulation_time)
+        if aligned_bin is not None:
+            lut = self._aligned_horizon_lut
+            node_vectors_heading = lut["node_vectors"][aligned_bin]
+            interval_vectors_heading = lut["interval_vectors"][aligned_bin]
+            node_relative_rotations = lut["node_relative_rotations"][aligned_bin]
+            interval_relative_rotations = lut[
+                "interval_relative_rotations"
+            ][aligned_bin]
+            anchor_orientation_heading = lut[
+                "anchor_orientations"
+            ][aligned_bin]
+        else:
+            # 【核心兼容】真机控制起点可能位于两个 2 ms bin 之间；此时
+            # 保留连续相位插值，不能用最近邻强行量化冲击相位。
+            phase_now = (float(simulation_time) / self.period) % 1.0
+            phase_step = self.control_dt / self.period
+            node_phases = np.mod(
+                phase_now + phase_step * np.arange(self.horizon + 1),
+                1.0,
             )
+            interval_phases = node_phases[: self.horizon]
+            midpoint_phases = np.mod(
+                interval_phases + 0.5 * phase_step,
+                1.0,
+            )
+            node_vectors_heading = np.stack(
+                [
+                    self._sample_many(self.node_acc_template, node_phases),
+                    self._sample_many(self.node_omega_template, node_phases),
+                    self._sample_many(self.node_alpha_template, node_phases),
+                ],
+                axis=0,
+            )
+            interval_vectors_heading = np.stack(
+                [
+                    self._sample_many(
+                        self.interval_acc_template, interval_phases
+                    ),
+                    self._sample_many(
+                        self.interval_omega_template, interval_phases
+                    ),
+                    self._sample_many(
+                        self.interval_alpha_template, interval_phases
+                    ),
+                ],
+                axis=0,
+            )
+            node_orientation_heading = self._quaternions_to_rotations(
+                self._sample_quaternions_many(
+                    self.orientation_quaternion_template,
+                    node_phases,
+                )
+            )
+            midpoint_orientation_heading = self._quaternions_to_rotations(
+                self._sample_quaternions_many(
+                    self.orientation_quaternion_template,
+                    midpoint_phases,
+                )
+            )
+            anchor_orientation_heading = node_orientation_heading[0]
+            anchor_transpose = anchor_orientation_heading.T
+            node_relative_rotations = np.einsum(
+                "ij,njk->nik", anchor_transpose, node_orientation_heading
+            )
+            interval_relative_rotations = np.einsum(
+                "ij,njk->nik",
+                anchor_transpose,
+                midpoint_orientation_heading,
+            )
+
+        # 三组节点向量和三组区间向量各只做一次批量 H→W 旋转。
+        node_vectors_world = node_vectors_heading @ rotation_world_heading.T
+        interval_vectors_world = (
+            interval_vectors_heading @ rotation_world_heading.T
         )
-        node_orientation_world = np.einsum(
-            "ij,njk->nik",
-            rotation_world_heading,
-            node_orientation_heading,
-        )
+        node_acc_world, node_omega_world, node_alpha_world = node_vectors_world
+        interval_acc, interval_omega, interval_alpha = interval_vectors_world
         node_acc_now = node_acc_world[0].copy()
         node_omega_now = node_omega_world[0].copy()
         node_alpha_now = node_alpha_world[0].copy()
-        anchor_orientation_world = node_orientation_world[0].copy()
+        anchor_orientation_world = (
+            rotation_world_heading @ anchor_orientation_heading
+        )
 
         # 【核心代码】模板保留步态冲击等快速周期项；实测与 node 模板之差
         # 只经过慢 EMA 形成长期偏差，不再用滞后的 d0 平移整条预测曲线。
         beta = self.slow_bias_update_alpha
-        self._slow_bias_acc = (
-            (1.0 - beta) * self._slow_bias_acc
-            + beta * (measured_acc - node_acc_now)
-        )
-        self._slow_bias_omega = (
-            (1.0 - beta) * self._slow_bias_omega
-            + beta * (measured_omega - node_omega_now)
-        )
-        self._slow_bias_alpha = (
-            (1.0 - beta) * self._slow_bias_alpha
-            + beta * (measured_alpha - node_alpha_now)
-        )
+        decay = 1.0 - beta
+        self._slow_bias_acc *= decay
+        self._slow_bias_acc += beta * (measured_acc - node_acc_now)
+        self._slow_bias_omega *= decay
+        self._slow_bias_omega += beta * (measured_omega - node_omega_now)
+        self._slow_bias_alpha *= decay
+        self._slow_bias_alpha += beta * (measured_alpha - node_alpha_now)
 
-        node_acc = np.clip(
-            node_acc_world + self._slow_bias_acc,
-            -self.acc_limit,
-            self.acc_limit,
-        )
-        node_omega = node_omega_world + self._slow_bias_omega
-        node_alpha = np.clip(
-            node_alpha_world + self._slow_bias_alpha,
-            -self.alpha_limit,
-            self.alpha_limit,
-        )
+        # node/interval world 数组是本次 matmul 新建的工作空间；
+        # 直接就地加偏差和限幅，避免四组“加法临时量 + clip 输出”。
+        node_acc = node_acc_world
+        node_acc += self._slow_bias_acc
+        np.clip(node_acc, -self.acc_limit, self.acc_limit, out=node_acc)
+        node_omega = node_omega_world
+        node_omega += self._slow_bias_omega
+        node_alpha = node_alpha_world
+        node_alpha += self._slow_bias_alpha
+        np.clip(node_alpha, -self.alpha_limit, self.alpha_limit, out=node_alpha)
         # 当前节点仍严格等于实测；只有未来节点使用模板预测。
         node_acc[0] = measured_acc
         node_omega[0] = measured_omega
         node_alpha[0] = measured_alpha
-        anchor_correction = measured_rotation @ anchor_orientation_world.T
-        node_rotations = np.einsum(
-            "ij,njk->nik",
-            anchor_correction,
-            node_orientation_world,
-        )
+        # R_meas (R_HB,0)^T R_HB,k 与原先先旋到 W 再修正完全等价；
+        # 中间的 R_WH^T R_WH 严格抵消，因此无需重复构造世界系模板姿态。
+        node_rotations = measured_rotation @ node_relative_rotations
+        # 每个字段是本次预测工作数组的不重叠行视图；这些
+        # 数组不会复用，视图会保持其生命期，无需再做 4(N+1) 次 copy。
         node_prediction = tuple(
-            self._disturbance_type(
-                acc_world=node_acc[step].copy(),
-                omega_world=node_omega[step].copy(),
-                alpha_world=node_alpha[step].copy(),
-                rot_world_body=node_rotations[step].copy(),
+            map(
+                self._disturbance_type,
+                node_acc,
+                node_omega,
+                node_alpha,
+                node_rotations,
             )
-            for step in range(self.horizon + 1)
         )
 
-        interval_acc = self._sample_many(
-            self.interval_acc_template, interval_phases
-        ) @ rotation_world_heading.T
-        interval_omega = self._sample_many(
-            self.interval_omega_template, interval_phases
-        ) @ rotation_world_heading.T
-        interval_alpha = self._sample_many(
-            self.interval_alpha_template, interval_phases
-        ) @ rotation_world_heading.T
-        interval_acc = np.clip(
-            interval_acc + self._slow_bias_acc,
+        interval_acc += self._slow_bias_acc
+        np.clip(
+            interval_acc,
             -self.acc_limit,
             self.acc_limit,
+            out=interval_acc,
         )
         interval_omega += self._slow_bias_omega
-        interval_alpha = np.clip(
-            interval_alpha + self._slow_bias_alpha,
+        interval_alpha += self._slow_bias_alpha
+        np.clip(
+            interval_alpha,
             -self.alpha_limit,
             self.alpha_limit,
+            out=interval_alpha,
         )
-        midpoint_orientation_heading = self._quaternions_to_rotations(
-            self._sample_quaternions_many(
-                self.orientation_quaternion_template,
-                midpoint_phases,
-            )
-        )
-        midpoint_orientation_world = np.einsum(
-            "ij,njk->nik",
-            rotation_world_heading,
-            midpoint_orientation_heading,
-        )
-        interval_rotations = np.einsum(
-            "ij,njk->nik",
-            anchor_correction,
-            midpoint_orientation_world,
-        )
+        interval_rotations = measured_rotation @ interval_relative_rotations
         interval_prediction = tuple(
-            self._disturbance_type(
-                acc_world=interval_acc[step].copy(),
-                omega_world=interval_omega[step].copy(),
-                alpha_world=interval_alpha[step].copy(),
-                rot_world_body=interval_rotations[step].copy(),
+            map(
+                self._disturbance_type,
+                interval_acc,
+                interval_omega,
+                interval_alpha,
+                interval_rotations,
             )
-            for step in range(self.horizon)
         )
 
         prediction = self._horizon_type(
@@ -835,6 +957,11 @@ class PhaseDisturbancePredictor:
             "slow_bias_update_alpha": self.slow_bias_update_alpha,
             "phase_source": "counter_times_simulation_dt",
             "periodic_interpolation": "linear_on_interval_start_grid",
+            "aligned_phase_lookup": (
+                "precomputed_400_bin_horizon_lut_with_off_grid_fallback"
+                if self._aligned_horizon_lut is not None
+                else "continuous_interpolation_only"
+            ),
             "rotation_prediction": "measurement_anchored_quaternion_template",
             "orientation_interpolation": "shortest_path_slerp",
         }
@@ -879,11 +1006,15 @@ class PhaseDisturbancePredictor:
         template_rotation_world,
     ):
         """【半核心代码】区分模板绝对偏差与真正的一步预测误差。"""
-        nan_vector = np.full(3, np.nan, dtype=np.float64)
         template_ready = template_acc_world is not None
         previous = self._previous_one_step_prediction
         one_step_valid = (
             previous is not None and self._previous_prediction_used_template
+        )
+        nan_vector = (
+            np.full(3, np.nan, dtype=np.float64)
+            if not template_ready or not one_step_valid
+            else None
         )
 
         diagnostics = {
@@ -897,17 +1028,17 @@ class PhaseDisturbancePredictor:
             "template_acc_world": (
                 nan_vector.copy()
                 if template_acc_world is None
-                else np.asarray(template_acc_world, dtype=np.float64).copy()
+                else np.asarray(template_acc_world, dtype=np.float64)
             ),
             "template_omega_world": (
                 nan_vector.copy()
                 if template_omega_world is None
-                else np.asarray(template_omega_world, dtype=np.float64).copy()
+                else np.asarray(template_omega_world, dtype=np.float64)
             ),
             "template_alpha_world": (
                 nan_vector.copy()
                 if template_alpha_world is None
-                else np.asarray(template_alpha_world, dtype=np.float64).copy()
+                else np.asarray(template_alpha_world, dtype=np.float64)
             ),
             "anchor_acc_error": (
                 nan_vector.copy()
@@ -977,8 +1108,12 @@ class PhaseDisturbancePredictor:
 
     @staticmethod
     def _rotation_error_angle(measured_rotation, predicted_rotation):
-        relative = np.asarray(measured_rotation) @ np.asarray(predicted_rotation).T
-        cosine = np.clip((np.trace(relative) - 1.0) * 0.5, -1.0, 1.0)
+        measured = np.asarray(measured_rotation)
+        predicted = np.asarray(predicted_rotation)
+        # trace(R_m R_p^T) 等于两矩阵对应元素的内积，不必
+        # 为两个每拍诊断分别构造临时 3x3 相对旋转矩阵。
+        trace = np.dot(measured.ravel(), predicted.ravel())
+        cosine = max(-1.0, min(1.0, (trace - 1.0) * 0.5))
         return float(np.arccos(cosine))
 
     @staticmethod
@@ -1084,37 +1219,102 @@ class PhaseDisturbancePredictor:
         )
         return self._horizon_type(nodes=nodes, intervals=intervals)
 
-    def _sample(self, values, phase):
-        lower, upper, fraction = self._phase_bracket(phase)
-        return (1.0 - fraction) * values[lower] + fraction * values[upper]
+    def _build_aligned_horizon_lut(self):
+        """把每个 2 ms 起始 bin 的完整 H 系预测窗口预先展开。"""
+        bin_count = len(self.phase_centers)
+        expected_centers = np.arange(bin_count, dtype=np.float64) / bin_count
+        step_ratio = self.control_dt / self.source_dt
+        step_bins = int(round(step_ratio))
+        if (
+            step_bins < 1
+            or not np.isclose(step_ratio, step_bins, rtol=0.0, atol=1e-10)
+            or not np.allclose(
+                self.phase_centers,
+                expected_centers,
+                rtol=0.0,
+                atol=1e-12,
+            )
+        ):
+            return None
+
+        starts = np.arange(bin_count, dtype=np.int32)[:, None]
+        node_indices = (
+            starts
+            + step_bins * np.arange(self.horizon + 1, dtype=np.int32)[None, :]
+        ) % bin_count
+        interval_indices = node_indices[:, : self.horizon]
+        node_vectors = np.stack(
+            [
+                self.node_acc_template[node_indices],
+                self.node_omega_template[node_indices],
+                self.node_alpha_template[node_indices],
+            ],
+            axis=1,
+        )
+        interval_vectors = np.stack(
+            [
+                self.interval_acc_template[interval_indices],
+                self.interval_omega_template[interval_indices],
+                self.interval_alpha_template[interval_indices],
+            ],
+            axis=1,
+        )
+
+        node_orientations = self.orientation_rotation_template[node_indices]
+        anchor_orientations = node_orientations[:, 0]
+        anchor_transpose = np.transpose(anchor_orientations, (0, 2, 1))
+        node_relative_rotations = np.einsum(
+            "bij,bnjk->bnik", anchor_transpose, node_orientations
+        )
+
+        midpoint_phases = np.mod(
+            self.phase_centers + 0.5 * self.control_dt / self.period,
+            1.0,
+        )
+        midpoint_orientations_by_start = self._quaternions_to_rotations(
+            self._sample_quaternions_many(
+                self.orientation_quaternion_template,
+                midpoint_phases,
+            )
+        )
+        midpoint_orientations = midpoint_orientations_by_start[
+            interval_indices
+        ]
+        interval_relative_rotations = np.einsum(
+            "bij,bnjk->bnik", anchor_transpose, midpoint_orientations
+        )
+        return {
+            "step_bins": step_bins,
+            "node_vectors": np.ascontiguousarray(node_vectors),
+            "interval_vectors": np.ascontiguousarray(interval_vectors),
+            "anchor_orientations": np.ascontiguousarray(
+                anchor_orientations
+            ),
+            "node_relative_rotations": np.ascontiguousarray(
+                node_relative_rotations
+            ),
+            "interval_relative_rotations": np.ascontiguousarray(
+                interval_relative_rotations
+            ),
+        }
+
+    def _aligned_start_bin(self, simulation_time):
+        """网格对齐时返回 bin；非对齐时返回 None 走连续插值。"""
+        if self._aligned_horizon_lut is None:
+            return None
+        grid_position = float(simulation_time) / self.source_dt
+        nearest = int(round(grid_position))
+        if abs(grid_position - nearest) > 1e-7:
+            return None
+        return nearest % len(self.phase_centers)
 
     def _sample_many(self, values, phases):
-        """批量周期线性插值；与逐点 ``_sample`` 数学等价。"""
+        """off-grid 回退使用的批量周期线性插值。"""
         lower, upper, fraction = self._phase_brackets_many(phases)
         return (
             (1.0 - fraction[:, None]) * values[lower]
             + fraction[:, None] * values[upper]
         )
-
-    def _sample_quaternion(self, quaternions, phase):
-        # 四元数不能直接线性插值；使用最短路径 SLERP，并处理 q/-q 二义性。
-        lower, upper, fraction = self._phase_bracket(phase)
-        q0 = np.asarray(quaternions[lower], dtype=np.float64)
-        q1 = np.asarray(quaternions[upper], dtype=np.float64)
-        dot = float(np.dot(q0, q1))
-        if dot < 0.0:
-            q1 = -q1
-            dot = -dot
-        dot = np.clip(dot, -1.0, 1.0)
-        if dot > 0.9995:
-            result = (1.0 - fraction) * q0 + fraction * q1
-            return result / np.linalg.norm(result)
-        angle = np.arccos(dot)
-        scale = np.sin(angle)
-        return (
-            np.sin((1.0 - fraction) * angle) * q0
-            + np.sin(fraction * angle) * q1
-        ) / scale
 
     def _sample_quaternions_many(self, quaternions, phases):
         """批量最短路径 SLERP，保留 q/-q 二义性处理。"""
@@ -1147,27 +1347,6 @@ class PhaseDisturbancePredictor:
                 + np.sin(weight * angle)[:, None] * q1[spherical]
             ) / scale[:, None]
         return result
-
-    def _phase_bracket(self, phase):
-        """周期插值任意相位，当前时刻无需对齐到 2 ms 模板网格。"""
-        centers = self.phase_centers
-        value = float(phase) % 1.0
-        upper_unwrapped = int(
-            np.searchsorted(centers, value, side="right")
-        )
-        lower = (upper_unwrapped - 1) % len(centers)
-        upper = upper_unwrapped % len(centers)
-        lower_phase = float(centers[lower])
-        upper_phase = float(centers[upper])
-        if upper_unwrapped == 0:
-            lower_phase -= 1.0
-        elif upper_unwrapped == len(centers):
-            upper_phase += 1.0
-        width = upper_phase - lower_phase
-        if width <= 0.0:
-            raise ValueError("模板 phase_centers 必须严格递增。")
-        fraction = (value - lower_phase) / width
-        return lower, upper, float(np.clip(fraction, 0.0, 1.0))
 
     def _phase_brackets_many(self, phases):
         """批量版周期相位区间定位。"""
@@ -1455,6 +1634,9 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
             "joint_limits": np.column_stack([q_min, q_max]),
             "joint_limit_margin": q_operating_margin,
             "solver_max_iter": int(config.get("mpc_osqp_max_iter", 400)),
+            "solver_check_termination": int(
+                config.get("mpc_osqp_check_termination", 25)
+            ),
             "solver_rho": float(config.get("mpc_osqp_rho", 0.1)),
             "solver_adaptive_rho": bool(
                 config.get("mpc_osqp_adaptive_rho", True)
@@ -2001,7 +2183,14 @@ def _copy_forward_dynamics_inputs(model, source, target):
         target.plugin_state[:] = source.plugin_state
 
 
-def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indices):
+def inverse_dynamics_feedforward(
+    model,
+    data,
+    scratch,
+    desired_qacc,
+    qvel_indices,
+    reference_qacc=None,
+):
     """计算不对抗非摩擦约束、同时保留摩擦补偿的逆动力学前馈。"""
     start_time = time.perf_counter()
     qvel_indices = np.asarray(qvel_indices, dtype=np.int32)
@@ -2015,7 +2204,15 @@ def inverse_dynamics_feedforward(model, data, scratch, desired_qacc, qvel_indice
     scratch.time = data.time
     scratch.qpos[:] = data.qpos
     scratch.qvel[:] = data.qvel
-    scratch.qacc[:] = 0.0
+    if reference_qacc is None:
+        scratch.qacc[:] = 0.0
+    else:
+        reference_qacc = np.asarray(reference_qacc, dtype=np.float64)
+        if reference_qacc.shape != (model.nv,) or not np.all(
+            np.isfinite(reference_qacc)
+        ):
+            raise ValueError("RNEA reference_qacc 维度错误或包含非有限值。")
+        scratch.qacc[:] = reference_qacc
     scratch.qacc[qvel_indices] = desired_qacc
     scratch.qfrc_applied[:] = data.qfrc_applied
     scratch.xfrc_applied[:] = data.xfrc_applied
@@ -2061,6 +2258,7 @@ def pinocchio_inverse_dynamics_feedforward(
     desired_qacc,
     qvel_indices,
     friction_breakaway_steps=5.0,
+    reference_qacc=None,
 ):
     """用 Pinocchio RNEA 生成名义前馈，接触验收仍留在 MuJoCo。
 
@@ -2081,7 +2279,10 @@ def pinocchio_inverse_dynamics_feedforward(
 
     core_start = time.perf_counter()
     tau_rnea = pinocchio_backend.compute_right_arm_rnea(
-        data.qpos, data.qvel, desired_qacc
+        data.qpos,
+        data.qvel,
+        desired_qacc,
+        reference_qacc=reference_qacc,
     )
     core_elapsed = time.perf_counter() - core_start
 
@@ -2146,6 +2347,7 @@ def cpp_pinocchio_inverse_dynamics_feedforward(
     desired_qacc,
     qvel_indices,
     friction_breakaway_steps=5.0,
+    reference_qacc=None,
 ):
     """用手写 C++ 桥接层执行 Pinocchio RNEA。
 
@@ -2173,6 +2375,7 @@ def cpp_pinocchio_inverse_dynamics_feedforward(
         friction_loss,
         model.opt.timestep,
         friction_breakaway_steps,
+        reference_qacc=reference_qacc,
     )
 
     diagnostic_start = time.perf_counter()
@@ -2747,6 +2950,7 @@ def apply_computed_torque_control(
     forward_dynamics_backend="python",
     cpp_ddq_mapper=None,
     pinocchio_friction_breakaway_steps=5.0,
+    inverse_dynamics_reference_qacc=None,
 ):
     tau_pd = np.asarray(tau_pd, dtype=np.float64)
     desired_qacc = np.asarray(desired_qacc, dtype=np.float64)
@@ -2761,6 +2965,7 @@ def apply_computed_torque_control(
             id_index_scratch.inverse_dynamics_data,
             desired_qacc,
             id_index_scratch.qvel_indices,
+            reference_qacc=inverse_dynamics_reference_qacc,
         )
     elif inverse_backend_name == "pinocchio":
         pin_result = pinocchio_inverse_dynamics_feedforward(
@@ -2770,6 +2975,7 @@ def apply_computed_torque_control(
             desired_qacc,
             id_index_scratch.qvel_indices,
             friction_breakaway_steps=pinocchio_friction_breakaway_steps,
+            reference_qacc=inverse_dynamics_reference_qacc,
         )
         inverse_result = pin_result
     elif inverse_backend_name == "cpp_pinocchio":
@@ -2780,6 +2986,7 @@ def apply_computed_torque_control(
             desired_qacc,
             id_index_scratch.qvel_indices,
             friction_breakaway_steps=pinocchio_friction_breakaway_steps,
+            reference_qacc=inverse_dynamics_reference_qacc,
         )
     elif inverse_backend_name == "pinocchio_shadow":
         # Shadow 绝不能影响主控制链：先完成 MuJoCo 名义力矩，
@@ -2790,6 +2997,7 @@ def apply_computed_torque_control(
             id_index_scratch.inverse_dynamics_data,
             desired_qacc,
             id_index_scratch.qvel_indices,
+            reference_qacc=inverse_dynamics_reference_qacc,
         )
         inverse_result.backend = "pinocchio_shadow"
         shadow_start = time.perf_counter()
@@ -2801,6 +3009,7 @@ def apply_computed_torque_control(
                 desired_qacc,
                 id_index_scratch.qvel_indices,
                 friction_breakaway_steps=pinocchio_friction_breakaway_steps,
+                reference_qacc=inverse_dynamics_reference_qacc,
             )
         except Exception as error:  # shadow 不得改变执行输出
             inverse_result.shadow_elapsed_time = (
@@ -4891,6 +5100,36 @@ def compute_lqr_tracking_diagnostics(trajectory_data, eval_start_time, eval_end_
             "attempt_count": int(np.sum(safety_fallback_attempts[eval_step_mask]))
             if safety_fallback_attempts.shape == eval_step_mask.shape
             else 0,
+            "one_rescue_pass_count": int(
+                np.count_nonzero(
+                    eval_step_mask
+                    & safety_fallback_used
+                    & (safety_fallback_attempts == 1)
+                )
+            )
+            if safety_fallback_attempts.shape == eval_step_mask.shape
+            and safety_fallback_used.shape == eval_step_mask.shape
+            else 0,
+            "two_rescue_pass_count": int(
+                np.count_nonzero(
+                    eval_step_mask
+                    & safety_fallback_used
+                    & (safety_fallback_attempts == 2)
+                )
+            )
+            if safety_fallback_attempts.shape == eval_step_mask.shape
+            and safety_fallback_used.shape == eval_step_mask.shape
+            else 0,
+            "final_unsafe_count": int(
+                np.count_nonzero(
+                    eval_step_mask
+                    & safety_fallback_used
+                    & ~safety_fallback_satisfied
+                )
+            )
+            if safety_fallback_satisfied.shape == eval_step_mask.shape
+            and safety_fallback_used.shape == eval_step_mask.shape
+            else 0,
         },
         "hold_last_safe": {
             "available_fraction": masked_fraction(
@@ -5583,6 +5822,43 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         if execution_updated.shape == (qacc.shape[0],)
         else np.ones(qacc.shape[0], dtype=bool)
     )
+    tau_selected = (
+        tau_nominal + tau_mapping_correction
+        if tau_nominal.shape == tau_mapping_correction.shape
+        else np.zeros_like(tau_nominal)
+    )
+    torque_gap_values = {}
+    if (
+        execution_mask.shape == (tau_nominal.shape[0],)
+        and ctrl.shape == tau_nominal.shape
+    ):
+        nominal_execution = tau_nominal[execution_mask]
+        selected_execution = tau_selected[execution_mask]
+        executed_execution = ctrl[execution_mask]
+
+        def torque_gap_stats(delta):
+            norms = np.linalg.norm(delta, axis=1)
+            return {
+                "per_joint_mae": np.mean(np.abs(delta), axis=0),
+                "per_joint_rms": np.sqrt(np.mean(delta ** 2, axis=0)),
+                "per_joint_abs_max": np.max(np.abs(delta), axis=0),
+                "vector_norm_rms": float(np.sqrt(np.mean(norms ** 2))),
+                "vector_norm_p95": float(np.percentile(norms, 95.0)),
+                "vector_norm_max": float(np.max(norms)),
+            }
+
+        torque_gap_values = {
+            "execution_call_count": int(np.count_nonzero(execution_mask)),
+            "nominal_to_selected": torque_gap_stats(
+                selected_execution - nominal_execution
+            ),
+            "selected_to_executed": torque_gap_stats(
+                executed_execution - selected_execution
+            ),
+            "nominal_to_executed": torque_gap_stats(
+                executed_execution - nominal_execution
+            ),
+        }
     # 只在真正重新计算 DDQ→力矩的物理步评价逆动力学与局部映射；保持上一
     # 拍力矩的步仍参与实际 ctrl/qacc/DDQ tracking，但不重复计算缓存诊断。
     if execution_mask.shape == (tau_inverse.shape[0],):
@@ -5632,6 +5908,87 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
     ddq_thr = ddq_limit - RIGHT_ARM_DDQ_SATURATION_EPS if np.isfinite(ddq_limit) else np.inf
     tau_low_last = tau_low[-1].copy() if tau_n > 0 else np.full(n, -np.inf)
     tau_high_last = tau_high[-1].copy() if tau_n > 0 else np.full(n, np.inf)
+    second_triggered_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_second_pass_triggered", []
+        ),
+        dtype=bool,
+    )
+    second_accepted_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_second_pass_accepted", []
+        ),
+        dtype=bool,
+    )
+    rescue_used_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safety_fallback_used", []
+        ),
+        dtype=bool,
+    )
+    rescue_satisfied_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safety_fallback_satisfied", []
+        ),
+        dtype=bool,
+    )
+    rescue_attempts_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safety_fallback_attempts", []
+        ),
+        dtype=np.int64,
+    )
+    hold_used_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_hold_last_safe_used", []
+        ),
+        dtype=bool,
+    )
+    branch_arrays_valid = all(
+        value.shape == execution_mask.shape
+        for value in (
+            second_triggered_all,
+            second_accepted_all,
+            rescue_used_all,
+            rescue_satisfied_all,
+            rescue_attempts_all,
+            hold_used_all,
+        )
+    )
+    execution_branch_summary = {}
+    if branch_arrays_valid:
+        executed = execution_mask
+        rescue = executed & rescue_used_all
+        hold_used = rescue & hold_used_all
+        final_safe = rescue & rescue_satisfied_all
+        execution_branch_summary = {
+            "execution_call_count": int(np.count_nonzero(executed)),
+            "first_pass_only_count": int(
+                np.count_nonzero(
+                    executed & ~second_triggered_all & ~rescue_used_all
+                )
+            ),
+            "second_pass_triggered_count": int(
+                np.count_nonzero(executed & second_triggered_all)
+            ),
+            "second_pass_accepted_count": int(
+                np.count_nonzero(executed & second_accepted_all)
+            ),
+            "rescue_used_count": int(np.count_nonzero(rescue)),
+            "one_rescue_pass_count": int(
+                np.count_nonzero(rescue & (rescue_attempts_all == 1))
+            ),
+            "two_rescue_pass_count": int(
+                np.count_nonzero(rescue & (rescue_attempts_all == 2))
+            ),
+            "rescue_succeeded_before_hold_count": int(
+                np.count_nonzero(final_safe & ~hold_used)
+            ),
+            "hold_last_succeeded_count": int(np.count_nonzero(hold_used)),
+            "final_unsafe_count": int(
+                np.count_nonzero(rescue & ~rescue_satisfied_all)
+            ),
+        }
     diagnostics = {
         "right_arm_joint_names": np.asarray(RIGHT_ARM_JOINT_NAMES),
         "right_arm_ddq_saturation_limit": np.array(ddq_limit),
@@ -5647,6 +6004,8 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         "right_arm_tau_saturation_percent": tau_frac * 100.0,
         "right_arm_tau_saturation_any_fraction": np.array(float(np.mean(np.any(tau_mask, axis=1))) if tau_n > 0 else 0.0),
         "right_arm_tau_clip_delta_abs_max": np.max(np.abs(ctrl - tau_raw), axis=0) if tau_n > 0 else np.zeros(n),
+        "right_arm_torque_gap": torque_gap_values,
+        "right_arm_execution_branches": execution_branch_summary,
     }
     for prefix, value in [
         ("right_arm_ddq_raw", ddq_raw),
@@ -6410,9 +6769,10 @@ def save_lqr_ddq_tracking_plot(
     eval_start_time,
     eval_end_time,
     controller_name="lqr",
+    plot_filename="ddq_tracking.png",
 ):
-    """绘制评估区间内五关节 ddq_des 与控制区间速度差分 ddq_real。"""
-    plot_path = os.path.join(run_dir, "ddq_tracking.png")
+    """按关节交替绘制五张 DDQ 跟踪图和五张力矩对比图。"""
+    plot_path = os.path.join(run_dir, plot_filename)
     time_values = np.asarray(trajectory_data.get("time", []), dtype=np.float64)
     valid = np.asarray(
         trajectory_data.get("right_arm_ddq_tracking_valid", []), dtype=bool
@@ -6423,6 +6783,12 @@ def save_lqr_ddq_tracking_plot(
     )
     ddq_des = np.asarray(trajectory_data.get("right_arm_ddq_des", []), dtype=np.float64)
     ddq_real = np.asarray(trajectory_data.get("right_arm_ddq_real", []), dtype=np.float64)
+    tau_nominal = np.asarray(
+        trajectory_data.get("right_arm_tau_nominal", []), dtype=np.float64
+    )
+    tau_executed = np.asarray(
+        trajectory_data.get("right_arm_ctrl", []), dtype=np.float64
+    )
     expected_shape = (len(time_values), len(RIGHT_ARM_JOINT_NAMES))
     if (
         valid.shape != time_values.shape
@@ -6483,11 +6849,44 @@ def save_lqr_ddq_tracking_plot(
         contact_count,
     )
     labels = tuple(name.removeprefix("right_").removesuffix("_joint") for name in RIGHT_ARM_JOINT_NAMES)
-    fig, axes = plt.subplots(5, 1, figsize=(15, 14), sharex=True)
+    # 每个关节独占一张加速度图和一张紧邻的力矩图。十行图保持足够高度，
+    # 避免双纵轴造成“数值可直接比较”的错觉，也避免把曲线压扁。
+    fig, axes = plt.subplots(10, 1, figsize=(15, 28), sharex=True)
     plot_time = time_values[valid]
-    for joint, (axis, label) in enumerate(zip(axes, labels)):
+    torque_valid = (time_values >= eval_start_time) & (time_values < eval_end_time)
+    torque_available = (
+        tau_nominal.shape == expected_shape
+        and tau_executed.shape == expected_shape
+        and np.any(torque_valid)
+    )
+    for joint, label in enumerate(labels):
+        axis = axes[2 * joint]
+        torque_axis = axes[2 * joint + 1]
         axis.plot(plot_time, ddq_des[valid, joint], color="tab:blue", lw=1.2, label="ddq_des")
         axis.plot(plot_time, ddq_real[valid, joint], color="tab:orange", lw=1.0, alpha=0.9, label="ddq_real")
+        if torque_available:
+            torque_axis.plot(
+                time_values[torque_valid],
+                tau_nominal[torque_valid, joint],
+                color="tab:green",
+                lw=0.9,
+                ls="--",
+                alpha=0.75,
+                label="tau_nominal (latest mapping/held)",
+            )
+            torque_axis.plot(
+                time_values[torque_valid],
+                tau_executed[torque_valid, joint],
+                color="tab:red",
+                lw=0.9,
+                ls="--",
+                alpha=0.70,
+                label="tau_executed",
+            )
+        torque_axis.axhline(0.0, color="black", lw=0.6, alpha=0.4)
+        torque_axis.grid(True, alpha=0.3)
+        torque_axis.set_ylabel("N m")
+        torque_axis.set_title(f"{label} torque")
         axis.axhline(0.0, color="black", lw=0.6, alpha=0.4)
         # 图顶短标记用于区分执行安全、接触切换、右臂接触和 MPC 恢复盒，
         # 从而避免把所有 ddq_real 尖峰都误判为关节恢复命令。
@@ -6529,7 +6928,10 @@ def save_lqr_ddq_tracking_plot(
             fontsize=9,
             bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
         )
-    axes[0].legend(loc="upper left")
+        if joint == 0:
+            axis.legend(loc="upper left")
+            if torque_available:
+                torque_axis.legend(loc="upper left")
     axes[-1].set_xlabel("time [s]")
     valid_count = max(int(np.count_nonzero(valid)), 1)
     fig.suptitle(
@@ -6541,7 +6943,7 @@ def save_lqr_ddq_tracking_plot(
         f"hold-last-safe={np.count_nonzero(valid & hold_last_safe_used) / valid_count:.1%}, "
         f"recovery-box={np.count_nonzero(valid & recovery_active) / valid_count:.1%}"
     )
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.985))
     fig.savefig(plot_path, dpi=170)
     plt.close(fig)
     return plot_path
@@ -7573,6 +7975,28 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
         eval_end_time,
         arm_controller,
     )
+    evaluation_duration = max(float(eval_end_time - eval_start_time), 0.0)
+    evaluation_cycle_count = max(
+        1,
+        int(np.floor(evaluation_duration / float(gait_period) + 1e-9)),
+    )
+    middle_cycle_start = float(
+        eval_start_time
+        + (evaluation_cycle_count // 2) * float(gait_period)
+    )
+    middle_cycle_end = min(
+        middle_cycle_start + float(gait_period),
+        float(eval_end_time),
+    )
+    lqr_ddq_tracking_middle_cycle_plot_path = save_lqr_ddq_tracking_plot(
+        run_dir,
+        buffers.trajectory_data,
+        lqr_tracking_diagnostics,
+        middle_cycle_start,
+        middle_cycle_end,
+        arm_controller,
+        plot_filename="ddq_tracking_middle_gait_cycle.png",
+    )
     lqr_tracking_preview_path = save_lqr_tracking_preview(
         run_dir,
         buffers.trajectory_data,
@@ -7596,6 +8020,9 @@ def finalize_run(run_dir, buffers, xml_path, simulation_dt, video_path, video_fr
     saved_paths["right_arm_diagnostics"] = right_arm_diagnostics_path
     saved_paths["lqr_tracking_diagnostics"] = lqr_tracking_diagnostics_path
     saved_paths["lqr_ddq_tracking_plot"] = lqr_ddq_tracking_plot_path
+    saved_paths["lqr_ddq_tracking_middle_gait_cycle_plot"] = (
+        lqr_ddq_tracking_middle_cycle_plot_path
+    )
     saved_paths["lqr_tracking_preview"] = lqr_tracking_preview_path
     saved_paths["mpc_diagnostics"] = mpc_diagnostics_path
     saved_paths["mpc_end_effector_task_prediction_plot"] = (

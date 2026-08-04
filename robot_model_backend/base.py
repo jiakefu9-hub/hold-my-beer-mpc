@@ -24,6 +24,22 @@ class PredictionKinematics:
     dJ_w_world: np.ndarray
 
 
+@dataclass(frozen=True)
+class PredictionKinematicsBatch:
+    """一个完整 MPC 窗口的连续运动学数组，第一维是预测节点。"""
+
+    ee_position_world: np.ndarray
+    ee_rotation_world: np.ndarray
+    imu_position_world: np.ndarray
+    imu_rotation_world: np.ndarray
+    J_v_world: np.ndarray
+    J_w_world: np.ndarray
+    dJ_v_world: np.ndarray
+    dJ_w_world: np.ndarray
+    wall_elapsed_time: float = 0.0
+    core_elapsed_time: float = 0.0
+
+
 class PredictionKinematicsBackend(ABC):
     """MuJoCo/Pinocchio 预测运动学的共同协议。"""
 

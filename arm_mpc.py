@@ -64,6 +64,7 @@ class ArmMPCPolicy:
         solver_eps_abs=1e-4,
         solver_eps_rel=1e-4,
         solver_max_iter=1000,
+        solver_check_termination=25,
         solver_rho=0.1,
         solver_adaptive_rho=True,
         solver_scaled_termination=False,
@@ -144,6 +145,7 @@ class ArmMPCPolicy:
         self.solver_eps_abs = float(solver_eps_abs)
         self.solver_eps_rel = float(solver_eps_rel)
         self.solver_max_iter = int(solver_max_iter)
+        self.solver_check_termination = int(solver_check_termination)
         self.solver_rho = float(solver_rho)
         self.solver_adaptive_rho = bool(solver_adaptive_rho)
         self.solver_scaled_termination = bool(solver_scaled_termination)
@@ -156,6 +158,8 @@ class ArmMPCPolicy:
             raise ValueError("OSQP 的 eps_abs / eps_rel 必须是正数。")
         if self.solver_max_iter < 1:
             raise ValueError("solver_max_iter 必须至少为 1。")
+        if self.solver_check_termination < 1:
+            raise ValueError("solver_check_termination 必须至少为 1。")
         if not np.isfinite(self.solver_rho) or self.solver_rho <= 0.0:
             raise ValueError("solver_rho 必须是正数。")
         if self.solver_time_limit is not None and self.solver_time_limit <= 0.0:
@@ -217,6 +221,7 @@ class ArmMPCPolicy:
 
         (
             terms_fn,
+            terms_batch_fn,
             disturbance_prediction,
             interval_disturbance_prediction,
         ) = self._resolve_terms_helper(helpers)
@@ -233,26 +238,44 @@ class ArmMPCPolicy:
         # 【核心代码】u_k 的加速度项使用 [t_k,t_{k+1}) 区间扰动；
         # 重力、姿态和角速度状态项仍使用节点扰动 d_k。
         terms_start = time.perf_counter()
-        step_terms = []
-        for k in range(self.horizon):
-            raw_terms = terms_fn(
-                working_states[k, : self.n],
-                working_states[k, self.n :],
-                disturbance_prediction[k],
-                interval_disturbance_prediction[k],
-                self._acceleration_cost_active or k == 0,
+        acceleration_required = np.zeros(self.horizon + 1, dtype=bool)
+        acceleration_required[: self.horizon] = self._acceleration_cost_active
+        # 即使 Qa/Qalpha 为零，k=0 仍为一步模型诊断保留加速度项。
+        acceleration_required[0] = True
+        if callable(terms_batch_fn):
+            raw_step_terms = terms_batch_fn(
+                working_states[:, : self.n],
+                working_states[:, self.n :],
+                disturbance_prediction,
+                interval_disturbance_prediction,
+                acceleration_required,
             )
-            step_terms.append(self._validate_step_terms(raw_terms, k))
-        terminal_terms = terms_fn(
-            working_states[self.horizon, : self.n],
-            working_states[self.horizon, self.n :],
-            disturbance_prediction[self.horizon],
-            None,
-            False,
-        )
-        step_terms.append(
-            self._validate_step_terms(terminal_terms, self.horizon)
-        )
+            if len(raw_step_terms) != self.horizon + 1:
+                raise ValueError(
+                    "compute_mpc_terms_batch 必须返回 horizon+1 个节点。"
+                )
+            step_terms = self._validate_step_terms_batch(raw_step_terms)
+        else:
+            step_terms = []
+            for k in range(self.horizon):
+                raw_terms = terms_fn(
+                    working_states[k, : self.n],
+                    working_states[k, self.n :],
+                    disturbance_prediction[k],
+                    interval_disturbance_prediction[k],
+                    bool(acceleration_required[k]),
+                )
+                step_terms.append(self._validate_step_terms(raw_terms, k))
+            terminal_terms = terms_fn(
+                working_states[self.horizon, : self.n],
+                working_states[self.horizon, self.n :],
+                disturbance_prediction[self.horizon],
+                None,
+                False,
+            )
+            step_terms.append(
+                self._validate_step_terms(terminal_terms, self.horizon)
+            )
         terms_time = time.perf_counter() - terms_start
 
         # 【核心代码】组装各阶段二次代价；这里没有 torso-relative 位置项。
@@ -772,6 +795,7 @@ class ArmMPCPolicy:
                     "eps_abs": self.solver_eps_abs,
                     "eps_rel": self.solver_eps_rel,
                     "max_iter": self.solver_max_iter,
+                    "check_termination": self.solver_check_termination,
                     "rho": self.solver_rho,
                     "adaptive_rho": self.solver_adaptive_rho,
                     "scaled_termination": self.solver_scaled_termination,
@@ -928,6 +952,7 @@ class ArmMPCPolicy:
     def _resolve_terms_helper(self, helpers):
         if isinstance(helpers, dict):
             terms_fn = helpers.get("compute_mpc_terms")
+            terms_batch_fn = helpers.get("compute_mpc_terms_batch")
             disturbance = helpers.get("disturbance")
             prediction = helpers.get("disturbance_prediction")
             interval_prediction = helpers.get(
@@ -935,6 +960,11 @@ class ArmMPCPolicy:
             )
         else:
             terms_fn = None if helpers is None else getattr(helpers, "compute_mpc_terms", None)
+            terms_batch_fn = (
+                None
+                if helpers is None
+                else getattr(helpers, "compute_mpc_terms_batch", None)
+            )
             disturbance = None if helpers is None else getattr(helpers, "disturbance", None)
             prediction = (
                 None
@@ -970,7 +1000,7 @@ class ArmMPCPolicy:
                     "interval_disturbance_prediction 必须包含 horizon "
                     f"个控制区间，当前为 {len(interval_prediction)}。"
                 )
-        return terms_fn, prediction, interval_prediction
+        return terms_fn, terms_batch_fn, prediction, interval_prediction
 
     @staticmethod
     def _disturbance_diagnostics(prediction):
@@ -1004,19 +1034,7 @@ class ArmMPCPolicy:
     def _validate_step_terms(self, terms, step):
         if not isinstance(terms, dict):
             raise ValueError(f"第 {step} 步 compute_mpc_terms 必须返回 dict。")
-        expected_shapes = {
-            "D_acc": (3,),
-            "C_acc": (3, self.n),
-            "B_acc": (3, self.nu),
-            "D_alpha": (3,),
-            "C_alpha": (3, self.n),
-            "B_alpha": (3, self.nu),
-            "D_omega": (3,),
-            "C_omega": (3, self.n),
-            "G_g": (2, self.nx),
-            "d_g": (2,),
-            "gravity_error": (2,),
-        }
+        expected_shapes = self._step_term_shapes()
         validated = {}
         for name, expected_shape in expected_shapes.items():
             if name not in terms:
@@ -1040,6 +1058,59 @@ class ArmMPCPolicy:
                         f"第 {step} 步 {name} 包含 NaN 或 Inf。"
                     )
         return validated
+
+    def _validate_step_terms_batch(self, step_terms):
+        """一次校验整窗口任务项，避免每节点单独 concatenate/isfinite。"""
+        expected_shapes = self._step_term_shapes()
+        validated_terms = []
+        flat_values = []
+        for step, terms in enumerate(step_terms):
+            if not isinstance(terms, dict):
+                raise ValueError(
+                    f"第 {step} 步 compute_mpc_terms_batch 必须返回 dict。"
+                )
+            validated = {}
+            for name, expected_shape in expected_shapes.items():
+                if name not in terms:
+                    raise ValueError(
+                        f"第 {step} 步 compute_mpc_terms_batch 缺少字段 {name}。"
+                    )
+                value = np.asarray(terms[name], dtype=np.float64)
+                if value.shape != expected_shape:
+                    raise ValueError(
+                        f"第 {step} 步 {name} 应为 shape={expected_shape}，"
+                        f"当前为 {value.shape}。"
+                    )
+                validated[name] = value
+                flat_values.append(value.reshape(-1))
+            validated_terms.append(validated)
+
+        # 【半核心提速】整个窗口只分配和扫描一次连续检查数组；若失败，
+        # 再逐字段定位以保留原有报错质量。
+        all_values = np.concatenate(flat_values)
+        if not np.all(np.isfinite(all_values)):
+            for step, terms in enumerate(validated_terms):
+                for name, value in terms.items():
+                    if not np.all(np.isfinite(value)):
+                        raise ValueError(
+                            f"第 {step} 步 {name} 包含 NaN 或 Inf。"
+                        )
+        return validated_terms
+
+    def _step_term_shapes(self):
+        return {
+            "D_acc": (3,),
+            "C_acc": (3, self.n),
+            "B_acc": (3, self.nu),
+            "D_alpha": (3,),
+            "C_alpha": (3, self.n),
+            "B_alpha": (3, self.nu),
+            "D_omega": (3,),
+            "C_omega": (3, self.n),
+            "G_g": (2, self.nx),
+            "d_g": (2,),
+            "gravity_error": (2,),
+        }
 
     def _build_one_step_diagnostics(
         self,

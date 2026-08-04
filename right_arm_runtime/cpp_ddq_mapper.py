@@ -172,6 +172,59 @@ class CppDdqTorqueMapper:
         self._library.ddq_torque_mapper_default_params(
             ctypes.byref(self._params)
         )
+        # 【非核心热路径缓存】MuJoCo MjData 的底层数组在 data 生命周期内
+        # 地址稳定；保留 ndarray owner 和 ctypes 指针，可避免每拍重复创建
+        # 六组 view/pointer。若调用方换了 MjData，则在 compute 中自动重绑。
+        self._bound_data = None
+        self._bound_state_arrays = None
+        self._ctrl_owner = None
+        self._state = _State()
+        self._state_pointer = ctypes.pointer(self._state)
+        self._request_pointer = ctypes.pointer(self._request)
+        self._params_pointer = ctypes.pointer(self._params)
+        self._output_pointer = ctypes.pointer(self._output)
+        self._params_key = None
+        self._request_views = {
+            name: np.ctypeslib.as_array(getattr(self._request, name))
+            for name in (
+                "desired_qacc",
+                "tau_nominal",
+                "previous_executed_tau",
+            )
+        }
+        self._output_vector_views = {
+            name: np.ctypeslib.as_array(getattr(self._output, name))
+            for name in (
+                "tau_cmd",
+                "tau_nominal",
+                "tau_correction_raw",
+                "tau_correction",
+                "tau_cmd_raw",
+                "qacc_baseline",
+                "qacc_predicted",
+                "qacc_prediction_error",
+                "qacc_validated",
+                "qacc_validation_error",
+                "qacc_linearization_error",
+                "singular_values",
+                "first_pass_qacc_validated",
+                "first_pass_qacc_validation_error",
+                "second_pass_tau_correction_raw",
+                "second_pass_tau_correction",
+                "second_pass_qacc_predicted",
+                "second_pass_qacc_validated",
+                "second_pass_qacc_validation_error",
+                "second_pass_qacc_linearization_error",
+                "second_pass_singular_values",
+                "hold_last_safe_qacc",
+            )
+        }
+        self._output_matrix_views = {
+            name: np.ctypeslib.as_array(getattr(self._output, name)).reshape(
+                ARM_DOF, ARM_DOF
+            )
+            for name in ("gain_matrix", "second_pass_gain_matrix")
+        }
 
     def _configure_signatures(self):
         library = self._library
@@ -220,21 +273,77 @@ class CppDdqTorqueMapper:
     def _pointer(values):
         return values.ctypes.data_as(DOUBLE_POINTER)
 
-    @staticmethod
-    def _copy_to_c(destination, source):
-        np.copyto(np.ctypeslib.as_array(destination), source)
-
-    @staticmethod
-    def _vector(source):
-        return np.ctypeslib.as_array(source).copy()
-
-    @staticmethod
-    def _matrix(source):
-        return np.ctypeslib.as_array(source).reshape(ARM_DOF, ARM_DOF).copy()
-
     def _error_text(self, prefix):
         detail = self._error.value.decode("utf-8", errors="replace")
         return f"{prefix}: {detail}" if detail else prefix
+
+    def _bind_state_arrays(self, data):
+        """把稳定的 MjData 数组绑定到 C ABI；借用仅持续到 data 被替换。"""
+        qpos = self._array(data.qpos, (self.nq,), "qpos")
+        qvel = self._array(data.qvel, (self.nv,), "qvel")
+        warmstart = self._array(
+            data.qacc_warmstart, (self.nv,), "qacc_warmstart"
+        )
+        qfrc = self._array(data.qfrc_applied, (self.nv,), "qfrc_applied")
+        xfrc = self._array(
+            data.xfrc_applied, (self.nbody, 6), "xfrc_applied"
+        ).reshape(-1)
+        self._bound_data = data
+        # ndarray owner 必须与 ctypes pointer 一起保活；不能只缓存裸指针。
+        self._bound_state_arrays = (qpos, qvel, warmstart, qfrc, xfrc)
+        state = self._state
+        state.qpos = self._pointer(qpos)
+        state.qpos_count = qpos.size
+        state.qvel = self._pointer(qvel)
+        state.qvel_count = qvel.size
+        state.qacc_warmstart = self._pointer(warmstart)
+        state.qacc_warmstart_count = warmstart.size
+        state.qfrc_applied = self._pointer(qfrc)
+        state.qfrc_applied_count = qfrc.size
+        state.xfrc_applied = self._pointer(xfrc)
+        state.xfrc_applied_count = xfrc.size
+
+    def _update_params(
+        self,
+        *,
+        perturbation,
+        regularization,
+        validation_scales,
+        second_pass_error_threshold,
+        max_joint_error,
+        max_abs_qacc,
+        enable_second_pass,
+        max_safety_rescue_passes,
+    ):
+        """配置通常整场不变，只在数值真正变化时写 ctypes 结构。"""
+        scales = tuple(float(value) for value in validation_scales)
+        if not 0 < len(scales) <= MAX_SCALES:
+            raise ValueError("validation_scales 数量必须在 1 到 8 之间。")
+        key = (
+            float(perturbation),
+            float(regularization),
+            scales,
+            float(second_pass_error_threshold),
+            float(max_joint_error),
+            float(max_abs_qacc),
+            bool(enable_second_pass),
+            int(max_safety_rescue_passes),
+        )
+        if key == self._params_key:
+            return
+        self._params.perturbation = key[0]
+        self._params.regularization = key[1]
+        self._params.second_pass_error_threshold = key[3]
+        self._params.max_joint_error = key[4]
+        self._params.max_abs_qacc = key[5]
+        self._params.enable_second_pass = int(key[6])
+        self._params.max_safety_rescue_passes = key[7]
+        self._params.validation_scale_count = len(scales)
+        for index in range(MAX_SCALES):
+            self._params.validation_scales[index] = (
+                scales[index] if index < len(scales) else 0.0
+            )
+        self._params_key = key
 
     def compute(
         self,
@@ -255,75 +364,45 @@ class CppDdqTorqueMapper:
     ):
         """【核心桥接】一次完成完整局部映射、验收与安全分支。"""
         wall_start = time.perf_counter_ns()
-        qpos = self._array(data.qpos, (self.nq,), "qpos")
-        qvel = self._array(data.qvel, (self.nv,), "qvel")
+        if data is not self._bound_data:
+            self._bind_state_arrays(data)
         ctrl = self._array(fixed_ctrl, (self.nu,), "fixed_ctrl")
-        warmstart = self._array(
-            data.qacc_warmstart, (self.nv,), "qacc_warmstart"
-        )
-        qfrc = self._array(data.qfrc_applied, (self.nv,), "qfrc_applied")
-        xfrc = self._array(
-            data.xfrc_applied, (self.nbody, 6), "xfrc_applied"
-        ).reshape(-1)
-        state = _State(
-            float(data.time),
-            self._pointer(qpos),
-            qpos.size,
-            self._pointer(qvel),
-            qvel.size,
-            self._pointer(ctrl),
-            ctrl.size,
-            self._pointer(warmstart),
-            warmstart.size,
-            self._pointer(qfrc),
-            qfrc.size,
-            self._pointer(xfrc),
-            xfrc.size,
-        )
+        # fixed_ctrl 在主循环中每拍新建，因此只借用到本次同步 C 调用结束；
+        # 不把输出改为借用 view，避免下一拍覆盖历史诊断。
+        self._ctrl_owner = ctrl
+        self._state.time = float(data.time)
+        self._state.ctrl = self._pointer(ctrl)
+        self._state.ctrl_count = ctrl.size
         desired = self._array(desired_qacc, (ARM_DOF,), "desired_qacc")
         nominal = self._array(tau_nominal, (ARM_DOF,), "tau_nominal")
-        previous = (
-            np.zeros(ARM_DOF, dtype=np.float64)
-            if previous_executed_tau is None
-            else self._array(
+        np.copyto(self._request_views["desired_qacc"], desired)
+        np.copyto(self._request_views["tau_nominal"], nominal)
+        has_previous = previous_executed_tau is not None
+        self._request.has_previous_executed_tau = int(has_previous)
+        if has_previous:
+            previous = self._array(
                 previous_executed_tau,
                 (ARM_DOF,),
                 "previous_executed_tau",
             )
-        )
-        self._copy_to_c(self._request.desired_qacc, desired)
-        self._copy_to_c(self._request.tau_nominal, nominal)
-        self._request.has_previous_executed_tau = int(
-            previous_executed_tau is not None
-        )
-        self._copy_to_c(self._request.previous_executed_tau, previous)
-
-        scales = tuple(float(value) for value in validation_scales)
-        if not 0 < len(scales) <= MAX_SCALES:
-            raise ValueError("validation_scales 数量必须在 1 到 8 之间。")
-        self._params.perturbation = float(perturbation)
-        self._params.regularization = float(regularization)
-        self._params.validation_scale_count = len(scales)
-        for index in range(MAX_SCALES):
-            self._params.validation_scales[index] = (
-                scales[index] if index < len(scales) else 0.0
-            )
-        self._params.second_pass_error_threshold = float(
-            second_pass_error_threshold
-        )
-        self._params.max_joint_error = float(max_joint_error)
-        self._params.max_abs_qacc = float(max_abs_qacc)
-        self._params.enable_second_pass = int(enable_second_pass)
-        self._params.max_safety_rescue_passes = int(
-            max_safety_rescue_passes
+            np.copyto(self._request_views["previous_executed_tau"], previous)
+        self._update_params(
+            perturbation=perturbation,
+            regularization=regularization,
+            validation_scales=validation_scales,
+            second_pass_error_threshold=second_pass_error_threshold,
+            max_joint_error=max_joint_error,
+            max_abs_qacc=max_abs_qacc,
+            enable_second_pass=enable_second_pass,
+            max_safety_rescue_passes=max_safety_rescue_passes,
         )
         self._error[0] = 0
         status = self._library.ddq_torque_mapper_compute(
             self._handle,
-            ctypes.byref(state),
-            ctypes.byref(self._request),
-            ctypes.byref(self._params),
-            ctypes.byref(self._output),
+            self._state_pointer,
+            self._request_pointer,
+            self._params_pointer,
+            self._output_pointer,
             self._error,
             len(self._error),
         )
@@ -338,35 +417,12 @@ class CppDdqTorqueMapper:
 
         output = self._output
         values = {
-            name: self._vector(getattr(output, name))
-            for name in (
-                "tau_cmd",
-                "tau_nominal",
-                "tau_correction_raw",
-                "tau_correction",
-                "tau_cmd_raw",
-                "qacc_baseline",
-                "qacc_predicted",
-                "qacc_prediction_error",
-                "qacc_validated",
-                "qacc_validation_error",
-                "qacc_linearization_error",
-                "singular_values",
-                "first_pass_qacc_validated",
-                "first_pass_qacc_validation_error",
-                "second_pass_tau_correction_raw",
-                "second_pass_tau_correction",
-                "second_pass_qacc_predicted",
-                "second_pass_qacc_validated",
-                "second_pass_qacc_validation_error",
-                "second_pass_qacc_linearization_error",
-                "second_pass_singular_values",
-                "hold_last_safe_qacc",
-            )
+            name: view.copy()
+            for name, view in self._output_vector_views.items()
         }
-        values["gain_matrix"] = self._matrix(output.gain_matrix)
-        values["second_pass_gain_matrix"] = self._matrix(
-            output.second_pass_gain_matrix
+        values.update(
+            (name, view.copy())
+            for name, view in self._output_matrix_views.items()
         )
         for name in (
             "condition_number",
@@ -426,6 +482,9 @@ class CppDdqTorqueMapper:
         if getattr(self, "_handle", None):
             self._library.ddq_torque_mapper_destroy(self._handle)
             self._handle = None
+        self._bound_data = None
+        self._bound_state_arrays = None
+        self._ctrl_owner = None
 
     def __del__(self):
         self.close()
