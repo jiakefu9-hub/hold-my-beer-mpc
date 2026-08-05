@@ -1,0 +1,240 @@
+# 
+policy_path: "/home/fjk/g1_ws/hold-my-beer-mpc/policy/motion.pt"
+xml_path: "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml"
+
+# Simulation time step
+simulation_dt: 0.002
+# Locomotion policy update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
+control_decimation: 10
+# Arm controller period = simulation_dt * arm_control_decimation.
+arm_control_decimation: 3
+# 右臂控制方式："pid"、"lqr" 或 "mpc"
+arm_controller: mpc
+
+# 仿真显示与实验长度。命令行 --headless/--smoke-test 会覆盖这些值。
+viewer_enabled: true
+record_video: true
+warmup_cycles: 3
+evaluation_cycles: 8
+cooldown_cycles: 2
+# 性能报告只统计完全落在 evaluation 内的完整 6 ms 控制区间。
+performance_measure_evaluation_only: true
+# 进入主控制循环前完成一次回收，随后暂停 Python 循环垃圾回收；
+# NumPy/Python 对象仍按引用计数正常释放，结束仿真后重新启用。
+performance_disable_gc_during_control: true
+
+# ==============================
+# PID 参数
+# ==============================
+pid_kp_pose: [1.20, 1.20]
+pid_kd_pose: [1.20, 1.20]
+pid_ki_pose: [0.0, 0.0]
+pid_posture_gain: [1.15, 1.15, 2.10, 1.15, 0.95]
+pid_finite_diff_eps: 0.0001
+pid_damping: 0.15
+pid_integral_limit: 0.20
+pid_max_dq: 0.48
+pid_de_g_alpha: 0.07
+
+# ==============================
+# LQR 参数
+# ==============================
+lqr_horizon: 12
+# LQR cost tuning. Position is measured in the torso IMU frame.
+# End-effector linear/angular acceleration weights.
+lqr_q_ee_acc: 1.0
+lqr_q_ee_alpha: 0.075
+lqr_q_position: 60.0
+lqr_q_gravity: 30.0
+# Joint order: shoulder pitch, shoulder roll, shoulder yaw, elbow, wrist roll.
+# Keep the arm near the nominal carrying pose. The distal joints remain less constrained
+# than shoulder pitch/roll, but no joint is left nearly free to accumulate pose drift.
+lqr_q_posture: [40.0, 50.0, 30.0, 10.0, 1.0]
+lqr_q_vel: 0.02
+lqr_r_ddq: 0.25
+# q_ref/dq_ref still use the physical joint limits and this velocity limit.
+lqr_max_dq: 1.0
+# These ddq safety parameters are retained for later comparison but are currently bypassed.
+lqr_max_ddq: 3.0
+lqr_ddq_rate_limit: 350.0
+lqr_ddq_smoothing_alpha: 0.45
+lqr_joint_limit_margin: 0.25
+lqr_joint_limit_stiffness: 8.0
+lqr_joint_limit_damping: 2.0
+# LQR/MPC 共用的 base 测量保护。
+ddq_torso_acc_filter_alpha: 0.20
+ddq_torso_alpha_filter_alpha: 0.20
+ddq_torso_acc_limit: 30.0
+ddq_torso_alpha_limit: 40.0
+
+# ==============================
+# MPC 参数
+# ==============================
+mpc_horizon: 9
+# MPC 预测窗口运动学后端：mujoco / pinocchio / cpp_pinocchio。
+# 最终路径一次 C ABI 调用批量计算整个窗口的位姿、J 和 Jdot；它与
+# RNEA 复用同一个 C++ Pinocchio handle，不参与仿真接触求解。
+mpc_prediction_kinematics_backend: cpp_pinocchio
+# 当前保留低 DDQ 权重下的端平基线；Qa=1.0、Qalpha=0.075
+# 的恢复实验会明显增加 QP 回退、DDQ 触顶和端平误差，因此不作为默认值。
+mpc_q_ee_acc: 0.0
+mpc_q_ee_alpha: 0.0
+# 世界系末端角速度权重；上扫实验中 8.0 明显优于 2.0，10.0 及以上会进入约束失稳区。
+mpc_q_ee_omega: 8.0
+# 六轮实验证明强行偏置 x/y 会增加关节盒回退，最终保留等权二维重力误差。
+mpc_q_gravity: [30.0, 30.0]
+# 五个关节趋近零位的正则权重；双层硬边界已经提供肩部运行裕量，
+# 因此比上一轮略微降低正则，避免过多挤占加速度和重力任务。
+mpc_q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
+# 与 Q_omega=8 配合时，0.08 比 0.02/0.04 更稳，且没有 DDQ 或力矩超限。
+mpc_q_vel: 0.08
+# 0.001 虽进一步改善端平，但实际 DDQ 有少量超过 8；保留完全不超限的 0.0025。
+mpc_r_ddq: 0.0025
+mpc_terminal_scale: 2.0
+# 外层安全盒，顺序：shoulder pitch、roll、yaw、elbow、wrist roll。
+mpc_q_min_deg: [-5.0, -5.0, -20.0, -40.0, -40.0]
+mpc_q_max_deg: [5.0, 3.0, 5.0, 40.0, 40.0]
+# 从安全盒两侧向内收缩的正常运行裕量：pitch 正常为 ±4°；
+# roll 正常为 [-4°, 2°]，外层 [-5°, 3°] 给执行误差和逐步恢复留余量。
+mpc_q_operating_margin_deg: [1.0, 1.0, 0.0, 0.0, 0.0]
+mpc_max_dq: 1.0
+mpc_max_ddq: 8.0
+mpc_qp_regularization: 0.000001
+mpc_osqp_max_iter: 400
+# 10 次检查间隔虽然少约 0.05 ms，但闭环中增加了 QP 回退和约束违反；
+# 最终配置保留 OSQP 默认的 25，不以很小的耗时收益交换求解稳健性。
+mpc_osqp_check_termination: 25
+mpc_osqp_eps_abs: 0.001
+mpc_osqp_eps_rel: 0.001
+# OSQP 数值参数也保留为配置项；当前完整时变 QP 使用自适应 rho。
+mpc_osqp_rho: 0.1
+mpc_osqp_adaptive_rho: true
+mpc_osqp_scaled_termination: false
+mpc_osqp_polishing: false
+# QP 失败时采用温和的“回中 + 速度制动”，常规回退 DDQ 不超过上限的一半；
+# 只有下一拍将越过外层安全盒时，硬安全裁剪才允许更强的向内加速度。
+mpc_failure_braking_gain: 4.0
+mpc_failure_posture_gain: 4.0
+mpc_failure_max_ddq_scale: 0.5
+# H 系步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
+# 开启后第一完整周期只用于计算 H，约 0.8 s 后前馈开始生效。
+mpc_disturbance_feedforward_enabled: true
+# 2 ms 相位网格上的未来控制区间模板；u_k 与 interval[k] 配对。
+mpc_disturbance_template_dir: disturbance_model_new_heading/templates_heading_interval
+# raw、half_smoothed、fully_smoothed；本轮闭环对照选择 raw。
+mpc_disturbance_template: raw
+# 闭环 A/B 表明关闭后综合任务代价变差，因此保留长期模板修正量。
+mpc_disturbance_slow_bias_enabled: true
+# 快速周期量由模板负责，持续测量差通过该时间常数缓慢形成长期修正。
+mpc_disturbance_slow_bias_time_constant: 0.4
+# MPC 独立低延迟通道，不改变 LQR 继续使用的 ddq_torso_* 滤波参数。
+mpc_torso_acc_filter_alpha: 0.50
+mpc_torso_alpha_filter_alpha: 0.50
+# 状态采样到整份 q_ref/dq_ref/ddq_des 命令在 2 ms 执行拍激活的延迟。
+# 0.0 是现有无延迟基线；A/B 实验优先用命令行覆盖，不改控制权重。
+mpc_command_delay_ms: 0.0
+
+# ==============================
+# DDQ 到力矩的共用执行层
+# ==============================
+# 名义逆动力学：mujoco / pinocchio_shadow / pinocchio / cpp_pinocchio。
+# shadow 仍执行 MuJoCo 力矩，只用于逐拍对比；Pinocchio active 后，
+# MuJoCo 的局部映射、候选验收、第二轮和安全回退仍全部保留。
+# 最终在线路径使用窄 C ABI 调用 C++ Pinocchio；Python pinocchio 仍是回归基准。
+ddq_nominal_inverse_dynamics_backend: cpp_pinocchio
+# 名义 RNEA 中右臂以外的参考加速度。zero 保持旧假设；measured 使用
+# 本拍开始时因果可用的上一 2 ms MuJoCo qacc，再由 blend 缩放。右臂
+# 五维无论哪种模式都会被 MPC/LQR 的 ddq_des 覆盖。
+ddq_rnea_other_qacc_mode: measured
+ddq_rnea_other_qacc_blend: 0.75
+# filtered/trend 仅作为后续实验入口；当前三轮实验不启用趋势外推。
+ddq_rnea_other_qacc_filter_alpha: 0.5
+ddq_rnea_other_qacc_trend_window: 4
+ddq_rnea_other_qacc_trend_lead_steps: 1.0
+ddq_rnea_other_qacc_limit: 100.0
+# 仿真接触/浮动基局部映射与候选验收：python / cpp。两者使用同一
+# MuJoCo 模型和算法；cpp 减少 Python 循环及多次 FFI 开销。
+# 该后端是仿真接触验收，不是真机可直接复用的接触求解器。
+ddq_forward_dynamics_backend: cpp
+# 低速即将反向时，用未来若干个 2 ms 物理步的速度变化判断干摩擦方向；
+# 对上一轮完整轨迹，5 步把 Pin/MuJoCo 名义力矩差的 5 维 RMS
+# 从约 0.110 Nm 降到 0.028 Nm。
+ddq_pinocchio_friction_breakaway_steps: 5.0
+# 一轮包含：1 次完整基线前向动力学、5 次力矩扰动，
+# 候选按局部模型排序后用 mj_forwardSkip 按需验收，正常 2 次、最多 4 次。
+ddq_execution_perturbation: 0.1
+ddq_execution_regularization: 5.0
+ddq_execution_second_pass_error_threshold: 5.0
+ddq_execution_max_joint_error: 4.0
+# MPC/LQR 期望 ddq 仍各自受优化器的 ±8 上限约束；执行层给真实前向
+# 动力学候选保留 2 rad/s^2 余量，避免 8.0001 这类边缘误差触发救援。
+ddq_execution_max_abs_qacc: 10.0
+# 仿真阶段两种优化控制器都启用第二轮重线性化和最多两轮安全救援；
+# 仅在预测瞬时 qacc 超限或第一轮残差较大时触发，不是每拍固定执行。
+lqr_execution_enable_second_pass: true
+lqr_execution_safety_rescue_passes: 2
+mpc_execution_enable_second_pass: true
+mpc_execution_safety_rescue_passes: 2
+# DDQ→力矩更新频率：every_step=每个 2 ms 物理步；
+# twice_per_interval=每个 6 ms 区间在 0/4 ms 各验收一次；
+# policy_update=只在 0 ms 验收一次。未验收的中间拍保持前馈，
+# C++ 执行器仍用最新 q/dq 每 2 ms 更新 PD。
+mpc_ddq_execution_mode: twice_per_interval
+# 安全救援仍失败时，用当前状态完整验收上一仿真步实际执行的右臂力矩；
+# 只有验收后的瞬时 qacc 安全才保持该力矩。
+mpc_execution_hold_last_safe: true
+
+# ==============================
+# C++ 2 ms 右臂安全执行器
+# ==============================
+# LQR/MPC 默认把完整 qpos/qvel、整机参考 qacc、当前非右臂力矩、
+# q_ref/dq_ref/ddq_des 和时间戳交给独立 C++ external-step 进程；进程依次
+# 完成 RNEA、MuJoCo 候选验收和最终执行器，再把 final_tau 返回主仿真。
+# sync 保留为冻结回归基线，shadow 会同拍运行两条路径并要求逐项一致。
+# PID 没有 ddq_des，因此即使这里是 process，也自动继续使用同步 C++ PD。
+right_arm_execution_runtime: process
+# cpp 在每个 2 ms 物理拍读取最新 q/dq，合成一次 PD，并负责参考/力矩
+# 限幅、命令/状态超时和 NaN 回退；python 仅用于回归对照。
+right_arm_executor_backend: cpp
+# 仿真与“主机算完整力矩”真机模式使用 host_full_torque；此时发送给
+# 电机的 kp/kd 必须为 0。device_pd 模式则只发送纯前馈和 PD 参数。
+right_arm_executor_output_semantics: host_full_torque
+right_arm_executor_command_timeout_ms: 30.0
+right_arm_executor_state_timeout_ms: 10.0
+right_arm_executor_timeout_damping: [5.0, 5.0, 3.0, 2.0, 1.0]
+right_arm_executor_dq_ref_abs_max: [1.0, 1.0, 1.0, 1.0, 1.0]
+
+kps: [100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40]
+kds: [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2]
+
+default_angles: [-0.1,  0.0,  0.0,  0.3, -0.2, 0.0, 
+                  -0.1,  0.0,  0.0,  0.3, -0.2, 0.0]
+
+# 真机安全基线 (Sim2Real Baseline)
+# 根据 G1 极限调整：适当降低 KP (防力矩越界)，大幅提高 KD (强力消除腰部共振)
+# 顺序: waist(1), left_arm(5), right_arm(5)
+arm_waist_kps: [100, 
+                80, 80, 60, 80, 30,
+                80, 80, 60, 80, 30]
+arm_waist_kds: [15,
+                5, 5, 3, 2, 1,
+                5, 5, 3, 2, 1]
+arm_waist_target: [0,
+                   0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0]
+
+ang_vel_scale: 0.25
+dof_pos_scale: 1.0
+dof_vel_scale: 0.05
+action_scale: 0.25
+cmd_scale: [2.0, 2.0, 0.25]
+num_actions: 12
+num_obs: 47
+
+# 世界系航向闭环：cmd_init[2] 作为前馈偏置，误差使用一个完整步态周期的均值。
+heading_control_enabled: true
+heading_filter_cycles: 1.0
+heading_kp: 0.6
+heading_kd: 0.1
+heading_max_yaw_rate: 0.25
+cmd_init: [0.5, 0, 0.0127]
