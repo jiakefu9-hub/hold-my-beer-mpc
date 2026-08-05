@@ -350,6 +350,7 @@ def main():
 
     repo_dir = pathlib.Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(repo_dir))
+    from right_arm_runtime.cpp_ddq_mapper import CppDdqTorqueMapper
     from sim_support import local_forward_dynamics_torque_mapping
 
     model = mujoco.MjModel.from_xml_path(str(args.scene))
@@ -366,7 +367,9 @@ def main():
     rng = np.random.default_rng(args.seed)
     cases = [make_case(model, rng, index) for index in range(args.samples)]
     native = NativeMapper(args.library, args.scene)
+    runtime = CppDdqTorqueMapper(args.scene, args.library)
     max_errors = {}
+    runtime_max_errors = {}
     branch_fields = (
         "validation_attempts",
         "validation_improved",
@@ -405,6 +408,14 @@ def main():
                 local_forward_dynamics_torque_mapping,
             )
             cpp = native.compute(case)
+            runtime_result = runtime.compute(
+                data=case.data,
+                fixed_ctrl=case.data.ctrl,
+                desired_qacc=case.desired_qacc,
+                tau_nominal=case.tau_nominal,
+                previous_executed_tau=case.previous_tau,
+                **case.params,
+            )
             array_pairs = {
                 "tau_cmd": (native_array(cpp.tau_cmd), python_tau),
                 "tau_nominal": (native_array(cpp.tau_nominal), python_result.tau_nominal),
@@ -498,11 +509,27 @@ def main():
             }
             for label, pair in array_pairs.items():
                 check_close(label, *pair, max_errors)
+                check_close(
+                    label,
+                    runtime_result.values[label],
+                    pair[0],
+                    runtime_max_errors,
+                    atol=0.0,
+                    rtol=0.0,
+                )
             check_close(
                 "condition_number",
                 cpp.condition_number,
                 python_result.condition_number,
                 max_errors,
+            )
+            check_close(
+                "condition_number",
+                runtime_result.values["condition_number"],
+                cpp.condition_number,
+                runtime_max_errors,
+                atol=0.0,
+                rtol=0.0,
             )
             check_close(
                 "validation_scale",
@@ -511,16 +538,40 @@ def main():
                 max_errors,
             )
             check_close(
+                "validation_scale",
+                runtime_result.values["validation_scale"],
+                cpp.validation_scale,
+                runtime_max_errors,
+                atol=0.0,
+                rtol=0.0,
+            )
+            check_close(
                 "second_pass_validation_scale",
                 cpp.second_pass_validation_scale,
                 python_result.second_pass_validation_scale,
                 max_errors,
             )
             check_close(
+                "second_pass_validation_scale",
+                runtime_result.values["second_pass_validation_scale"],
+                cpp.second_pass_validation_scale,
+                runtime_max_errors,
+                atol=0.0,
+                rtol=0.0,
+            )
+            check_close(
                 "second_pass_condition_number",
                 cpp.second_pass_condition_number,
                 python_result.second_pass_condition_number,
                 max_errors,
+            )
+            check_close(
+                "second_pass_condition_number",
+                runtime_result.values["second_pass_condition_number"],
+                cpp.second_pass_condition_number,
+                runtime_max_errors,
+                atol=0.0,
+                rtol=0.0,
             )
             for field in branch_fields:
                 cpp_value = int(getattr(cpp, field))
@@ -531,8 +582,22 @@ def main():
                     raise AssertionError(
                         f"sample={index} 分支字段 {field}: C++={cpp_value}, Python={python_value}"
                     )
+                runtime_value = int(runtime_result.values[field])
+                if runtime_value != cpp_value:
+                    raise AssertionError(
+                        f"sample={index} 生产适配层分支 {field}: "
+                        f"runtime={runtime_value}, C ABI={cpp_value}"
+                    )
             if cpp.full_forward_calls != 1 or cpp.forward_skip_calls < 5:
                 raise AssertionError("MuJoCo 调用计数不符合一次基线加五次扰动的下界。")
+            if (
+                runtime_result.full_forward_calls != cpp.full_forward_calls
+                or runtime_result.forward_skip_calls != cpp.forward_skip_calls
+                or runtime_result.validated_pass_count != cpp.validated_pass_count
+            ):
+                raise AssertionError(
+                    f"sample={index} 生产适配层 MuJoCo 调用计数与 C ABI 不一致。"
+                )
             coverage["second"] += int(bool(cpp.second_pass_triggered))
             coverage["rescue"] += int(bool(cpp.safety_fallback_used))
             coverage["hold_attempt"] += int(bool(cpp.hold_last_safe_available))
@@ -547,11 +612,17 @@ def main():
             f"second={coverage['second']}, rescue={coverage['rescue']}, "
             f"hold_attempt={coverage['hold_attempt']}, hold_used={coverage['hold_used']}"
         )
+        print(
+            "  生产 ctypes 适配层与原始 C ABI: "
+            f"max_abs={max(runtime_max_errors.values(), default=0.0):.3e}"
+        )
 
         benchmark_case = cases[1 if len(cases) > 1 else 0]
         python_times = []
         native_times = []
         native_core_times = []
+        runtime_times = []
+        runtime_core_times = []
         for _ in range(args.repeats):
             start = time.perf_counter()
             python_compute(
@@ -569,11 +640,28 @@ def main():
             output = native.compute(benchmark_case)
             native_times.append(time.perf_counter() - start)
             native_core_times.append(output.total_elapsed_ns * 1e-9)
+        runtime_kwargs = {
+            "data": benchmark_case.data,
+            "fixed_ctrl": benchmark_case.data.ctrl,
+            "desired_qacc": benchmark_case.desired_qacc,
+            "tau_nominal": benchmark_case.tau_nominal,
+            "previous_executed_tau": benchmark_case.previous_tau,
+            **benchmark_case.params,
+        }
+        # 先完成一次稳定 data pointer 和参数缓存绑定，再测生产热路径。
+        runtime.compute(**runtime_kwargs)
+        for _ in range(args.repeats):
+            start = time.perf_counter()
+            output = runtime.compute(**runtime_kwargs)
+            runtime_times.append(time.perf_counter() - start)
+            runtime_core_times.append(output.core_elapsed_time)
         print("耗时基准 [us]")
         for name, values in (
             ("Python reference wall", python_times),
             ("C ABI + ctypes wall", native_times),
             ("C++ internal total", native_core_times),
+            ("Production adapter wall", runtime_times),
+            ("Production adapter C++ core", runtime_core_times),
         ):
             summary = percentile_summary(values)
             print(
@@ -581,6 +669,7 @@ def main():
                 f"p99={summary['p99']:.2f}, max={summary['max']:.2f}"
             )
     finally:
+        runtime.close()
         native.close()
 
 

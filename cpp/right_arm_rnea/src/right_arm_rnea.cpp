@@ -1,6 +1,8 @@
 #include "right_arm_rnea/right_arm_rnea_c.h"
 
 #include <mujoco/mujoco.h>
+#include <pinocchio/algorithm/frames.hpp>
+#include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/parsers/mjcf.hpp>
 
@@ -26,7 +28,7 @@ namespace {
 using Clock = std::chrono::steady_clock;
 using Nanoseconds = std::chrono::nanoseconds;
 
-constexpr uint32_t kAbiVersion = 1;
+constexpr uint32_t kAbiVersion = 3;
 constexpr std::array<const char*, RIGHT_ARM_RNEA_JOINT_COUNT> kRightArmJointNames = {
     "right_shoulder_pitch_joint",
     "right_shoulder_roll_joint",
@@ -153,9 +155,13 @@ public:
         q_pin_.resize(pinocchio_model_.nq);
         v_pin_.setZero(pinocchio_model_.nv);
         a_pin_.setZero(pinocchio_model_.nv);
+        jacobian_.setZero(6, pinocchio_model_.nv);
+        jacobian_dot_.setZero(6, pinocchio_model_.nv);
         mujoco_q_for_pin_q_.assign(
             static_cast<size_t>(pinocchio_model_.nq), -1);
         BuildMappings();
+        ee_frame_id_ = ResolveFrame("right_grasp_site");
+        imu_frame_id_ = ResolveFrame("imu_in_torso");
     }
 
     size_t nq() const noexcept {
@@ -169,6 +175,7 @@ public:
     RightArmRneaOutput Compute(
         const double* qpos,
         const double* qvel,
+        const double* reference_qacc,
         const double* desired_ddq,
         const double* passive,
         const double* friction_loss,
@@ -197,13 +204,23 @@ public:
             Eigen::Map<const Eigen::Vector3d>(qvel + mujoco_free_v_index_ + 3);
 
         a_pin_.setZero();
+        for (const ScalarVelocityMapping& mapping : scalar_velocity_mappings_) {
+            a_pin_[mapping.pin_index] = reference_qacc[mapping.mujoco_index];
+        }
         const Eigen::Vector3d base_linear_velocity =
             v_pin_.segment<3>(pinocchio_free_v_index_);
         const Eigen::Vector3d base_angular_velocity =
             v_pin_.segment<3>(pinocchio_free_v_index_ + 3);
-        // 世界系 base 线加速度为零时，body 空间加速度包含 -omega x v。
+        // MuJoCo free-joint 平动加速度是世界系导数；Pinocchio 使用 body
+        // 空间加速度，因此需要旋转并减去 omega x v 的坐标导数项。
         a_pin_.segment<3>(pinocchio_free_v_index_) =
-            -base_angular_velocity.cross(base_linear_velocity);
+            rotation_world_base.transpose()
+                * Eigen::Map<const Eigen::Vector3d>(
+                    reference_qacc + mujoco_free_v_index_)
+            - base_angular_velocity.cross(base_linear_velocity);
+        a_pin_.segment<3>(pinocchio_free_v_index_ + 3) =
+            Eigen::Map<const Eigen::Vector3d>(
+                reference_qacc + mujoco_free_v_index_ + 3);
         for (size_t joint = 0; joint < RIGHT_ARM_RNEA_JOINT_COUNT; ++joint) {
             a_pin_[pinocchio_arm_v_indices_[joint]] = desired_ddq[joint];
         }
@@ -240,7 +257,125 @@ public:
         return output;
     }
 
+    RightArmKinematicsBatchOutput ComputeKinematicsBatch(
+        const double* qpos_reference,
+        const double* q_arm,
+        const double* dq_arm,
+        const uint8_t* acceleration_required,
+        size_t state_count) {
+        RightArmKinematicsBatchOutput output{};
+        output.state_count = static_cast<int32_t>(state_count);
+        const auto core_start = Clock::now();
+
+        // 【核心批处理】冻结的整机 qpos 只映射一次；随后每个节点只覆盖
+        // 5 个右臂 q，并在同一个 Pinocchio Data 中顺序更新运动学。
+        for (Eigen::Index pin_q = 0; pin_q < pinocchio_model_.nq; ++pin_q) {
+            q_pin_[pin_q] =
+                qpos_reference[mujoco_q_for_pin_q_[static_cast<size_t>(pin_q)]];
+        }
+        for (size_t state = 0; state < state_count; ++state) {
+            for (size_t joint = 0; joint < RIGHT_ARM_RNEA_JOINT_COUNT; ++joint) {
+                q_pin_[pinocchio_arm_q_indices_[joint]] =
+                    q_arm[state * RIGHT_ARM_RNEA_JOINT_COUNT + joint];
+            }
+            v_pin_.setZero();
+            for (size_t joint = 0; joint < RIGHT_ARM_RNEA_JOINT_COUNT; ++joint) {
+                v_pin_[pinocchio_arm_v_indices_[joint]] =
+                    dq_arm[state * RIGHT_ARM_RNEA_JOINT_COUNT + joint];
+            }
+
+            const bool need_acceleration = acceleration_required[state] != 0;
+            if (need_acceleration) {
+                pinocchio::computeJointJacobiansTimeVariation(
+                    pinocchio_model_, *pinocchio_data_, q_pin_, v_pin_);
+            } else {
+                pinocchio::computeJointJacobians(
+                    pinocchio_model_, *pinocchio_data_, q_pin_);
+            }
+            pinocchio::updateFramePlacements(
+                pinocchio_model_, *pinocchio_data_);
+            jacobian_.setZero();
+            pinocchio::getFrameJacobian(
+                pinocchio_model_,
+                *pinocchio_data_,
+                ee_frame_id_,
+                pinocchio::LOCAL_WORLD_ALIGNED,
+                jacobian_);
+            jacobian_dot_.setZero();
+            if (need_acceleration) {
+                pinocchio::getFrameJacobianTimeVariation(
+                    pinocchio_model_,
+                    *pinocchio_data_,
+                    ee_frame_id_,
+                    pinocchio::LOCAL_WORLD_ALIGNED,
+                    jacobian_dot_);
+            }
+
+            const auto& ee = pinocchio_data_->oMf[ee_frame_id_];
+            const auto& imu = pinocchio_data_->oMf[imu_frame_id_];
+            StoreVector3(ee.translation(), output.ee_position_world, state);
+            StoreRotation(ee.rotation(), output.ee_rotation_world, state);
+            StoreVector3(imu.translation(), output.imu_position_world, state);
+            StoreRotation(imu.rotation(), output.imu_rotation_world, state);
+            StoreArmJacobian(
+                jacobian_, 0, output.J_v_world, state);
+            StoreArmJacobian(
+                jacobian_, 3, output.J_w_world, state);
+            StoreArmJacobian(
+                jacobian_dot_, 0, output.dJ_v_world, state);
+            StoreArmJacobian(
+                jacobian_dot_, 3, output.dJ_w_world, state);
+        }
+        output.core_elapsed_ns = static_cast<uint64_t>(
+            std::chrono::duration_cast<Nanoseconds>(Clock::now() - core_start)
+                .count());
+        return output;
+    }
+
 private:
+    pinocchio::FrameIndex ResolveFrame(const char* name) const {
+        const pinocchio::FrameIndex frame_id = pinocchio_model_.getFrameId(name);
+        if (frame_id >= pinocchio_model_.frames.size()
+            || pinocchio_model_.frames[frame_id].name != name) {
+            throw std::runtime_error(std::string("Pinocchio 模型缺少 frame: ") + name);
+        }
+        return frame_id;
+    }
+
+    static void StoreVector3(
+        const Eigen::Vector3d& value, double* output, size_t state) {
+        for (size_t row = 0; row < 3; ++row) {
+            output[state * 3 + row] = value[static_cast<Eigen::Index>(row)];
+        }
+    }
+
+    static void StoreRotation(
+        const Eigen::Matrix3d& value, double* output, size_t state) {
+        for (size_t row = 0; row < 3; ++row) {
+            for (size_t col = 0; col < 3; ++col) {
+                output[state * 9 + row * 3 + col] = value(
+                    static_cast<Eigen::Index>(row),
+                    static_cast<Eigen::Index>(col));
+            }
+        }
+    }
+
+    void StoreArmJacobian(
+        const pinocchio::Data::Matrix6x& value,
+        Eigen::Index row_offset,
+        double* output,
+        size_t state) const {
+        for (size_t row = 0; row < 3; ++row) {
+            for (size_t joint = 0; joint < RIGHT_ARM_RNEA_JOINT_COUNT; ++joint) {
+                output[
+                    state * 3 * RIGHT_ARM_RNEA_JOINT_COUNT
+                    + row * RIGHT_ARM_RNEA_JOINT_COUNT + joint] = value(
+                        row_offset + static_cast<Eigen::Index>(row),
+                        pinocchio_arm_v_indices_[joint]);
+            }
+        }
+    }
+
     void BuildMappings() {
         bool free_joint_found = false;
         for (pinocchio::JointIndex pin_id = 1;
@@ -319,6 +454,7 @@ private:
                     std::string("右臂关节不是单自由度: ")
                     + kRightArmJointNames[joint]);
             }
+            pinocchio_arm_q_indices_[joint] = pin_joint.idx_q();
             pinocchio_arm_v_indices_[joint] = pin_joint.idx_v();
             mujoco_arm_v_indices_[joint] = mujoco_model_->jnt_dofadr[mujoco_id];
         }
@@ -330,14 +466,20 @@ private:
     Eigen::VectorXd q_pin_;
     Eigen::VectorXd v_pin_;
     Eigen::VectorXd a_pin_;
+    pinocchio::Data::Matrix6x jacobian_;
+    pinocchio::Data::Matrix6x jacobian_dot_;
     std::vector<int> mujoco_q_for_pin_q_;
     std::vector<ScalarVelocityMapping> scalar_velocity_mappings_;
     Eigen::Index pinocchio_free_v_index_{0};
     int mujoco_free_q_index_{0};
     int mujoco_free_v_index_{0};
     std::array<Eigen::Index, RIGHT_ARM_RNEA_JOINT_COUNT>
+        pinocchio_arm_q_indices_{};
+    std::array<Eigen::Index, RIGHT_ARM_RNEA_JOINT_COUNT>
         pinocchio_arm_v_indices_{};
     std::array<int, RIGHT_ARM_RNEA_JOINT_COUNT> mujoco_arm_v_indices_{};
+    pinocchio::FrameIndex ee_frame_id_{0};
+    pinocchio::FrameIndex imu_frame_id_{0};
 };
 
 }  // namespace
@@ -387,6 +529,8 @@ RightArmRneaStatus right_arm_rnea_compute(
     size_t qpos_count,
     const double* mujoco_qvel,
     size_t qvel_count,
+    const double* mujoco_reference_qacc,
+    size_t reference_qacc_count,
     const double* desired_right_arm_ddq,
     size_t ddq_count,
     const double* tau_passive,
@@ -400,13 +544,15 @@ RightArmRneaStatus right_arm_rnea_compute(
     size_t error_capacity) {
     WriteError(error_message, error_capacity, "");
     if (handle == nullptr || output == nullptr || mujoco_qpos == nullptr
-        || mujoco_qvel == nullptr || desired_right_arm_ddq == nullptr
+        || mujoco_qvel == nullptr || mujoco_reference_qacc == nullptr
+        || desired_right_arm_ddq == nullptr
         || tau_passive == nullptr || friction_loss == nullptr) {
         WriteError(error_message, error_capacity, "C ABI 收到空指针");
         return RIGHT_ARM_RNEA_INVALID_ARGUMENT;
     }
     *output = RightArmRneaOutput{};
     if (qpos_count != handle->core.nq() || qvel_count != handle->core.nv()
+        || reference_qacc_count != handle->core.nv()
         || ddq_count != RIGHT_ARM_RNEA_JOINT_COUNT
         || passive_count != RIGHT_ARM_RNEA_JOINT_COUNT
         || friction_count != RIGHT_ARM_RNEA_JOINT_COUNT) {
@@ -415,6 +561,7 @@ RightArmRneaStatus right_arm_rnea_compute(
     }
     if (!IsFiniteArray(mujoco_qpos, qpos_count)
         || !IsFiniteArray(mujoco_qvel, qvel_count)
+        || !IsFiniteArray(mujoco_reference_qacc, reference_qacc_count)
         || !IsFiniteArray(desired_right_arm_ddq, ddq_count)
         || !IsFiniteArray(tau_passive, passive_count)
         || !IsFiniteArray(friction_loss, friction_count)
@@ -434,6 +581,7 @@ RightArmRneaStatus right_arm_rnea_compute(
         *output = handle->core.Compute(
             mujoco_qpos,
             mujoco_qvel,
+            mujoco_reference_qacc,
             desired_right_arm_ddq,
             tau_passive,
             friction_loss,
@@ -445,6 +593,70 @@ RightArmRneaStatus right_arm_rnea_compute(
         return RIGHT_ARM_RNEA_INTERNAL_ERROR;
     } catch (...) {
         WriteError(error_message, error_capacity, "RNEA 计算发生未知异常");
+        return RIGHT_ARM_RNEA_INTERNAL_ERROR;
+    }
+}
+
+RightArmRneaStatus right_arm_kinematics_batch_compute(
+    RightArmRneaHandle* handle,
+    const double* mujoco_qpos_reference,
+    size_t qpos_count,
+    const double* q_arm,
+    const double* dq_arm,
+    const uint8_t* acceleration_required,
+    size_t state_count,
+    RightArmKinematicsBatchOutput* output,
+    char* error_message,
+    size_t error_capacity) {
+    WriteError(error_message, error_capacity, "");
+    if (handle == nullptr || mujoco_qpos_reference == nullptr
+        || q_arm == nullptr || dq_arm == nullptr
+        || acceleration_required == nullptr || output == nullptr) {
+        WriteError(error_message, error_capacity, "批运动学 C ABI 收到空指针");
+        return RIGHT_ARM_RNEA_INVALID_ARGUMENT;
+    }
+    *output = RightArmKinematicsBatchOutput{};
+    if (qpos_count != handle->core.nq()
+        || state_count == 0
+        || state_count > RIGHT_ARM_KINEMATICS_MAX_STATES) {
+        WriteError(
+            error_message,
+            error_capacity,
+            "批运动学 qpos 维度或 state_count 与接口上限不一致");
+        return RIGHT_ARM_RNEA_DIMENSION_MISMATCH;
+    }
+
+    const size_t arm_value_count =
+        state_count * static_cast<size_t>(RIGHT_ARM_RNEA_JOINT_COUNT);
+    if (!IsFiniteArray(mujoco_qpos_reference, qpos_count)
+        || !IsFiniteArray(q_arm, arm_value_count)
+        || !IsFiniteArray(dq_arm, arm_value_count)) {
+        WriteError(error_message, error_capacity, "批运动学输入含 NaN 或 Inf");
+        return RIGHT_ARM_RNEA_NONFINITE_INPUT;
+    }
+    for (size_t state = 0; state < state_count; ++state) {
+        if (acceleration_required[state] > 1) {
+            WriteError(
+                error_message,
+                error_capacity,
+                "acceleration_required 只能包含 0 或 1");
+            return RIGHT_ARM_RNEA_INVALID_ARGUMENT;
+        }
+    }
+
+    try {
+        *output = handle->core.ComputeKinematicsBatch(
+            mujoco_qpos_reference,
+            q_arm,
+            dq_arm,
+            acceleration_required,
+            state_count);
+        return RIGHT_ARM_RNEA_OK;
+    } catch (const std::exception& error) {
+        WriteError(error_message, error_capacity, error.what());
+        return RIGHT_ARM_RNEA_INTERNAL_ERROR;
+    } catch (...) {
+        WriteError(error_message, error_capacity, "批运动学计算发生未知异常");
         return RIGHT_ARM_RNEA_INTERNAL_ERROR;
     }
 }

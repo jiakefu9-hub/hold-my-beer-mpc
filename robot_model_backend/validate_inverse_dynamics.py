@@ -84,7 +84,7 @@ def main():
         data.qvel[:6] = rng.uniform(-0.5, 0.5, size=6)
         data.qvel[arm_v] = rng.uniform(-1.0, 1.0, size=5)
         desired = rng.uniform(-8.0, 8.0, size=5)
-        data.qacc[:] = 0.0
+        data.qacc[:] = rng.uniform(-20.0, 20.0, size=model.nv)
         data.qacc[arm_v] = desired
         mujoco.mj_inverse(model, data)
         reference = (
@@ -93,12 +93,15 @@ def main():
             + data.qfrc_constraint[arm_v]
         )
         candidate = backend.compute_right_arm_rnea(
-            data.qpos, data.qvel, desired
+            data.qpos,
+            data.qvel,
+            desired,
+            reference_qacc=data.qacc,
         )
         error = candidate - reference
         max_abs_error = max(max_abs_error, float(np.max(np.abs(error))))
         max_norm_error = max(max_norm_error, float(np.linalg.norm(error)))
-        cases.append((data, desired))
+        cases.append((data, desired, data.qacc.copy()))
 
     print("整机 RNEA 一致性：")
     print(f"  单关节最大绝对误差: {max_abs_error:.3e} N m")
@@ -112,12 +115,17 @@ def main():
     mujoco_times = []
     pinocchio_times = []
     for index in range(args.repeats):
-        data, desired = cases[index % len(cases)]
+        data, desired, reference_qacc = cases[index % len(cases)]
         start = time.perf_counter()
         mujoco.mj_inverse(model, data)
         mujoco_times.append(time.perf_counter() - start)
         start = time.perf_counter()
-        backend.compute_right_arm_rnea(data.qpos, data.qvel, desired)
+        backend.compute_right_arm_rnea(
+            data.qpos,
+            data.qvel,
+            desired,
+            reference_qacc=reference_qacc,
+        )
         pinocchio_times.append(time.perf_counter() - start)
 
     print(f"\n核心调用基准（{args.repeats} 次，单位 us）：")

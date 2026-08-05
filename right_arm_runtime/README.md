@@ -1,6 +1,32 @@
 # 右臂运行时边界
 
-这个目录保存 Python 与手写 C++ 实时部件之间的窄接口。`unitree_shm.py` 是 `cpp/unitree_arm_adapter` protocol v2 的 Python 客户端：Python 写 13 维 arm SDK 命令，读取 35 电机状态和 C++ 2 ms 循环状态。它只打开已经由 C++ 创建的 POSIX 共享内存，**不会创建 DDS、不会发送真机命令**。
+这个目录保存 Python 与手写 C++ 实时部件之间的窄接口。这里有两条用途不同、不能混为一谈的进程边界：
+
+- `sim_process.py` 对接 `cpp/right_arm_sim_runtime`，只用于 MuJoCo 仿真；
+- `unitree_shm.py` 对接 `cpp/unitree_arm_adapter`，用于以后连接真机的 2 ms 进程。
+
+`unitree_shm.py` 是 `cpp/unitree_arm_adapter` protocol v2 的 Python 客户端：Python 写 13 维 arm SDK 命令，读取 35 电机状态和 C++ 2 ms 循环状态。它只打开已经由 C++ 创建的 POSIX 共享内存，**不会创建 DDS、不会发送真机命令**。
+
+## MuJoCo 独立执行进程
+
+`RightArmSimProcess` 每个虚拟 2 ms 物理拍原子发送完整 MuJoCo 状态、`q_ref/dq_ref/ddq_des` 和虚拟时间戳。独立 C++ worker 顺序执行 Pinocchio RNEA、MuJoCo DDQ→力矩候选验收以及最终 PD/限幅/超时/NaN 保护；Python 只接受 session、request、command 和 state id 全部匹配且有限的 `final_tau`，再把它写入 MuJoCo。大数组通过 seqlock 共享内存传输，两根 pipe 只发送请求/完成通知。
+
+配置 `right_arm_execution_runtime` 有三种取值：
+
+- `process`：默认 LQR/MPC 仿真路径，真正执行独立进程返回的 `final_tau`；
+- `sync`：保留的同步 C ABI 回归基线；
+- `shadow`：同拍运行两条路径并逐项比较，比较通过后执行进程结果。
+
+PID 不产生 `ddq_des`，因此主程序会把它的有效运行方式自动设为 `sync`，继续使用同步 C++ PD 执行器。仿真进程是 external-step 锁步结构，不是 Unitree DDS 线程，也不能证明目标硬件已经达到 2 ms 硬实时。
+
+请求一旦发生启动失败、响应超时、EOF、错帧、C++ 非零状态或非有限力矩，Python 客户端会立即把会话标记为永久失效，终止并回收 worker、pipe 和共享内存；同一个对象不能继续复用，从而不会把迟到响应当成下一拍结果。正常使用应采用上下文管理器：
+
+```python
+with RightArmSimProcess(...) as runtime:
+    result = runtime.execute(...)
+```
+
+仿真中的 command/state 时间使用 MuJoCo 虚拟时间；`publish_monotonic_ns` 只测量 IPC 墙钟耗时，二者不能相减。完整协议、构建方法和 worker 单测见 `cpp/right_arm_sim_runtime/README.md`。
 
 ## 固定 ABI
 

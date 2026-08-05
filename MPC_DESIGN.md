@@ -16,7 +16,7 @@
 
 当前 MPC 不进行整机接触力优化，也不把浮动基完整刚体动力学放进 QP。它是一个以关节加速度为输入、使用局部运动学观测模型的稀疏线性时变 QP。
 
-当前仓库已经实现 MPC、可选扰动前馈和第 10 节的 `ddq_des` 到力矩执行链。Python 负责状态整理、扰动模板、MPC/QP 组装与实验记录；当前在线运动学、名义 RNEA、MuJoCo DDQ→力矩候选验收和 2 ms 最终安全执行核心分别由 Pinocchio/C++、MuJoCo/C++ 共享库完成，Python 参考实现用于回归对照。仿真中的接触、浮动基反作用和候选验收仍依赖 MuJoCo，不是可原样部署到真机的接触安全层。本文同时作为数学定义与当前实现说明。
+当前仓库已经实现 MPC、可选扰动前馈和第 10 节的 `ddq_des` 到力矩执行链。Python 负责状态整理、扰动模板、MPC/QP 组装与实验记录；仿真默认把完整状态、参考和时间戳交给独立 C++ external-step 进程，由该进程依次完成 Pinocchio RNEA、MuJoCo DDQ→力矩候选验收以及 2 ms 最终安全执行，再把唯一的最终力矩返回 Python 写入 MuJoCo。原同步 C ABI 路径保留为冻结回归基线。仿真中的接触、浮动基反作用和候选验收仍依赖 MuJoCo，不是可原样部署到真机的接触安全层。本文同时作为数学定义与当前实现说明。
 
 ---
 
@@ -634,19 +634,20 @@ $$
 
 其中肩部正则仍强于肘部和腕部，使后两者承担更多补偿，但比上一轮略微降低。该项仍需与重力和加速度任务的实际代价对照，不能仅靠继续增大 $Q_q$ 解决已经发生的硬约束不可行。
 
-当前仿真配置显式使用的主要权重为
+当前进入重新加入末端加速度代价之前的基线权重为
 
 $$
-Q_a=I_3,\qquad
-Q_\alpha=0.075I_3,\qquad
-Q_\omega=2I_3,\qquad
+Q_a=0,\qquad
+Q_\alpha=0,\qquad
+Q_\omega=8I_3,\qquad
 Q_g=30I_2,\qquad
-R=0.25I_5.
+Q_v=0.08I_5,\qquad
+R=0.0025I_5.
 $$
 
-$Q_g$ 的两个对角元素可以分别配置，但它们对应右手末端局部系中的 $x,y$ 倾斜分量，而不是两个独立的世界系安全方向。六轮闭环实验中，提高 $y$ 权重能够降低右手 $y$ 分量，却会把一部分误差转移到 $x$，并增加关节盒恢复和 QP 回退。因此当前默认仍保留 $Q_g=30I_2$，用二维范数评价整体正立程度；$Q_\omega=2I_3$ 则用于补上已经存在的末端角速度。
+$Q_g$ 的两个对角元素可以分别配置，但它们对应右手末端局部系中的 $x,y$ 倾斜分量，而不是两个独立的世界系安全方向。六轮闭环实验中，提高 $y$ 权重能够降低右手 $y$ 分量，却会把一部分误差转移到 $x$，并增加关节盒恢复和 QP 回退。因此当前默认仍保留 $Q_g=30I_2$，用二维范数评价整体正立程度；$Q_\omega=8I_3$ 用于补上已经存在的末端角速度。
 
-`configs/g1.yaml` 中的 `mpc_q_ee_omega: 2.0` 对应上述 $Q_\omega$。控制器 API 在缺少该配置项时仍回退到 $Q_\omega=0$，用于兼容旧配置；这不等于当前实验关闭了角速度项。
+这里把 $Q_a,Q_\alpha$ 置零是有意保留的“端平 + 角速度”基线，不表示第 5 节的加速度模型或第 6.2 节的代价定义被删除；进入下一阶段时将分别恢复 `mpc_q_ee_acc` 和 `mpc_q_ee_alpha`，做单变量闭环比较。控制器 API 在缺少 `mpc_q_ee_omega` 时仍回退到 $Q_\omega=0$，用于兼容旧配置；这不等于当前实验关闭了角速度项。
 
 ### 6.2 单步代价
 
@@ -874,7 +875,7 @@ $$
 k=0,\ldots,N-1.
 $$
 
-该值与当前执行层候选验收使用的瞬时加速度上限对齐，避免 MPC 主动要求明显超过执行安全筛选范围的 `ddq_des`。它约束的是期望加速度；实际 `qacc` 仍必须由第 10 节的前向动力学验收检查。
+该值低于当前执行层 $10\ \mathrm{rad/s^2}$ 的候选验收上限，为模型和执行误差保留 $2\ \mathrm{rad/s^2}$ 的短时余量。它约束的是期望加速度；实际 `qacc` 仍必须由第 10 节的前向动力学验收检查。
 
 初版不再额外增加 DDQ rate limit 或 jerk 约束。先记录加速度约束激活率、相邻 `ddq_des` 跳变量和最终力矩平滑度；只有确认存在问题时再增加 $\Delta u$ 代价或约束。
 
@@ -1151,7 +1152,9 @@ $$
 
 ### 10.2 逆动力学生成名义力矩
 
-当前提供四种配置：`mujoco`、`pinocchio_shadow`、`pinocchio` 和默认的 `cpp_pinocchio`。四种方式都令非右臂期望加速度为零、右臂期望加速度为 `ddq_des`；shadow 先完成并执行 MuJoCo 结果，再尝试 Pinocchio 对照。`pinocchio` 是 Python 回归基准，`cpp_pinocchio` 通过窄 C ABI 调用同一 MJCF 的 C++ Pinocchio RNEA。对照成功时记录 `tau_ff_shadow`、差值、有效标记和额外耗时；Pinocchio 对照异常不会改变本拍 MuJoCo 力矩。
+当前提供四种配置：`mujoco`、`pinocchio_shadow`、`pinocchio` 和默认的 `cpp_pinocchio`。`pinocchio` 是 Python 回归基准，`cpp_pinocchio` 使用同一 MJCF 的 C++ Pinocchio RNEA；同步 shadow 先执行 MuJoCo 结果，再用 Pinocchio 对照。
+
+RNEA 的已知量是当前整机 $q,\dot q$ 和整机参考加速度。默认 `ddq_rnea_other_qacc_mode: measured` 先取上一物理步已经完成后、因果可用的 MuJoCo 整机 `qacc`，把非右臂自由度乘以 `ddq_rnea_other_qacc_blend: 0.75`，再把右臂 5 维覆盖为本拍 `ddq_des`。因此当前默认既不是“其他自由度全为零”，也没有把 H 系 torso 扰动模板当作整机广义加速度；模板只进入上层末端任务预测。`zero` 模式仍保留为对照，此时只有右臂 5 维为 `ddq_des`，其余参考加速度为零。
 
 MuJoCo 路径在临时数据中复制当前整机状态并调用 `mj_inverse`，采用非摩擦约束感知的名义前馈：
 
@@ -1189,7 +1192,7 @@ $$
 \right).
 $$
 
-非右臂加速度为零的假设只用于提供初始名义力矩，最终加速度由完整前向动力学评估。
+无论使用 measured 还是 zero，参考加速度只用于生成初始名义力矩；最终候选仍由当前整机状态、非右臂力矩、接触和浮动基反作用下的完整前向动力学评估。
 
 ### 10.3 数值前向动力学局部映射
 
@@ -1263,7 +1266,9 @@ $$
 
 1. 总误差小于当前工作点；
 2. $e_{\max}(s)\le4\ \mathrm{rad/s^2}$；
-3. $a_{\max}(s)\le8\ \mathrm{rad/s^2}$。
+3. $a_{\max}(s)\le10\ \mathrm{rad/s^2}$。
+
+这里的 $10\ \mathrm{rad/s^2}$ 是执行候选验收上限；MPC 优化输入仍受 $|ddq_{\mathrm{des}}|\le8\ \mathrm{rad/s^2}$ 约束。两者分开可为模型和执行误差保留短时余量，而不是把优化器的正常边界值误判为执行故障。
 
 在已实际验收的候选中，按以下顺序选择：
 
@@ -1307,7 +1312,9 @@ q, dq, measured base motion
         -> Python: one MPC QP every 6 ms
         -> ddq_des = u0*
         -> one-step q_ref, dq_ref -> tau_pd
-        -> C++ Pinocchio RNEA -> tau_ff
+        -> shared-memory request: full qpos/qvel, reference_qacc,
+           fixed non-right-arm torque, q_ref/dq_ref/ddq_des and timestamps
+        -> independent C++ process: Pinocchio RNEA -> tau_ff
         -> clipped tau_nom
         -> C++ MuJoCo baseline / G_tau / damped correction
         -> C++ model-ranked, on-demand mj_forwardSkip validation
@@ -1315,9 +1322,14 @@ q, dq, measured base motion
         -> if still unsafe: validate previous executed torque in current state
         -> accepted feedforward held only between validation updates
         -> C++ 2 ms latest-state PD / limits / timeout / NaN guard
-        -> tau_cmd (validation at 0/4 ms, PD at 0/2/4 ms)
+        -> response final_tau (validation at 0/4 ms, PD at 0/2/4 ms)
+        -> Python writes only final_tau to MuJoCo
         -> one real mj_step every 2 ms
 ```
+
+仿真使用单写者 seqlock 共享内存传递大数组，两根 pipe 只负责请求/完成通知。Python 只接受 session、request、command 和 state 标识全部匹配的响应；超时、worker 退出、错帧或非有限输出均 fail-closed，不能静默退回另一条物理定义不同的执行链。`simulation_time` 用于虚拟控制时间，墙钟只用于统计进程排队、计算和 IPC 开销，二者不能相减。
+
+`right_arm_execution_runtime: process` 是默认在线仿真路径；`sync` 是冻结基线；`shadow` 在同一冻结输入上同时运行两条路径，并在 RNEA、候选分支、验收后前馈和最终力矩任一项超过 $10^{-9}$ 时立即停止。PID 不产生 `ddq_des`，因此自动继续使用同步 C++ PD 执行器。这个 external-step 进程证明了状态和命令边界、时间戳、失败语义及 C++ 执行责任，但仍与 Python/MuJoCo 锁步；它不是对真机 DDS 调度的伪装，真机 I/O、base/contact 状态估计和硬实时线程优先级必须在接触硬件后单独验证。
 
 ---
 
@@ -1418,7 +1430,22 @@ $ddq_{\mathrm{des}}$ 模型结果与上述回代结果的差主要反映 DDQ 执
 
 `mj_step` 物理推进、评估记录/绘图、viewer/video 和实时 sleep 不属于真机控制算法，单独统计但不进入上述区间；仿真无法测到的传感器/总线、电机驱动通信、固件和目标计算机实时调度延迟也明确列在 `timing_scope.not_measurable_in_simulation`。仿真 C++ mapper 内的 MuJoCo 接触验收同样不会原样出现在真机上；真机的 2 ms C++ 适配器已实现 LowState 读取、共享内存、限幅、超时、NaN、过热、deadline 保护和可选 `rt/arm_sdk` 发送，但完整 floating-base RNEA 仍需要经验证的 base pose/twist 与接触状态估计。
 
-最终配置使用 $N=9$ 和每区间两次验收。加入完整原生分项计时后的交付验证回合 `20260802_213817_final_hybrid_verification` 完整区间 mean/p95/p99/max 为 $5.25/6.98/9.58/11.92\ \mathrm{ms}$，6 ms 超时率为 $10.6\%$；平均由 MPC 更新 $3.18\ \mathrm{ms}$、两次 DDQ→力矩 $1.50\ \mathrm{ms}$、C++ 执行桥 $0.12\ \mathrm{ms}$ 和其余路径 $0.45\ \mathrm{ms}$ 组成。其物理轨迹与第 5 轮逐项相同：QP 成功率 $100\%$，右端线加速度、角加速度和二维重力误差 RMS 为 $2.877\ \mathrm{m/s^2}$、$6.417\ \mathrm{rad/s^2}$ 和 $0.0176$。这是时间与高保真三次验收之间的折中，不是硬实时证明；p99 仍超过 6 ms，因此 Python MPC 必须是可超时的上层更新器，最终 2 ms 命令循环必须由 C++ 保持上次安全命令并独立回退。
+当前默认独立进程零延迟回合 `20260804_203511_process_delay0` 的完整 6 ms 区间 mean/p95/p99/max 为 $3.067/3.402/3.917/5.807\ \mathrm{ms}$，evaluation 超时率为 0。平均值严格分解为 MPC 更新 $1.612\ \mathrm{ms}$、两次 DDQ→力矩 $1.012\ \mathrm{ms}$、中间拍只重算执行器的进程桥 $0.031\ \mathrm{ms}$ 和其余右臂路径 $0.412\ \mathrm{ms}$。独立进程 3198 次往返的 mean/p99/max 为 $0.182/0.397/0.593\ \mathrm{ms}$，其中 worker 计算均值 $0.147\ \mathrm{ms}$、通知排队均值 $0.019\ \mathrm{ms}$、复制与 IPC 余量均值 $0.035\ \mathrm{ms}$。这些结果覆盖 Python 到独立 C++ 进程再返回最终力矩的完整仿真调用，但仍不是目标真机上的硬实时证明。
+
+### 11.6 独立进程一致性与延迟阶段门
+
+`20260804_203227_process_shadow_smoke` 对 400 个物理步逐拍比较同步基线和独立进程：RNEA 最大误差为 0，验收后前馈最大误差为 $4.44\times10^{-16}\ \mathrm{N\,m}$，mapper 输出、候选分支和最终力矩最大误差均为 0。随后同步回合 `20260804_203251_parity_sync_smoke` 与进程回合 `20260804_203308_parity_process_smoke` 的 `qpos/qvel/qacc/ctrl`、`ddq_des`、RNEA 力矩、验收后前馈、最终控制力矩和所有救援分支数组逐元素相同。
+
+同一冻结配置的命令激活延迟结果如下；效果和安全只统计正式 evaluation 区间：
+
+| 延迟 | 完整区间 mean / p99 / max [ms] | 超时率 | QP 成功率 | 右端线加速度 RMS | 右端角加速度 RMS | 二维重力误差 RMS | 平均五关节 DDQ RMSE |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 ms | 3.067 / 3.917 / 5.807 | 0 | 99.62% | 2.929 | 6.520 | 0.0151 | 0.804 |
+| 2 ms | 3.085 / 3.738 / 4.588 | 0 | 99.62% | 2.928 | 6.349 | 0.0138 | 1.005 |
+| 4 ms | 3.004 / 3.587 / 3.981 | 0 | 99.34% | 2.925 | 6.363 | 0.0157 | 0.896 |
+| 6 ms | 3.069 / 3.841 / 5.414 | 0 | 99.34% | 2.999 | 6.834 | 0.0148 | 0.816 |
+
+四组 evaluation 内最终不安全候选均为 0。4 ms 回合仅在启动期 $0.094\ \mathrm{s}$ 发生一次真实的未满足救援执行更新；$0.096\ \mathrm{s}$ 只是未重算拍沿用诊断标志，不是第二个事件，二者都不属于当前没有启动模板的 evaluation 指标。由此，进入 $Q_a,Q_\alpha$ 调参前的仿真阶段门已经满足：独立进程实际执行最终力矩、同步路径数值等价、时间戳和可配置延迟可测、完整 6 ms p99 小于预算且 evaluation 安全指标通过。硬件 LowState/DDS、真实 base/contact 估计及驱动器延迟仍是上真机阶段任务，不是继续调整仿真代价前可以假装完成的事项。
 
 ---
 
@@ -1442,7 +1469,7 @@ $$
 
 9. 扰动前馈关闭时并不是完全忽略 base 运动，而是每拍测量当前节点并在当前 54 ms 时域内零阶保持；模板开启后才提供未来节点变化和与每个 $u_k$ 对齐的 6 ms 区间平均扰动。因此开关实验的差值表示未来预测的附加收益，不是全部 base 补偿的收益。
 10. 即使模板完全准确，5 个关节 DDQ 也不能同时独立消除三维线加速度、三维角加速度、三维角速度和二维重力误差；关节盒、DQ/DDQ 上限和互相冲突的任务会留下不可消除残差。当前保留回合中，6 ms 区间 base 线加速度和角加速度预测误差分别约为实际 RMS 的 14.0% 和 25.3%，也不是完全已知未来。
-11. 当前折中配置的完整右臂控制链在交付验证中平均约 5.25 ms、p99 约 9.58 ms、最大约 11.92 ms，且约 10.6% 的区间超过 6 ms；这已经包含区间内两次 DDQ→力矩和三次 C++ 执行桥。它可作为 Python 上层软实时参考，不得宣称为 6 ms 硬实时循环。
+11. 当前独立进程零延迟仿真回合的完整右臂控制链平均约 3.07 ms、p99 约 3.92 ms、最大约 5.81 ms，evaluation 内没有 6 ms 超时；这已经包含区间内两次 DDQ→力矩和中间拍执行器更新。该结果只能证明本机锁步仿真的计算预算，不得宣称目标真机已经达到 6 ms 硬实时。
 12. 当前角速度模型冻结 $J_\omega(\bar q_k)$，忽略 $\partial(J_\omega\dot q)/\partial q$。若以后角速度任务权重明显增大、关节运动范围放宽或模型/实际角速度开始出现显著偏差，应恢复完整的一阶线性化。
 13. 最终保留回合中，按“任一关节真实区间 DDQ 超过配置上限”的统一口径，超限区间为 0，真实 DDQ 最大绝对值为 $7.788\ \mathrm{rad/s^2}$。早期区间模板实验的 $7/8.334$ 只保留在开发日志中，不再作为当前结论。真机仍需保留独立硬限幅和执行层故障回退。
 
@@ -1476,7 +1503,9 @@ $$
 - 关节姿态正则使用低权重，不与二维重力误差混淆。
 - OSQP 矩阵使用固定稀疏结构，在线只更新数值。
 - 只执行第一拍 `ddq_des`。
-- 默认使用 C++ Pinocchio RNEA、C++ MuJoCo DDQ→力矩映射和 C++ 2 ms 执行核；Python 版本保留为回归基准。
+- 默认使用独立 C++ 仿真进程完成 Pinocchio RNEA、MuJoCo DDQ→力矩映射和 2 ms 执行核，再把唯一 `final_tau` 返回 Python；同步 C ABI 版本保留为冻结回归基准。
+- 独立进程请求必须原子包含完整 `qpos/qvel`、整机参考 `qacc`、固定非右臂力矩、外力、`q_ref/dq_ref/ddq_des` 和时间戳；响应标识不匹配、超时或非有限值必须 fail-closed。
+- `shadow` 必须逐拍比较 RNEA、验收分支、验收后前馈和最终力矩，不能只用最终轨迹相似作为等价证据。
 - `twice_per_interval` 只保持上次验收后的前馈，不得保持已包含旧状态 PD 的完整力矩；C++ 每 2 ms 重算一次 PD。
 - 当前仿真启用模型排序后的按需 `mj_forwardSkip` 候选验收、按需第二轮重线性化、最多两轮安全救援，以及救援失败后的上一拍力矩重新验收。
 - 所有被拒绝候选只在临时动力学数据中计算，不能写入真实执行器。

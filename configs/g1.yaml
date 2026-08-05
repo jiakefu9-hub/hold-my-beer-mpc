@@ -17,6 +17,11 @@ record_video: true
 warmup_cycles: 3
 evaluation_cycles: 8
 cooldown_cycles: 2
+# 性能报告只统计完全落在 evaluation 内的完整 6 ms 控制区间。
+performance_measure_evaluation_only: true
+# 进入主控制循环前完成一次回收，随后暂停 Python 循环垃圾回收；
+# NumPy/Python 对象仍按引用计数正常释放，结束仿真后重新启用。
+performance_disable_gc_during_control: true
 
 # ==============================
 # PID 参数
@@ -66,9 +71,10 @@ ddq_torso_alpha_limit: 40.0
 # MPC 参数
 # ==============================
 mpc_horizon: 9
-# MPC 预测窗口运动学后端：mujoco / pinocchio。两者读取同一份 MJCF；
-# Pinocchio 只替代位姿、J 和 Jdot，不参与仿真接触求解。
-mpc_prediction_kinematics_backend: pinocchio
+# MPC 预测窗口运动学后端：mujoco / pinocchio / cpp_pinocchio。
+# 最终路径一次 C ABI 调用批量计算整个窗口的位姿、J 和 Jdot；它与
+# RNEA 复用同一个 C++ Pinocchio handle，不参与仿真接触求解。
+mpc_prediction_kinematics_backend: cpp_pinocchio
 # 当前保留低 DDQ 权重下的端平基线；Qa=1.0、Qalpha=0.075
 # 的恢复实验会明显增加 QP 回退、DDQ 触顶和端平误差，因此不作为默认值。
 mpc_q_ee_acc: 0.0
@@ -95,6 +101,9 @@ mpc_max_dq: 1.0
 mpc_max_ddq: 8.0
 mpc_qp_regularization: 0.000001
 mpc_osqp_max_iter: 400
+# 10 次检查间隔虽然少约 0.05 ms，但闭环中增加了 QP 回退和约束违反；
+# 最终配置保留 OSQP 默认的 25，不以很小的耗时收益交换求解稳健性。
+mpc_osqp_check_termination: 25
 mpc_osqp_eps_abs: 0.001
 mpc_osqp_eps_rel: 0.001
 # OSQP 数值参数也保留为配置项；当前完整时变 QP 使用自适应 rho。
@@ -121,6 +130,9 @@ mpc_disturbance_slow_bias_time_constant: 0.4
 # MPC 独立低延迟通道，不改变 LQR 继续使用的 ddq_torso_* 滤波参数。
 mpc_torso_acc_filter_alpha: 0.50
 mpc_torso_alpha_filter_alpha: 0.50
+# 状态采样到整份 q_ref/dq_ref/ddq_des 命令在 2 ms 执行拍激活的延迟。
+# 0.0 是现有无延迟基线；A/B 实验优先用命令行覆盖，不改控制权重。
+mpc_command_delay_ms: 0.0
 
 # ==============================
 # DDQ 到力矩的共用执行层
@@ -130,6 +142,16 @@ mpc_torso_alpha_filter_alpha: 0.50
 # MuJoCo 的局部映射、候选验收、第二轮和安全回退仍全部保留。
 # 最终在线路径使用窄 C ABI 调用 C++ Pinocchio；Python pinocchio 仍是回归基准。
 ddq_nominal_inverse_dynamics_backend: cpp_pinocchio
+# 名义 RNEA 中右臂以外的参考加速度。zero 保持旧假设；measured 使用
+# 本拍开始时因果可用的上一 2 ms MuJoCo qacc，再由 blend 缩放。右臂
+# 五维无论哪种模式都会被 MPC/LQR 的 ddq_des 覆盖。
+ddq_rnea_other_qacc_mode: measured
+ddq_rnea_other_qacc_blend: 0.75
+# filtered/trend 仅作为后续实验入口；当前三轮实验不启用趋势外推。
+ddq_rnea_other_qacc_filter_alpha: 0.5
+ddq_rnea_other_qacc_trend_window: 4
+ddq_rnea_other_qacc_trend_lead_steps: 1.0
+ddq_rnea_other_qacc_limit: 100.0
 # 仿真接触/浮动基局部映射与候选验收：python / cpp。两者使用同一
 # MuJoCo 模型和算法；cpp 减少 Python 循环及多次 FFI 开销。
 # 该后端是仿真接触验收，不是真机可直接复用的接触求解器。
@@ -144,7 +166,9 @@ ddq_execution_perturbation: 0.1
 ddq_execution_regularization: 5.0
 ddq_execution_second_pass_error_threshold: 5.0
 ddq_execution_max_joint_error: 4.0
-ddq_execution_max_abs_qacc: 8.0
+# MPC/LQR 期望 ddq 仍各自受优化器的 ±8 上限约束；执行层给真实前向
+# 动力学候选保留 2 rad/s^2 余量，避免 8.0001 这类边缘误差触发救援。
+ddq_execution_max_abs_qacc: 10.0
 # 仿真阶段两种优化控制器都启用第二轮重线性化和最多两轮安全救援；
 # 仅在预测瞬时 qacc 超限或第一轮残差较大时触发，不是每拍固定执行。
 lqr_execution_enable_second_pass: true
@@ -163,6 +187,12 @@ mpc_execution_hold_last_safe: true
 # ==============================
 # C++ 2 ms 右臂安全执行器
 # ==============================
+# LQR/MPC 默认把完整 qpos/qvel、整机参考 qacc、当前非右臂力矩、
+# q_ref/dq_ref/ddq_des 和时间戳交给独立 C++ external-step 进程；进程依次
+# 完成 RNEA、MuJoCo 候选验收和最终执行器，再把 final_tau 返回主仿真。
+# sync 保留为冻结回归基线，shadow 会同拍运行两条路径并要求逐项一致。
+# PID 没有 ddq_des，因此即使这里是 process，也自动继续使用同步 C++ PD。
+right_arm_execution_runtime: process
 # cpp 在每个 2 ms 物理拍读取最新 q/dq，合成一次 PD，并负责参考/力矩
 # 限幅、命令/状态超时和 NaN 回退；python 仅用于回归对照。
 right_arm_executor_backend: cpp
