@@ -1,0 +1,64 @@
+{
+  "validation_id": "qa_qalpha_final_validation_20260806_144951",
+  "branch": "feat/23dof_arm_mpc",
+  "git_head": "4d6b9541895863cf269126ea38ed0f59da164d91",
+  "created_at": "2026-08-06 15:15:47",
+  "repeats": 5,
+  "planned_runs": 30,
+  "candidates": [
+    {
+      "name": "baseline",
+      "qa": 0.0,
+      "qalpha": 0.0,
+      "purpose": "Zero acceleration weights; reference for improvement percentages."
+    },
+    {
+      "name": "posture_floor",
+      "qa": 0.0003,
+      "qalpha": 0.0,
+      "purpose": "Lowest tilt point from the full 154-point scan."
+    },
+    {
+      "name": "final_candidate",
+      "qa": 0.01,
+      "qalpha": 0.0005,
+      "purpose": "Proposed task-priority knee: low tilt and low DDQ saturation."
+    },
+    {
+      "name": "angular_priority",
+      "qa": 0.01,
+      "qalpha": 0.0015,
+      "purpose": "More angular-acceleration suppression at higher motion cost."
+    },
+    {
+      "name": "balanced_auto",
+      "qa": 0.015,
+      "qalpha": 0.0015,
+      "purpose": "Automatic balanced winner from the full scan."
+    },
+    {
+      "name": "linear_priority",
+      "qa": 0.02,
+      "qalpha": 0.0005,
+      "purpose": "Stronger linear-acceleration suppression."
+    }
+  ],
+  "selection_weights": {
+    "right_tilt_rms": 0.45,
+    "right_acc_rms": 0.25,
+    "right_alpha_rms": 0.2,
+    "ddq_saturation_any_fraction": 0.1
+  },
+  "task_eligibility": {
+    "min_acc_improvement_pct": 5.0,
+    "min_alpha_improvement_pct": 5.0,
+    "mean_tilt_rms_max": 0.02
+  },
+  "hard_gates": {
+    "qp_success_min": 0.99,
+    "tilt_rms_max": 0.03,
+    "ddq_saturation_max": 0.1,
+    "safety_violation_max": 0.0,
+    "arm_interval_overrun_report_only": true
+  }
+}

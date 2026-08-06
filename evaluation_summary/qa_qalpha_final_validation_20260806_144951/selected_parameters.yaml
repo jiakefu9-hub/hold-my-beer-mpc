@@ -1,0 +1,7 @@
+completed_runs: 30
+planned_runs: 30
+selection_status: selected
+candidate: final_candidate
+mpc_q_ee_acc: 0.01
+mpc_q_ee_alpha: 0.0005
+task_score: 0.532778380775

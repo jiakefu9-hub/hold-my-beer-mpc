@@ -979,7 +979,7 @@ def main() -> int:
     args = parse_args()
     maybe_reexec_with_sleep_inhibit(args)
 
-    repo_dir = Path(__file__).resolve().parent
+    repo_dir = Path(__file__).resolve().parents[2]
     config_file = repo_dir / "configs" / "g1.yaml"
     run_script = repo_dir / "run.sh"
     sweep_logs_root = repo_dir / "sweep_logs"

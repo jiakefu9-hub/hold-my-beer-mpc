@@ -75,10 +75,10 @@ mpc_horizon: 9
 # 最终路径一次 C ABI 调用批量计算整个窗口的位姿、J 和 Jdot；它与
 # RNEA 复用同一个 C++ Pinocchio handle，不参与仿真接触求解。
 mpc_prediction_kinematics_backend: cpp_pinocchio
-# 最终验证选择 QA=0.01、Qalpha=0.0005：相较零权重基线降低末端
-# 线加速度和角加速度，同时保持较低倾斜误差与 DDQ 触边比例。
-mpc_q_ee_acc: 0.01
-mpc_q_ee_alpha: 0.0005
+# 当前保留低 DDQ 权重下的端平基线；Qa=1.0、Qalpha=0.075
+# 的恢复实验会明显增加 QP 回退、DDQ 触顶和端平误差，因此不作为默认值。
+mpc_q_ee_acc: 0.0
+mpc_q_ee_alpha: 0.0
 # 世界系末端角速度权重；上扫实验中 8.0 明显优于 2.0，10.0 及以上会进入约束失稳区。
 mpc_q_ee_omega: 8.0
 # 六轮实验证明强行偏置 x/y 会增加关节盒回退，最终保留等权二维重力误差。
