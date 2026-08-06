@@ -1,0 +1,10 @@
+{
+  "validation_id": "qa_qalpha_final_validation_20260806_144951",
+  "planned_runs": 30,
+  "completed_runs": 30,
+  "complete": true,
+  "selected_candidate": "final_candidate",
+  "selected_qa": 0.01,
+  "selected_qalpha": 0.0005,
+  "updated_at": "2026-08-06 15:15:48"
+}
