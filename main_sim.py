@@ -34,6 +34,7 @@ from disturbance_learning.command_schedule import (
     command_schedule,
 )
 from kinematics_helper import KinematicsHelper
+from payload_model import create_modeled_payload_mjcf
 from robot_model_backend import CppRightArmRneaBackend, create_prediction_backend
 from right_arm_runtime import (
     CppDdqTorqueMapper,
@@ -133,7 +134,16 @@ if __name__ == "__main__":
         "--predictor-payload-kg",
         type=float,
         default=0.0,
-        help="仅给 MuJoCo right_bottle 增加的小幅 payload 质量。",
+        help="给 MuJoCo right_bottle 增加的小幅 payload 质量。",
+    )
+    parser.add_argument(
+        "--predictor-payload-modeling",
+        choices=("unmodeled", "modeled"),
+        default="unmodeled",
+        help=(
+            "unmodeled 只修改仿真 plant；modeled 让 plant、RNEA、"
+            "候选验收和独立执行 worker 使用同一含 payload 模型。"
+        ),
     )
     args = parser.parse_args()
     schedule_profile = (
@@ -167,6 +177,8 @@ if __name__ == "__main__":
             policy_path = os.path.join(repo_dir, policy_path)
         if not os.path.isabs(xml_path):
             xml_path = os.path.join(repo_dir, xml_path)
+
+        source_xml_path = xml_path
 
         simulation_dt = config["simulation_dt"]
         control_decimation = config["control_decimation"]
@@ -393,14 +405,37 @@ if __name__ == "__main__":
     # MuJoCo 负责整机物理推进；TorchScript policy 负责下肢 locomotion。
     # 对论文/面试来说，需要知道“谁负责物理、谁负责走路”，但不用纠结加载语法细节。
     # ==============================
-    m = mujoco.MjModel.from_xml_path(xml_path)
+    modeled_payload_mjcf = None
+    runtime_xml_path = source_xml_path
+    if (
+        args.predictor_payload_kg > 0.0
+        and args.predictor_payload_modeling == "modeled"
+    ):
+        modeled_payload_mjcf = create_modeled_payload_mjcf(
+            source_xml_path,
+            body_name="right_bottle",
+            added_mass_kg=args.predictor_payload_kg,
+        )
+        runtime_xml_path = str(modeled_payload_mjcf.scene_path)
+    m = mujoco.MjModel.from_xml_path(runtime_xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
+    payload_treatment = (
+        "nominal"
+        if args.predictor_payload_kg == 0.0
+        else args.predictor_payload_modeling
+    )
     payload_metadata = {
         "body": "right_bottle",
         "added_mass_kg": float(args.predictor_payload_kg),
         "intentional_nominal_model_mismatch": bool(
             args.predictor_payload_kg > 0.0
+            and args.predictor_payload_modeling == "unmodeled"
+        ),
+        "treatment": payload_treatment,
+        "controller_model_includes_payload": bool(
+            args.predictor_payload_kg > 0.0
+            and args.predictor_payload_modeling == "modeled"
         ),
     }
     if args.predictor_payload_kg > 0.0:
@@ -409,15 +444,30 @@ if __name__ == "__main__":
         )
         if payload_body_id < 0:
             raise ValueError("MuJoCo model 中找不到 right_bottle payload body。")
-        original_mass = float(m.body_mass[payload_body_id])
-        mass_scale = (original_mass + args.predictor_payload_kg) / original_mass
-        m.body_mass[payload_body_id] = original_mass + args.predictor_payload_kg
-        m.body_inertia[payload_body_id] *= mass_scale
-        mujoco.mj_setConst(m, d)
+        original_mass = (
+            float(modeled_payload_mjcf.nominal_mass_kg)
+            if modeled_payload_mjcf is not None
+            else float(m.body_mass[payload_body_id])
+        )
+        if modeled_payload_mjcf is None:
+            mass_scale = (
+                original_mass + args.predictor_payload_kg
+            ) / original_mass
+            m.body_mass[payload_body_id] = (
+                original_mass + args.predictor_payload_kg
+            )
+            m.body_inertia[payload_body_id] *= mass_scale
+            mujoco.mj_setConst(m, d)
         payload_metadata["nominal_mass_kg"] = original_mass
         payload_metadata["simulated_mass_kg"] = float(
             m.body_mass[payload_body_id]
         )
+        expected_mass = original_mass + args.predictor_payload_kg
+        if abs(payload_metadata["simulated_mass_kg"] - expected_mass) > 1e-10:
+            raise ValueError(
+                "runtime payload model mass mismatch: "
+                f"{payload_metadata['simulated_mass_kg']} vs {expected_mass}"
+            )
     if schedule_profile is not None:
         initial_rng = np.random.default_rng(args.predictor_ablation_seed)
         initial_lower_q_offset = np.clip(
@@ -685,7 +735,7 @@ if __name__ == "__main__":
         ),
         mujoco_model=m,
         joint_names=right_arm_id_index_scratch.joint_names,
-        mjcf_path=xml_path,
+        mjcf_path=runtime_xml_path,
         ee_name="right_grasp_site",
         imu_name="imu_in_torso",
     )
@@ -703,7 +753,7 @@ if __name__ == "__main__":
             "pinocchio",
             mujoco_model=m,
             joint_names=right_arm_id_index_scratch.joint_names,
-            mjcf_path=xml_path,
+            mjcf_path=runtime_xml_path,
             ee_name="right_grasp_site",
             imu_name="imu_in_torso",
         )
@@ -719,9 +769,9 @@ if __name__ == "__main__":
         and ddq_nominal_inverse_dynamics_backend == "cpp_pinocchio"
         and cpp_rnea_backend is None
     ):
-        cpp_rnea_backend = CppRightArmRneaBackend(xml_path)
+        cpp_rnea_backend = CppRightArmRneaBackend(runtime_xml_path)
     cpp_ddq_mapper = (
-        CppDdqTorqueMapper(xml_path)
+        CppDdqTorqueMapper(runtime_xml_path)
         if acceleration_controller
         and ddq_forward_dynamics_backend == "cpp"
         and right_arm_execution_runtime in {"sync", "shadow"}
@@ -802,7 +852,7 @@ if __name__ == "__main__":
         )
     right_arm_sim_process = (
         RightArmSimProcess(
-            xml_path,
+            runtime_xml_path,
             nq=m.nq,
             nv=m.nv,
             nu=m.nu,
@@ -1597,7 +1647,7 @@ if __name__ == "__main__":
     finalize_run(
         run_dir,
         buffers,
-        xml_path,
+        source_xml_path,
         simulation_dt,
         video_path,
         video_frames,
@@ -1647,3 +1697,5 @@ if __name__ == "__main__":
         ):
             native_backend.close()
             closed_native_backends.add(id(native_backend))
+    if modeled_payload_mjcf is not None:
+        modeled_payload_mjcf.cleanup()

@@ -2,6 +2,7 @@ import csv
 import hashlib
 import json
 import os
+from pathlib import Path
 import time
 import warnings
 from collections import deque
@@ -3593,6 +3594,51 @@ def build_performance_runtime_config(
         if hasattr(os, "sched_getaffinity")
         else []
     )
+    scheduler_policy = (
+        int(os.sched_getscheduler(0))
+        if hasattr(os, "sched_getscheduler")
+        else None
+    )
+    scheduler_names = {
+        getattr(os, name): name
+        for name in (
+            "SCHED_OTHER",
+            "SCHED_BATCH",
+            "SCHED_IDLE",
+            "SCHED_FIFO",
+            "SCHED_RR",
+        )
+        if hasattr(os, name)
+    }
+    cpu_frequency = {}
+    for cpu in affinity:
+        frequency_root = Path(
+            f"/sys/devices/system/cpu/cpu{cpu}/cpufreq"
+        )
+
+        def read_frequency_value(name):
+            path = frequency_root / name
+            try:
+                return path.read_text(encoding="utf-8").strip()
+            except OSError:
+                return None
+
+        cpu_frequency[str(cpu)] = {
+            "scaling_driver": read_frequency_value("scaling_driver"),
+            "scaling_governor": read_frequency_value("scaling_governor"),
+            "energy_performance_preference": read_frequency_value(
+                "energy_performance_preference"
+            ),
+            "scaling_min_freq_khz": read_frequency_value(
+                "scaling_min_freq"
+            ),
+            "scaling_max_freq_khz": read_frequency_value(
+                "scaling_max_freq"
+            ),
+            "scaling_cur_freq_khz_at_start": read_frequency_value(
+                "scaling_cur_freq"
+            ),
+        }
     metadata = {
         "measurement_scope": (
             "complete_intervals_fully_inside_evaluation"
@@ -3601,6 +3647,24 @@ def build_performance_runtime_config(
         ),
         "gc_disabled_during_control_loop": disable_gc,
         "cpu_affinity": affinity,
+        "cpu_frequency_at_start": cpu_frequency,
+        "scheduler": {
+            "policy": scheduler_policy,
+            "policy_name": scheduler_names.get(
+                scheduler_policy, str(scheduler_policy)
+            ),
+            "priority": (
+                int(os.sched_getparam(0).sched_priority)
+                if hasattr(os, "sched_getparam")
+                else None
+            ),
+            "nice": (
+                int(os.getpriority(os.PRIO_PROCESS, 0))
+                if hasattr(os, "getpriority")
+                else None
+            ),
+            "right_arm_worker_inherits_parent_policy_and_affinity": True,
+        },
         "thread_environment": {
             name: os.environ.get(name, "")
             for name in (
