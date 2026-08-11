@@ -2,43 +2,44 @@
   "baseline_summary": "evaluation_summary/readiness_blocker_diagnostics/performance/summary.json",
   "comparison": {
     "complete_interval_mean_ms": {
-      "rr_change_percent": -15.897164487167947,
+      "rr_change_percent": -19.292019783504124,
       "sched_other": 3.9837077057155685,
-      "sched_rr": 3.3504111390499802
+      "sched_rr": 3.215170027011943
     },
     "complete_interval_p99_ms": {
-      "rr_change_percent": -13.090752180852183,
+      "rr_change_percent": -26.183384162584012,
       "sched_other": 4.833002088362264,
-      "sched_rr": 4.200325762079349
+      "sched_rr": 3.5675585849806644
     },
     "complete_interval_worst_max_ms": {
-      "rr_change_percent": -27.735540910037017,
+      "rr_change_percent": -55.610058114185264,
       "sched_other": 9.023836999404011,
-      "sched_rr": 6.521026996779256
+      "sched_rr": 4.005675999906089
     },
     "overrun": {
       "sched_other_count": 9,
       "sched_other_interval_count": 9588,
-      "sched_rr_count": 2,
+      "sched_rr_count": 0,
       "sched_rr_interval_count": 9588
     },
     "predictor_mean_ms": {
-      "rr_change_percent": -24.358574367458086,
+      "rr_change_percent": -29.21121212463016,
       "sched_other": 0.7050218685481013,
-      "sched_rr": 0.5332885923909695
+      "sched_rr": 0.49907643500148424
     },
     "predictor_p99_ms": {
-      "rr_change_percent": -20.177343444900174,
+      "rr_change_percent": -33.70751279806423,
       "sched_other": 0.9458336177582775,
-      "sched_rr": 0.7549895202858655
+      "sched_rr": 0.6270166300040122
     }
   },
   "decision": {
     "best_effort_runtime": "performance governor; one performance CPU; single-thread numeric libraries; main and blocking C++ worker at SCHED_RR priority 10; kernel RT throttling retained",
     "generic_kernel_reliably_meets_6ms": false,
     "hard_realtime_claim": false,
-    "next_gate_if_failed": "repeat on the target PREEMPT_RT or equivalent real-time environment with IRQ/CPU isolation",
-    "worker_queue_worst_sample_reduction_percent": 96.43812696970353
+    "next_gate_if_failed": null,
+    "target_realtime_reliably_meets_6ms": true,
+    "worker_queue_worst_sample_reduction_percent": 96.13158040236641
   },
   "evidence_scope": "paced MuJoCo closed loop; not hardware evidence",
   "launch_snapshot": {
@@ -49,8 +50,6 @@
       3,
       4,
       5,
-      6,
-      7,
       8,
       9,
       10,
@@ -73,7 +72,7 @@
     "rtprio_limit_hard": 20,
     "rtprio_limit_soft": 20
   },
-  "local_evaluation_group_ignored": "realtime_rr10_validation_20260811",
+  "local_evaluation_group_ignored": "target_rt_preempt_rt_irq_verified_20260811",
   "profiles": [
     "delayed_fast_lateral",
     "slow_start_speedup",
@@ -84,13 +83,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 4.390204998344416,
-        "mean": 3.3040846846164325,
+        "max": 3.839230999801657,
+        "mean": 3.178182131409727,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2483309987583198,
-        "p95": 3.7150792024476678,
-        "p99": 4.098081057527452
+        "p50": 3.157059000159279,
+        "p95": 3.375521200041476,
+        "p99": 3.4784822001938664
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.0375,
@@ -122,14 +121,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.8821160008665174,
-        "mean": 0.5264007612368005,
-        "p50": 0.5053464974480448,
-        "p95": 0.637041747359035,
-        "p99": 0.7499413874393213
+        "max": 0.7148810000217054,
+        "mean": 0.49174001500063014,
+        "p50": 0.4824369999596456,
+        "p95": 0.5650458000673098,
+        "p99": 0.6098067999187151
       },
       "profile": "delayed_fast_lateral",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_221703_timing_rr10_delayed_fast_lateral_seed2101_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235141_timing_rr10_delayed_fast_lateral_seed2101_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -139,15 +138,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -162,7 +181,7 @@
               7
             ],
             "nice": 0,
-            "pid": 92657,
+            "pid": 13428,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -239,13 +258,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 5.6321439988096245,
-        "mean": 3.3593023618733415,
+        "max": 4.005675999906089,
+        "mean": 3.2008162002501295,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2873959971766453,
-        "p95": 3.8733524022973143,
-        "p99": 4.4027539987291675
+        "p50": 3.167847000213442,
+        "p95": 3.431126500163373,
+        "p99": 3.632593839975015
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.0375,
@@ -277,14 +296,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.9137950000877026,
-        "mean": 0.5326043150262194,
-        "p50": 0.5077690002508461,
-        "p95": 0.6754726497092632,
-        "p99": 0.7624742120606242
+        "max": 0.8350509999672795,
+        "mean": 0.49530721625131946,
+        "p50": 0.48448749998897256,
+        "p95": 0.5699943500189874,
+        "p99": 0.6289158999447864
       },
       "profile": "delayed_fast_lateral",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222111_timing_rr10_delayed_fast_lateral_seed2102_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235200_timing_rr10_delayed_fast_lateral_seed2102_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -294,15 +313,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4404424",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -317,7 +356,7 @@
               7
             ],
             "nice": 0,
-            "pid": 93201,
+            "pid": 13609,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -394,13 +433,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 5.809856997075258,
-        "mean": 3.3031129111733346,
+        "max": 3.6965200001759513,
+        "mean": 3.1947568085102755,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2137530033651274,
-        "p95": 3.7920705955912117,
-        "p99": 4.268951961275886
+        "p50": 3.1755590000557277,
+        "p95": 3.4208687000500495,
+        "p99": 3.560098999901129
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.03625,
@@ -432,14 +471,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.9639429990784265,
-        "mean": 0.520740077499795,
-        "p50": 0.49742199917091057,
-        "p95": 0.6503720993350726,
-        "p99": 0.7780756066858882
+        "max": 0.8657470000343892,
+        "mean": 0.4995189500030506,
+        "p50": 0.4909389999738778,
+        "p95": 0.5769090001194854,
+        "p99": 0.6229548699684528
       },
       "profile": "delayed_fast_lateral",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222129_timing_rr10_delayed_fast_lateral_seed2103_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235220_timing_rr10_delayed_fast_lateral_seed2103_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -449,15 +488,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4426370",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -472,7 +531,7 @@
               7
             ],
             "nice": 0,
-            "pid": 93427,
+            "pid": 13789,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -549,13 +608,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 5.304495003656484,
-        "mean": 3.318068465532189,
+        "max": 3.80213499988713,
+        "mean": 3.2874978322952835,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2426500001747627,
-        "p95": 3.8606848997005714,
-        "p99": 4.188578841931301
+        "p50": 3.2774910000625823,
+        "p95": 3.533007200144311,
+        "p99": 3.6738900599539193
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.035,
@@ -587,14 +646,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.8253779997176025,
-        "mean": 0.5252718262408962,
-        "p50": 0.5032254994148389,
-        "p95": 0.6636347481617122,
-        "p99": 0.7683218314923579
+        "max": 0.6952319999982137,
+        "mean": 0.5136505275015679,
+        "p50": 0.504359999922599,
+        "p95": 0.5952372501951686,
+        "p99": 0.656868669962023
       },
       "profile": "delayed_fast_lateral",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222146_timing_rr10_delayed_fast_lateral_seed2104_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235239_timing_rr10_delayed_fast_lateral_seed2104_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -604,15 +663,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4426257",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -627,7 +706,7 @@
               7
             ],
             "nice": 0,
-            "pid": 93630,
+            "pid": 13971,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -704,13 +783,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 4.72300600449671,
-        "mean": 3.463576682033351,
+        "max": 3.767093999840654,
+        "mean": 3.2131620050068173,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.3774900002754293,
-        "p95": 4.046608300996013,
-        "p99": 4.253817615681328
+        "p50": 3.19549700020616,
+        "p95": 3.4479240998280147,
+        "p99": 3.5708321998708925
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.035,
@@ -742,14 +821,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.8513119973940775,
-        "mean": 0.5544983624668021,
-        "p50": 0.5231525010458427,
-        "p95": 0.7307443009267441,
-        "p99": 0.7894084992585704
+        "max": 0.7388820001779095,
+        "mean": 0.49971493125070765,
+        "p50": 0.48964950008212327,
+        "p95": 0.5775408999852515,
+        "p99": 0.6334208098746785
       },
       "profile": "slow_start_speedup",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222203_timing_rr10_slow_start_speedup_seed2101_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235259_timing_rr10_slow_start_speedup_seed2101_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -759,15 +838,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -782,7 +881,7 @@
               7
             ],
             "nice": 0,
-            "pid": 93832,
+            "pid": 14187,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -859,13 +958,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 4.534004001470748,
-        "mean": 3.524473111314904,
+        "max": 3.6803979999149306,
+        "mean": 3.2108274067678884,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.430918000958627,
-        "p95": 4.136045398627175,
-        "p99": 4.279144513639039
+        "p50": 3.1910480001897668,
+        "p95": 3.428943999983858,
+        "p99": 3.602744439799608
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.03375,
@@ -897,14 +996,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.8330710006703157,
-        "mean": 0.5801486149675839,
-        "p50": 0.548709000213421,
-        "p95": 0.7594836009957362,
-        "p99": 0.7805799981360906
+        "max": 0.707221000084246,
+        "mean": 0.5004042887526339,
+        "p50": 0.48947250002129294,
+        "p95": 0.5836287500414983,
+        "p99": 0.6334532601931642
       },
       "profile": "slow_start_speedup",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222221_timing_rr10_slow_start_speedup_seed2102_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235318_timing_rr10_slow_start_speedup_seed2102_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -914,15 +1013,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -937,7 +1056,7 @@
               7
             ],
             "nice": 0,
-            "pid": 94032,
+            "pid": 14365,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -1014,13 +1133,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 3.972444999817526,
-        "mean": 3.272879911199514,
+        "max": 3.7571870000192575,
+        "mean": 3.1887823016257744,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2414849993074313,
-        "p95": 3.5628964011266344,
-        "p99": 3.7808745155052748
+        "p50": 3.1646220002130576,
+        "p95": 3.405670699885377,
+        "p99": 3.5098406200268073
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.035,
@@ -1052,14 +1171,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.7274490017152857,
-        "mean": 0.5135343512620238,
-        "p50": 0.5006195005989866,
-        "p95": 0.5990430996462237,
-        "p99": 0.6570742406620411
+        "max": 0.7188760000644834,
+        "mean": 0.49351045750086087,
+        "p50": 0.483754000015324,
+        "p95": 0.5668582000680544,
+        "p99": 0.6125724300613911
       },
       "profile": "slow_start_speedup",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222238_timing_rr10_slow_start_speedup_seed2103_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235340_timing_rr10_slow_start_speedup_seed2103_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -1069,15 +1188,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -1092,7 +1231,7 @@
               7
             ],
             "nice": 0,
-            "pid": 94237,
+            "pid": 14566,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -1169,13 +1308,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 4.7912200025166385,
-        "mean": 3.3810297310027337,
+        "max": 3.7703340001371544,
+        "mean": 3.268392023770464,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2845630012161564,
-        "p95": 4.026760300985188,
-        "p99": 4.288527383541805
+        "p50": 3.249771000128021,
+        "p95": 3.518328499899326,
+        "p99": 3.6452492399030234
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.03625,
@@ -1207,14 +1346,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.998815998173086,
-        "mean": 0.5387960950156412,
-        "p50": 0.5095154992886819,
-        "p95": 0.6983843491980222,
-        "p99": 0.7521893404555158
+        "max": 0.7299880001028214,
+        "mean": 0.5099105525033565,
+        "p50": 0.4996840000330849,
+        "p95": 0.5945694498905141,
+        "p99": 0.6472830701227393
       },
       "profile": "slow_start_speedup",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222256_timing_rr10_slow_start_speedup_seed2104_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235359_timing_rr10_slow_start_speedup_seed2104_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -1224,15 +1363,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4461439",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -1247,7 +1406,7 @@
               7
             ],
             "nice": 0,
-            "pid": 94436,
+            "pid": 14748,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -1324,13 +1483,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 5.395891999796731,
-        "mean": 3.2939637898475786,
+        "max": 3.784685000027821,
+        "mean": 3.2291599036270053,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2139889990503434,
-        "p95": 3.876099901754059,
-        "p99": 4.191878222918603
+        "p50": 3.206158000011783,
+        "p95": 3.4547895000059725,
+        "p99": 3.572664819907913
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.03375,
@@ -1362,14 +1521,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.9191620010824408,
-        "mean": 0.5231104949416476,
-        "p50": 0.5015730002924101,
-        "p95": 0.6618329009143052,
-        "p99": 0.7573296308692079
+        "max": 0.7498390000364452,
+        "mean": 0.5002182999956517,
+        "p50": 0.4907620000267343,
+        "p95": 0.580939149972437,
+        "p99": 0.6276816301055987
       },
       "profile": "late_multiaxis",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222313_timing_rr10_late_multiaxis_seed2101_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235421_timing_rr10_late_multiaxis_seed2101_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -1379,15 +1538,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4459819",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -1402,7 +1581,7 @@
               7
             ],
             "nice": 0,
-            "pid": 94661,
+            "pid": 14927,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -1479,13 +1658,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 4.585827002301812,
-        "mean": 3.370302147728291,
+        "max": 3.563694999911604,
+        "mean": 3.1575256057610486,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.2962290024443064,
-        "p95": 3.9525820026028664,
-        "p99": 4.200243517552735
+        "p50": 3.1403729999510688,
+        "p95": 3.335347499955787,
+        "p99": 3.46432552002625
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.035,
@@ -1517,14 +1696,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.8194319998438004,
-        "mean": 0.5380226112674791,
-        "p50": 0.5092379997222451,
-        "p95": 0.68459975082078,
-        "p99": 0.7559776380367111
+        "max": 0.6479050000507414,
+        "mean": 0.48944158875855237,
+        "p50": 0.4809410000916614,
+        "p95": 0.557963200060385,
+        "p99": 0.6021699699317651
       },
       "profile": "late_multiaxis",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222330_timing_rr10_late_multiaxis_seed2102_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235440_timing_rr10_late_multiaxis_seed2102_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -1534,15 +1713,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4456862",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -1557,7 +1756,7 @@
               7
             ],
             "nice": 0,
-            "pid": 94884,
+            "pid": 15105,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -1634,13 +1833,13 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 4.312052999011939,
-        "mean": 3.2966922164373176,
+        "max": 3.7542580000717862,
+        "mean": 3.1641895106257834,
         "overrun_count": 0,
         "overrun_fraction": 0.0,
-        "p50": 3.223768999305321,
-        "p95": 3.830637198552721,
-        "p99": 4.186088119313354
+        "p50": 3.1453110000256856,
+        "p95": 3.338700299968877,
+        "p99": 3.473476700187348
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.035,
@@ -1672,14 +1871,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 0.7744870017631911,
-        "mean": 0.5244180638055695,
-        "p50": 0.49933400077861734,
-        "p95": 0.6643794995397906,
-        "p99": 0.743991979798011
+        "max": 0.737147000108962,
+        "mean": 0.48745132125105783,
+        "p50": 0.47800350012039416,
+        "p95": 0.5391334501496202,
+        "p99": 0.6139443300526181
       },
       "profile": "late_multiaxis",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222348_timing_rr10_late_multiaxis_seed2103_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235502_timing_rr10_late_multiaxis_seed2103_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -1689,15 +1888,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4489611",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -1712,7 +1931,7 @@
               7
             ],
             "nice": 0,
-            "pid": 95087,
+            "pid": 15287,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -1789,29 +2008,29 @@
       "complete_6ms_right_arm_interval_ms": {
         "budget_ms": 6.0,
         "count": 799,
-        "max": 6.521026996779256,
-        "mean": 3.3174476558407777,
-        "overrun_count": 2,
-        "overrun_fraction": 0.0025031289111389237,
-        "p50": 3.2325200008926913,
-        "p95": 3.862016894345288,
-        "p99": 4.264969397336245
+        "max": 3.8605899999311077,
+        "mean": 3.288748594493117,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.275334000136354,
+        "p95": 3.5250656000698655,
+        "p99": 3.626504380022197
       },
       "overall_evaluation": {
         "ddq_saturation_any_fraction": 0.03125,
-        "qp_fallback_fraction": 0.0,
-        "qp_success_fraction": 1.0,
-        "right_ee_acc_norm_rms": 2.402776228524262,
-        "right_ee_alpha_norm_rms": 6.659719261699444,
-        "right_ee_tilt_xy_norm_rms": 0.055996499264547375,
-        "torso_acc_norm_rms": 2.179063589604906,
-        "torso_alpha_norm_rms": 6.985825330262404
+        "qp_fallback_fraction": 0.00125,
+        "qp_success_fraction": 0.99875,
+        "right_ee_acc_norm_rms": 2.406354315617607,
+        "right_ee_alpha_norm_rms": 6.69729610725181,
+        "right_ee_tilt_xy_norm_rms": 0.0561894868167628,
+        "torso_acc_norm_rms": 2.178841152420041,
+        "torso_alpha_norm_rms": 6.981211871479771
       },
       "payload_cause_diagnostics": {
-        "current_q_violation_fraction": 0.0075,
-        "current_q_violation_max_rad": 0.000105275419230208,
-        "forward_dynamics_model_error_norm_rms": 2.7845452083776824e-14,
-        "recovery_active_fraction": 0.025,
+        "current_q_violation_fraction": 0.02,
+        "current_q_violation_max_rad": 0.0004596481765950372,
+        "forward_dynamics_model_error_norm_rms": 2.8452207926895756e-14,
+        "recovery_active_fraction": 0.0325,
         "solver_status_val_counts": {
           "1": 800
         }
@@ -1827,14 +2046,14 @@
       "payload_modeling": "unmodeled",
       "predictor_timing_ms": {
         "count": 800,
-        "max": 1.0663680004654452,
-        "mean": 0.521917534961176,
-        "p50": 0.4958994995831745,
-        "p95": 0.6651980515016476,
-        "p99": 0.7645098785360459
+        "max": 0.7072239998251462,
+        "mean": 0.508049071248422,
+        "p50": 0.49902349985586625,
+        "p95": 0.5908315000624498,
+        "p99": 0.6351278199122133
       },
       "profile": "late_multiaxis",
-      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222405_timing_rr10_late_multiaxis_seed2104_payload0g_unmodeled_hybrid_residual",
+      "run_dir_local_ignored": "evaluation/target_rt_preempt_rt_irq_verified_20260811/20260811_235522_timing_rr10_late_multiaxis_seed2104_payload0g_unmodeled_hybrid_residual",
       "runtime_environment": {
         "aligned_measurement_end_time_s": 5.6,
         "complete_interval_count_expected": 800,
@@ -1844,15 +2063,35 @@
         "cpu_frequency_at_start": {
           "7": {
             "energy_performance_preference": "default",
-            "scaling_cur_freq_khz_at_start": "4500045",
+            "scaling_cur_freq_khz_at_start": "400000",
             "scaling_driver": "intel_pstate",
             "scaling_governor": "performance",
             "scaling_max_freq_khz": "4500000",
             "scaling_min_freq_khz": "400000"
           }
         },
+        "evaluation_irq_activity": {
+          "active_irqs": [],
+          "captured": true,
+          "end_simulation_time_s": 5.6,
+          "end_total_on_physical_core": 6031,
+          "error": null,
+          "physical_core_cpus": [
+            6,
+            7
+          ],
+          "start_simulation_time_s": 0.8,
+          "start_total_on_physical_core": 6031,
+          "timing_scope_note": "numeric /proc/interrupts snapshots are read at evaluation boundaries outside the complete 6 ms control-path timer",
+          "total_delta_on_physical_core": 0
+        },
+        "evaluation_irq_monitoring_enabled": true,
         "gc_disabled_during_control_loop": true,
         "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "physical_core_cpus": [
+          6,
+          7
+        ],
         "requested_measurement_end_time_s": 5.6000000000000005,
         "requested_measurement_start_time_s": 0.8,
         "scheduler": {
@@ -1867,7 +2106,7 @@
               7
             ],
             "nice": 0,
-            "pid": 95287,
+            "pid": 15466,
             "policy": 2,
             "policy_name": "SCHED_RR",
             "priority": 10
@@ -1888,54 +2127,54 @@
         "warmup_cycles_before_measurement": 1
       },
       "safety": {
-        "complete_interval_overrun_count": 2,
-        "complete_interval_overrun_fraction": 0.0025031289111389237,
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
         "critical_nonfinite_count": 0
       },
       "safety_gate": {
         "acc_correction_norm_max": {
-          "count": 798,
+          "count": 800,
           "max": 12.48145580291748,
-          "mean": 2.00249637482235,
-          "p95": 9.428734588623046,
-          "p99": 11.660202970504761
+          "mean": 2.0074335357733073,
+          "p95": 9.444913816452024,
+          "p99": 11.632246284484863
         },
         "alpha_correction_norm_max": {
-          "count": 798,
-          "max": 48.853172302246094,
-          "mean": 8.889959815786895,
-          "p95": 38.109418869018555,
-          "p99": 43.79927825927734
+          "count": 800,
+          "max": 48.66511154174805,
+          "mean": 8.918573868758976,
+          "p95": 38.09032230377197,
+          "p99": 43.79360321044922
         },
         "by_code": {
           "4": 0,
           "5": 0,
           "6": 0,
           "7": 0,
-          "8": 2
+          "8": 0
         },
-        "evaluation_count": 2,
-        "evaluation_fraction": 0.0025,
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
         "input_abs_z_max": {
-          "count": 798,
+          "count": 800,
           "max": 7.265402317047119,
-          "mean": 4.440437536938746,
-          "p95": 6.805877208709717,
+          "mean": 4.447123980671168,
+          "p95": 6.8052544593811035,
           "p99": 7.265402317047119
         },
         "input_rms_z": {
-          "count": 798,
+          "count": 800,
           "max": 1.3866184055624602,
-          "mean": 1.0418069608591076,
-          "p95": 1.2826903719812148,
-          "p99": 1.3822338236177
+          "mean": 1.0419007493158374,
+          "p95": 1.282420796461398,
+          "p99": 1.3822034548533713
         },
         "prediction_abs_z_max": {
-          "count": 798,
+          "count": 800,
           "max": 7.458605766296387,
-          "mean": 1.7071557931396597,
-          "p95": 6.038276243209839,
-          "p99": 6.674292774200438
+          "mean": 1.7112261869572103,
+          "p95": 6.003037524223328,
+          "p99": 6.642493662834167
         }
       },
       "seed": 2104
@@ -2287,40 +2526,15 @@
   },
   "sched_rr_overrun_profile": {
     "component_mean_ms": {
-      "cpp_executor_bridge_ms": 0.059027500000000004,
-      "ddq_total_ms": 2.0207060006214306,
-      "mpc_policy_update_ms": 3.5879049992217915,
-      "other_right_arm_path_ms": 0.7469109981606854
+      "cpp_executor_bridge_ms": 0.0,
+      "ddq_total_ms": 0.0,
+      "mpc_policy_update_ms": 0.0,
+      "other_right_arm_path_ms": 0.0
     },
-    "largest_intervals": [
-      {
-        "complete_interval_ms": "6.521026996779256",
-        "cpp_executor_bridge_ms": "0.05959400000000001",
-        "ddq_max_ms": "1.1751589991035871",
-        "ddq_rescue_count": "0",
-        "ddq_second_pass_count": "1",
-        "ddq_total_ms": "2.111132998834364",
-        "mpc_policy_update_ms": "3.5976090002804995",
-        "other_right_arm_path_ms": "0.752690997664392",
-        "profile": "late_multiaxis",
-        "seed": 2104
-      },
-      {
-        "complete_interval_ms": "6.308071999228559",
-        "cpp_executor_bridge_ms": "0.058461",
-        "ddq_max_ms": "1.0086610018333886",
-        "ddq_rescue_count": "0",
-        "ddq_second_pass_count": "0",
-        "ddq_total_ms": "1.930279002408497",
-        "mpc_policy_update_ms": "3.5782009981630836",
-        "other_right_arm_path_ms": "0.7411309986569788",
-        "profile": "late_multiaxis",
-        "seed": 2104
-      }
-    ],
-    "overrun_count": 2,
-    "without_ddq_rescue_count": 2,
-    "without_ddq_second_pass_count": 1
+    "largest_intervals": [],
+    "overrun_count": 0,
+    "without_ddq_rescue_count": 0,
+    "without_ddq_second_pass_count": 0
   },
   "sched_rr_result": {
     "overall": {
@@ -2334,134 +2548,134 @@
       "qp_fallback_fraction": {
         "count": 12,
         "max": 0.0075,
-        "mean": 0.0035416666666666674,
-        "min": 0.0,
-        "std": 0.002438479148066589
+        "mean": 0.0036458333333333343,
+        "min": 0.00125,
+        "std": 0.002308179146475035
       },
       "qp_success_fraction": {
         "count": 12,
-        "max": 1.0,
-        "mean": 0.9964583333333333,
+        "max": 0.99875,
+        "mean": 0.9963541666666665,
         "min": 0.9925,
-        "std": 0.002438479148066584
+        "std": 0.0023081791464750335
       },
       "right_ee_acc_norm_rms": {
         "count": 12,
         "max": 2.5143667938734966,
-        "mean": 2.4449082436687823,
+        "mean": 2.4452064175932278,
         "min": 2.396628575037997,
-        "std": 0.044992515124262
+        "std": 0.044723361514844615
       },
       "right_ee_alpha_norm_rms": {
         "count": 12,
         "max": 7.386951384277725,
-        "mean": 6.875189538040643,
+        "mean": 6.878320941836673,
         "min": 6.538275247162115,
-        "std": 0.31149743561315024
+        "std": 0.30949808739006335
       },
       "right_ee_tilt_xy_norm_rms": {
         "count": 12,
         "max": 0.06376173851409507,
-        "mean": 0.06035836696878213,
+        "mean": 0.060374449264800074,
         "min": 0.055660732062517176,
-        "std": 0.003128483367735966
+        "std": 0.0031064377556417532
       },
       "torso_acc_norm_rms": {
         "count": 12,
         "max": 2.265044747918616,
-        "mean": 2.20570458220131,
+        "mean": 2.205686045769238,
         "min": 2.1662659878190347,
-        "std": 0.040589878604836635
+        "std": 0.0406020896339957
       },
       "torso_alpha_norm_rms": {
         "count": 12,
         "max": 7.892565556644318,
-        "mean": 7.309962915755226,
+        "mean": 7.309578460856674,
         "min": 6.886404562300306,
-        "std": 0.38186492847731307
+        "std": 0.38219325220016404
       }
     },
     "run_count": 12,
     "safety_totals": {
       "complete_interval_count": 9588,
-      "complete_interval_overrun_count": 2,
-      "complete_interval_overrun_fraction": 0.00020859407592824363,
+      "complete_interval_overrun_count": 0,
+      "complete_interval_overrun_fraction": 0.0,
       "critical_nonfinite_count": 0,
       "evaluation_update_count": 9600,
-      "predictor_fallback_count": 5,
+      "predictor_fallback_count": 3,
       "safety_gate_by_code": {
         "4": 0,
         "5": 0,
         "6": 0,
         "7": 3,
-        "8": 2
+        "8": 0
       },
-      "safety_gate_count": 5,
-      "safety_gate_fraction": 0.0005208333333333333
+      "safety_gate_count": 3,
+      "safety_gate_fraction": 0.0003125
     },
     "timing_ms": {
       "complete_interval_max": {
         "count": 12,
-        "max": 6.521026996779256,
-        "mean": 4.997681250339762,
-        "min": 3.972444999817526,
-        "std": 0.7087769560778203
+        "max": 4.005675999906089,
+        "mean": 3.773483583302095,
+        "min": 3.563694999911604,
+        "std": 0.10249205714875557
       },
       "complete_interval_mean": {
         "count": 12,
-        "max": 3.524473111314904,
-        "mean": 3.3504111390499802,
-        "min": 3.272879911199514,
-        "std": 0.07252311942698066
+        "max": 3.288748594493117,
+        "mean": 3.215170027011943,
+        "min": 3.1575256057610486,
+        "std": 0.043113557183427034
       },
       "complete_interval_p99": {
         "count": 12,
-        "max": 4.4027539987291675,
-        "mean": 4.200325762079349,
-        "min": 3.7808745155052748,
-        "std": 0.14535136794572864
+        "max": 3.6738900599539193,
+        "mean": 3.5675585849806644,
+        "min": 3.46432552002625,
+        "std": 0.06901166816031756
       },
       "neural_core_max": {
         "count": 12,
-        "max": 0.49126399972010404,
-        "mean": 0.4202621670022684,
-        "min": 0.322619998769369,
-        "std": 0.05123169471815869
+        "max": 0.4881090001163102,
+        "mean": 0.39059875001612454,
+        "min": 0.32882499999686843,
+        "std": 0.0401806091872249
       },
       "neural_core_mean": {
         "count": 12,
-        "max": 0.2349097387150323,
-        "mean": 0.2043344243871131,
-        "min": 0.19156286628003727,
-        "std": 0.010860288015148734
+        "max": 0.18824048621219963,
+        "mean": 0.18038085346705265,
+        "min": 0.17296685124989608,
+        "std": 0.004523843370044572
       },
       "neural_core_p99": {
         "count": 12,
-        "max": 0.35502581031323643,
-        "mean": 0.33916932351530704,
-        "min": 0.30038997014344204,
-        "std": 0.013327887827987061
+        "max": 0.30767766982080497,
+        "mean": 0.292025740835129,
+        "min": 0.27604214986467923,
+        "std": 0.008434486636097747
       },
       "predictor_max": {
         "count": 12,
-        "max": 1.0663680004654452,
-        "mean": 0.8812774167381576,
-        "min": 0.7274490017152857,
-        "std": 0.09248402488839848
+        "max": 0.8657470000343892,
+        "mean": 0.7373327500393619,
+        "min": 0.6479050000507414,
+        "std": 0.056774146798062246
       },
       "predictor_mean": {
         "count": 12,
-        "max": 0.5801486149675839,
-        "mean": 0.5332885923909695,
-        "min": 0.5135343512620238,
-        "std": 0.017487888037529774
+        "max": 0.5136505275015679,
+        "mean": 0.49907643500148424,
+        "min": 0.48745132125105783,
+        "std": 0.007857823752423044
       },
       "predictor_p99": {
         "count": 12,
-        "max": 0.7894084992585704,
-        "mean": 0.7549895202858655,
-        "min": 0.6570742406620411,
-        "std": 0.03220382927130138
+        "max": 0.656868669962023,
+        "mean": 0.6270166300040122,
+        "min": 0.6021699699317651,
+        "std": 0.015175940571666435
       }
     },
     "transients": {
@@ -2492,23 +2706,23 @@
         "right_ee_acc_norm_rms": {
           "count": 12,
           "max": 2.931681360970951,
-          "mean": 2.438450238488781,
+          "mean": 2.441702843107931,
           "min": 1.9129060344524715,
-          "std": 0.39208028933753586
+          "std": 0.39226589441324483
         },
         "right_ee_alpha_norm_rms": {
           "count": 12,
-          "max": 6.540087732708923,
-          "mean": 6.284246036491964,
+          "max": 6.672026497659424,
+          "mean": 6.310090432951391,
           "min": 5.977990645810112,
-          "std": 0.15201634987282092
+          "std": 0.1856603022063197
         },
         "right_ee_tilt_xy_norm_rms": {
           "count": 12,
           "max": 0.07144362319567435,
-          "mean": 0.05593206802988124,
+          "mean": 0.05605002949066759,
           "min": 0.04618138578335574,
-          "std": 0.010523495249878945
+          "std": 0.010421635148736343
         }
       },
       "velocity_change": {
@@ -2590,57 +2804,220 @@
     },
     "sched_rr": {
       "ddq_to_torque_call": {
-        "mean_of_run_means_ms": 0.46514343629648164,
-        "mean_of_run_p99_ms": 0.7028890242872876,
+        "mean_of_run_means_ms": 0.44261968140569746,
+        "mean_of_run_p99_ms": 0.5696014883180093,
         "run_count": 12,
-        "worst_run_p99_ms": 0.7399812708172249,
-        "worst_sample_ms": 1.1751589991035871
+        "worst_run_p99_ms": 0.6038512998884471,
+        "worst_sample_ms": 0.7568349999473867
       },
       "mpc_policy_update": {
-        "mean_of_run_means_ms": 1.992090132607321,
-        "mean_of_run_p99_ms": 2.41475361613387,
+        "mean_of_run_means_ms": 1.907539785832692,
+        "mean_of_run_p99_ms": 2.136480876671006,
         "run_count": 12,
-        "worst_run_p99_ms": 2.5201528297839104,
-        "worst_sample_ms": 3.5976090002804995
+        "worst_run_p99_ms": 2.187959350001165,
+        "worst_sample_ms": 2.4020309999741585
       },
       "worker_compute": {
-        "mean_of_run_means_ms": 0.1242584647222222,
-        "mean_of_run_p99_ms": 0.31012872083333326,
+        "mean_of_run_means_ms": 0.11259543822916666,
+        "mean_of_run_p99_ms": 0.24787921166666652,
         "run_count": 12,
-        "worst_run_p99_ms": 0.32561653,
-        "worst_sample_ms": 0.598481
+        "worst_run_p99_ms": 0.25707586,
+        "worst_sample_ms": 0.381779
       },
       "worker_ipc_and_copy": {
-        "mean_of_run_means_ms": 0.03337039350694445,
-        "mean_of_run_p99_ms": 0.06566085083333327,
+        "mean_of_run_means_ms": 0.03824452479166667,
+        "mean_of_run_p99_ms": 0.0649157891666666,
         "run_count": 12,
-        "worst_run_p99_ms": 0.07125853999999995,
-        "worst_sample_ms": 0.23417100000000002
+        "worst_run_p99_ms": 0.07363220999999998,
+        "worst_sample_ms": 0.10905100000000004
       },
       "worker_queue": {
-        "mean_of_run_means_ms": 0.019354227986111115,
-        "mean_of_run_p99_ms": 0.04194823333333327,
+        "mean_of_run_means_ms": 0.02316221652777778,
+        "mean_of_run_p99_ms": 0.04040220333333328,
         "run_count": 12,
-        "worst_run_p99_ms": 0.045762069999999995,
-        "worst_sample_ms": 0.07408500000000001
+        "worst_run_p99_ms": 0.04645967999999996,
+        "worst_sample_ms": 0.080461
       },
       "worker_roundtrip": {
-        "mean_of_run_means_ms": 0.15762885822916667,
-        "mean_of_run_p99_ms": 0.3724675041666665,
+        "mean_of_run_means_ms": 0.15083996302083336,
+        "mean_of_run_p99_ms": 0.29346180916666637,
         "run_count": 12,
-        "worst_run_p99_ms": 0.3906993099999999,
-        "worst_sample_ms": 0.686745
+        "worst_run_p99_ms": 0.3076454899999991,
+        "worst_sample_ms": 0.442224
       }
     }
   },
+  "target_environment": {
+    "control_cpu": 7,
+    "governors": {
+      "6": "performance",
+      "7": "performance"
+    },
+    "housekeeping_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "isolation": {
+      "active_irq_conflicts": [],
+      "configured_irq_conflicts": [
+        {
+          "count_on_isolated": 6031,
+          "description": "IR-PCI-MSIX-0000:01:00.0 8-edge nvme0q8",
+          "effective_affinity": "7",
+          "irq": 169,
+          "isolated_overlap": "7",
+          "total_count": 6031
+        }
+      ],
+      "irq_affinity_evidence_available": true,
+      "irq_observation_ms": 100.0,
+      "irqaffinity_cpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "irqbalance_state": "inactive",
+      "isolcpus_cpus": [
+        6,
+        7
+      ],
+      "isolcpus_flags": [
+        "domain",
+        "managed_irq"
+      ],
+      "nohz_full_active_cpus": [
+        6,
+        7
+      ],
+      "nohz_full_cmdline_cpus": [
+        6,
+        7
+      ],
+      "rcu_nocbs_cpus": [
+        6,
+        7
+      ],
+      "sysfs_isolated_cpus": [
+        6,
+        7
+      ]
+    },
+    "kernel": {
+      "command_line": "BOOT_IMAGE=/boot/vmlinuz-6.8.1-1057-realtime root=UUID=de12a84a-d992-4e2c-86a3-2b2dad6aec21 ro quiet splash vt.handoff=7 isolcpus=domain,managed_irq,6-7 nohz_full=6-7 rcu_nocbs=6-7 irqaffinity=0-5,8-17",
+      "preempt_rt": {
+        "config_preempt_rt": true,
+        "detected": true,
+        "sysfs_realtime": "1",
+        "version_preempt_rt": true
+      },
+      "release": "6.8.1-1057-realtime",
+      "version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026"
+    },
+    "online_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "physical_core_cpus": [
+      6,
+      7
+    ],
+    "recommended_boot_parameters": "isolcpus=domain,managed_irq,6-7 nohz_full=6-7 rcu_nocbs=6-7 irqaffinity=0-5,8-17",
+    "rt_throttling": {
+      "period_us": "1000000",
+      "runtime_us": "950000"
+    },
+    "tools": {
+      "chrt": "/usr/bin/chrt",
+      "sudo": "/usr/bin/sudo",
+      "systemd-run": "/usr/bin/systemd-run",
+      "taskset": "/usr/bin/taskset"
+    }
+  },
+  "target_environment_gate": {
+    "checks": {
+      "boot_irqaffinity_excludes_physical_core": true,
+      "bounded_kernel_rt_throttling": true,
+      "control_cpu_online": true,
+      "irq_affinity_evidence_available": true,
+      "irqbalance_inactive": true,
+      "isolcpus_domain_and_managed_irq": true,
+      "isolcpus_whole_physical_core": true,
+      "no_active_irq_on_physical_core": true,
+      "nohz_full_whole_physical_core": true,
+      "performance_governor_on_physical_core": true,
+      "physical_core_known": true,
+      "preempt_rt_kernel": true,
+      "rcu_nocbs_whole_physical_core": true,
+      "required_runtime_tools_available": true
+    },
+    "failed_checks": [],
+    "passed": true
+  },
   "timing_gate": {
     "checks": {
+      "at_least_12_repeated_runs": true,
+      "at_least_9588_complete_intervals": true,
+      "evaluation_irq_activity_captured_for_all_runs": true,
       "normal_qp_success_min_ge_99pct": true,
-      "worst_run_complete_max_lt_6ms": false,
+      "worst_run_complete_max_lt_6ms": true,
       "worst_run_complete_p99_le_5p5ms": true,
-      "zero_6ms_overrun": false,
-      "zero_critical_nonfinite": true
+      "zero_6ms_overrun": true,
+      "zero_critical_nonfinite": true,
+      "zero_evaluation_irq_on_physical_core": true
     },
-    "passed": false
+    "passed": true,
+    "requirements": {
+      "control_period_ms": 6.0,
+      "maximum_complete_interval_overrun_count": 0,
+      "maximum_critical_nonfinite_count": 0,
+      "maximum_evaluation_irq_count_on_physical_core": 0,
+      "maximum_worst_run_p99_ms": 5.5,
+      "minimum_complete_interval_count": 9588,
+      "minimum_normal_qp_success_fraction": 0.99,
+      "minimum_run_count": 12
+    }
   }
 }

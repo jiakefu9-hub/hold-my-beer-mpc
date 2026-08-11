@@ -14,6 +14,11 @@ import matplotlib.pyplot as plt
 import mujoco
 import numpy as np
 
+from realtime_environment import (
+    read_interrupt_counts,
+    summarize_interrupt_activity,
+)
+
 try:
     import imageio.v2 as imageio
 except ImportError:
@@ -3594,6 +3599,24 @@ def build_performance_runtime_config(
         if hasattr(os, "sched_getaffinity")
         else []
     )
+    physical_core_cpus = set()
+    for cpu in affinity:
+        siblings_path = Path(
+            f"/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list"
+        )
+        try:
+            sibling_text = siblings_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            physical_core_cpus.add(cpu)
+            continue
+        for token in sibling_text.split(","):
+            bounds = token.split("-", 1)
+            try:
+                start = int(bounds[0])
+                end = int(bounds[-1])
+            except ValueError:
+                continue
+            physical_core_cpus.update(range(start, end + 1))
     scheduler_policy = (
         int(os.sched_getscheduler(0))
         if hasattr(os, "sched_getscheduler")
@@ -3647,6 +3670,10 @@ def build_performance_runtime_config(
         ),
         "gc_disabled_during_control_loop": disable_gc,
         "cpu_affinity": affinity,
+        "physical_core_cpus": sorted(physical_core_cpus),
+        "evaluation_irq_monitoring_enabled": (
+            os.environ.get("MPC_REQUIRE_TARGET_REALTIME", "0") == "1"
+        ),
         "cpu_frequency_at_start": cpu_frequency,
         "scheduler": {
             "policy": scheduler_policy,
@@ -3798,6 +3825,15 @@ class PerformanceMonitor:
     current_interval_cpp_executor_elapsed: float = 0.0
     last_complete_interval_elapsed: Optional[float] = None
     last_complete_interval_overrun: Optional[bool] = None
+    measurement_irq_start: Optional[dict] = field(
+        default=None, init=False, repr=False
+    )
+    measurement_irq_start_time: Optional[float] = field(
+        default=None, init=False, repr=False
+    )
+    measurement_irq_finalized: bool = field(
+        default=False, init=False, repr=False
+    )
 
     def __post_init__(self):
         if self.arm_budget is None:
@@ -3814,9 +3850,8 @@ class PerformanceMonitor:
         )
 
     def start_step(self, simulation_time=0.0):
-        self.step_start = time.perf_counter()
         self.current_step_simulation_time = float(simulation_time)
-        self.measurement_active = (
+        next_measurement_active = (
             self.current_step_simulation_time + 1e-12
             >= self.measurement_start_time
             and (
@@ -3825,6 +3860,76 @@ class PerformanceMonitor:
                 < self.measurement_end_time - 1e-12
             )
         )
+        if next_measurement_active and self.measurement_irq_start is None:
+            self._start_measurement_irq_monitor()
+        elif self.measurement_active and not next_measurement_active:
+            self.finish_measurement_environment(
+                self.current_step_simulation_time
+            )
+        # Boundary IRQ reads deliberately precede step_start, so they cannot
+        # inflate either the complete 6 ms path or the legacy loop timer.
+        self.step_start = time.perf_counter()
+        self.measurement_active = next_measurement_active
+
+    def _start_measurement_irq_monitor(self):
+        if not self.runtime_environment.get(
+            "evaluation_irq_monitoring_enabled", False
+        ):
+            return
+        cpus = set(self.runtime_environment.get("physical_core_cpus", ()))
+        if not cpus:
+            cpus = set(self.runtime_environment.get("cpu_affinity", ()))
+        self.measurement_irq_start = read_interrupt_counts(cpus)
+        self.measurement_irq_start_time = self.current_step_simulation_time
+
+    def finish_measurement_environment(self, simulation_time=None):
+        """Capture IRQ activity outside the timed control path, once per run."""
+
+        if self.measurement_irq_finalized:
+            return
+        if self.measurement_irq_start is None:
+            if self.runtime_environment.get(
+                "evaluation_irq_monitoring_enabled", False
+            ):
+                self.runtime_environment["evaluation_irq_activity"] = {
+                    "captured": False,
+                    "physical_core_cpus": self.runtime_environment.get(
+                        "physical_core_cpus", []
+                    ),
+                    "error": "measurement window never started",
+                    "start_simulation_time_s": None,
+                    "end_simulation_time_s": None,
+                    "total_delta_on_physical_core": None,
+                    "active_irqs": [],
+                }
+            self.measurement_irq_finalized = True
+            return
+        cpus = set(self.measurement_irq_start.get("cpus", ()))
+        activity = summarize_interrupt_activity(
+            self.measurement_irq_start,
+            read_interrupt_counts(cpus),
+        )
+        if simulation_time is None and self.measurement_end_time is not None:
+            end_simulation_time = self.measurement_end_time
+        else:
+            end_simulation_time = (
+                self.current_step_simulation_time
+                if simulation_time is None
+                else simulation_time
+            )
+        activity.update(
+            {
+                "start_simulation_time_s": self.measurement_irq_start_time,
+                "end_simulation_time_s": float(end_simulation_time),
+                "timing_scope_note": (
+                    "numeric /proc/interrupts snapshots are read at "
+                    "evaluation boundaries outside the complete 6 ms "
+                    "control-path timer"
+                ),
+            }
+        )
+        self.runtime_environment["evaluation_irq_activity"] = activity
+        self.measurement_irq_finalized = True
 
     def begin_arm_interval(self, simulation_time=None):
         """在新的上层控制拍开始前，封存上一完整控制区间。"""

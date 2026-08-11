@@ -215,6 +215,22 @@ def _comparison(baseline: dict, realtime: dict) -> dict:
     }
 
 
+def _target_irq_checks(results: list[dict]) -> dict:
+    activity = [
+        result["runtime_environment"].get("evaluation_irq_activity", {})
+        for result in results
+    ]
+    return {
+        "evaluation_irq_activity_captured_for_all_runs": bool(activity)
+        and all(item.get("captured") is True for item in activity),
+        "zero_evaluation_irq_on_physical_core": bool(activity)
+        and all(
+            item.get("total_delta_on_physical_core") == 0
+            for item in activity
+        ),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Repeated SCHED_OTHER versus SCHED_RR timing validation"
@@ -319,6 +335,8 @@ def main() -> None:
             >= MIN_COMPLETE_INTERVALS
         ),
     }
+    if args.require_target_realtime:
+        checks.update(_target_irq_checks(results))
     gate_passed = all(checks.values())
     sched_other_tail = _tail_source_profile(
         baseline_source["timing_runs"]
@@ -368,12 +386,20 @@ def main() -> None:
                 ),
                 "maximum_complete_interval_overrun_count": 0,
                 "maximum_critical_nonfinite_count": 0,
+                "maximum_evaluation_irq_count_on_physical_core": (
+                    0 if args.require_target_realtime else None
+                ),
             },
             "checks": checks,
             "passed": gate_passed,
         },
         "decision": {
-            "generic_kernel_reliably_meets_6ms": gate_passed,
+            "generic_kernel_reliably_meets_6ms": (
+                gate_passed if not args.require_target_realtime else False
+            ),
+            "target_realtime_reliably_meets_6ms": (
+                gate_passed if args.require_target_realtime else None
+            ),
             "hard_realtime_claim": False,
             "worker_queue_worst_sample_reduction_percent": 100.0
             * (

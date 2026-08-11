@@ -1636,6 +1636,7 @@ if __name__ == "__main__":
             perf_monitor.finish_step(counter)
 
         perf_monitor.finish_pending_arm_interval()
+        perf_monitor.finish_measurement_environment()
         perf_monitor.print_summary()
         close_renderer(renderer)
         renderer = None

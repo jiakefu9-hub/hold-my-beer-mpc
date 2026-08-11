@@ -27,6 +27,15 @@ checker 会检查 PREEMPT_RT、物理核 topology、boot isolation、活动 IRQ�
 irqbalance、governor、RT throttling 和所需命令。任何目标条件缺失都返回非零。
 它同时打印按当前机器 topology 生成的一次性 boot 参数建议。
 
+对于 Linux managed MSI-X，effective affinity 可能仍显示隔离 CPU，即使
+`isolcpus=managed_irq` 已把该 CPU 从设备 queue map 中移除。checker 会保留
+这类 configured affinity 作为诊断，但只把观察窗口内计数继续增加的 IRQ
+判为 active conflict；启动阶段的历史计数不会伪装成运行期 IRQ 活动。
+target timing gate 还会在每次仿真的 evaluation 窗口两端读取
+`/proc/interrupts` 的数字 IRQ 计数；
+这两个快照都位于完整 6 ms 控制路径计时之外。任何一次 run 在物理核
+`6-7` 上出现正 IRQ 增量，或快照不可用，整批 target gate 都会失败。
+
 ## 需要手动完成的系统步骤
 
 ### 1. PREEMPT_RT kernel

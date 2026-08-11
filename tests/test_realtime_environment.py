@@ -1,10 +1,15 @@
 """Tests for the read-only PREEMPT_RT target environment gate."""
 
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 from realtime_environment import (
+    _irqbalance_state,
     format_cpu_list,
+    parse_interrupt_counts,
     parse_cpu_list,
+    summarize_interrupt_activity,
     validate_target_environment,
 )
 
@@ -24,7 +29,9 @@ def _passing_snapshot():
             "rcu_nocbs_cpus": [6, 7],
             "irqaffinity_cpus": [0, 1, 2, 3, 4, 5, 8, 9],
             "irqbalance_state": "inactive",
+            "irq_observation_ms": 100.0,
             "irq_affinity_evidence_available": True,
+            "configured_irq_conflicts": [],
             "active_irq_conflicts": [],
         },
         "governors": {"6": "performance", "7": "performance"},
@@ -46,12 +53,59 @@ class CpuListTest(unittest.TestCase):
         self.assertEqual(format_cpu_list({9, 2, 3, 4, 8}), "2-4,8-9")
         self.assertEqual(parse_cpu_list("(null)"), set())
 
+    @mock.patch("realtime_environment.shutil.which", return_value="/bin/systemctl")
+    @mock.patch("realtime_environment.subprocess.run")
+    def test_system_bus_failure_is_not_treated_as_missing_service(
+        self, run, _which
+    ):
+        run.return_value = SimpleNamespace(
+            stdout="", stderr="Failed to connect to bus", returncode=1
+        )
+        self.assertEqual(_irqbalance_state(), "unavailable")
+
+    def test_interrupt_activity_is_scoped_to_selected_cpus(self):
+        before = parse_interrupt_counts(
+            """            CPU6 CPU7 CPU8
+169:          0    4    0  PCI-MSI nvme0q8
+170:          1    0    7  PCI-MSI device
+""",
+            {6, 7},
+        )
+        after = parse_interrupt_counts(
+            """            CPU6 CPU7 CPU8
+169:          0    9    0  PCI-MSI nvme0q8
+170:          1    0   99  PCI-MSI device
+""",
+            {6, 7},
+        )
+        activity = summarize_interrupt_activity(before, after)
+        self.assertTrue(activity["captured"])
+        self.assertEqual(activity["total_delta_on_physical_core"], 5)
+        self.assertEqual(activity["active_irqs"][0]["irq"], 169)
+        self.assertEqual(activity["active_irqs"][0]["per_cpu_delta"], {"7": 5})
+
+    def test_interrupt_snapshot_fails_closed_when_cpu_column_is_missing(self):
+        snapshot = parse_interrupt_counts(
+            "            CPU0 CPU1\n169: 0 0 device\n", {7}
+        )
+        activity = summarize_interrupt_activity(snapshot, snapshot)
+        self.assertFalse(activity["captured"])
+        self.assertIsNone(activity["total_delta_on_physical_core"])
+
 
 class TargetRealtimeGateTest(unittest.TestCase):
     def test_complete_target_environment_passes(self):
         result = validate_target_environment(_passing_snapshot())
         self.assertTrue(result["passed"])
         self.assertEqual(result["failed_checks"], [])
+
+    def test_historical_managed_irq_count_is_diagnostic_only(self):
+        snapshot = _passing_snapshot()
+        snapshot["isolation"]["configured_irq_conflicts"] = [
+            {"irq": 169, "total_count": 4}
+        ]
+        result = validate_target_environment(snapshot)
+        self.assertTrue(result["passed"])
 
     def test_generic_unisolated_environment_fails_closed(self):
         snapshot = _passing_snapshot()

@@ -18,6 +18,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import time
 
 
 ISOLCPUS_FLAGS = {"domain", "managed_irq", "nohz"}
@@ -126,7 +127,11 @@ def _irqbalance_state() -> str:
     except (OSError, subprocess.TimeoutExpired):
         return "unavailable"
     state = result.stdout.strip()
-    return state or "not-found"
+    if state:
+        return state
+    if "Failed to connect to bus" in result.stderr:
+        return "unavailable"
+    return "not-found"
 
 
 def _interrupt_descriptions() -> tuple[list[int], dict[int, dict]]:
@@ -157,7 +162,142 @@ def _interrupt_descriptions() -> tuple[list[int], dict[int, dict]]:
     return cpus, interrupts
 
 
-def _active_irq_conflicts(isolated_cpus: set[int]) -> list[dict]:
+def parse_interrupt_counts(text: str, cpus: set[int]) -> dict:
+    """Parse numeric IRQ counters for selected CPUs from ``/proc/interrupts``."""
+
+    lines = text.splitlines()
+    if not lines:
+        return {
+            "available": False,
+            "cpus": sorted(cpus),
+            "error": "/proc/interrupts is empty",
+            "interrupts": {},
+        }
+    header = lines[0].split()
+    cpu_columns = {}
+    for column, name in enumerate(header):
+        match = re.fullmatch(r"CPU(\d+)", name)
+        if match:
+            cpu = int(match.group(1))
+            if cpu in cpus:
+                cpu_columns[cpu] = column
+    missing = sorted(cpus - set(cpu_columns))
+    if missing:
+        return {
+            "available": False,
+            "cpus": sorted(cpus),
+            "error": f"CPU columns missing: {format_cpu_list(missing)}",
+            "interrupts": {},
+        }
+
+    interrupts = {}
+    for line in lines[1:]:
+        match = re.match(r"^\s*(\d+):\s+(.*)$", line)
+        if not match:
+            continue
+        fields = match.group(2).split()
+        if len(fields) < len(header):
+            continue
+        try:
+            all_counts = [int(value) for value in fields[: len(header)]]
+        except ValueError:
+            continue
+        irq = int(match.group(1))
+        per_cpu = {
+            str(cpu): all_counts[column]
+            for cpu, column in sorted(cpu_columns.items())
+        }
+        interrupts[str(irq)] = {
+            "per_cpu": per_cpu,
+            "total_on_cpus": sum(per_cpu.values()),
+            "description": " ".join(fields[len(header) :]),
+        }
+    available = bool(interrupts)
+    return {
+        "available": available,
+        "cpus": sorted(cpus),
+        "error": None if available else "no numeric IRQ counters found",
+        "interrupts": interrupts,
+    }
+
+
+def read_interrupt_counts(cpus: set[int]) -> dict:
+    """Read one lightweight IRQ-count snapshot for selected CPUs."""
+
+    text = _read_text("/proc/interrupts")
+    return parse_interrupt_counts(text or "", set(cpus))
+
+
+def summarize_interrupt_activity(before: dict, after: dict) -> dict:
+    """Return positive IRQ deltas between two evaluation-boundary snapshots."""
+
+    cpus = sorted(set(before.get("cpus", ())) | set(after.get("cpus", ())))
+    captured = bool(before.get("available") and after.get("available"))
+    if not captured:
+        errors = [
+            message
+            for message in (before.get("error"), after.get("error"))
+            if message
+        ]
+        return {
+            "captured": False,
+            "physical_core_cpus": cpus,
+            "error": "; ".join(errors) or "IRQ count snapshot unavailable",
+            "start_total_on_physical_core": None,
+            "end_total_on_physical_core": None,
+            "total_delta_on_physical_core": None,
+            "active_irqs": [],
+        }
+
+    before_irqs = before.get("interrupts", {})
+    after_irqs = after.get("interrupts", {})
+    active = []
+    for irq in sorted(
+        set(before_irqs) | set(after_irqs), key=lambda value: int(value)
+    ):
+        left = before_irqs.get(irq, {})
+        right = after_irqs.get(irq, {})
+        per_cpu_delta = {}
+        for cpu in cpus:
+            delta = int(right.get("per_cpu", {}).get(str(cpu), 0)) - int(
+                left.get("per_cpu", {}).get(str(cpu), 0)
+            )
+            if delta > 0:
+                per_cpu_delta[str(cpu)] = delta
+        delta_total = sum(per_cpu_delta.values())
+        if delta_total:
+            active.append(
+                {
+                    "irq": int(irq),
+                    "count_delta": delta_total,
+                    "per_cpu_delta": per_cpu_delta,
+                    "description": right.get("description")
+                    or left.get("description", ""),
+                }
+            )
+
+    def total(snapshot: dict) -> int:
+        return sum(
+            int(item.get("total_on_cpus", 0))
+            for item in snapshot.get("interrupts", {}).values()
+        )
+
+    start_total = total(before)
+    end_total = total(after)
+    return {
+        "captured": True,
+        "physical_core_cpus": cpus,
+        "error": None,
+        "start_total_on_physical_core": start_total,
+        "end_total_on_physical_core": end_total,
+        "total_delta_on_physical_core": sum(
+            item["count_delta"] for item in active
+        ),
+        "active_irqs": active,
+    }
+
+
+def _irq_affinity_conflicts(isolated_cpus: set[int]) -> list[dict]:
     _, interrupts = _interrupt_descriptions()
     conflicts = []
     irq_root = Path("/proc/irq")
@@ -189,6 +329,31 @@ def _active_irq_conflicts(isolated_cpus: set[int]) -> list[dict]:
             }
         )
     return sorted(conflicts, key=lambda item: item["irq"])
+
+
+def _sample_active_irq_conflicts(
+    isolated_cpus: set[int], observation_s: float = 0.1
+) -> tuple[list[dict], list[dict]]:
+    """Separate configured affinity from IRQs active during observation.
+
+    Managed MSI-X vectors can retain a single-CPU effective affinity even
+    when ``isolcpus=managed_irq`` removes that CPU from the block-mq queue.
+    Historical setup interrupts are not runtime activity, so gate on positive
+    count deltas while preserving all configured conflicts as diagnostics.
+    """
+
+    before = {
+        item["irq"]: item["total_count"]
+        for item in _irq_affinity_conflicts(isolated_cpus)
+    }
+    time.sleep(max(0.0, float(observation_s)))
+    configured = _irq_affinity_conflicts(isolated_cpus)
+    active = []
+    for item in configured:
+        delta = item["total_count"] - before.get(item["irq"], 0)
+        if delta > 0:
+            active.append({**item, "count_delta": delta})
+    return configured, active
 
 
 def collect_target_environment(control_cpu: int) -> dict:
@@ -230,6 +395,9 @@ def collect_target_environment(control_cpu: int) -> dict:
     rt_period_us = _read_text("/proc/sys/kernel/sched_rt_period_us")
     required_isolation = format_cpu_list(sibling_cpus)
     housekeeping = format_cpu_list(housekeeping_cpus)
+    configured_irq_conflicts, active_irq_conflicts = (
+        _sample_active_irq_conflicts(sibling_cpus)
+    )
     recommended_boot_parameters = (
         " ".join(
             (
@@ -266,11 +434,13 @@ def collect_target_environment(control_cpu: int) -> dict:
             "rcu_nocbs_cpus": sorted(rcu_nocbs),
             "irqaffinity_cpus": sorted(irqaffinity),
             "irqbalance_state": _irqbalance_state(),
+            "irq_observation_ms": 100.0,
             "irq_affinity_evidence_available": bool(
                 _read_text("/proc/interrupts")
                 and any(Path("/proc/irq").glob("*/effective_affinity_list"))
             ),
-            "active_irq_conflicts": _active_irq_conflicts(sibling_cpus),
+            "configured_irq_conflicts": configured_irq_conflicts,
+            "active_irq_conflicts": active_irq_conflicts,
         },
         "governors": governors,
         "rt_throttling": {
@@ -365,9 +535,23 @@ def _print_human(snapshot: dict, result: dict) -> None:
         snapshot["recommended_boot_parameters"] or "unavailable",
     )
     conflicts = snapshot["isolation"]["active_irq_conflicts"]
+    configured_conflicts = snapshot["isolation"].get(
+        "configured_irq_conflicts", []
+    )
     if conflicts:
         print("active IRQ conflicts:")
         for conflict in conflicts:
+            print(
+                f"  IRQ {conflict['irq']} affinity="
+                f"{conflict['effective_affinity']} "
+                f"{conflict['description']}"
+            )
+    elif configured_conflicts:
+        print(
+            "configured but idle IRQ affinities during "
+            f"{snapshot['isolation']['irq_observation_ms']:.0f} ms:"
+        )
+        for conflict in configured_conflicts:
             print(
                 f"  IRQ {conflict['irq']} affinity="
                 f"{conflict['effective_affinity']} "

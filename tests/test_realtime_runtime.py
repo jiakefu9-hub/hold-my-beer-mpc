@@ -1,6 +1,7 @@
 """Tests for the fail-closed optional real-time environment guard."""
 
 import unittest
+from unittest import mock
 
 from realtime_runtime import (
     validate_realtime_launcher_prerequisites,
@@ -103,6 +104,87 @@ class RealtimeResultEnvironmentTest(unittest.TestCase):
             _require_run_environment(
                 result, policy="SCHED_RR", priority=10, cpu=7
             )
+
+
+class TargetTimingIrqGateTest(unittest.TestCase):
+    def test_target_gate_requires_captured_quiet_evaluation_window(self):
+        from disturbance_learning.run_realtime_timing_ablation import (
+            _target_irq_checks,
+        )
+
+        result = {
+            "runtime_environment": {
+                "evaluation_irq_activity": {
+                    "captured": True,
+                    "total_delta_on_physical_core": 0,
+                }
+            }
+        }
+        self.assertEqual(
+            _target_irq_checks([result]),
+            {
+                "evaluation_irq_activity_captured_for_all_runs": True,
+                "zero_evaluation_irq_on_physical_core": True,
+            },
+        )
+        result["runtime_environment"]["evaluation_irq_activity"][
+            "total_delta_on_physical_core"
+        ] = 1
+        self.assertFalse(
+            _target_irq_checks([result])[
+                "zero_evaluation_irq_on_physical_core"
+            ]
+        )
+
+    @mock.patch("sim_support.read_interrupt_counts")
+    def test_monitor_captures_irqs_outside_measurement_timer(self, read):
+        from sim_support import PerformanceMonitor
+
+        read.side_effect = [
+            {
+                "available": True,
+                "cpus": [6, 7],
+                "error": None,
+                "interrupts": {
+                    "169": {
+                        "per_cpu": {"6": 0, "7": 4},
+                        "total_on_cpus": 4,
+                        "description": "nvme0q8",
+                    }
+                },
+            },
+            {
+                "available": True,
+                "cpus": [6, 7],
+                "error": None,
+                "interrupts": {
+                    "169": {
+                        "per_cpu": {"6": 0, "7": 4},
+                        "total_on_cpus": 4,
+                        "description": "nvme0q8",
+                    }
+                },
+            },
+        ]
+        environment = {
+            "evaluation_irq_monitoring_enabled": True,
+            "physical_core_cpus": [6, 7],
+        }
+        monitor = PerformanceMonitor(
+            step_budget=0.002,
+            arm_budget=0.006,
+            measurement_start_time=0.8,
+            measurement_end_time=1.0,
+            runtime_environment=environment,
+        )
+        monitor.start_step(0.8)
+        monitor.start_step(1.0)
+        activity = environment["evaluation_irq_activity"]
+        self.assertEqual(read.call_count, 2)
+        self.assertTrue(activity["captured"])
+        self.assertEqual(activity["start_simulation_time_s"], 0.8)
+        self.assertEqual(activity["end_simulation_time_s"], 1.0)
+        self.assertEqual(activity["total_delta_on_physical_core"], 0)
 
 
 if __name__ == "__main__":
