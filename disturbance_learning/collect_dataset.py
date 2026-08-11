@@ -23,30 +23,18 @@ from disturbance_learning.dataset import (
     build_supervised_windows,
     validate_supervised_windows,
 )
+from disturbance_learning.command_schedule import (
+    GAIT_PERIOD,
+    REQUIRED_SCHEDULE_SEGMENT_IDS,
+    SCHEDULE_DURATION,
+    SCHEDULE_SEGMENT_NAMES,
+    command_schedule,
+)
 from sim_support import get_gravity_orientation, get_site_vel, pd_control
 
 
 REPO_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
-GAIT_PERIOD = 0.8
-SCHEDULE_DURATION = 4.6
-SCHEDULE_SEGMENT_NAMES = np.asarray(
-    (
-        "heading_warmup",
-        "start_ramp",
-        "steady_walking",
-        "velocity_change",
-        "stop_ramp",
-        "stopped",
-    )
-)
-REQUIRED_SCHEDULE_SEGMENT_IDS = np.asarray((1, 2, 3, 4, 5), dtype=np.int64)
-
-
-@dataclass(frozen=True)
-class CommandState:
-    command: np.ndarray
-    segment_id: int
 
 
 @dataclass(frozen=True)
@@ -55,11 +43,6 @@ class EpisodeProfile:
     changed_command: np.ndarray
     initial_lower_q_offset: np.ndarray
     initial_lower_dq: np.ndarray
-
-
-def _lerp(start: np.ndarray, end: np.ndarray, fraction: float) -> np.ndarray:
-    fraction = float(np.clip(fraction, 0.0, 1.0))
-    return (1.0 - fraction) * start + fraction * end
 
 
 def build_episode_profile(
@@ -90,38 +73,6 @@ def build_episode_profile(
         initial_lower_q_offset=rng.normal(0.0, 0.006, size=12),
         initial_lower_dq=rng.normal(0.0, 0.01, size=12),
     )
-
-
-def command_schedule(
-    time_s: float,
-    nominal_command: np.ndarray,
-    changed_command: np.ndarray | None = None,
-) -> CommandState:
-    """Small deterministic schedule covering idle/start/change/stop."""
-    nominal = np.asarray(nominal_command, dtype=np.float64)
-    stopped = np.zeros(3, dtype=np.float64)
-    changed = (
-        np.array([0.55 * nominal[0], 0.10, -0.04], dtype=np.float64)
-        if changed_command is None
-        else np.asarray(changed_command, dtype=np.float64)
-    )
-    if time_s < 0.8:
-        return CommandState(stopped.copy(), 0)
-    if time_s < 1.4:
-        return CommandState(
-            _lerp(stopped, nominal, (time_s - 0.8) / 0.6), 1
-        )
-    if time_s < 2.2:
-        return CommandState(nominal.copy(), 2)
-    if time_s < 3.0:
-        return CommandState(
-            _lerp(nominal, changed, (time_s - 2.2) / 0.8), 3
-        )
-    if time_s < 3.6:
-        return CommandState(
-            _lerp(changed, stopped, (time_s - 3.0) / 0.6), 4
-        )
-    return CommandState(stopped.copy(), 5)
 
 
 def _repo_path(configured_path: str) -> Path:

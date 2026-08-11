@@ -1,0 +1,411 @@
+{
+  "command_schedule": {
+    "changed_command_vx_vy_wz": [
+      0.275,
+      0.1,
+      -0.04
+    ],
+    "heading_hold_disabled_for_training_match": true,
+    "heading_warmup_s": [
+      0.0,
+      0.8
+    ],
+    "start_command_vx_vy_wz": [
+      0.5,
+      0.0,
+      0.0127
+    ],
+    "start_s": [
+      0.8,
+      1.4
+    ],
+    "steady_s": [
+      1.4,
+      2.2
+    ],
+    "stop_s": [
+      3.0,
+      3.6
+    ],
+    "stopped_s": [
+      3.6,
+      4.8
+    ],
+    "velocity_change_s": [
+      2.2,
+      3.0
+    ]
+  },
+  "hybrid_vs_template": {
+    "all_three_quality_metrics_better_in_every_stage": true,
+    "current_best_mode": "hybrid_residual",
+    "ddq_saturation_change_percentage_points": -1.5,
+    "evidence_scope": "one deterministic 4.8 s MuJoCo closed-loop run per mode; not hardware evidence",
+    "qp_success_change_percentage_points": 1.6491754122938573,
+    "relative_change_percent": {
+      "right_ee_acc_norm_rms": -6.279881838685208,
+      "right_ee_alpha_norm_rms": -11.641616333306503,
+      "right_ee_tilt_xy_norm_rms": -4.56841540357652
+    }
+  },
+  "modes": [
+    "template",
+    "neural",
+    "hybrid_residual"
+  ],
+  "repeats_per_mode": 1,
+  "results": [
+    {
+      "by_stage": {
+        "start": {
+          "ddq_saturation_any_fraction": 0.11,
+          "duration_s": 0.5999999999999999,
+          "mpc_update_count": 100,
+          "physics_sample_count": 300,
+          "qp_fallback_fraction": 0.01,
+          "qp_success_fraction": 0.99,
+          "right_ee_acc_norm_rms": 2.722108008031074,
+          "right_ee_alpha_norm_rms": 8.860488062192928,
+          "right_ee_tilt_xy_norm_rms": 0.10519859614834044,
+          "torso_acc_norm_rms": 2.1213730158260367,
+          "torso_alpha_norm_rms": 6.662024446590696
+        },
+        "steady": {
+          "ddq_saturation_any_fraction": 0.0225,
+          "duration_s": 0.8000000000000003,
+          "mpc_update_count": 133,
+          "physics_sample_count": 400,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.5861637522445267,
+          "right_ee_alpha_norm_rms": 5.848932639433107,
+          "right_ee_tilt_xy_norm_rms": 0.035431553218621806,
+          "torso_acc_norm_rms": 2.3614787143346225,
+          "torso_alpha_norm_rms": 8.106051240700644
+        },
+        "stop": {
+          "ddq_saturation_any_fraction": 0.02,
+          "duration_s": 0.6000000000000001,
+          "mpc_update_count": 100,
+          "physics_sample_count": 300,
+          "qp_fallback_fraction": 0.02,
+          "qp_success_fraction": 0.98,
+          "right_ee_acc_norm_rms": 2.1794155250114238,
+          "right_ee_alpha_norm_rms": 5.2748463205252865,
+          "right_ee_tilt_xy_norm_rms": 0.04875173732074245,
+          "torso_acc_norm_rms": 1.9805698550296795,
+          "torso_alpha_norm_rms": 5.274773888377726
+        },
+        "stopped": {
+          "ddq_saturation_any_fraction": 0.055,
+          "duration_s": 1.1999999999999997,
+          "mpc_update_count": 200,
+          "physics_sample_count": 600,
+          "qp_fallback_fraction": 0.025,
+          "qp_success_fraction": 0.975,
+          "right_ee_acc_norm_rms": 2.613676184497301,
+          "right_ee_alpha_norm_rms": 8.581620108898584,
+          "right_ee_tilt_xy_norm_rms": 0.06604945906477896,
+          "torso_acc_norm_rms": 2.147577913384144,
+          "torso_alpha_norm_rms": 6.95950075921409
+        },
+        "velocity_change": {
+          "ddq_saturation_any_fraction": 0.0225,
+          "duration_s": 0.7999999999999998,
+          "mpc_update_count": 133,
+          "physics_sample_count": 400,
+          "qp_fallback_fraction": 0.022556390977443608,
+          "qp_success_fraction": 0.9774436090225563,
+          "right_ee_acc_norm_rms": 2.5657879265058265,
+          "right_ee_alpha_norm_rms": 7.179852773758845,
+          "right_ee_tilt_xy_norm_rms": 0.029856092284750918,
+          "torso_acc_norm_rms": 2.420531722605915,
+          "torso_alpha_norm_rms": 8.501648263365382
+        }
+      },
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 665,
+        "max": 4.630526000255486,
+        "mean": 3.4885188721173312,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.4448279984644614,
+        "p95": 3.9842395988671337,
+        "p99": 4.242795879836195
+      },
+      "fallback": {
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "full_run_count": 0
+      },
+      "mode": "template",
+      "neural_core_inference_timing_ms": {
+        "count": 0,
+        "max": 0.0,
+        "mean": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "overall_evaluation_0p8_to_4p8_s": {
+        "ddq_saturation_any_fraction": 0.045,
+        "qp_fallback_fraction": 0.01649175412293853,
+        "qp_success_fraction": 0.9835082458770614,
+        "right_ee_acc_norm_rms": 2.5546643002146103,
+        "right_ee_alpha_norm_rms": 7.43146826851006,
+        "right_ee_tilt_xy_norm_rms": 0.06130398868510016,
+        "torso_acc_norm_rms": 2.22129926829662,
+        "torso_alpha_norm_rms": 7.277258042868384
+      },
+      "predictor_timing_ms": {
+        "count": 666,
+        "max": 0.4032730012113461,
+        "mean": 0.2424595510507476,
+        "p50": 0.23759500072628725,
+        "p95": 0.2894197505156626,
+        "p99": 0.34909854975921945
+      },
+      "run_dir_local_ignored": "evaluation/neural_closed_loop_20260811_optimized/20260811_172714_template",
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      }
+    },
+    {
+      "by_stage": {
+        "start": {
+          "ddq_saturation_any_fraction": 0.0,
+          "duration_s": 0.5999999999999999,
+          "mpc_update_count": 100,
+          "physics_sample_count": 300,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.3013444856053975,
+          "right_ee_alpha_norm_rms": 5.712423529989847,
+          "right_ee_tilt_xy_norm_rms": 0.12014819202210468,
+          "torso_acc_norm_rms": 2.126506681163774,
+          "torso_alpha_norm_rms": 6.560215306535365
+        },
+        "steady": {
+          "ddq_saturation_any_fraction": 0.0,
+          "duration_s": 0.8000000000000003,
+          "mpc_update_count": 133,
+          "physics_sample_count": 400,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.528689588509034,
+          "right_ee_alpha_norm_rms": 7.094122926424614,
+          "right_ee_tilt_xy_norm_rms": 0.11888280316020249,
+          "torso_acc_norm_rms": 2.3743790598559342,
+          "torso_alpha_norm_rms": 8.060420873159499
+        },
+        "stop": {
+          "ddq_saturation_any_fraction": 0.0,
+          "duration_s": 0.6000000000000001,
+          "mpc_update_count": 100,
+          "physics_sample_count": 300,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 1.8388479259411148,
+          "right_ee_alpha_norm_rms": 4.407136636392958,
+          "right_ee_tilt_xy_norm_rms": 0.1017960556458758,
+          "torso_acc_norm_rms": 1.99412016359231,
+          "torso_alpha_norm_rms": 5.260224215537612
+        },
+        "stopped": {
+          "ddq_saturation_any_fraction": 0.0,
+          "duration_s": 1.1999999999999997,
+          "mpc_update_count": 200,
+          "physics_sample_count": 600,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.2648032643644798,
+          "right_ee_alpha_norm_rms": 6.319328284009289,
+          "right_ee_tilt_xy_norm_rms": 0.11290741505594207,
+          "torso_acc_norm_rms": 2.117829883071699,
+          "torso_alpha_norm_rms": 6.7458015980004555
+        },
+        "velocity_change": {
+          "ddq_saturation_any_fraction": 0.0,
+          "duration_s": 0.7999999999999998,
+          "mpc_update_count": 133,
+          "physics_sample_count": 400,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.4241332860593006,
+          "right_ee_alpha_norm_rms": 7.343708021130312,
+          "right_ee_tilt_xy_norm_rms": 0.11584344588993674,
+          "torso_acc_norm_rms": 2.418003374505112,
+          "torso_alpha_norm_rms": 8.4153930866915
+        }
+      },
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 665,
+        "max": 4.935418000968639,
+        "mean": 4.067251100792432,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 4.036570000607753,
+        "p95": 4.470899600710254,
+        "p99": 4.805258640917601
+      },
+      "fallback": {
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "full_run_count": 134
+      },
+      "mode": "neural",
+      "neural_core_inference_timing_ms": {
+        "count": 666,
+        "max": 0.48990499999490567,
+        "mean": 0.2949292747325125,
+        "p95": 0.36584174949894077,
+        "p99": 0.4026982003779268
+      },
+      "overall_evaluation_0p8_to_4p8_s": {
+        "ddq_saturation_any_fraction": 0.0,
+        "qp_fallback_fraction": 0.0,
+        "qp_success_fraction": 1.0,
+        "right_ee_acc_norm_rms": 2.3005628581941666,
+        "right_ee_alpha_norm_rms": 6.376417303219995,
+        "right_ee_tilt_xy_norm_rms": 0.11429314089772727,
+        "torso_acc_norm_rms": 2.2174819403258903,
+        "torso_alpha_norm_rms": 7.170464029681071
+      },
+      "predictor_timing_ms": {
+        "count": 666,
+        "max": 1.0972510008286918,
+        "mean": 0.7534989609276245,
+        "p50": 0.7502939988626167,
+        "p95": 0.875294250818115,
+        "p99": 0.9842511502938579
+      },
+      "run_dir_local_ignored": "evaluation/neural_closed_loop_20260811_optimized/20260811_172732_neural",
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      }
+    },
+    {
+      "by_stage": {
+        "start": {
+          "ddq_saturation_any_fraction": 0.08,
+          "duration_s": 0.5999999999999999,
+          "mpc_update_count": 100,
+          "physics_sample_count": 300,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.483382491398378,
+          "right_ee_alpha_norm_rms": 8.259319777465588,
+          "right_ee_tilt_xy_norm_rms": 0.10496397208705788,
+          "torso_acc_norm_rms": 2.1236763728365875,
+          "torso_alpha_norm_rms": 6.529104081895689
+        },
+        "steady": {
+          "ddq_saturation_any_fraction": 0.0225,
+          "duration_s": 0.8000000000000003,
+          "mpc_update_count": 133,
+          "physics_sample_count": 400,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.548319873822121,
+          "right_ee_alpha_norm_rms": 5.7170199941181385,
+          "right_ee_tilt_xy_norm_rms": 0.03531181038309709,
+          "torso_acc_norm_rms": 2.355275787046176,
+          "torso_alpha_norm_rms": 8.063013244298155
+        },
+        "stop": {
+          "ddq_saturation_any_fraction": 0.01,
+          "duration_s": 0.6000000000000001,
+          "mpc_update_count": 100,
+          "physics_sample_count": 300,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.0045066368126534,
+          "right_ee_alpha_norm_rms": 4.05733176977436,
+          "right_ee_tilt_xy_norm_rms": 0.04174511810937123,
+          "torso_acc_norm_rms": 1.9777463816159615,
+          "torso_alpha_norm_rms": 5.238969740123631
+        },
+        "stopped": {
+          "ddq_saturation_any_fraction": 0.04,
+          "duration_s": 1.1999999999999997,
+          "mpc_update_count": 200,
+          "physics_sample_count": 600,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.3679114972063164,
+          "right_ee_alpha_norm_rms": 7.383473767927417,
+          "right_ee_tilt_xy_norm_rms": 0.061311321796825156,
+          "torso_acc_norm_rms": 2.1327536819623902,
+          "torso_alpha_norm_rms": 6.828544794149673
+        },
+        "velocity_change": {
+          "ddq_saturation_any_fraction": 0.0,
+          "duration_s": 0.7999999999999998,
+          "mpc_update_count": 133,
+          "physics_sample_count": 400,
+          "qp_fallback_fraction": 0.0,
+          "qp_success_fraction": 1.0,
+          "right_ee_acc_norm_rms": 2.474814548441079,
+          "right_ee_alpha_norm_rms": 6.115048288867504,
+          "right_ee_tilt_xy_norm_rms": 0.025325853814491227,
+          "torso_acc_norm_rms": 2.4208700657231454,
+          "torso_alpha_norm_rms": 8.532327486623233
+        }
+      },
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 665,
+        "max": 5.205303999900934,
+        "mean": 4.10752012036862,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 4.073819001860102,
+        "p95": 4.6617658001196105,
+        "p99": 4.898690557820373
+      },
+      "fallback": {
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "full_run_count": 134
+      },
+      "mode": "hybrid_residual",
+      "neural_core_inference_timing_ms": {
+        "count": 666,
+        "max": 0.48629000048094895,
+        "mean": 0.29677893094545055,
+        "p95": 0.3738414993676997,
+        "p99": 0.429351399998268
+      },
+      "overall_evaluation_0p8_to_4p8_s": {
+        "ddq_saturation_any_fraction": 0.03,
+        "qp_fallback_fraction": 0.0,
+        "qp_success_fraction": 1.0,
+        "right_ee_acc_norm_rms": 2.3942344007860585,
+        "right_ee_alpha_norm_rms": 6.566325244758703,
+        "right_ee_tilt_xy_norm_rms": 0.058503367823003236,
+        "torso_acc_norm_rms": 2.215716808391863,
+        "torso_alpha_norm_rms": 7.215446402862337
+      },
+      "predictor_timing_ms": {
+        "count": 666,
+        "max": 1.1144840009364998,
+        "mean": 0.7647677883213035,
+        "p50": 0.7557939998150687,
+        "p95": 0.9071865001715196,
+        "p99": 1.010290550038917
+      },
+      "run_dir_local_ignored": "evaluation/neural_closed_loop_20260811_optimized/20260811_172751_hybrid_residual",
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      }
+    }
+  ],
+  "stage": "first_neural_predictor_closed_loop_ablation"
+}

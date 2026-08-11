@@ -28,6 +28,7 @@ from disturbance_predictor import (
     DisturbancePredictorObservation,
     create_disturbance_predictor,
 )
+from disturbance_learning.command_schedule import command_schedule
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import CppRightArmRneaBackend, create_prediction_backend
 from right_arm_runtime import (
@@ -98,12 +99,28 @@ if __name__ == "__main__":
         default=None,
         help="覆盖右臂执行结构：同步C ABI、独立C++进程或逐拍shadow",
     )
+    parser.add_argument(
+        "--disturbance-predictor",
+        choices=("template", "zoh", "neural", "hybrid_residual"),
+        default=None,
+        help="只覆盖本次运行的 disturbance predictor。",
+    )
+    parser.add_argument(
+        "--predictor-ablation",
+        action="store_true",
+        help=(
+            "使用 0.8 s H-frame warmup 和 start/steady/change/stop/"
+            "stopped 命令日程，评估时间为 0.8~4.8 s。"
+        ),
+    )
     args = parser.parse_args()
     config_file = args.config_file
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = config_file if os.path.isabs(config_file) else os.path.join(repo_dir, "configs", config_file)
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
+        if args.disturbance_predictor is not None:
+            config["disturbance_predictor"] = args.disturbance_predictor
         policy_path = config["policy_path"]
         xml_path = config["xml_path"]
         if not os.path.isabs(policy_path):
@@ -254,11 +271,28 @@ if __name__ == "__main__":
                 "twice_per_interval 或 policy_update。"
             )
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
+        disturbance_command_schedule_enabled = bool(
+            config.get("disturbance_command_schedule_enabled", False)
+        )
+        disturbance_command_changed = np.asarray(
+            config.get(
+                "disturbance_command_changed",
+                [0.55 * float(cmd_nominal[0]), 0.10, -0.04],
+            ),
+            dtype=np.float32,
+        )
+        if disturbance_command_changed.shape != (3,) or not np.all(
+            np.isfinite(disturbance_command_changed)
+        ):
+            raise ValueError("disturbance_command_changed 必须是有限的 vx/vy/wz。")
         heading_control_enabled = bool(config.get("heading_control_enabled", True))
         heading_filter_cycles = float(config.get("heading_filter_cycles", 1.0))
         heading_kp = float(config.get("heading_kp", 0.6))
         heading_kd = float(config.get("heading_kd", 0.1))
         heading_max_yaw_rate = float(config.get("heading_max_yaw_rate", 0.25))
+        if args.predictor_ablation:
+            disturbance_command_schedule_enabled = True
+            heading_control_enabled = False
 
     # ==============================
     # 2. 初始化主循环状态【非核心代码】
@@ -279,6 +313,12 @@ if __name__ == "__main__":
     if args.smoke_test:
         warmup_cycles = 0
         evaluation_cycles = 1
+        cooldown_cycles = 0
+        viewer_enabled = False
+        record_video = False
+    elif args.predictor_ablation:
+        warmup_cycles = 1
+        evaluation_cycles = 5
         cooldown_cycles = 0
         viewer_enabled = False
         record_video = False
@@ -463,6 +503,16 @@ if __name__ == "__main__":
         "kd": heading_kd,
         "yaw_rate_feedforward": float(cmd_nominal[2]),
         "max_abs_yaw_rate": heading_max_yaw_rate,
+    }
+    controller_meta["disturbance_command_schedule"] = {
+        "enabled": disturbance_command_schedule_enabled,
+        "definition": (
+            "heading_warmup/start/steady/velocity_change/stop/stopped"
+            if disturbance_command_schedule_enabled
+            else "disabled_constant_command"
+        ),
+        "start_command": cmd_nominal.copy(),
+        "changed_command": disturbance_command_changed.copy(),
     }
     performance_runtime = build_performance_runtime_config(
         config=config,
@@ -734,7 +784,13 @@ if __name__ == "__main__":
         max_abs_yaw_rate=heading_max_yaw_rate,
     )
     heading_state = heading_controller.last_output
-    cmd_runtime = cmd_nominal.copy()
+    cmd_runtime = (
+        command_schedule(
+            0.0, cmd_nominal, disturbance_command_changed
+        ).command.astype(np.float32)
+        if disturbance_command_schedule_enabled
+        else cmd_nominal.copy()
+    )
     heading_yaw_rate_command_runtime = float(cmd_runtime[2])
 
     perf_monitor = PerformanceMonitor(
@@ -837,10 +893,33 @@ if __name__ == "__main__":
                 disturbance_prediction_start = time.perf_counter()
                 disturbance_horizon = None
                 if disturbance_predictor is not None:
+                    predictor_phase_angle = (
+                        2.0
+                        * np.pi
+                        * ((counter * simulation_dt) % gait_period)
+                        / gait_period
+                    )
                     disturbance_predictor.update(
                         DisturbancePredictorObservation(
                             simulation_time=counter * simulation_dt,
                             measured_disturbance=torso_disturbance,
+                            gravity_direction_torso=(
+                                torso_state.rotmat.T
+                                @ np.array(
+                                    [0.0, 0.0, -1.0], dtype=np.float64
+                                )
+                            ),
+                            lower_body_q=leg_q,
+                            lower_body_dq=leg_dq,
+                            lower_body_policy_target=target_dof_pos,
+                            runtime_command=cmd_runtime,
+                            gait_phase_sin_cos=np.array(
+                                [
+                                    np.sin(predictor_phase_angle),
+                                    np.cos(predictor_phase_angle),
+                                ],
+                                dtype=np.float64,
+                            ),
                         )
                     )
                     disturbance_horizon = disturbance_predictor.predict(
@@ -1353,7 +1432,15 @@ if __name__ == "__main__":
 
                 obs[:3] = omega
                 obs[3:6] = gravity_orientation
-                cmd_active = cmd_nominal.copy()
+                cmd_active = (
+                    command_schedule(
+                        count,
+                        cmd_nominal,
+                        disturbance_command_changed,
+                    ).command.astype(np.float32)
+                    if disturbance_command_schedule_enabled
+                    else cmd_nominal.copy()
+                )
                 if heading_control_enabled:
                     torso_yaw_world = quat_to_yaw_wxyz(d.xquat[scene_ids.torso_id].copy())
                     heading_state = heading_controller.update(torso_yaw_world, torso_state.ang_vel[2])

@@ -5079,6 +5079,11 @@ def init_eval_buffers():
             "right_mpc_template_one_step_omega_error": [],
             "right_mpc_template_one_step_alpha_error": [],
             "right_mpc_template_one_step_rotation_error_angle": [],
+            "right_mpc_predictor_neural_inference_valid": [],
+            "right_mpc_predictor_neural_inference_time": [],
+            "right_mpc_predictor_fallback_used": [],
+            "right_mpc_predictor_fallback_code": [],
+            "right_mpc_predictor_history_count": [],
             "arm_policy_updated": [],
             "ddq_execution_updated": [],
             "contact_count": [],
@@ -8659,6 +8664,23 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data[
         "right_mpc_template_one_step_rotation_error_angle"
     ].append(template_scalar("one_step_rotation_error_angle"))
+    buffers.trajectory_data[
+        "right_mpc_predictor_neural_inference_valid"
+    ].append(
+        bool(mpc_template_diagnostics.get("neural_inference_valid", False))
+    )
+    buffers.trajectory_data[
+        "right_mpc_predictor_neural_inference_time"
+    ].append(template_scalar("neural_inference_time"))
+    buffers.trajectory_data["right_mpc_predictor_fallback_used"].append(
+        bool(mpc_template_diagnostics.get("fallback_used", False))
+    )
+    buffers.trajectory_data["right_mpc_predictor_fallback_code"].append(
+        int(mpc_template_diagnostics.get("fallback_code", 0))
+    )
+    buffers.trajectory_data["right_mpc_predictor_history_count"].append(
+        int(mpc_template_diagnostics.get("history_count", 0))
+    )
     buffers.trajectory_data["arm_policy_updated"].append(arm_policy_updated)
     buffers.trajectory_data["ddq_execution_updated"].append(
         ddq_execution_updated
