@@ -28,7 +28,11 @@ from disturbance_predictor import (
     DisturbancePredictorObservation,
     create_disturbance_predictor,
 )
-from disturbance_learning.command_schedule import command_schedule
+from disturbance_learning.command_schedule import (
+    DEFAULT_SCHEDULE_TIMING,
+    GENERALIZATION_SCHEDULE_PROFILES,
+    command_schedule,
+)
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import CppRightArmRneaBackend, create_prediction_backend
 from right_arm_runtime import (
@@ -113,7 +117,43 @@ if __name__ == "__main__":
             "stopped 命令日程，评估时间为 0.8~4.8 s。"
         ),
     )
+    parser.add_argument(
+        "--predictor-schedule-profile",
+        choices=tuple(GENERALIZATION_SCHEDULE_PROFILES),
+        default=None,
+        help="使用一个未见 command schedule，并启用 predictor 闭环评估。",
+    )
+    parser.add_argument(
+        "--predictor-ablation-seed",
+        type=int,
+        default=0,
+        help="未见日程验证的可复现下肢初始状态扰动 seed。",
+    )
+    parser.add_argument(
+        "--predictor-payload-kg",
+        type=float,
+        default=0.0,
+        help="仅给 MuJoCo right_bottle 增加的小幅 payload 质量。",
+    )
     args = parser.parse_args()
+    schedule_profile = (
+        None
+        if args.predictor_schedule_profile is None
+        else GENERALIZATION_SCHEDULE_PROFILES[
+            args.predictor_schedule_profile
+        ]
+    )
+    predictor_ablation_active = args.predictor_ablation or schedule_profile is not None
+    active_schedule_timing = (
+        DEFAULT_SCHEDULE_TIMING
+        if schedule_profile is None
+        else schedule_profile.timing
+    )
+    if (
+        not np.isfinite(args.predictor_payload_kg)
+        or not 0.0 <= args.predictor_payload_kg <= 0.25
+    ):
+        raise ValueError("predictor payload 必须是 0~0.25 kg 的有限值。")
     config_file = args.config_file
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = config_file if os.path.isabs(config_file) else os.path.join(repo_dir, "configs", config_file)
@@ -285,12 +325,19 @@ if __name__ == "__main__":
             np.isfinite(disturbance_command_changed)
         ):
             raise ValueError("disturbance_command_changed 必须是有限的 vx/vy/wz。")
+        if schedule_profile is not None:
+            cmd_nominal = np.asarray(
+                schedule_profile.start_command, dtype=np.float32
+            )
+            disturbance_command_changed = np.asarray(
+                schedule_profile.changed_command, dtype=np.float32
+            )
         heading_control_enabled = bool(config.get("heading_control_enabled", True))
         heading_filter_cycles = float(config.get("heading_filter_cycles", 1.0))
         heading_kp = float(config.get("heading_kp", 0.6))
         heading_kd = float(config.get("heading_kd", 0.1))
         heading_max_yaw_rate = float(config.get("heading_max_yaw_rate", 0.25))
-        if args.predictor_ablation:
+        if predictor_ablation_active:
             disturbance_command_schedule_enabled = True
             heading_control_enabled = False
 
@@ -316,9 +363,9 @@ if __name__ == "__main__":
         cooldown_cycles = 0
         viewer_enabled = False
         record_video = False
-    elif args.predictor_ablation:
+    elif predictor_ablation_active:
         warmup_cycles = 1
-        evaluation_cycles = 5
+        evaluation_cycles = 6 if schedule_profile is not None else 5
         cooldown_cycles = 0
         viewer_enabled = False
         record_video = False
@@ -349,6 +396,41 @@ if __name__ == "__main__":
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
+    payload_metadata = {
+        "body": "right_bottle",
+        "added_mass_kg": float(args.predictor_payload_kg),
+        "intentional_nominal_model_mismatch": bool(
+            args.predictor_payload_kg > 0.0
+        ),
+    }
+    if args.predictor_payload_kg > 0.0:
+        payload_body_id = mujoco.mj_name2id(
+            m, mujoco.mjtObj.mjOBJ_BODY, "right_bottle"
+        )
+        if payload_body_id < 0:
+            raise ValueError("MuJoCo model 中找不到 right_bottle payload body。")
+        original_mass = float(m.body_mass[payload_body_id])
+        mass_scale = (original_mass + args.predictor_payload_kg) / original_mass
+        m.body_mass[payload_body_id] = original_mass + args.predictor_payload_kg
+        m.body_inertia[payload_body_id] *= mass_scale
+        mujoco.mj_setConst(m, d)
+        payload_metadata["nominal_mass_kg"] = original_mass
+        payload_metadata["simulated_mass_kg"] = float(
+            m.body_mass[payload_body_id]
+        )
+    if schedule_profile is not None:
+        initial_rng = np.random.default_rng(args.predictor_ablation_seed)
+        initial_lower_q_offset = np.clip(
+            initial_rng.normal(0.0, 0.006, size=12), -0.018, 0.018
+        )
+        initial_lower_dq = np.clip(
+            initial_rng.normal(0.0, 0.01, size=12), -0.03, 0.03
+        )
+        d.qpos[7:19] += initial_lower_q_offset
+        d.qvel[6:18] = initial_lower_dq
+    else:
+        initial_lower_q_offset = np.zeros(12, dtype=np.float64)
+        initial_lower_dq = np.zeros(12, dtype=np.float64)
     # 初始化 site_xmat/xpos 等派生运动学量；扰动前馈第 0 拍需要有效的 torso 姿态。
     mujoco.mj_forward(m, d)
     free_joint_ids = np.flatnonzero(
@@ -513,6 +595,17 @@ if __name__ == "__main__":
         ),
         "start_command": cmd_nominal.copy(),
         "changed_command": disturbance_command_changed.copy(),
+        "profile": (
+            "legacy_default" if schedule_profile is None else schedule_profile.name
+        ),
+        "timing_s": {
+            name: list(window)
+            for name, window in active_schedule_timing.stage_windows().items()
+        },
+        "seed": int(args.predictor_ablation_seed),
+        "initial_lower_q_offset": initial_lower_q_offset.copy(),
+        "initial_lower_dq": initial_lower_dq.copy(),
+        "payload": payload_metadata,
     }
     performance_runtime = build_performance_runtime_config(
         config=config,
@@ -786,7 +879,10 @@ if __name__ == "__main__":
     heading_state = heading_controller.last_output
     cmd_runtime = (
         command_schedule(
-            0.0, cmd_nominal, disturbance_command_changed
+            0.0,
+            cmd_nominal,
+            disturbance_command_changed,
+            active_schedule_timing,
         ).command.astype(np.float32)
         if disturbance_command_schedule_enabled
         else cmd_nominal.copy()
@@ -1437,6 +1533,7 @@ if __name__ == "__main__":
                         count,
                         cmd_nominal,
                         disturbance_command_changed,
+                        active_schedule_timing,
                     ).command.astype(np.float32)
                     if disturbance_command_schedule_enabled
                     else cmd_nominal.copy()

@@ -10,6 +10,10 @@ from disturbance_learning.collect_dataset import (
     build_episode_profile,
     command_schedule,
 )
+from disturbance_learning.command_schedule import (
+    DEFAULT_SCHEDULE_TIMING,
+    GENERALIZATION_SCHEDULE_PROFILES,
+)
 from disturbance_learning.dataset import (
     FEATURE_NAMES,
     HEADING_DEFINITION,
@@ -186,6 +190,69 @@ class DisturbanceDatasetTest(unittest.TestCase):
         self.assertTrue(0.30 <= first.start_command[0] <= 0.60)
         self.assertTrue(-0.12 <= first.changed_command[1] <= 0.12)
         self.assertLess(np.max(np.abs(first.initial_lower_q_offset)), 0.03)
+
+    def test_default_schedule_timing_is_numerically_unchanged(self) -> None:
+        nominal = np.array([0.5, 0.0, 0.0127])
+        changed = np.array([0.275, 0.10, -0.04])
+        expected = {
+            0.4: (0, np.zeros(3)),
+            1.1: (1, 0.5 * nominal),
+            1.8: (2, nominal),
+            2.6: (3, 0.5 * (nominal + changed)),
+            3.3: (4, 0.5 * changed),
+            4.0: (5, np.zeros(3)),
+        }
+        for time_s, (segment_id, expected_command) in expected.items():
+            state = command_schedule(
+                time_s, nominal, changed, DEFAULT_SCHEDULE_TIMING
+            )
+            self.assertEqual(state.segment_id, segment_id)
+            np.testing.assert_allclose(
+                state.command, expected_command, atol=1e-12
+            )
+
+    def test_generalization_profiles_are_distinct_and_keep_heading_warmup(self) -> None:
+        legacy = np.array(
+            [
+                DEFAULT_SCHEDULE_TIMING.start_begin,
+                DEFAULT_SCHEDULE_TIMING.start_end,
+                DEFAULT_SCHEDULE_TIMING.change_begin,
+                DEFAULT_SCHEDULE_TIMING.change_end,
+                DEFAULT_SCHEDULE_TIMING.stop_begin,
+                DEFAULT_SCHEDULE_TIMING.stop_end,
+            ]
+        )
+        seen_timings = set()
+        for profile in GENERALIZATION_SCHEDULE_PROFILES.values():
+            timing = profile.timing
+            profile_values = (
+                timing.start_begin,
+                timing.start_end,
+                timing.change_begin,
+                timing.change_end,
+                timing.stop_begin,
+                timing.stop_end,
+            )
+            self.assertGreaterEqual(timing.start_begin, 0.8)
+            self.assertEqual(timing.run_end, 5.6)
+            self.assertFalse(np.array_equal(np.asarray(profile_values), legacy))
+            self.assertNotIn(profile_values, seen_timings)
+            seen_timings.add(profile_values)
+
+            start = command_schedule(
+                timing.start_begin,
+                np.asarray(profile.start_command),
+                np.asarray(profile.changed_command),
+                timing,
+            )
+            stopped = command_schedule(
+                timing.stop_end,
+                np.asarray(profile.start_command),
+                np.asarray(profile.changed_command),
+                timing,
+            )
+            self.assertEqual(start.segment_id, 1)
+            self.assertEqual(stopped.segment_id, 5)
 
 
 if __name__ == "__main__":

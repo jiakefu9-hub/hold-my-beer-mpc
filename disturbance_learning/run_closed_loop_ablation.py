@@ -138,7 +138,14 @@ def _critical_nonfinite_count(
     return count
 
 
-def summarize_run(run_dir: Path, mode: str) -> dict:
+def summarize_run(
+    run_dir: Path,
+    mode: str,
+    *,
+    evaluation_start: float = 0.8,
+    evaluation_end: float = 4.8,
+    stages: dict[str, tuple[float, float]] = STAGES,
+) -> dict:
     # trajectory.npz 含有本项目自行写入的字段名 object 数组；
     # 此处只读取刚在本地生成的可信评估文件。
     with np.load(run_dir / "trajectory.npz", allow_pickle=True) as source:
@@ -146,8 +153,6 @@ def summarize_run(run_dir: Path, mode: str) -> dict:
     with np.load(run_dir / "metrics.npz", allow_pickle=False) as source:
         metrics = {name: source[name] for name in source.files}
     perf = _load_json(run_dir / "perf_summary.json")
-    overall = _load_json(run_dir / "summary.json")
-    mpc = _load_json(run_dir / "mpc_diagnostics.json")
     hardware = _nested(perf, "total", "real_hardware_control")
     predictor_timing = _nested(
         hardware, "mpc_breakdown", "disturbance_prediction_time"
@@ -156,7 +161,11 @@ def summarize_run(run_dir: Path, mode: str) -> dict:
 
     time_values = np.asarray(trajectory["time"], dtype=np.float64)
     arm_updates = np.asarray(trajectory["arm_policy_updated"], dtype=bool)
-    evaluation = (time_values >= 0.8) & (time_values < 4.8) & arm_updates
+    evaluation = (
+        (time_values >= evaluation_start)
+        & (time_values < evaluation_end)
+        & arm_updates
+    )
     full_updates = arm_updates
     predictor_fallback = np.asarray(
         trajectory["right_mpc_predictor_fallback_used"], dtype=bool
@@ -169,37 +178,78 @@ def summarize_run(run_dir: Path, mode: str) -> dict:
         dtype=np.float64,
     )
     neural_timing_mask = evaluation & neural_inference_valid
-    evaluation_dense = (time_values >= 0.8) & (time_values < 4.8)
+    evaluation_dense = (
+        (time_values >= evaluation_start) & (time_values < evaluation_end)
+    )
     ddq_saturation = np.asarray(
         trajectory["right_arm_ddq_saturation_mask"], dtype=bool
     )
 
+    overall_evaluation = {
+        "right_ee_acc_norm_rms": _vector_rms(
+            metrics["right_ee_lin_acc_world"],
+            (np.asarray(metrics["time"]) >= evaluation_start)
+            & (np.asarray(metrics["time"]) < evaluation_end),
+        ),
+        "right_ee_alpha_norm_rms": _vector_rms(
+            metrics["right_ee_ang_acc_world"],
+            (np.asarray(metrics["time"]) >= evaluation_start)
+            & (np.asarray(metrics["time"]) < evaluation_end),
+        ),
+        "right_ee_tilt_xy_norm_rms": _vector_rms(
+            np.asarray(metrics["right_ee_tilt_error"])[:, :2],
+            (np.asarray(metrics["time"]) >= evaluation_start)
+            & (np.asarray(metrics["time"]) < evaluation_end),
+        ),
+        "torso_acc_norm_rms": _vector_rms(
+            trajectory["torso_acc_world_used"],
+            evaluation_dense,
+        ),
+        "torso_alpha_norm_rms": _vector_rms(
+            trajectory["torso_alpha_world_used"],
+            evaluation_dense,
+        ),
+        "qp_success_fraction": float(
+            np.mean(np.asarray(trajectory["right_mpc_solver_success"])[evaluation])
+        ),
+        "qp_fallback_fraction": float(
+            np.mean(np.asarray(trajectory["right_mpc_fallback_used"])[evaluation])
+        ),
+        "ddq_saturation_any_fraction": float(
+            np.mean(np.any(ddq_saturation[evaluation_dense], axis=1))
+        ),
+    }
+    legacy_window = evaluation_start == 0.8 and evaluation_end == 4.8
+    if legacy_window:
+        # Preserve the original first-ablation report exactly.  Generalized
+        # windows are recomputed above from the trajectory with explicit bounds.
+        original_overall = _load_json(run_dir / "summary.json")
+        original_mpc = _load_json(run_dir / "mpc_diagnostics.json")
+        overall_evaluation.update(
+            {
+                "right_ee_acc_norm_rms": float(original_overall["right_acc_rms"]),
+                "right_ee_alpha_norm_rms": float(
+                    original_overall["right_alpha_rms"]
+                ),
+                "right_ee_tilt_xy_norm_rms": float(
+                    original_overall["right_tilt_rms"]
+                ),
+                "qp_success_fraction": float(
+                    original_mpc["solver"]["success_fraction"]
+                ),
+                "qp_fallback_fraction": float(
+                    original_mpc["solver"]["fallback_fraction"]
+                ),
+            }
+        )
     result = {
         "mode": mode,
         "run_dir_local_ignored": str(run_dir.relative_to(REPO_DIR)),
-        "overall_evaluation_0p8_to_4p8_s": {
-            "right_ee_acc_norm_rms": float(overall["right_acc_rms"]),
-            "right_ee_alpha_norm_rms": float(overall["right_alpha_rms"]),
-            "right_ee_tilt_xy_norm_rms": float(overall["right_tilt_rms"]),
-            "torso_acc_norm_rms": _vector_rms(
-                trajectory["torso_acc_world_used"],
-                evaluation_dense,
-            ),
-            "torso_alpha_norm_rms": _vector_rms(
-                trajectory["torso_alpha_world_used"],
-                evaluation_dense,
-            ),
-            "qp_success_fraction": float(mpc["solver"]["success_fraction"]),
-            "qp_fallback_fraction": float(
-                mpc["solver"]["fallback_fraction"]
-            ),
-            "ddq_saturation_any_fraction": float(
-                np.mean(np.any(ddq_saturation[evaluation_dense], axis=1))
-            ),
-        },
+        "evaluation_window_s": [evaluation_start, evaluation_end],
+        "overall_evaluation": overall_evaluation,
         "by_stage": {
             name: _stage_metrics(trajectory, metrics, start, end)
-            for name, (start, end) in STAGES.items()
+            for name, (start, end) in stages.items()
         },
         "predictor_timing_ms": predictor_timing,
         "neural_core_inference_timing_ms": _distribution(
@@ -229,6 +279,9 @@ def summarize_run(run_dir: Path, mode: str) -> dict:
             ),
         },
     }
+    if legacy_window:
+        # Keep the first-ablation summary schema stable.
+        result["overall_evaluation_0p8_to_4p8_s"] = overall_evaluation
     return result
 
 
@@ -313,12 +366,8 @@ def main() -> None:
         "results": results,
     }
     by_mode = {result["mode"]: result for result in results}
-    template_overall = by_mode["template"][
-        "overall_evaluation_0p8_to_4p8_s"
-    ]
-    hybrid_overall = by_mode["hybrid_residual"][
-        "overall_evaluation_0p8_to_4p8_s"
-    ]
+    template_overall = by_mode["template"]["overall_evaluation"]
+    hybrid_overall = by_mode["hybrid_residual"]["overall_evaluation"]
     quality_names = (
         "right_ee_acc_norm_rms",
         "right_ee_alpha_norm_rms",
