@@ -1,0 +1,37 @@
+collection:
+  episode_count: 18
+  seed_start: 1000
+  output_dir: disturbance_learning/data/b2_mlp_episodes
+
+split:
+  train_episodes: 12
+  validation_episodes: 3
+  test_episodes: 3
+  shuffle_seed: 20260811
+
+model:
+  hidden_sizes: [128, 128]
+
+overfit_sanity:
+  sample_count: 64
+  steps: 400
+  learning_rate: 0.003
+  required_loss_ratio: 0.05
+
+training:
+  seed: 20260811
+  batch_size: 256
+  max_epochs: 180
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  patience: 25
+
+timing:
+  warmup_iterations: 300
+  benchmark_iterations: 5000
+  benchmark_repeats: 5
+  torch_num_threads: 1
+
+outputs:
+  artifact_dir: disturbance_learning/artifacts/b2_mlp_baseline
+  summary_dir: evaluation_summary/b2_mlp_baseline

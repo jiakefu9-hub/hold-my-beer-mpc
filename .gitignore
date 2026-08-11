@@ -13,6 +13,8 @@ evaluation/
 sweep_logs/
 # B1 raw episodes、window datasets 和 validation reports 只保存在本地。
 disturbance_learning/data/
+# B2 checkpoints、normalization 和本地训练日志。
+disturbance_learning/artifacts/
 
 # 轻量、可复现的实验摘要放在 evaluation_summary/，允许正常提交。
 # evaluation_summary/ 不需要额外的反向忽略规则，因为它不在上述目录中。

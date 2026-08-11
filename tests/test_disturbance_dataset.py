@@ -6,7 +6,10 @@ import unittest
 
 import numpy as np
 
-from disturbance_learning.collect_dataset import command_schedule
+from disturbance_learning.collect_dataset import (
+    build_episode_profile,
+    command_schedule,
+)
 from disturbance_learning.dataset import (
     FEATURE_NAMES,
     HEADING_DEFINITION,
@@ -169,6 +172,20 @@ class DisturbanceDatasetTest(unittest.TestCase):
         self.assertGreater(states[1].command[0], 0.0)
         self.assertGreater(states[3].command[1], 0.0)
         self.assertGreater(states[4].command[0], 0.0)
+
+    def test_episode_seed_produces_bounded_reproducible_variation(self) -> None:
+        nominal = np.array([0.5, 0.0, 0.0127])
+        first = build_episode_profile(nominal, 1000)
+        repeated = build_episode_profile(nominal, 1000)
+        second = build_episode_profile(nominal, 1001)
+        np.testing.assert_array_equal(first.start_command, repeated.start_command)
+        np.testing.assert_array_equal(
+            first.initial_lower_q_offset, repeated.initial_lower_q_offset
+        )
+        self.assertFalse(np.array_equal(first.start_command, second.start_command))
+        self.assertTrue(0.30 <= first.start_command[0] <= 0.60)
+        self.assertTrue(-0.12 <= first.changed_command[1] <= 0.12)
+        self.assertLess(np.max(np.abs(first.initial_lower_q_offset)), 0.03)
 
 
 if __name__ == "__main__":

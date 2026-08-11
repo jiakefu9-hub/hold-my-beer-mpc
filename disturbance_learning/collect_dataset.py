@@ -49,17 +49,61 @@ class CommandState:
     segment_id: int
 
 
+@dataclass(frozen=True)
+class EpisodeProfile:
+    start_command: np.ndarray
+    changed_command: np.ndarray
+    initial_lower_q_offset: np.ndarray
+    initial_lower_dq: np.ndarray
+
+
 def _lerp(start: np.ndarray, end: np.ndarray, fraction: float) -> np.ndarray:
     fraction = float(np.clip(fraction, 0.0, 1.0))
     return (1.0 - fraction) * start + fraction * end
 
 
-def command_schedule(time_s: float, nominal_command: np.ndarray) -> CommandState:
+def build_episode_profile(
+    nominal_command: np.ndarray, seed: int
+) -> EpisodeProfile:
+    """Create one reproducible, bounded command/state variation."""
+    rng = np.random.default_rng(int(seed))
+    nominal = np.asarray(nominal_command, dtype=np.float64)
+    start_command = np.array(
+        [
+            np.clip(nominal[0] * rng.uniform(0.75, 1.15), 0.30, 0.60),
+            rng.uniform(-0.055, 0.055),
+            np.clip(nominal[2] + rng.uniform(-0.025, 0.025), -0.05, 0.05),
+        ],
+        dtype=np.float64,
+    )
+    changed_command = np.array(
+        [
+            np.clip(start_command[0] * rng.uniform(0.45, 0.80), 0.15, 0.45),
+            np.clip(start_command[1] + rng.uniform(-0.10, 0.10), -0.12, 0.12),
+            rng.uniform(-0.06, 0.06),
+        ],
+        dtype=np.float64,
+    )
+    return EpisodeProfile(
+        start_command=start_command,
+        changed_command=changed_command,
+        initial_lower_q_offset=rng.normal(0.0, 0.006, size=12),
+        initial_lower_dq=rng.normal(0.0, 0.01, size=12),
+    )
+
+
+def command_schedule(
+    time_s: float,
+    nominal_command: np.ndarray,
+    changed_command: np.ndarray | None = None,
+) -> CommandState:
     """Small deterministic schedule covering idle/start/change/stop."""
     nominal = np.asarray(nominal_command, dtype=np.float64)
     stopped = np.zeros(3, dtype=np.float64)
-    changed = np.array(
-        [0.55 * nominal[0], 0.10, -0.04], dtype=np.float64
+    changed = (
+        np.array([0.55 * nominal[0], 0.10, -0.04], dtype=np.float64)
+        if changed_command is None
+        else np.asarray(changed_command, dtype=np.float64)
     )
     if time_s < 0.8:
         return CommandState(stopped.copy(), 0)
@@ -156,6 +200,9 @@ def collect_raw_episode(
     model = mujoco.MjModel.from_xml_path(str(xml_path))
     data = mujoco.MjData(model)
     model.opt.timestep = simulation_dt
+    profile = build_episode_profile(cmd_nominal, seed)
+    data.qpos[7:19] += profile.initial_lower_q_offset
+    data.qvel[6:18] = profile.initial_lower_dq
     mujoco.mj_forward(model, data)
 
     acceleration_adr = _sensor_address(
@@ -168,7 +215,9 @@ def collect_raw_episode(
     action = np.zeros(num_actions, dtype=np.float32)
     target_dof_pos = default_angles.copy()
     observation = np.zeros(num_obs, dtype=np.float32)
-    active_schedule = command_schedule(0.0, cmd_nominal)
+    active_schedule = command_schedule(
+        0.0, profile.start_command, profile.changed_command
+    )
     previous_omega_world = np.zeros(3, dtype=np.float64)
 
     raw_lists: dict[str, list] = {
@@ -269,7 +318,11 @@ def collect_raw_episode(
         next_step = step_index + 1
         if next_step % control_decimation == 0:
             policy_time = next_step * simulation_dt
-            active_schedule = command_schedule(policy_time, cmd_nominal)
+            active_schedule = command_schedule(
+                policy_time,
+                profile.start_command,
+                profile.changed_command,
+            )
             policy_q = data.qpos[7:19].copy()
             policy_dq = data.qvel[6:18].copy()
             policy_quaternion = data.qpos[3:7].copy()
@@ -328,6 +381,10 @@ def collect_raw_episode(
             "command_update_dt": np.array(
                 simulation_dt * control_decimation, dtype=np.float64
             ),
+            "start_command": profile.start_command.copy(),
+            "changed_command": profile.changed_command.copy(),
+            "initial_lower_q_offset": profile.initial_lower_q_offset.copy(),
+            "initial_lower_dq": profile.initial_lower_dq.copy(),
             "schedule_segment_names": SCHEDULE_SEGMENT_NAMES.copy(),
             "required_schedule_segment_ids": (
                 REQUIRED_SCHEDULE_SEGMENT_IDS.copy()
