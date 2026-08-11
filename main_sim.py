@@ -888,6 +888,9 @@ if __name__ == "__main__":
         else cmd_nominal.copy()
     )
     heading_yaw_rate_command_runtime = float(cmd_runtime[2])
+    predictor_world_down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+    predictor_gravity_direction = np.empty(3, dtype=np.float64)
+    predictor_phase_sin_cos = np.empty(2, dtype=np.float64)
 
     perf_monitor = PerformanceMonitor(
         step_budget=simulation_dt,
@@ -995,26 +998,36 @@ if __name__ == "__main__":
                         * ((counter * simulation_dt) % gait_period)
                         / gait_period
                     )
+                    np.matmul(
+                        torso_state.rotmat.T,
+                        predictor_world_down,
+                        out=predictor_gravity_direction,
+                    )
+                    predictor_phase_sin_cos[0] = np.sin(
+                        predictor_phase_angle
+                    )
+                    predictor_phase_sin_cos[1] = np.cos(
+                        predictor_phase_angle
+                    )
                     disturbance_predictor.update(
                         DisturbancePredictorObservation(
                             simulation_time=counter * simulation_dt,
                             measured_disturbance=torso_disturbance,
                             gravity_direction_torso=(
-                                torso_state.rotmat.T
-                                @ np.array(
-                                    [0.0, 0.0, -1.0], dtype=np.float64
-                                )
+                                predictor_gravity_direction
                             ),
                             lower_body_q=leg_q,
                             lower_body_dq=leg_dq,
                             lower_body_policy_target=target_dof_pos,
                             runtime_command=cmd_runtime,
-                            gait_phase_sin_cos=np.array(
-                                [
-                                    np.sin(predictor_phase_angle),
-                                    np.cos(predictor_phase_angle),
-                                ],
-                                dtype=np.float64,
+                            gait_phase_sin_cos=predictor_phase_sin_cos,
+                            previous_mpc_success=(
+                                None
+                                if mpc_diagnostics is None
+                                else bool(mpc_diagnostics.get("success", False))
+                            ),
+                            previous_control_interval_overrun=(
+                                perf_monitor.last_complete_interval_overrun
                             ),
                         )
                     )
@@ -1100,7 +1113,9 @@ if __name__ == "__main__":
                         mpc_diagnostics = controller_diagnostics
                         if disturbance_predictor is not None:
                             mpc_diagnostics["disturbance_predictor_diagnostics"] = (
-                                disturbance_predictor.get_last_diagnostics()
+                                disturbance_predictor.get_last_diagnostics(
+                                    copy_data=False
+                                )
                             )
                     diagnostics_time = time.perf_counter() - diagnostics_start
                     if arm_controller == "mpc":

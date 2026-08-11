@@ -65,6 +65,15 @@ def _aggregate_mode(results: list[dict], mode: str) -> dict:
             for result in selected
         )
     )
+    evaluation_update_count = int(
+        sum(
+            result["fallback"]["evaluation_update_count"]
+            for result in selected
+        )
+    )
+    safety_gate_count = int(
+        sum(result["safety_gate"]["evaluation_count"] for result in selected)
+    )
     overall_names = QUALITY_METRICS + (
         "torso_acc_norm_rms",
         "torso_alpha_norm_rms",
@@ -137,6 +146,7 @@ def _aggregate_mode(results: list[dict], mode: str) -> dict:
             ),
         },
         "safety_totals": {
+            "evaluation_update_count": evaluation_update_count,
             "predictor_fallback_count": int(
                 sum(result["fallback"]["evaluation_count"] for result in selected)
             ),
@@ -151,6 +161,17 @@ def _aggregate_mode(results: list[dict], mode: str) -> dict:
             "complete_interval_overrun_fraction": (
                 interval_overrun_count / interval_count
             ),
+            "safety_gate_count": safety_gate_count,
+            "safety_gate_fraction": safety_gate_count / evaluation_update_count,
+            "safety_gate_by_code": {
+                str(code): int(
+                    sum(
+                        result["safety_gate"]["by_code"][str(code)]
+                        for result in selected
+                    )
+                )
+                for code in (4, 5, 6, 7, 8)
+            },
         },
     }
 
@@ -169,6 +190,7 @@ def _compact_result(result: dict) -> dict:
             "evaluation_window_s",
             "overall_evaluation",
             "fallback",
+            "safety_gate",
             "safety",
         )
     }

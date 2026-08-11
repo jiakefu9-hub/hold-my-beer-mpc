@@ -1181,8 +1181,10 @@ class PhaseDisturbancePredictor:
             "slow_bias_alpha_world": self._slow_bias_alpha.copy(),
         }
 
-    def get_last_diagnostics(self):
+    def get_last_diagnostics(self, copy_data=True):
         """【非核心代码】返回模板当前偏差和上一拍的一步预测误差。"""
+        if not copy_data:
+            return self._last_prediction_diagnostics
         copied = {}
         for name, value in self._last_prediction_diagnostics.items():
             copied[name] = value.copy() if isinstance(value, np.ndarray) else value
@@ -3709,6 +3711,8 @@ class PerformanceMonitor:
     current_interval_policy_sample: Optional[dict] = None
     current_interval_ddq_samples: list = field(default_factory=list)
     current_interval_cpp_executor_elapsed: float = 0.0
+    last_complete_interval_elapsed: Optional[float] = None
+    last_complete_interval_overrun: Optional[bool] = None
 
     def __post_init__(self):
         if self.arm_budget is None:
@@ -3751,12 +3755,20 @@ class PerformanceMonitor:
         self._finish_current_arm_interval()
 
     def _finish_current_arm_interval(self):
+        self.last_complete_interval_elapsed = None
+        self.last_complete_interval_overrun = None
         if self.current_interval_steps <= 0:
             self._reset_current_interval_details()
             return
         # evaluation 末端可能切到一个不足 3 个物理拍的残余区间；它不是
         # 完整 6 ms 控制周期，不能混入实时预算统计。
         if self.current_interval_steps == self.expected_steps_per_interval:
+            self.last_complete_interval_elapsed = float(
+                self.current_interval_elapsed
+            )
+            self.last_complete_interval_overrun = bool(
+                self.current_interval_elapsed > self.arm_budget
+            )
             self.right_arm_interval_samples.append(
                 self.current_interval_elapsed
             )
@@ -5084,6 +5096,15 @@ def init_eval_buffers():
             "right_mpc_predictor_fallback_used": [],
             "right_mpc_predictor_fallback_code": [],
             "right_mpc_predictor_history_count": [],
+            "right_mpc_predictor_safety_gate_triggered": [],
+            "right_mpc_predictor_input_abs_z_max": [],
+            "right_mpc_predictor_input_rms_z": [],
+            "right_mpc_predictor_prediction_abs_z_max": [],
+            "right_mpc_predictor_acc_correction_norm_max": [],
+            "right_mpc_predictor_alpha_correction_norm_max": [],
+            "right_mpc_predictor_solver_gate_remaining": [],
+            "right_mpc_predictor_solver_failure_streak": [],
+            "right_mpc_predictor_timing_gate_remaining": [],
             "arm_policy_updated": [],
             "ddq_execution_updated": [],
             "contact_count": [],
@@ -8681,6 +8702,35 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_mpc_predictor_history_count"].append(
         int(mpc_template_diagnostics.get("history_count", 0))
     )
+    buffers.trajectory_data[
+        "right_mpc_predictor_safety_gate_triggered"
+    ].append(bool(mpc_template_diagnostics.get("safety_gate_triggered", False)))
+    for field, diagnostic_name in (
+        ("right_mpc_predictor_input_abs_z_max", "input_abs_z_max"),
+        ("right_mpc_predictor_input_rms_z", "input_rms_z"),
+        (
+            "right_mpc_predictor_prediction_abs_z_max",
+            "prediction_abs_z_max",
+        ),
+        (
+            "right_mpc_predictor_acc_correction_norm_max",
+            "acc_correction_norm_max",
+        ),
+        (
+            "right_mpc_predictor_alpha_correction_norm_max",
+            "alpha_correction_norm_max",
+        ),
+    ):
+        buffers.trajectory_data[field].append(template_scalar(diagnostic_name))
+    buffers.trajectory_data[
+        "right_mpc_predictor_solver_gate_remaining"
+    ].append(int(mpc_template_diagnostics.get("solver_gate_remaining", 0)))
+    buffers.trajectory_data[
+        "right_mpc_predictor_solver_failure_streak"
+    ].append(int(mpc_template_diagnostics.get("solver_failure_streak", 0)))
+    buffers.trajectory_data[
+        "right_mpc_predictor_timing_gate_remaining"
+    ].append(int(mpc_template_diagnostics.get("timing_gate_remaining", 0)))
     buffers.trajectory_data["arm_policy_updated"].append(arm_policy_updated)
     buffers.trajectory_data["ddq_execution_updated"].append(
         ddq_execution_updated

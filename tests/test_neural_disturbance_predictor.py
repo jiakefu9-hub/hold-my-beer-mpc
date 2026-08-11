@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -107,6 +108,24 @@ def _run_until_heading_ready(predictor):
         predictor.update(_observation(index * CONTROL_DT))
         preview = predictor.predict(HORIZON, CONTROL_DT)
     return preview
+
+
+def _assert_previews_equal(test: unittest.TestCase, actual, expected) -> None:
+    for actual_items, expected_items in (
+        (actual.nodes, expected.nodes),
+        (actual.intervals, expected.intervals),
+    ):
+        test.assertEqual(len(actual_items), len(expected_items))
+        for actual_item, expected_item in zip(actual_items, expected_items):
+            for name in (
+                "acc_world",
+                "omega_world",
+                "alpha_world",
+                "rot_world_body",
+            ):
+                np.testing.assert_array_equal(
+                    getattr(actual_item, name), getattr(expected_item, name)
+                )
 
 
 class NeuralDisturbancePredictorTest(unittest.TestCase):
@@ -299,6 +318,207 @@ class NeuralDisturbancePredictorTest(unittest.TestCase):
             np.testing.assert_array_equal(
                 preview.intervals[0].acc_world, measured.acc_world
             )
+
+    def test_hybrid_out_of_range_residual_falls_back_exactly_to_template(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "residual.pt"
+            _write_constant_checkpoint(
+                checkpoint,
+                "residual_template",
+                np.array([20.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            )
+            hybrid = ResidualHybridPredictor(
+                checkpoint_path=str(checkpoint),
+                template_reference=_template(),
+                control_dt=CONTROL_DT,
+                horizon=HORIZON,
+                acc_limit=30.0,
+                alpha_limit=40.0,
+                safety_gate_enabled=True,
+                max_acc_correction_norm=1.0,
+            )
+            baseline = _template()
+            for index in range(135):
+                observation = _observation(index * CONTROL_DT)
+                hybrid.update(observation)
+                baseline.update(observation)
+                hybrid_preview = hybrid.predict(HORIZON, CONTROL_DT)
+                baseline_preview = baseline.predict(HORIZON, CONTROL_DT)
+
+            diagnostics = hybrid.get_last_diagnostics()
+            self.assertEqual(diagnostics["fallback_code"], 6)
+            self.assertTrue(diagnostics["safety_gate_triggered"])
+            _assert_previews_equal(self, hybrid_preview, baseline_preview)
+
+    def test_hybrid_input_envelope_gate_skips_neural_correction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "residual.pt"
+            _write_constant_checkpoint(
+                checkpoint, "residual_template", np.zeros(6)
+            )
+            hybrid = ResidualHybridPredictor(
+                checkpoint_path=str(checkpoint),
+                template_reference=_template(),
+                control_dt=CONTROL_DT,
+                horizon=HORIZON,
+                acc_limit=30.0,
+                alpha_limit=40.0,
+                safety_gate_enabled=True,
+                max_input_abs_z=0.25,
+            )
+            baseline = _template()
+            for index in range(135):
+                observation = _observation(index * CONTROL_DT)
+                hybrid.update(observation)
+                baseline.update(observation)
+                hybrid_preview = hybrid.predict(HORIZON, CONTROL_DT)
+                baseline_preview = baseline.predict(HORIZON, CONTROL_DT)
+
+            diagnostics = hybrid.get_last_diagnostics()
+            self.assertEqual(diagnostics["fallback_code"], 5)
+            self.assertTrue(diagnostics["safety_gate_triggered"])
+            self.assertFalse(diagnostics["neural_inference_valid"])
+            _assert_previews_equal(self, hybrid_preview, baseline_preview)
+
+    def test_hybrid_nonfinite_model_output_falls_back_to_template(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "residual.pt"
+            _write_constant_checkpoint(
+                checkpoint, "residual_template", np.zeros(6)
+            )
+            hybrid = ResidualHybridPredictor(
+                checkpoint_path=str(checkpoint),
+                template_reference=_template(),
+                control_dt=CONTROL_DT,
+                horizon=HORIZON,
+                acc_limit=30.0,
+                alpha_limit=40.0,
+                safety_gate_enabled=True,
+            )
+            baseline = _template()
+            for index in range(135):
+                observation = _observation(index * CONTROL_DT)
+                hybrid.update(observation)
+                baseline.update(observation)
+                hybrid_preview = hybrid.predict(HORIZON, CONTROL_DT)
+                baseline_preview = baseline.predict(HORIZON, CONTROL_DT)
+
+            hybrid._model = lambda tensor: torch.full(
+                (tensor.shape[0], HORIZON, len(TARGET_NAMES)),
+                torch.nan,
+                dtype=torch.float32,
+            )
+            observation = _observation(135 * CONTROL_DT)
+            hybrid.update(observation)
+            baseline.update(observation)
+            hybrid_preview = hybrid.predict(HORIZON, CONTROL_DT)
+            baseline_preview = baseline.predict(HORIZON, CONTROL_DT)
+            diagnostics = hybrid.get_last_diagnostics()
+            self.assertEqual(diagnostics["fallback_code"], 4)
+            self.assertTrue(diagnostics["safety_gate_triggered"])
+            _assert_previews_equal(self, hybrid_preview, baseline_preview)
+
+    def test_hybrid_solver_failure_uses_fixed_template_cooldown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "residual.pt"
+            _write_constant_checkpoint(
+                checkpoint,
+                "residual_template",
+                np.array([0.01, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            )
+            hybrid = ResidualHybridPredictor(
+                checkpoint_path=str(checkpoint),
+                template_reference=_template(),
+                control_dt=CONTROL_DT,
+                horizon=HORIZON,
+                acc_limit=30.0,
+                alpha_limit=40.0,
+                safety_gate_enabled=True,
+                solver_failure_streak_threshold=2,
+                solver_failure_cooldown_steps=1,
+            )
+            baseline = _template()
+            for index in range(135):
+                observation = _observation(index * CONTROL_DT)
+                hybrid.update(observation)
+                baseline.update(observation)
+                hybrid.predict(HORIZON, CONTROL_DT)
+                baseline.predict(HORIZON, CONTROL_DT)
+
+            # One isolated failure keeps the residual active.  Two
+            # consecutive residual failures trigger exactly one bounded
+            # template probe; a failed probe cannot create a fallback loop.
+            previous_success = (False, False, True)
+            for offset, (success, expected_code) in enumerate(
+                zip(previous_success, (0, 7, 0)), start=135
+            ):
+                observation = replace(
+                    _observation(offset * CONTROL_DT),
+                    previous_mpc_success=success,
+                )
+                hybrid.update(observation)
+                baseline.update(observation)
+                hybrid_preview = hybrid.predict(HORIZON, CONTROL_DT)
+                baseline_preview = baseline.predict(HORIZON, CONTROL_DT)
+                diagnostics = hybrid.get_last_diagnostics()
+                self.assertEqual(diagnostics["fallback_code"], expected_code)
+                if expected_code == 7:
+                    _assert_previews_equal(
+                        self, hybrid_preview, baseline_preview
+                    )
+                else:
+                    self.assertTrue(diagnostics["neural_inference_valid"])
+
+    def test_hybrid_previous_overrun_uses_one_bounded_template_update(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "residual.pt"
+            _write_constant_checkpoint(
+                checkpoint,
+                "residual_template",
+                np.array([0.01, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            )
+            hybrid = ResidualHybridPredictor(
+                checkpoint_path=str(checkpoint),
+                template_reference=_template(),
+                control_dt=CONTROL_DT,
+                horizon=HORIZON,
+                acc_limit=30.0,
+                alpha_limit=40.0,
+                safety_gate_enabled=True,
+                control_overrun_cooldown_steps=1,
+            )
+            baseline = _template()
+            for index in range(135):
+                observation = _observation(index * CONTROL_DT)
+                hybrid.update(observation)
+                baseline.update(observation)
+                hybrid.predict(HORIZON, CONTROL_DT)
+                baseline.predict(HORIZON, CONTROL_DT)
+
+            for offset, (overrun, expected_code) in enumerate(
+                ((True, 8), (False, 0)), start=135
+            ):
+                observation = replace(
+                    _observation(offset * CONTROL_DT),
+                    previous_mpc_success=True,
+                    previous_control_interval_overrun=overrun,
+                )
+                hybrid.update(observation)
+                baseline.update(observation)
+                hybrid_preview = hybrid.predict(HORIZON, CONTROL_DT)
+                baseline_preview = baseline.predict(HORIZON, CONTROL_DT)
+                diagnostics = hybrid.get_last_diagnostics()
+                self.assertEqual(diagnostics["fallback_code"], expected_code)
+                if expected_code == 8:
+                    _assert_previews_equal(
+                        self, hybrid_preview, baseline_preview
+                    )
+                else:
+                    self.assertTrue(diagnostics["neural_inference_valid"])
 
 
 if __name__ == "__main__":

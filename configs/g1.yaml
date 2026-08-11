@@ -123,6 +123,18 @@ disturbance_predictor: template
 # acc/alpha + residual MLP。两个 checkpoint 仅本地生成，不提交 Git。
 neural_disturbance_model_path: disturbance_learning/artifacts/b2_mlp_baseline/mlp_checkpoint.pt
 hybrid_residual_model_path: disturbance_learning/artifacts/hybrid_residual_mlp/residual_mlp_checkpoint.pt
+# Hybrid safety gate：任何非有限值、超出训练包络的输入/修正会立即退回
+# template；连续两拍 residual QP 失败或上一完整周期超时时做一拍
+# 有界 template probe。
+hybrid_residual_safety_gate_enabled: true
+hybrid_residual_max_input_abs_z: 10.0
+hybrid_residual_max_input_rms_z: 2.0
+hybrid_residual_max_prediction_abs_z: 10.0
+hybrid_residual_max_acc_correction_norm: 15.0
+hybrid_residual_max_alpha_correction_norm: 55.0
+hybrid_residual_solver_failure_streak_threshold: 2
+hybrid_residual_solver_failure_cooldown_steps: 1
+hybrid_residual_control_overrun_cooldown_steps: 1
 # 只用于学习型 predictor 闭环消融。false 保持既有恒定命令 baseline。
 disturbance_command_schedule_enabled: false
 disturbance_command_changed: [0.275, 0.10, -0.04]

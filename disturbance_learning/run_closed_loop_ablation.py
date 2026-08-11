@@ -170,6 +170,16 @@ def summarize_run(
     predictor_fallback = np.asarray(
         trajectory["right_mpc_predictor_fallback_used"], dtype=bool
     )
+    predictor_fallback_code = np.asarray(
+        trajectory["right_mpc_predictor_fallback_code"], dtype=np.int64
+    )
+    safety_gate = np.asarray(
+        trajectory.get(
+            "right_mpc_predictor_safety_gate_triggered",
+            np.zeros_like(predictor_fallback),
+        ),
+        dtype=bool,
+    )
     neural_inference_valid = np.asarray(
         trajectory["right_mpc_predictor_neural_inference_valid"], dtype=bool
     )
@@ -184,6 +194,12 @@ def summarize_run(
     ddq_saturation = np.asarray(
         trajectory["right_arm_ddq_saturation_mask"], dtype=bool
     )
+
+    def optional_scalar(name: str) -> np.ndarray:
+        values = np.asarray(trajectory.get(name, []), dtype=np.float64)
+        if values.shape != time_values.shape:
+            return np.full(time_values.shape, np.nan, dtype=np.float64)
+        return values
 
     overall_evaluation = {
         "right_ee_acc_norm_rms": _vector_rms(
@@ -256,7 +272,14 @@ def summarize_run(
             neural_inference_time[neural_timing_mask], scale=1000.0
         ),
         "complete_6ms_right_arm_interval_ms": interval_timing,
+        "complete_interval_mean_composition_ms": hardware[
+            "interval_mean_composition"
+        ],
+        "mpc_policy_update_timing_ms": hardware["mpc_policy_update"],
+        "ddq_to_torque_call_timing_ms": hardware["ddq_to_torque_call"],
         "fallback": {
+            "full_run_update_count": int(np.count_nonzero(full_updates)),
+            "evaluation_update_count": int(np.count_nonzero(evaluation)),
             "full_run_count": int(
                 np.count_nonzero(predictor_fallback[full_updates])
             ),
@@ -265,6 +288,39 @@ def summarize_run(
             ),
             "evaluation_fraction": float(
                 np.mean(predictor_fallback[evaluation])
+            ),
+        },
+        "safety_gate": {
+            "evaluation_count": int(np.count_nonzero(safety_gate[evaluation])),
+            "evaluation_fraction": float(np.mean(safety_gate[evaluation])),
+            "by_code": {
+                str(code): int(
+                    np.count_nonzero(
+                        evaluation & safety_gate & (predictor_fallback_code == code)
+                    )
+                )
+                for code in (4, 5, 6, 7, 8)
+            },
+            "input_abs_z_max": _distribution(
+                optional_scalar("right_mpc_predictor_input_abs_z_max")[evaluation]
+            ),
+            "input_rms_z": _distribution(
+                optional_scalar("right_mpc_predictor_input_rms_z")[evaluation]
+            ),
+            "prediction_abs_z_max": _distribution(
+                optional_scalar(
+                    "right_mpc_predictor_prediction_abs_z_max"
+                )[evaluation]
+            ),
+            "acc_correction_norm_max": _distribution(
+                optional_scalar(
+                    "right_mpc_predictor_acc_correction_norm_max"
+                )[evaluation]
+            ),
+            "alpha_correction_norm_max": _distribution(
+                optional_scalar(
+                    "right_mpc_predictor_alpha_correction_norm_max"
+                )[evaluation]
             ),
         },
         "safety": {
