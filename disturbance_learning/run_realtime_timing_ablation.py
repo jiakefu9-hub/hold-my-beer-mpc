@@ -24,9 +24,18 @@ from realtime_runtime import (
     collect_realtime_snapshot,
     validate_realtime_launcher_prerequisites,
 )
+from realtime_environment import (
+    collect_target_environment,
+    validate_target_environment,
+)
 
 
 DEFAULT_SEEDS = (2101, 2102, 2103, 2104)
+MIN_TIMING_RUNS = 12
+MIN_COMPLETE_INTERVALS = 9588
+MAX_WORST_RUN_P99_MS = 5.5
+CONTROL_PERIOD_MS = 6.0
+MIN_NORMAL_QP_SUCCESS = 0.99
 BASELINE_SUMMARY = (
     REPO_DIR
     / "evaluation_summary/readiness_blocker_diagnostics/performance/summary.json"
@@ -230,6 +239,8 @@ def main() -> None:
     parser.add_argument("--expected-policy", default="SCHED_RR")
     parser.add_argument("--expected-priority", type=int, default=10)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--require-target-realtime", action="store_true")
+    parser.add_argument("--fail-on-gate", action="store_true")
     args = parser.parse_args()
     if len(args.seeds) < 2:
         raise ValueError("real-time timing ablation requires at least two seeds")
@@ -242,6 +253,16 @@ def main() -> None:
     )
     if launch_errors:
         raise RuntimeError("invalid real-time launch: " + "; ".join(launch_errors))
+    target_environment = None
+    target_gate = None
+    if args.require_target_realtime:
+        target_environment = collect_target_environment(args.control_cpu)
+        target_gate = validate_target_environment(target_environment)
+        if not target_gate["passed"]:
+            raise RuntimeError(
+                "target real-time environment failed: "
+                + ", ".join(target_gate["failed_checks"])
+            )
 
     group_dir = REPO_DIR / "evaluation" / args.group
     group_dir.mkdir(parents=True, exist_ok=True)
@@ -281,13 +302,21 @@ def main() -> None:
             realtime["safety_totals"]["complete_interval_overrun_count"] == 0
         ),
         "worst_run_complete_p99_le_5p5ms": (
-            realtime["timing_ms"]["complete_interval_p99"]["max"] <= 5.5
+            realtime["timing_ms"]["complete_interval_p99"]["max"]
+            <= MAX_WORST_RUN_P99_MS
         ),
         "worst_run_complete_max_lt_6ms": (
-            realtime["timing_ms"]["complete_interval_max"]["max"] < 6.0
+            realtime["timing_ms"]["complete_interval_max"]["max"]
+            < CONTROL_PERIOD_MS
         ),
         "normal_qp_success_min_ge_99pct": (
-            realtime["overall"]["qp_success_fraction"]["min"] >= 0.99
+            realtime["overall"]["qp_success_fraction"]["min"]
+            >= MIN_NORMAL_QP_SUCCESS
+        ),
+        "at_least_12_repeated_runs": len(results) >= MIN_TIMING_RUNS,
+        "at_least_9588_complete_intervals": (
+            realtime["safety_totals"]["complete_interval_count"]
+            >= MIN_COMPLETE_INTERVALS
         ),
     }
     gate_passed = all(checks.values())
@@ -303,6 +332,8 @@ def main() -> None:
         "profiles": args.profiles,
         "seeds": args.seeds,
         "launch_snapshot": launch_snapshot,
+        "target_environment": target_environment,
+        "target_environment_gate": target_gate,
         "safety_design": {
             "policy": args.expected_policy,
             "priority": args.expected_priority,
@@ -327,6 +358,17 @@ def main() -> None:
             "sched_rr": sched_rr_tail,
         },
         "timing_gate": {
+            "requirements": {
+                "minimum_run_count": MIN_TIMING_RUNS,
+                "minimum_complete_interval_count": MIN_COMPLETE_INTERVALS,
+                "control_period_ms": CONTROL_PERIOD_MS,
+                "maximum_worst_run_p99_ms": MAX_WORST_RUN_P99_MS,
+                "minimum_normal_qp_success_fraction": (
+                    MIN_NORMAL_QP_SUCCESS
+                ),
+                "maximum_complete_interval_overrun_count": 0,
+                "maximum_critical_nonfinite_count": 0,
+            },
             "checks": checks,
             "passed": gate_passed,
         },
@@ -364,6 +406,8 @@ def main() -> None:
     )
     print(json.dumps(summary["timing_gate"], indent=2, sort_keys=True))
     print(f"summary: {summary_path}")
+    if args.fail_on_gate and not gate_passed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

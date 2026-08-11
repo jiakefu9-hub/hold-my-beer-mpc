@@ -7,6 +7,8 @@ export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/hold-my-beer-mpc-matplotlib}"
 mkdir -p "$MPLCONFIGDIR"
 
 RUN_ARGS=("$@")
+G1_MPC_CONDA="${G1_MPC_CONDA:-/home/fjk/miniforge3/bin/conda}"
+G1_MPC_PYTHON="${G1_MPC_PYTHON:-/home/fjk/miniforge3/envs/g1_mpc/bin/python}"
 
 # 【非核心代码】实时性能实验固定为单线程数值库，避免 BLAS/OpenMP
 # 在很小的矩阵上临时创建线程并引入不可重复的调度长尾。
@@ -38,7 +40,7 @@ if ! xdpyinfo -display "${DISPLAY:-}" >/dev/null 2>&1; then
 fi
 
 PYTHON_COMMAND=(
-    /home/fjk/miniforge3/bin/conda run --no-capture-output -n g1_mpc
+    "$G1_MPC_CONDA" run --no-capture-output -n g1_mpc
     python "$REPO_DIR/main_sim.py" g1.yaml "${RUN_ARGS[@]}"
 )
 
@@ -72,13 +74,19 @@ if [[ "${MPC_REQUIRE_REALTIME:-0}" == "1" ]]; then
         echo "[run.sh] RT 模式要求显式设置单个 MPC_CONTROL_CPU。" >&2
         exit 2
     fi
-    PYTHON_COMMAND=(
-        chrt --rr "$REALTIME_PRIORITY"
-        /home/fjk/miniforge3/envs/g1_mpc/bin/python
-        "$REPO_DIR/realtime_runtime.py"
+    REALTIME_GUARD_ARGS=(
         --expected-policy "$REALTIME_POLICY"
         --expected-priority "$REALTIME_PRIORITY"
         --expected-cpu "$CONTROL_CPU"
+    )
+    if [[ "${MPC_REQUIRE_TARGET_REALTIME:-0}" == "1" ]]; then
+        REALTIME_GUARD_ARGS+=(--require-target-environment)
+    fi
+    PYTHON_COMMAND=(
+        chrt --rr "$REALTIME_PRIORITY"
+        "$G1_MPC_PYTHON"
+        "$REPO_DIR/realtime_runtime.py"
+        "${REALTIME_GUARD_ARGS[@]}"
         -- "${PYTHON_COMMAND[@]}"
     )
 fi

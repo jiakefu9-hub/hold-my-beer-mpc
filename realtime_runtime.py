@@ -8,6 +8,11 @@ import os
 from pathlib import Path
 import resource
 
+from realtime_environment import (
+    collect_target_environment,
+    validate_target_environment,
+)
+
 
 POLICY_NAMES = {
     getattr(os, name): name
@@ -135,6 +140,7 @@ def main() -> None:
     )
     parser.add_argument("--expected-priority", type=int, default=10)
     parser.add_argument("--expected-cpu", type=int, default=7)
+    parser.add_argument("--require-target-environment", action="store_true")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     snapshot = collect_realtime_snapshot(args.expected_cpu)
@@ -144,7 +150,25 @@ def main() -> None:
         expected_priority=args.expected_priority,
         expected_cpu=args.expected_cpu,
     )
+    target_environment = None
+    if args.require_target_environment:
+        target_environment = collect_target_environment(args.expected_cpu)
+        target_gate = validate_target_environment(target_environment)
+        errors.extend(
+            f"target environment: {name}"
+            for name in target_gate["failed_checks"]
+        )
     print(json.dumps(snapshot, sort_keys=True))
+    if target_environment is not None:
+        print(
+            json.dumps(
+                {
+                    "target_environment": target_environment,
+                    "target_gate": target_gate,
+                },
+                sort_keys=True,
+            )
+        )
     if errors:
         raise SystemExit(
             "unsafe or incomplete real-time environment: " + "; ".join(errors)
