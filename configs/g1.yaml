@@ -1,6 +1,6 @@
-# 
-policy_path: "/home/fjk/g1_ws/hold-my-beer-mpc/policy/motion.pt"
-xml_path: "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml"
+# 相对路径统一以 disturbance-lab 仓库根目录解析，避免依赖原仓库。
+policy_path: "policy/motion.pt"
+xml_path: "resources/g1_description/scene.xml"
 
 # Simulation time step
 simulation_dt: 0.002

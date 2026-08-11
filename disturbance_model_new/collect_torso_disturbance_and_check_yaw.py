@@ -11,6 +11,13 @@ import torch
 import yaml
 
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+DEFAULT_OUTPUT_PREFIX = os.path.join(
+    SCRIPT_DIR, "torso_disturbance_straight"
+)
+
+
 def get_gravity_orientation(quaternion):
     qw, qx, qy, qz = quaternion
     gravity_orientation = np.zeros(3)
@@ -191,18 +198,25 @@ def main():
     parser.add_argument(
         "--output-prefix",
         type=str,
-        default="/home/fjk/g1_ws/hold-my-beer-mpc/disturbance_model_new/torso_disturbance_straight",
+        default=DEFAULT_OUTPUT_PREFIX,
         help="输出前缀，默认保存到 disturbance_model_new/",
     )
     args = parser.parse_args()
 
-    project_root = "/home/fjk/g1_ws/hold-my-beer-mpc"
-    config_path = os.path.join(project_root, "configs", args.config_file)
+    config_path = (
+        args.config_file
+        if os.path.isabs(args.config_file)
+        else os.path.join(PROJECT_ROOT, "configs", args.config_file)
+    )
     with open(config_path, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     policy_path = config["policy_path"]
     xml_path = config["xml_path"]
+    if not os.path.isabs(policy_path):
+        policy_path = os.path.join(PROJECT_ROOT, policy_path)
+    if not os.path.isabs(xml_path):
+        xml_path = os.path.join(PROJECT_ROOT, xml_path)
     simulation_dt = config["simulation_dt"]
     control_decimation = config["control_decimation"]
 

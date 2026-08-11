@@ -106,6 +106,10 @@ if __name__ == "__main__":
         config = yaml.load(f, Loader=yaml.FullLoader)
         policy_path = config["policy_path"]
         xml_path = config["xml_path"]
+        if not os.path.isabs(policy_path):
+            policy_path = os.path.join(repo_dir, policy_path)
+        if not os.path.isabs(xml_path):
+            xml_path = os.path.join(repo_dir, xml_path)
 
         simulation_dt = config["simulation_dt"]
         control_decimation = config["control_decimation"]
