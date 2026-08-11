@@ -863,6 +863,13 @@ class PhaseDisturbancePredictor:
         # 初始化时把 400 个起始 bin 各自的完整预测窗口展开；在线只查一行。
         # 真机时间戳若没有落在网格上，predict() 会自动回退到连续相位插值。
         self._aligned_horizon_lut = self._build_aligned_horizon_lut()
+        self._reset_runtime_state()
+
+    def reset(self):
+        """清除跨控制周期的 H 系、slow bias 和预测诊断状态。"""
+        self._reset_runtime_state()
+
+    def _reset_runtime_state(self):
         self._slow_bias_acc = np.zeros(3, dtype=np.float64)
         self._slow_bias_omega = np.zeros(3, dtype=np.float64)
         self._slow_bias_alpha = np.zeros(3, dtype=np.float64)
@@ -1769,8 +1776,11 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
             }
         }
     elif controller_name == "mpc":
-        feedforward_enabled = bool(
-            config.get("mpc_disturbance_feedforward_enabled", False)
+        configured_predictor = config.get("disturbance_predictor")
+        feedforward_enabled = (
+            bool(config.get("mpc_disturbance_feedforward_enabled", False))
+            if configured_predictor is None
+            else str(configured_predictor).strip().lower() == "template"
         )
         q_min = np.deg2rad(
             np.asarray(
@@ -8216,7 +8226,11 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     mpc_prediction_valid = isinstance(mpc_prediction, dict)
     mpc_template_diagnostics = (
-        mpc_diagnostics.get("disturbance_template_diagnostics", {})
+        mpc_diagnostics.get(
+            "disturbance_predictor_diagnostics",
+            # 兼容 B0 前已有运行记录中的字段名。
+            mpc_diagnostics.get("disturbance_template_diagnostics", {}),
+        )
         if mpc_diagnostics_valid
         else {}
     )

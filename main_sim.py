@@ -24,6 +24,10 @@ except RuntimeError:
     # 同一解释器中若已有并行工作启动，Torch 不允许再次修改 inter-op。
     pass
 
+from disturbance_predictor import (
+    DisturbancePredictorObservation,
+    create_disturbance_predictor,
+)
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import CppRightArmRneaBackend, create_prediction_backend
 from right_arm_runtime import (
@@ -35,7 +39,6 @@ from right_arm_runtime import (
 from sim_support import (
     ArmCommandDelayLine,
     HeadingHoldController,
-    PhaseDisturbancePredictor,
     PerformanceMonitor,
     RneaOtherAccelerationEstimator,
     TorsoAccelerationFilter,
@@ -430,44 +433,23 @@ if __name__ == "__main__":
         config, enabled=acceleration_controller, **filter_keys
     )
     disturbance_predictor = None
-    if arm_controller == "mpc" and bool(
-        config.get("mpc_disturbance_feedforward_enabled", False)
-    ):
-        disturbance_predictor = PhaseDisturbancePredictor(
-            template_dir=os.path.join(
-                repo_dir,
-                config.get(
-                    "mpc_disturbance_template_dir",
-                    "disturbance_model_new_heading/templates_heading_interval",
-                ),
-            ),
-            variant=config.get(
-                "mpc_disturbance_template", "fully_smoothed"
-            ),
+    if arm_controller == "mpc":
+        disturbance_predictor = create_disturbance_predictor(
+            config,
+            repo_dir=repo_dir,
             control_dt=arm_control_dt,
             horizon=arm_policy.horizon,
             acc_limit=torso_acceleration_filter.acc_limit,
             alpha_limit=torso_acceleration_filter.alpha_limit,
-            slow_bias_enabled=bool(
-                config.get("mpc_disturbance_slow_bias_enabled", True)
-            ),
-            slow_bias_time_constant=float(
-                config.get(
-                    "mpc_disturbance_slow_bias_time_constant", 0.4
-                )
-            ),
         )
-        controller_meta["mpc_config"][
-            "disturbance_feedforward"
-        ] = disturbance_predictor.metadata()
-    elif arm_controller == "mpc":
-        controller_meta["mpc_config"]["disturbance_feedforward"] = {
-            "enabled": False,
-            "variant": str(
-                config.get("mpc_disturbance_template", "fully_smoothed")
-            ),
-            "prediction": "zero_order_hold_current_measurement",
-        }
+        predictor_metadata = disturbance_predictor.metadata()
+        controller_meta["mpc_config"]["disturbance_predictor"] = (
+            predictor_metadata
+        )
+        # 保留旧 metadata key，避免既有评估脚本因 B0 接口化失效。
+        controller_meta["mpc_config"]["disturbance_feedforward"] = (
+            predictor_metadata
+        )
     controller_meta["heading_control"] = {
         "enabled": heading_control_enabled,
         "reference_frame": "world",
@@ -849,14 +831,18 @@ if __name__ == "__main__":
             if arm_policy_update_due:
                 perf_monitor.start_arm_control()
                 disturbance_prediction_start = time.perf_counter()
-                disturbance_horizon = (
-                    None
-                    if disturbance_predictor is None
-                    else disturbance_predictor.predict(
-                        counter * simulation_dt,
-                        torso_disturbance,
+                disturbance_horizon = None
+                if disturbance_predictor is not None:
+                    disturbance_predictor.update(
+                        DisturbancePredictorObservation(
+                            simulation_time=counter * simulation_dt,
+                            measured_disturbance=torso_disturbance,
+                        )
                     )
-                )
+                    disturbance_horizon = disturbance_predictor.predict(
+                        arm_policy.horizon,
+                        arm_control_dt,
+                    )
                 disturbance_prediction_time = (
                     time.perf_counter() - disturbance_prediction_start
                 )
@@ -934,7 +920,7 @@ if __name__ == "__main__":
                         )
                         mpc_diagnostics = controller_diagnostics
                         if disturbance_predictor is not None:
-                            mpc_diagnostics["disturbance_template_diagnostics"] = (
+                            mpc_diagnostics["disturbance_predictor_diagnostics"] = (
                                 disturbance_predictor.get_last_diagnostics()
                             )
                     diagnostics_time = time.perf_counter() - diagnostics_start

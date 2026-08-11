@@ -116,8 +116,11 @@ mpc_osqp_polishing: false
 mpc_failure_braking_gain: 4.0
 mpc_failure_posture_gain: 4.0
 mpc_failure_max_ddq_scale: 0.5
-# H 系步态扰动前馈开关；关闭时未来 base 扰动采用当前测量零阶保持。
-# 开启后第一完整周期只用于计算 H，约 0.8 s 后前馈开始生效。
+# B0 统一 predictor 选择器：template 或 zoh。该项优先于旧布尔开关；
+# template 的数值路径保持原 PhaseDisturbancePredictor 不变。
+disturbance_predictor: template
+# 旧配置兼容项；未配置 disturbance_predictor 时才决定 template/zoh。
+# H 系步态扰动前馈开启后，第一完整周期只用于计算 H，约 0.8 s 后生效。
 mpc_disturbance_feedforward_enabled: true
 # 2 ms 相位网格上的未来控制区间模板；u_k 与 interval[k] 配对。
 mpc_disturbance_template_dir: disturbance_model_new_heading/templates_heading_interval
