@@ -900,6 +900,10 @@ if __name__ == "__main__":
         and right_arm_execution_runtime in {"process", "shadow"}
         else None
     )
+    if right_arm_sim_process is not None:
+        performance_runtime.metadata["scheduler"][
+            "right_arm_worker"
+        ] = right_arm_sim_process.scheduling_snapshot()
     process_shadow_validator = (
         SimProcessShadowValidator(absolute_tolerance=1e-9)
         if acceleration_controller

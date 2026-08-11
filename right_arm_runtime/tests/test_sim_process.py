@@ -148,6 +148,18 @@ class RightArmSimProcessTest(unittest.TestCase):
         self.assertEqual(len(created_processes), 1)
         self.assert_worker_reaped(self, created_processes[0])
 
+    def test_worker_scheduling_snapshot_matches_inherited_parent_state(self):
+        process = self.make_process()
+        self.addCleanup(process.close)
+        snapshot = process.scheduling_snapshot()
+        self.assertEqual(snapshot["policy"], os.sched_getscheduler(0))
+        self.assertEqual(
+            snapshot["priority"], os.sched_getparam(0).sched_priority
+        )
+        self.assertEqual(
+            snapshot["cpu_affinity"], sorted(os.sched_getaffinity(0))
+        )
+
     def test_invalid_request_poisons_process_and_forbids_reuse(self):
         process = self.make_process()
         worker = process._process

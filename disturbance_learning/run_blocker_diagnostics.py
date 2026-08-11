@@ -128,6 +128,9 @@ def _run_one(
     arm_diagnostics = json.loads(
         (run_dir / "right_arm_diagnostics.json").read_text(encoding="utf-8")
     )
+    perf_summary = json.loads(
+        (run_dir / "perf_summary.json").read_text(encoding="utf-8")
+    )
     result.update(
         {
             "profile": profile_name,
@@ -137,7 +140,12 @@ def _run_one(
             "payload_metadata": metadata["disturbance_command_schedule"][
                 "payload"
             ],
-            "runtime_environment": metadata["runtime_timing_environment"],
+            # perf_summary is written after the worker starts, so it includes
+            # the worker's observed scheduler/priority/affinity.  The earlier
+            # run_metadata snapshot can only describe the parent process.
+            "runtime_environment": perf_summary["total"]["timing_scope"][
+                "runtime_environment"
+            ],
             "payload_cause_diagnostics": {
                 "forward_dynamics_model_error_norm_rms": arm_diagnostics[
                     "right_arm_qacc_mapping_model_error_norm_rms"

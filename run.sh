@@ -52,6 +52,37 @@ if [[ "$CONTROL_CPU" == "auto" ]] && command -v lscpu >/dev/null 2>&1; then
     )"
 fi
 
+# systemd transient service 只临时授予 RLIMIT_RTPRIO；这里把最终控制
+# Python 及其锁步 C++ worker 放入同一个低优先级 SCHED_RR 调度类。
+# 构建和批量实验 runner 仍是 SCHED_OTHER。guard 在 exec 前验证 governor、
+# affinity、policy/priority 以及内核 RT throttling，任何缺项都拒绝运行。
+if [[ "${MPC_REQUIRE_REALTIME:-0}" == "1" ]]; then
+    REALTIME_POLICY="${MPC_REALTIME_POLICY:-SCHED_RR}"
+    REALTIME_PRIORITY="${MPC_REALTIME_PRIORITY:-10}"
+    if [[ "$REALTIME_POLICY" != "SCHED_RR" ]]; then
+        echo "[run.sh] 安全 RT 模式当前只允许 SCHED_RR。" >&2
+        exit 2
+    fi
+    if [[ ! "$REALTIME_PRIORITY" =~ ^[0-9]+$ ]] \
+        || (( REALTIME_PRIORITY < 1 || REALTIME_PRIORITY > 20 )); then
+        echo "[run.sh] 安全 RT 模式只允许 1..20 的低 RR 优先级。" >&2
+        exit 2
+    fi
+    if [[ ! "$CONTROL_CPU" =~ ^[0-9]+$ ]]; then
+        echo "[run.sh] RT 模式要求显式设置单个 MPC_CONTROL_CPU。" >&2
+        exit 2
+    fi
+    PYTHON_COMMAND=(
+        chrt --rr "$REALTIME_PRIORITY"
+        /home/fjk/miniforge3/envs/g1_mpc/bin/python
+        "$REPO_DIR/realtime_runtime.py"
+        --expected-policy "$REALTIME_POLICY"
+        --expected-priority "$REALTIME_PRIORITY"
+        --expected-cpu "$CONTROL_CPU"
+        -- "${PYTHON_COMMAND[@]}"
+    )
+fi
+
 if [[ -n "$CONTROL_CPU" && "$CONTROL_CPU" != "none" ]] \
     && command -v taskset >/dev/null 2>&1 \
     && taskset -c "$CONTROL_CPU" true >/dev/null 2>&1; then

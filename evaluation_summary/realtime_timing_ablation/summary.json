@@ -1,0 +1,2646 @@
+{
+  "baseline_summary": "evaluation_summary/readiness_blocker_diagnostics/performance/summary.json",
+  "comparison": {
+    "complete_interval_mean_ms": {
+      "rr_change_percent": -15.897164487167947,
+      "sched_other": 3.9837077057155685,
+      "sched_rr": 3.3504111390499802
+    },
+    "complete_interval_p99_ms": {
+      "rr_change_percent": -13.090752180852183,
+      "sched_other": 4.833002088362264,
+      "sched_rr": 4.200325762079349
+    },
+    "complete_interval_worst_max_ms": {
+      "rr_change_percent": -27.735540910037017,
+      "sched_other": 9.023836999404011,
+      "sched_rr": 6.521026996779256
+    },
+    "overrun": {
+      "sched_other_count": 9,
+      "sched_other_interval_count": 9588,
+      "sched_rr_count": 2,
+      "sched_rr_interval_count": 9588
+    },
+    "predictor_mean_ms": {
+      "rr_change_percent": -24.358574367458086,
+      "sched_other": 0.7050218685481013,
+      "sched_rr": 0.5332885923909695
+    },
+    "predictor_p99_ms": {
+      "rr_change_percent": -20.177343444900174,
+      "sched_other": 0.9458336177582775,
+      "sched_rr": 0.7549895202858655
+    }
+  },
+  "decision": {
+    "best_effort_runtime": "performance governor; one performance CPU; single-thread numeric libraries; main and blocking C++ worker at SCHED_RR priority 10; kernel RT throttling retained",
+    "generic_kernel_reliably_meets_6ms": false,
+    "hard_realtime_claim": false,
+    "next_gate_if_failed": "repeat on the target PREEMPT_RT or equivalent real-time environment with IRQ/CPU isolation",
+    "worker_queue_worst_sample_reduction_percent": 96.43812696970353
+  },
+  "evidence_scope": "paced MuJoCo closed loop; not hardware evidence",
+  "launch_snapshot": {
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "control_cpu": 7,
+    "governor": "performance",
+    "policy": 0,
+    "policy_name": "SCHED_OTHER",
+    "priority": 0,
+    "rr_timeslice_ms": "100",
+    "rt_period_us": "1000000",
+    "rt_runtime_us": "950000",
+    "rtprio_limit_hard": 20,
+    "rtprio_limit_soft": 20
+  },
+  "local_evaluation_group_ignored": "realtime_rr10_validation_20260811",
+  "profiles": [
+    "delayed_fast_lateral",
+    "slow_start_speedup",
+    "late_multiaxis"
+  ],
+  "runs": [
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 4.390204998344416,
+        "mean": 3.3040846846164325,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2483309987583198,
+        "p95": 3.7150792024476678,
+        "p99": 4.098081057527452
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.0375,
+        "qp_fallback_fraction": 0.0075,
+        "qp_success_fraction": 0.9925,
+        "right_ee_acc_norm_rms": 2.5143667938734966,
+        "right_ee_alpha_norm_rms": 7.283924920280744,
+        "right_ee_tilt_xy_norm_rms": 0.06288927598817977,
+        "torso_acc_norm_rms": 2.2621757161939775,
+        "torso_alpha_norm_rms": 7.805789011744018
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.02875,
+        "current_q_violation_max_rad": 0.004702966130035367,
+        "forward_dynamics_model_error_norm_rms": 2.7348133497849792e-14,
+        "recovery_active_fraction": 0.035,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.8821160008665174,
+        "mean": 0.5264007612368005,
+        "p50": 0.5053464974480448,
+        "p95": 0.637041747359035,
+        "p99": 0.7499413874393213
+      },
+      "profile": "delayed_fast_lateral",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_221703_timing_rr10_delayed_fast_lateral_seed2101_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 92657,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 12.82825756072998,
+          "mean": 2.1203893072344364,
+          "p95": 9.33286609649658,
+          "p99": 11.553919143676756
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 49.025352478027344,
+          "mean": 9.304090082645416,
+          "p95": 38.96279335021971,
+          "p99": 45.034132881164545
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 8.121170997619629,
+          "mean": 4.668250945210457,
+          "p95": 8.048213005065918,
+          "p99": 8.121170997619629
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.4700311055480622,
+          "mean": 1.0994161910752132,
+          "p95": 1.420968897557409,
+          "p99": 1.4586724937891251
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 8.168542861938477,
+          "mean": 1.8129940617084503,
+          "p95": 6.072620129585265,
+          "p99": 7.384451885223387
+        }
+      },
+      "seed": 2101
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 5.6321439988096245,
+        "mean": 3.3593023618733415,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2873959971766453,
+        "p95": 3.8733524022973143,
+        "p99": 4.4027539987291675
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.0375,
+        "qp_fallback_fraction": 0.005,
+        "qp_success_fraction": 0.995,
+        "right_ee_acc_norm_rms": 2.511012862247372,
+        "right_ee_alpha_norm_rms": 7.318496779927413,
+        "right_ee_tilt_xy_norm_rms": 0.06376173851409507,
+        "torso_acc_norm_rms": 2.2629662894099916,
+        "torso_alpha_norm_rms": 7.793832323395968
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.02375,
+        "current_q_violation_max_rad": 0.0004773771564934859,
+        "forward_dynamics_model_error_norm_rms": 2.849617318812685e-14,
+        "recovery_active_fraction": 0.02875,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.9137950000877026,
+        "mean": 0.5326043150262194,
+        "p50": 0.5077690002508461,
+        "p95": 0.6754726497092632,
+        "p99": 0.7624742120606242
+      },
+      "profile": "delayed_fast_lateral",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222111_timing_rr10_delayed_fast_lateral_seed2102_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4404424",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 93201,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 12.734633445739746,
+          "mean": 2.1342217338457705,
+          "p95": 9.474491882324218,
+          "p99": 11.73085084915161
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 49.37028884887695,
+          "mean": 9.318547910936177,
+          "p95": 39.053328132629396,
+          "p99": 45.266016273498536
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 8.089863777160645,
+          "mean": 4.6498395816981795,
+          "p95": 8.028921127319336,
+          "p99": 8.089863777160645
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.4741128103247223,
+          "mean": 1.1003734582610583,
+          "p95": 1.4198149881353157,
+          "p99": 1.4634312784192782
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 7.815587043762207,
+          "mean": 1.8086384134367108,
+          "p95": 6.111376595497128,
+          "p99": 7.044958543777465
+        }
+      },
+      "seed": 2102
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 5.809856997075258,
+        "mean": 3.3031129111733346,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2137530033651274,
+        "p95": 3.7920705955912117,
+        "p99": 4.268951961275886
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.03625,
+        "qp_fallback_fraction": 0.00375,
+        "qp_success_fraction": 0.99625,
+        "right_ee_acc_norm_rms": 2.5043780181161917,
+        "right_ee_alpha_norm_rms": 7.239120694811067,
+        "right_ee_tilt_xy_norm_rms": 0.06255966847272305,
+        "torso_acc_norm_rms": 2.265044747918616,
+        "torso_alpha_norm_rms": 7.841651158106003
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.035,
+        "current_q_violation_max_rad": 0.0045223127138353525,
+        "forward_dynamics_model_error_norm_rms": 2.932975937428724e-14,
+        "recovery_active_fraction": 0.04125,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.9639429990784265,
+        "mean": 0.520740077499795,
+        "p50": 0.49742199917091057,
+        "p95": 0.6503720993350726,
+        "p99": 0.7780756066858882
+      },
+      "profile": "delayed_fast_lateral",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222129_timing_rr10_delayed_fast_lateral_seed2103_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4426370",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 93427,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 12.763166427612305,
+          "mean": 2.127117968481034,
+          "p95": 9.416109943389893,
+          "p99": 11.718999300003052
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 49.17109298706055,
+          "mean": 9.31957881256938,
+          "p95": 39.05334758758545,
+          "p99": 45.28081039428711
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 8.129240036010742,
+          "mean": 4.6804913435876365,
+          "p95": 8.029101371765137,
+          "p99": 8.129240036010742
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.4703418802232395,
+          "mean": 1.0988636976109367,
+          "p95": 1.421577373831967,
+          "p99": 1.4591555814104284
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 7.778432846069336,
+          "mean": 1.8063335769064723,
+          "p95": 6.046271109580993,
+          "p99": 7.034690356254576
+        }
+      },
+      "seed": 2103
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 5.304495003656484,
+        "mean": 3.318068465532189,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2426500001747627,
+        "p95": 3.8606848997005714,
+        "p99": 4.188578841931301
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.035,
+        "qp_fallback_fraction": 0.00125,
+        "qp_success_fraction": 0.99875,
+        "right_ee_acc_norm_rms": 2.49769707951185,
+        "right_ee_alpha_norm_rms": 7.386951384277725,
+        "right_ee_tilt_xy_norm_rms": 0.0632886032985642,
+        "torso_acc_norm_rms": 2.26039011310801,
+        "torso_alpha_norm_rms": 7.892565556644318
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.0075,
+        "current_q_violation_max_rad": 0.00027473983204916175,
+        "forward_dynamics_model_error_norm_rms": 2.858600934008977e-14,
+        "recovery_active_fraction": 0.02625,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.8253779997176025,
+        "mean": 0.5252718262408962,
+        "p50": 0.5032254994148389,
+        "p95": 0.6636347481617122,
+        "p99": 0.7683218314923579
+      },
+      "profile": "delayed_fast_lateral",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222146_timing_rr10_delayed_fast_lateral_seed2104_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4426257",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 93630,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 12.765865325927734,
+          "mean": 2.130642806133255,
+          "p95": 9.481310844421385,
+          "p99": 11.903242692947387
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 49.71770477294922,
+          "mean": 9.320579331479967,
+          "p95": 39.004131126403806,
+          "p99": 45.44244216918945
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 7.933147430419922,
+          "mean": 4.631307772397995,
+          "p95": 7.126730918884277,
+          "p99": 7.933147430419922
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.4747729405144783,
+          "mean": 1.0980325428160347,
+          "p95": 1.414704003000628,
+          "p99": 1.4631631119790396
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 7.821662425994873,
+          "mean": 1.7997039696015418,
+          "p95": 6.078036451339721,
+          "p99": 6.846190261840818
+        }
+      },
+      "seed": 2104
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 4.72300600449671,
+        "mean": 3.463576682033351,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.3774900002754293,
+        "p95": 4.046608300996013,
+        "p99": 4.253817615681328
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.035,
+        "qp_fallback_fraction": 0.0075,
+        "qp_success_fraction": 0.9925,
+        "right_ee_acc_norm_rms": 2.4247526557060004,
+        "right_ee_alpha_norm_rms": 6.643642801200531,
+        "right_ee_tilt_xy_norm_rms": 0.06105879867803771,
+        "torso_acc_norm_rms": 2.1800883928217245,
+        "torso_alpha_norm_rms": 7.1422318128073705
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.0475,
+        "current_q_violation_max_rad": 0.004708072667343369,
+        "forward_dynamics_model_error_norm_rms": 2.6758265285498412e-14,
+        "recovery_active_fraction": 0.0575,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.8513119973940775,
+        "mean": 0.5544983624668021,
+        "p50": 0.5231525010458427,
+        "p95": 0.7307443009267441,
+        "p99": 0.7894084992585704
+      },
+      "profile": "slow_start_speedup",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222203_timing_rr10_slow_start_speedup_seed2101_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 93832,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 799,
+          "max": 13.273125648498535,
+          "mean": 1.92487947184019,
+          "p95": 8.899820804595937,
+          "p99": 12.213254776000975
+        },
+        "alpha_correction_norm_max": {
+          "count": 799,
+          "max": 49.439491271972656,
+          "mean": 8.316079777382193,
+          "p95": 38.241283416748026,
+          "p99": 45.57765922546386
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 1,
+          "8": 0
+        },
+        "evaluation_count": 1,
+        "evaluation_fraction": 0.00125,
+        "input_abs_z_max": {
+          "count": 799,
+          "max": 6.999711513519287,
+          "mean": 4.351652167616261,
+          "p95": 6.870257377624512,
+          "p99": 6.999711513519287
+        },
+        "input_rms_z": {
+          "count": 799,
+          "max": 1.3799159793064684,
+          "mean": 1.0238548256308728,
+          "p95": 1.3221441236909717,
+          "p99": 1.3751906258525963
+        },
+        "prediction_abs_z_max": {
+          "count": 799,
+          "max": 8.168542861938477,
+          "mean": 1.6500598851297614,
+          "p95": 6.128519964218138,
+          "p99": 7.07033254623413
+        }
+      },
+      "seed": 2101
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 4.534004001470748,
+        "mean": 3.524473111314904,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.430918000958627,
+        "p95": 4.136045398627175,
+        "p99": 4.279144513639039
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.03375,
+        "qp_fallback_fraction": 0.00125,
+        "qp_success_fraction": 0.99875,
+        "right_ee_acc_norm_rms": 2.396628575037997,
+        "right_ee_alpha_norm_rms": 6.678965141977788,
+        "right_ee_tilt_xy_norm_rms": 0.0618259484378868,
+        "torso_acc_norm_rms": 2.16933320535504,
+        "torso_alpha_norm_rms": 7.143288759114727
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.01,
+        "current_q_violation_max_rad": 0.0005032895227821341,
+        "forward_dynamics_model_error_norm_rms": 2.7419626754640854e-14,
+        "recovery_active_fraction": 0.01875,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.8330710006703157,
+        "mean": 0.5801486149675839,
+        "p50": 0.548709000213421,
+        "p95": 0.7594836009957362,
+        "p99": 0.7805799981360906
+      },
+      "profile": "slow_start_speedup",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222221_timing_rr10_slow_start_speedup_seed2102_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 94032,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 13.214336395263672,
+          "mean": 1.9263460916280746,
+          "p95": 8.893767070770261,
+          "p99": 12.138417215347289
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 49.34242630004883,
+          "mean": 8.324350802451372,
+          "p95": 38.23224067687987,
+          "p99": 45.402424850463866
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 6.983397483825684,
+          "mean": 4.377540577352047,
+          "p95": 6.911640644073486,
+          "p99": 6.983397483825684
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.3815640380408938,
+          "mean": 1.0197488155875911,
+          "p95": 1.3219481894640122,
+          "p99": 1.3761724527033605
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 7.755805492401123,
+          "mean": 1.64806077869609,
+          "p95": 6.119610905647276,
+          "p99": 6.994478101730346
+        }
+      },
+      "seed": 2102
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 3.972444999817526,
+        "mean": 3.272879911199514,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2414849993074313,
+        "p95": 3.5628964011266344,
+        "p99": 3.7808745155052748
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.035,
+        "qp_fallback_fraction": 0.00375,
+        "qp_success_fraction": 0.99625,
+        "right_ee_acc_norm_rms": 2.425552865036963,
+        "right_ee_alpha_norm_rms": 6.716701007994271,
+        "right_ee_tilt_xy_norm_rms": 0.06203613013689482,
+        "torso_acc_norm_rms": 2.18419707178905,
+        "torso_alpha_norm_rms": 7.163433646438949
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.02875,
+        "current_q_violation_max_rad": 0.004526813777317645,
+        "forward_dynamics_model_error_norm_rms": 3.026999475612364e-14,
+        "recovery_active_fraction": 0.035,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.7274490017152857,
+        "mean": 0.5135343512620238,
+        "p50": 0.5006195005989866,
+        "p95": 0.5990430996462237,
+        "p99": 0.6570742406620411
+      },
+      "profile": "slow_start_speedup",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222238_timing_rr10_slow_start_speedup_seed2103_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4500000",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 94237,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 13.28597354888916,
+          "mean": 1.921165316766128,
+          "p95": 8.951910638809203,
+          "p99": 12.332571382522582
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 49.49945068359375,
+          "mean": 8.318442366160452,
+          "p95": 38.94111309051513,
+          "p99": 45.83998390197753
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 7.103218078613281,
+          "mean": 4.308873241245746,
+          "p95": 6.847723484039307,
+          "p99": 7.103218078613281
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.38039403013905,
+          "mean": 1.0188970200436094,
+          "p95": 1.3267957007727886,
+          "p99": 1.3749344759097712
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 7.549147605895996,
+          "mean": 1.6423263394087553,
+          "p95": 6.13506679534912,
+          "p99": 6.950864486694336
+        }
+      },
+      "seed": 2103
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 4.7912200025166385,
+        "mean": 3.3810297310027337,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2845630012161564,
+        "p95": 4.026760300985188,
+        "p99": 4.288527383541805
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.03625,
+        "qp_fallback_fraction": 0.00625,
+        "qp_success_fraction": 0.99375,
+        "right_ee_acc_norm_rms": 2.4171673127443882,
+        "right_ee_alpha_norm_rms": 6.771698411041414,
+        "right_ee_tilt_xy_norm_rms": 0.06272890897722784,
+        "torso_acc_norm_rms": 2.1851247998488406,
+        "torso_alpha_norm_rms": 7.176941831957809
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.015,
+        "current_q_violation_max_rad": 0.0010376574746733536,
+        "forward_dynamics_model_error_norm_rms": 2.8146252623862173e-14,
+        "recovery_active_fraction": 0.02375,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.998815998173086,
+        "mean": 0.5387960950156412,
+        "p50": 0.5095154992886819,
+        "p95": 0.6983843491980222,
+        "p99": 0.7521893404555158
+      },
+      "profile": "slow_start_speedup",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222256_timing_rr10_slow_start_speedup_seed2104_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4461439",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 94436,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 798,
+          "max": 13.148467063903809,
+          "mean": 1.9069696691232665,
+          "p95": 8.87701120376587,
+          "p99": 12.114488124847412
+        },
+        "alpha_correction_norm_max": {
+          "count": 798,
+          "max": 50.69221115112305,
+          "mean": 8.30373738795743,
+          "p95": 38.81084442138672,
+          "p99": 45.12959800720215
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 2,
+          "8": 0
+        },
+        "evaluation_count": 2,
+        "evaluation_fraction": 0.0025,
+        "input_abs_z_max": {
+          "count": 798,
+          "max": 7.527813911437988,
+          "mean": 4.351751488103604,
+          "p95": 7.015558242797852,
+          "p99": 7.527813911437988
+        },
+        "input_rms_z": {
+          "count": 798,
+          "max": 1.3733715772080244,
+          "mean": 1.0213757649385649,
+          "p95": 1.3236038579683196,
+          "p99": 1.368531206592737
+        },
+        "prediction_abs_z_max": {
+          "count": 798,
+          "max": 7.15752649307251,
+          "mean": 1.6299352673883725,
+          "p95": 6.060204243659973,
+          "p99": 6.857960047721862
+        }
+      },
+      "seed": 2104
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 5.395891999796731,
+        "mean": 3.2939637898475786,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2139889990503434,
+        "p95": 3.876099901754059,
+        "p99": 4.191878222918603
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.03375,
+        "qp_fallback_fraction": 0.0025,
+        "qp_success_fraction": 0.9975,
+        "right_ee_acc_norm_rms": 2.411420931019478,
+        "right_ee_alpha_norm_rms": 6.538275247162115,
+        "right_ee_tilt_xy_norm_rms": 0.0560886701770853,
+        "torso_acc_norm_rms": 2.1662659878190347,
+        "torso_alpha_norm_rms": 6.886404562300306
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.02875,
+        "current_q_violation_max_rad": 0.004702966130035367,
+        "forward_dynamics_model_error_norm_rms": 1.8551185207666336e-07,
+        "recovery_active_fraction": 0.0425,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.9191620010824408,
+        "mean": 0.5231104949416476,
+        "p50": 0.5015730002924101,
+        "p95": 0.6618329009143052,
+        "p99": 0.7573296308692079
+      },
+      "profile": "late_multiaxis",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222313_timing_rr10_late_multiaxis_seed2101_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4459819",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 94661,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 13.353071212768555,
+          "mean": 2.0098434212617575,
+          "p95": 9.346356773376462,
+          "p99": 11.660376577377319
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 50.66747283935547,
+          "mean": 8.929562201201916,
+          "p95": 37.812537765502924,
+          "p99": 43.49287895202636
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 7.53720235824585,
+          "mean": 4.456690131723881,
+          "p95": 7.301878929138184,
+          "p99": 7.53720235824585
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.3856767370170728,
+          "mean": 1.0388020945043224,
+          "p95": 1.286558003985197,
+          "p99": 1.3820271293149076
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 8.168542861938477,
+          "mean": 1.7262697339244186,
+          "p95": 5.89499793052673,
+          "p99": 7.244481878280638
+        }
+      },
+      "seed": 2101
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 4.585827002301812,
+        "mean": 3.370302147728291,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.2962290024443064,
+        "p95": 3.9525820026028664,
+        "p99": 4.200243517552735
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.035,
+        "qp_fallback_fraction": 0.00125,
+        "qp_success_fraction": 0.99875,
+        "right_ee_acc_norm_rms": 2.4025973678198316,
+        "right_ee_alpha_norm_rms": 6.6503672815572,
+        "right_ee_tilt_xy_norm_rms": 0.055660732062517176,
+        "torso_acc_norm_rms": 2.1777322128977983,
+        "torso_alpha_norm_rms": 6.9490441377390075
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.04,
+        "current_q_violation_max_rad": 0.0014972818829596668,
+        "forward_dynamics_model_error_norm_rms": 2.9528838732867194e-14,
+        "recovery_active_fraction": 0.045,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.8194319998438004,
+        "mean": 0.5380226112674791,
+        "p50": 0.5092379997222451,
+        "p95": 0.68459975082078,
+        "p99": 0.7559776380367111
+      },
+      "profile": "late_multiaxis",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222330_timing_rr10_late_multiaxis_seed2102_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4456862",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 94884,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 12.407548904418945,
+          "mean": 2.007880640886724,
+          "p95": 9.322062969207762,
+          "p99": 11.627878904342651
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 48.57619094848633,
+          "mean": 8.928357793353499,
+          "p95": 37.99529132843016,
+          "p99": 43.10138748168944
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 7.6792426109313965,
+          "mean": 4.4158170299232005,
+          "p95": 7.27290153503418,
+          "p99": 7.6792426109313965
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.3872836243521371,
+          "mean": 1.0413821315864353,
+          "p95": 1.284569536420054,
+          "p99": 1.3833190073344601
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 7.755805492401123,
+          "mean": 1.715915981605649,
+          "p95": 6.0833026409149165,
+          "p99": 6.881316056251525
+        }
+      },
+      "seed": 2102
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 4.312052999011939,
+        "mean": 3.2966922164373176,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p50": 3.223768999305321,
+        "p95": 3.830637198552721,
+        "p99": 4.186088119313354
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.035,
+        "qp_fallback_fraction": 0.0025,
+        "qp_success_fraction": 0.9975,
+        "right_ee_acc_norm_rms": 2.4305482343875546,
+        "right_ee_alpha_norm_rms": 6.614411524557999,
+        "right_ee_tilt_xy_norm_rms": 0.056405429617626325,
+        "torso_acc_norm_rms": 2.1760728596487326,
+        "torso_alpha_norm_rms": 6.938546858551849
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.02875,
+        "current_q_violation_max_rad": 0.0045223127138353525,
+        "forward_dynamics_model_error_norm_rms": 2.985057197555868e-14,
+        "recovery_active_fraction": 0.03375,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 0.7744870017631911,
+        "mean": 0.5244180638055695,
+        "p50": 0.49933400077861734,
+        "p95": 0.6643794995397906,
+        "p99": 0.743991979798011
+      },
+      "profile": "late_multiaxis",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222348_timing_rr10_late_multiaxis_seed2103_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4489611",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 95087,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 0,
+        "complete_interval_overrun_fraction": 0.0,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 800,
+          "max": 13.65758228302002,
+          "mean": 2.009721704106778,
+          "p95": 9.40795464515686,
+          "p99": 11.872493600845337
+        },
+        "alpha_correction_norm_max": {
+          "count": 800,
+          "max": 51.33005905151367,
+          "mean": 8.938898017108441,
+          "p95": 37.8680809020996,
+          "p99": 43.96421703338623
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0
+        },
+        "evaluation_count": 0,
+        "evaluation_fraction": 0.0,
+        "input_abs_z_max": {
+          "count": 800,
+          "max": 7.531982421875,
+          "mean": 4.462564773708582,
+          "p95": 7.341309070587158,
+          "p99": 7.531982421875
+        },
+        "input_rms_z": {
+          "count": 800,
+          "max": 1.3865404112036703,
+          "mean": 1.0374869489772809,
+          "p95": 1.2870014338343159,
+          "p99": 1.3828392217519054
+        },
+        "prediction_abs_z_max": {
+          "count": 800,
+          "max": 7.549147605895996,
+          "mean": 1.7195574542880059,
+          "p95": 5.9351426362991315,
+          "p99": 6.990169281959532
+        }
+      },
+      "seed": 2103
+    },
+    {
+      "complete_6ms_right_arm_interval_ms": {
+        "budget_ms": 6.0,
+        "count": 799,
+        "max": 6.521026996779256,
+        "mean": 3.3174476558407777,
+        "overrun_count": 2,
+        "overrun_fraction": 0.0025031289111389237,
+        "p50": 3.2325200008926913,
+        "p95": 3.862016894345288,
+        "p99": 4.264969397336245
+      },
+      "overall_evaluation": {
+        "ddq_saturation_any_fraction": 0.03125,
+        "qp_fallback_fraction": 0.0,
+        "qp_success_fraction": 1.0,
+        "right_ee_acc_norm_rms": 2.402776228524262,
+        "right_ee_alpha_norm_rms": 6.659719261699444,
+        "right_ee_tilt_xy_norm_rms": 0.055996499264547375,
+        "torso_acc_norm_rms": 2.179063589604906,
+        "torso_alpha_norm_rms": 6.985825330262404
+      },
+      "payload_cause_diagnostics": {
+        "current_q_violation_fraction": 0.0075,
+        "current_q_violation_max_rad": 0.000105275419230208,
+        "forward_dynamics_model_error_norm_rms": 2.7845452083776824e-14,
+        "recovery_active_fraction": 0.025,
+        "solver_status_val_counts": {
+          "1": 800
+        }
+      },
+      "payload_kg": 0.0,
+      "payload_metadata": {
+        "added_mass_kg": 0.0,
+        "body": "right_bottle",
+        "controller_model_includes_payload": false,
+        "intentional_nominal_model_mismatch": false,
+        "treatment": "nominal"
+      },
+      "payload_modeling": "unmodeled",
+      "predictor_timing_ms": {
+        "count": 800,
+        "max": 1.0663680004654452,
+        "mean": 0.521917534961176,
+        "p50": 0.4958994995831745,
+        "p95": 0.6651980515016476,
+        "p99": 0.7645098785360459
+      },
+      "profile": "late_multiaxis",
+      "run_dir_local_ignored": "evaluation/realtime_rr10_validation_20260811/20260811_222405_timing_rr10_late_multiaxis_seed2104_payload0g_unmodeled_hybrid_residual",
+      "runtime_environment": {
+        "aligned_measurement_end_time_s": 5.6,
+        "complete_interval_count_expected": 800,
+        "cpu_affinity": [
+          7
+        ],
+        "cpu_frequency_at_start": {
+          "7": {
+            "energy_performance_preference": "default",
+            "scaling_cur_freq_khz_at_start": "4500045",
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "performance",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_min_freq_khz": "400000"
+          }
+        },
+        "gc_disabled_during_control_loop": true,
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "requested_measurement_end_time_s": 5.6000000000000005,
+        "requested_measurement_start_time_s": 0.8,
+        "scheduler": {
+          "kernel_rt_period_us": "1000000",
+          "kernel_rt_runtime_us": "950000",
+          "nice": 0,
+          "policy": 2,
+          "policy_name": "SCHED_RR",
+          "priority": 10,
+          "right_arm_worker": {
+            "cpu_affinity": [
+              7
+            ],
+            "nice": 0,
+            "pid": 95287,
+            "policy": 2,
+            "policy_name": "SCHED_RR",
+            "priority": 10
+          },
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "rr_timeslice_ms": "100"
+        },
+        "thread_environment": {
+          "BLIS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1"
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "warmup_cycles_before_measurement": 1
+      },
+      "safety": {
+        "complete_interval_overrun_count": 2,
+        "complete_interval_overrun_fraction": 0.0025031289111389237,
+        "critical_nonfinite_count": 0
+      },
+      "safety_gate": {
+        "acc_correction_norm_max": {
+          "count": 798,
+          "max": 12.48145580291748,
+          "mean": 2.00249637482235,
+          "p95": 9.428734588623046,
+          "p99": 11.660202970504761
+        },
+        "alpha_correction_norm_max": {
+          "count": 798,
+          "max": 48.853172302246094,
+          "mean": 8.889959815786895,
+          "p95": 38.109418869018555,
+          "p99": 43.79927825927734
+        },
+        "by_code": {
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 2
+        },
+        "evaluation_count": 2,
+        "evaluation_fraction": 0.0025,
+        "input_abs_z_max": {
+          "count": 798,
+          "max": 7.265402317047119,
+          "mean": 4.440437536938746,
+          "p95": 6.805877208709717,
+          "p99": 7.265402317047119
+        },
+        "input_rms_z": {
+          "count": 798,
+          "max": 1.3866184055624602,
+          "mean": 1.0418069608591076,
+          "p95": 1.2826903719812148,
+          "p99": 1.3822338236177
+        },
+        "prediction_abs_z_max": {
+          "count": 798,
+          "max": 7.458605766296387,
+          "mean": 1.7071557931396597,
+          "p95": 6.038276243209839,
+          "p99": 6.674292774200438
+        }
+      },
+      "seed": 2104
+    }
+  ],
+  "safety_design": {
+    "cpu": 7,
+    "fifo_rejected_reason": "no expected latency benefit for blocking handoff, with a larger runaway starvation risk",
+    "kernel_rt_throttling_required": true,
+    "main_and_worker_same_policy_priority_and_cpu": true,
+    "policy": "SCHED_RR",
+    "priority": 10,
+    "transient_systemd_unit_runtime_limit_minutes": 15
+  },
+  "sched_other_baseline": {
+    "overall": {
+      "ddq_saturation_any_fraction": {
+        "count": 12,
+        "max": 0.03625,
+        "mean": 0.034583333333333334,
+        "min": 0.03125,
+        "std": 0.0013819269959814157
+      },
+      "qp_fallback_fraction": {
+        "count": 12,
+        "max": 0.01,
+        "mean": 0.002916666666666667,
+        "min": 0.0,
+        "std": 0.002517301244498869
+      },
+      "qp_success_fraction": {
+        "count": 12,
+        "max": 1.0,
+        "mean": 0.9970833333333333,
+        "min": 0.99,
+        "std": 0.0025173012444988816
+      },
+      "right_ee_acc_norm_rms": {
+        "count": 12,
+        "max": 2.513357091829733,
+        "mean": 2.4442737475337477,
+        "min": 2.396628575037997,
+        "std": 0.043564896146962295
+      },
+      "right_ee_alpha_norm_rms": {
+        "count": 12,
+        "max": 7.386951384277725,
+        "mean": 6.872511293661752,
+        "min": 6.538275247162115,
+        "std": 0.307232321286915
+      },
+      "right_ee_tilt_xy_norm_rms": {
+        "count": 12,
+        "max": 0.06373267220966126,
+        "mean": 0.060307889517867926,
+        "min": 0.055660732062517176,
+        "std": 0.0030435241917214336
+      },
+      "torso_acc_norm_rms": {
+        "count": 12,
+        "max": 2.265044747918616,
+        "mean": 2.206109742575506,
+        "min": 2.1662659878190347,
+        "std": 0.04078972351762573
+      },
+      "torso_alpha_norm_rms": {
+        "count": 12,
+        "max": 7.892565556644318,
+        "mean": 7.312624097887938,
+        "min": 6.886404562300306,
+        "std": 0.3866698847416738
+      }
+    },
+    "run_count": 12,
+    "safety_totals": {
+      "complete_interval_count": 9588,
+      "complete_interval_overrun_count": 9,
+      "complete_interval_overrun_fraction": 0.0009386733416770963,
+      "critical_nonfinite_count": 0,
+      "evaluation_update_count": 9600,
+      "predictor_fallback_count": 11,
+      "safety_gate_by_code": {
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 2,
+        "8": 9
+      },
+      "safety_gate_count": 11,
+      "safety_gate_fraction": 0.0011458333333333333
+    },
+    "timing_ms": {
+      "complete_interval_max": {
+        "count": 12,
+        "max": 9.023836999404011,
+        "mean": 5.966556333987683,
+        "min": 4.992002002836671,
+        "std": 1.1175749767185388
+      },
+      "complete_interval_mean": {
+        "count": 12,
+        "max": 4.067055426863415,
+        "mean": 3.9837077057155685,
+        "min": 3.8701105646015983,
+        "std": 0.056836940508311944
+      },
+      "complete_interval_p99": {
+        "count": 12,
+        "max": 5.209661320695883,
+        "mean": 4.833002088362264,
+        "min": 4.54313340022054,
+        "std": 0.18784941786508902
+      },
+      "neural_core_max": {
+        "count": 12,
+        "max": 0.5853209986526053,
+        "mean": 0.5333416668994081,
+        "min": 0.4265370007487945,
+        "std": 0.04029102752344744
+      },
+      "neural_core_mean": {
+        "count": 12,
+        "max": 0.33382608492502186,
+        "mean": 0.3166445623128397,
+        "min": 0.29822064388099534,
+        "std": 0.011892850564325146
+      },
+      "neural_core_p99": {
+        "count": 12,
+        "max": 0.4820561993255976,
+        "mean": 0.44907004436330067,
+        "min": 0.40276187104609557,
+        "std": 0.0256188103181078
+      },
+      "predictor_max": {
+        "count": 12,
+        "max": 1.2767290027113631,
+        "mean": 1.1070052496506833,
+        "min": 0.9735160019772593,
+        "std": 0.0759161226058828
+      },
+      "predictor_mean": {
+        "count": 12,
+        "max": 0.729946475048564,
+        "mean": 0.7050218685481013,
+        "min": 0.6756971086588237,
+        "std": 0.017265961443687628
+      },
+      "predictor_p99": {
+        "count": 12,
+        "max": 1.0035593092106865,
+        "mean": 0.9458336177582775,
+        "min": 0.8719743023539194,
+        "std": 0.04372827447639865
+      }
+    },
+    "transients": {
+      "start": {
+        "right_ee_acc_norm_rms": {
+          "count": 12,
+          "max": 2.6647262388814674,
+          "mean": 2.2981110617462304,
+          "min": 1.926435149876162,
+          "std": 0.28655894222608497
+        },
+        "right_ee_alpha_norm_rms": {
+          "count": 12,
+          "max": 7.463629403294012,
+          "mean": 7.165424473673775,
+          "min": 6.926074850491552,
+          "std": 0.19717647849039235
+        },
+        "right_ee_tilt_xy_norm_rms": {
+          "count": 12,
+          "max": 0.106235285740268,
+          "mean": 0.09128799435402048,
+          "min": 0.07643855348232652,
+          "std": 0.010955041932497755
+        }
+      },
+      "stop": {
+        "right_ee_acc_norm_rms": {
+          "count": 12,
+          "max": 2.931681360970951,
+          "mean": 2.4436821264859905,
+          "min": 1.9129060344524715,
+          "std": 0.3904595916185023
+        },
+        "right_ee_alpha_norm_rms": {
+          "count": 12,
+          "max": 6.672026497659424,
+          "mean": 6.288612823405484,
+          "min": 5.962215306529069,
+          "std": 0.19287856837737052
+        },
+        "right_ee_tilt_xy_norm_rms": {
+          "count": 12,
+          "max": 0.07156900269069508,
+          "mean": 0.0556607704429292,
+          "min": 0.04618138578335574,
+          "std": 0.010564078520839668
+        }
+      },
+      "velocity_change": {
+        "right_ee_acc_norm_rms": {
+          "count": 12,
+          "max": 3.2984007446647965,
+          "mean": 2.764432285287434,
+          "min": 2.42531756852071,
+          "std": 0.37173903196464586
+        },
+        "right_ee_alpha_norm_rms": {
+          "count": 12,
+          "max": 8.77450978208131,
+          "mean": 6.346964296444614,
+          "min": 4.44743027524042,
+          "std": 1.6979257551280418
+        },
+        "right_ee_tilt_xy_norm_rms": {
+          "count": 12,
+          "max": 0.042838047143587805,
+          "mean": 0.03460282038934344,
+          "min": 0.02857299230943671,
+          "std": 0.005020871779248829
+        }
+      }
+    }
+  },
+  "sched_other_overrun_profile": {
+    "component_mean_ms": {
+      "cpp_executor_bridge_ms": 0.06814233333333335,
+      "ddq_total_ms": 2.5270448887668966,
+      "mpc_policy_update_ms": 3.6262351107628397,
+      "other_right_arm_path_ms": 0.7686593337596813
+    },
+    "largest_intervals": [
+      {
+        "complete_interval_ms": "9.023836999404011",
+        "cpp_executor_bridge_ms": "0.068935",
+        "ddq_max_ms": "3.487763002340216",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "4.547957003524061",
+        "mpc_policy_update_ms": "3.622300002461998",
+        "other_right_arm_path_ms": "0.7846449934179522",
+        "profile": "delayed_fast_lateral",
+        "seed": 2101
+      },
+      {
+        "complete_interval_ms": "8.24058600119315",
+        "cpp_executor_bridge_ms": "0.07676200000000001",
+        "ddq_max_ms": "3.2422080003016163",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "4.386807999253506",
+        "mpc_policy_update_ms": "2.8436610009521246",
+        "other_right_arm_path_ms": "0.9333550009875204",
+        "profile": "delayed_fast_lateral",
+        "seed": 2101
+      },
+      {
+        "complete_interval_ms": "7.049406001897296",
+        "cpp_executor_bridge_ms": "0.07772799999999999",
+        "ddq_max_ms": "1.1291570008324925",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "2.2525679996761028",
+        "mpc_policy_update_ms": "3.89382100183866",
+        "other_right_arm_path_ms": "0.8252890003825333",
+        "profile": "late_multiaxis",
+        "seed": 2103
+      },
+      {
+        "complete_interval_ms": "7.039519001409644",
+        "cpp_executor_bridge_ms": "0.066474",
+        "ddq_max_ms": "1.1430270023993216",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "2.1137399999133777",
+        "mpc_policy_update_ms": "3.9669759971729945",
+        "other_right_arm_path_ms": "0.8923290043232721",
+        "profile": "delayed_fast_lateral",
+        "seed": 2101
+      },
+      {
+        "complete_interval_ms": "6.526879999000812",
+        "cpp_executor_bridge_ms": "0.072533",
+        "ddq_max_ms": "1.05798699951265",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "2.0716099970741197",
+        "mpc_policy_update_ms": "3.648759000498103",
+        "other_right_arm_path_ms": "0.7339780014285892",
+        "profile": "delayed_fast_lateral",
+        "seed": 2101
+      },
+      {
+        "complete_interval_ms": "6.443591999413911",
+        "cpp_executor_bridge_ms": "0.058665",
+        "ddq_max_ms": "1.0860379989026114",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "1.8764409978757612",
+        "mpc_policy_update_ms": "3.900348998286063",
+        "other_right_arm_path_ms": "0.6081370032520872",
+        "profile": "delayed_fast_lateral",
+        "seed": 2102
+      },
+      {
+        "complete_interval_ms": "6.349587998556672",
+        "cpp_executor_bridge_ms": "0.059993000000000005",
+        "ddq_max_ms": "1.0482799989404157",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "2.073543997539673",
+        "mpc_policy_update_ms": "3.439996999077266",
+        "other_right_arm_path_ms": "0.7760540019397325",
+        "profile": "slow_start_speedup",
+        "seed": 2104
+      },
+      {
+        "complete_interval_ms": "6.165288996271556",
+        "cpp_executor_bridge_ms": "0.076845",
+        "ddq_max_ms": "0.9067130013136193",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "1.6365090014005546",
+        "mpc_policy_update_ms": "3.7141329994483385",
+        "other_right_arm_path_ms": "0.7378019954226632",
+        "profile": "slow_start_speedup",
+        "seed": 2101
+      },
+      {
+        "complete_interval_ms": "6.0720380024577025",
+        "cpp_executor_bridge_ms": "0.055346",
+        "ddq_max_ms": "0.9875150026346091",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "1.7842270026449114",
+        "mpc_policy_update_ms": "3.6061199971300084",
+        "other_right_arm_path_ms": "0.6263450026827827",
+        "profile": "late_multiaxis",
+        "seed": 2103
+      }
+    ],
+    "overrun_count": 9,
+    "without_ddq_rescue_count": 9,
+    "without_ddq_second_pass_count": 9
+  },
+  "sched_rr_overrun_profile": {
+    "component_mean_ms": {
+      "cpp_executor_bridge_ms": 0.059027500000000004,
+      "ddq_total_ms": 2.0207060006214306,
+      "mpc_policy_update_ms": 3.5879049992217915,
+      "other_right_arm_path_ms": 0.7469109981606854
+    },
+    "largest_intervals": [
+      {
+        "complete_interval_ms": "6.521026996779256",
+        "cpp_executor_bridge_ms": "0.05959400000000001",
+        "ddq_max_ms": "1.1751589991035871",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "1",
+        "ddq_total_ms": "2.111132998834364",
+        "mpc_policy_update_ms": "3.5976090002804995",
+        "other_right_arm_path_ms": "0.752690997664392",
+        "profile": "late_multiaxis",
+        "seed": 2104
+      },
+      {
+        "complete_interval_ms": "6.308071999228559",
+        "cpp_executor_bridge_ms": "0.058461",
+        "ddq_max_ms": "1.0086610018333886",
+        "ddq_rescue_count": "0",
+        "ddq_second_pass_count": "0",
+        "ddq_total_ms": "1.930279002408497",
+        "mpc_policy_update_ms": "3.5782009981630836",
+        "other_right_arm_path_ms": "0.7411309986569788",
+        "profile": "late_multiaxis",
+        "seed": 2104
+      }
+    ],
+    "overrun_count": 2,
+    "without_ddq_rescue_count": 2,
+    "without_ddq_second_pass_count": 1
+  },
+  "sched_rr_result": {
+    "overall": {
+      "ddq_saturation_any_fraction": {
+        "count": 12,
+        "max": 0.0375,
+        "mean": 0.035104166666666665,
+        "min": 0.03125,
+        "std": 0.001650310366432797
+      },
+      "qp_fallback_fraction": {
+        "count": 12,
+        "max": 0.0075,
+        "mean": 0.0035416666666666674,
+        "min": 0.0,
+        "std": 0.002438479148066589
+      },
+      "qp_success_fraction": {
+        "count": 12,
+        "max": 1.0,
+        "mean": 0.9964583333333333,
+        "min": 0.9925,
+        "std": 0.002438479148066584
+      },
+      "right_ee_acc_norm_rms": {
+        "count": 12,
+        "max": 2.5143667938734966,
+        "mean": 2.4449082436687823,
+        "min": 2.396628575037997,
+        "std": 0.044992515124262
+      },
+      "right_ee_alpha_norm_rms": {
+        "count": 12,
+        "max": 7.386951384277725,
+        "mean": 6.875189538040643,
+        "min": 6.538275247162115,
+        "std": 0.31149743561315024
+      },
+      "right_ee_tilt_xy_norm_rms": {
+        "count": 12,
+        "max": 0.06376173851409507,
+        "mean": 0.06035836696878213,
+        "min": 0.055660732062517176,
+        "std": 0.003128483367735966
+      },
+      "torso_acc_norm_rms": {
+        "count": 12,
+        "max": 2.265044747918616,
+        "mean": 2.20570458220131,
+        "min": 2.1662659878190347,
+        "std": 0.040589878604836635
+      },
+      "torso_alpha_norm_rms": {
+        "count": 12,
+        "max": 7.892565556644318,
+        "mean": 7.309962915755226,
+        "min": 6.886404562300306,
+        "std": 0.38186492847731307
+      }
+    },
+    "run_count": 12,
+    "safety_totals": {
+      "complete_interval_count": 9588,
+      "complete_interval_overrun_count": 2,
+      "complete_interval_overrun_fraction": 0.00020859407592824363,
+      "critical_nonfinite_count": 0,
+      "evaluation_update_count": 9600,
+      "predictor_fallback_count": 5,
+      "safety_gate_by_code": {
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 3,
+        "8": 2
+      },
+      "safety_gate_count": 5,
+      "safety_gate_fraction": 0.0005208333333333333
+    },
+    "timing_ms": {
+      "complete_interval_max": {
+        "count": 12,
+        "max": 6.521026996779256,
+        "mean": 4.997681250339762,
+        "min": 3.972444999817526,
+        "std": 0.7087769560778203
+      },
+      "complete_interval_mean": {
+        "count": 12,
+        "max": 3.524473111314904,
+        "mean": 3.3504111390499802,
+        "min": 3.272879911199514,
+        "std": 0.07252311942698066
+      },
+      "complete_interval_p99": {
+        "count": 12,
+        "max": 4.4027539987291675,
+        "mean": 4.200325762079349,
+        "min": 3.7808745155052748,
+        "std": 0.14535136794572864
+      },
+      "neural_core_max": {
+        "count": 12,
+        "max": 0.49126399972010404,
+        "mean": 0.4202621670022684,
+        "min": 0.322619998769369,
+        "std": 0.05123169471815869
+      },
+      "neural_core_mean": {
+        "count": 12,
+        "max": 0.2349097387150323,
+        "mean": 0.2043344243871131,
+        "min": 0.19156286628003727,
+        "std": 0.010860288015148734
+      },
+      "neural_core_p99": {
+        "count": 12,
+        "max": 0.35502581031323643,
+        "mean": 0.33916932351530704,
+        "min": 0.30038997014344204,
+        "std": 0.013327887827987061
+      },
+      "predictor_max": {
+        "count": 12,
+        "max": 1.0663680004654452,
+        "mean": 0.8812774167381576,
+        "min": 0.7274490017152857,
+        "std": 0.09248402488839848
+      },
+      "predictor_mean": {
+        "count": 12,
+        "max": 0.5801486149675839,
+        "mean": 0.5332885923909695,
+        "min": 0.5135343512620238,
+        "std": 0.017487888037529774
+      },
+      "predictor_p99": {
+        "count": 12,
+        "max": 0.7894084992585704,
+        "mean": 0.7549895202858655,
+        "min": 0.6570742406620411,
+        "std": 0.03220382927130138
+      }
+    },
+    "transients": {
+      "start": {
+        "right_ee_acc_norm_rms": {
+          "count": 12,
+          "max": 2.6647262388814674,
+          "mean": 2.2980053281060924,
+          "min": 1.926435149876162,
+          "std": 0.2865293295373061
+        },
+        "right_ee_alpha_norm_rms": {
+          "count": 12,
+          "max": 7.463629403294012,
+          "mean": 7.165032651417641,
+          "min": 6.926074850491552,
+          "std": 0.19718581173351668
+        },
+        "right_ee_tilt_xy_norm_rms": {
+          "count": 12,
+          "max": 0.106235285740268,
+          "mean": 0.09129031972400865,
+          "min": 0.07643855348232652,
+          "std": 0.010957911752933244
+        }
+      },
+      "stop": {
+        "right_ee_acc_norm_rms": {
+          "count": 12,
+          "max": 2.931681360970951,
+          "mean": 2.438450238488781,
+          "min": 1.9129060344524715,
+          "std": 0.39208028933753586
+        },
+        "right_ee_alpha_norm_rms": {
+          "count": 12,
+          "max": 6.540087732708923,
+          "mean": 6.284246036491964,
+          "min": 5.977990645810112,
+          "std": 0.15201634987282092
+        },
+        "right_ee_tilt_xy_norm_rms": {
+          "count": 12,
+          "max": 0.07144362319567435,
+          "mean": 0.05593206802988124,
+          "min": 0.04618138578335574,
+          "std": 0.010523495249878945
+        }
+      },
+      "velocity_change": {
+        "right_ee_acc_norm_rms": {
+          "count": 12,
+          "max": 3.2984007446647965,
+          "mean": 2.7667205782919866,
+          "min": 2.416174611126287,
+          "std": 0.3754512161594448
+        },
+        "right_ee_alpha_norm_rms": {
+          "count": 12,
+          "max": 8.673854278260148,
+          "mean": 6.344428351764617,
+          "min": 4.44743027524042,
+          "std": 1.6856074732109803
+        },
+        "right_ee_tilt_xy_norm_rms": {
+          "count": 12,
+          "max": 0.041720690286346736,
+          "mean": 0.0343558807811504,
+          "min": 0.028628695137017164,
+          "std": 0.004638351361879778
+        }
+      }
+    }
+  },
+  "seeds": [
+    2101,
+    2102,
+    2103,
+    2104
+  ],
+  "stage": "sched_other_vs_safe_sched_rr_timing_ablation",
+  "tail_source_comparison": {
+    "sched_other": {
+      "ddq_to_torque_call": {
+        "mean_of_run_means_ms": 0.5748697618810183,
+        "mean_of_run_p99_ms": 0.7948702636864861,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.862546298849338,
+        "worst_sample_ms": 3.487763002340216
+      },
+      "mpc_policy_update": {
+        "mean_of_run_means_ms": 2.3656628022869577,
+        "mean_of_run_p99_ms": 2.9760748894659628,
+        "run_count": 12,
+        "worst_run_p99_ms": 3.068810088589089,
+        "worst_sample_ms": 3.9669759971729945
+      },
+      "worker_compute": {
+        "mean_of_run_means_ms": 0.17547242486111111,
+        "mean_of_run_p99_ms": 0.3761392058333331,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.3989666199999992,
+        "worst_sample_ms": 0.53844
+      },
+      "worker_ipc_and_copy": {
+        "mean_of_run_means_ms": 0.039566456388888886,
+        "mean_of_run_p99_ms": 0.06462533916666656,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.07048748999999965,
+        "worst_sample_ms": 2.414555
+      },
+      "worker_queue": {
+        "mean_of_run_means_ms": 0.022286855937500002,
+        "mean_of_run_p99_ms": 0.03550095249999994,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.04092507999999986,
+        "worst_sample_ms": 2.079945
+      },
+      "worker_roundtrip": {
+        "mean_of_run_means_ms": 0.21503888125000004,
+        "mean_of_run_p99_ms": 0.43123682166666616,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.4489865,
+        "worst_sample_ms": 2.88152
+      }
+    },
+    "sched_rr": {
+      "ddq_to_torque_call": {
+        "mean_of_run_means_ms": 0.46514343629648164,
+        "mean_of_run_p99_ms": 0.7028890242872876,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.7399812708172249,
+        "worst_sample_ms": 1.1751589991035871
+      },
+      "mpc_policy_update": {
+        "mean_of_run_means_ms": 1.992090132607321,
+        "mean_of_run_p99_ms": 2.41475361613387,
+        "run_count": 12,
+        "worst_run_p99_ms": 2.5201528297839104,
+        "worst_sample_ms": 3.5976090002804995
+      },
+      "worker_compute": {
+        "mean_of_run_means_ms": 0.1242584647222222,
+        "mean_of_run_p99_ms": 0.31012872083333326,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.32561653,
+        "worst_sample_ms": 0.598481
+      },
+      "worker_ipc_and_copy": {
+        "mean_of_run_means_ms": 0.03337039350694445,
+        "mean_of_run_p99_ms": 0.06566085083333327,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.07125853999999995,
+        "worst_sample_ms": 0.23417100000000002
+      },
+      "worker_queue": {
+        "mean_of_run_means_ms": 0.019354227986111115,
+        "mean_of_run_p99_ms": 0.04194823333333327,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.045762069999999995,
+        "worst_sample_ms": 0.07408500000000001
+      },
+      "worker_roundtrip": {
+        "mean_of_run_means_ms": 0.15762885822916667,
+        "mean_of_run_p99_ms": 0.3724675041666665,
+        "run_count": 12,
+        "worst_run_p99_ms": 0.3906993099999999,
+        "worst_sample_ms": 0.686745
+      }
+    }
+  },
+  "timing_gate": {
+    "checks": {
+      "normal_qp_success_min_ge_99pct": true,
+      "worst_run_complete_max_lt_6ms": false,
+      "worst_run_complete_p99_le_5p5ms": true,
+      "zero_6ms_overrun": false,
+      "zero_critical_nonfinite": true
+    },
+    "passed": false
+  }
+}

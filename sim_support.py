@@ -3664,6 +3664,27 @@ def build_performance_runtime_config(
                 else None
             ),
             "right_arm_worker_inherits_parent_policy_and_affinity": True,
+            "kernel_rt_runtime_us": (
+                Path("/proc/sys/kernel/sched_rt_runtime_us")
+                .read_text(encoding="utf-8")
+                .strip()
+                if Path("/proc/sys/kernel/sched_rt_runtime_us").is_file()
+                else None
+            ),
+            "kernel_rt_period_us": (
+                Path("/proc/sys/kernel/sched_rt_period_us")
+                .read_text(encoding="utf-8")
+                .strip()
+                if Path("/proc/sys/kernel/sched_rt_period_us").is_file()
+                else None
+            ),
+            "rr_timeslice_ms": (
+                Path("/proc/sys/kernel/sched_rr_timeslice_ms")
+                .read_text(encoding="utf-8")
+                .strip()
+                if Path("/proc/sys/kernel/sched_rr_timeslice_ms").is_file()
+                else None
+            ),
         },
         "thread_environment": {
             name: os.environ.get(name, "")

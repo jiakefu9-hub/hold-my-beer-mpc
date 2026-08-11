@@ -698,6 +698,37 @@ class RightArmSimProcess:
             stderr = process.stderr.read().strip()
         return f"{prefix}（exit={status}）" + (f"：{stderr}" if stderr else "")
 
+    def scheduling_snapshot(self) -> dict:
+        """Read the live worker scheduling state for timing evidence."""
+
+        process = self._process
+        if process is None or process.poll() is not None:
+            raise SimRuntimeError(self._worker_failure("C++进程不可用"))
+        policy = int(os.sched_getscheduler(process.pid))
+        policy_names = {
+            getattr(os, name): name
+            for name in (
+                "SCHED_OTHER",
+                "SCHED_BATCH",
+                "SCHED_IDLE",
+                "SCHED_FIFO",
+                "SCHED_RR",
+            )
+            if hasattr(os, name)
+        }
+        return {
+            "pid": int(process.pid),
+            "policy": policy,
+            "policy_name": policy_names.get(policy, str(policy)),
+            "priority": int(
+                os.sched_getparam(process.pid).sched_priority
+            ),
+            "nice": int(os.getpriority(os.PRIO_PROCESS, process.pid)),
+            "cpu_affinity": sorted(
+                int(cpu) for cpu in os.sched_getaffinity(process.pid)
+            ),
+        }
+
     def _write_request(self, request: _Request) -> None:
         sequence_address = self._sequence_address(self._request_sequence)
         sequence = int(
