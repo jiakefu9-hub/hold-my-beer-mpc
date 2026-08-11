@@ -359,9 +359,11 @@ class UnitreeArmSharedMemoryClient:
         name: str = DEFAULT_SHARED_MEMORY_NAME,
         *,
         wait_timeout_s: float = 0.0,
+        read_only: bool = False,
     ):
         self.name = name
         self.path = _shared_memory_path(name)
+        self.read_only = bool(read_only)
         self._mapping: mmap.mmap | None = None
         self._layout: _SharedMemoryLayout | None = None
         self._next_command_id = 1
@@ -373,7 +375,9 @@ class UnitreeArmSharedMemoryClient:
         deadline = time.monotonic() + wait_timeout_s
         while True:
             try:
-                descriptor = os.open(self.path, os.O_RDWR)
+                descriptor = os.open(
+                    self.path, os.O_RDONLY if self.read_only else os.O_RDWR
+                )
                 break
             except FileNotFoundError:
                 if time.monotonic() >= deadline:
@@ -389,7 +393,10 @@ class UnitreeArmSharedMemoryClient:
             mapping = mmap.mmap(
                 descriptor,
                 _EXPECTED_LAYOUT["layout_size"],
-                flags=mmap.MAP_SHARED,
+                # ctypes.from_buffer needs a writable local buffer.  A
+                # read-only client therefore uses a private COW mapping:
+                # accidental Python writes cannot reach the shared object.
+                flags=mmap.MAP_PRIVATE if self.read_only else mmap.MAP_SHARED,
                 prot=mmap.PROT_READ | mmap.PROT_WRITE,
             )
         finally:
@@ -564,6 +571,10 @@ class UnitreeArmSharedMemoryClient:
         command_id: int | None,
         request_output: bool,
     ) -> CommandWriteReceipt:
+        if self.read_only:
+            raise PermissionError(
+                "read-only Unitree shared-memory client cannot write commands"
+            )
         arm_weight = float(arm_weight)
         if not math.isfinite(arm_weight):
             raise ValueError("arm_weight 必须是有限数。")

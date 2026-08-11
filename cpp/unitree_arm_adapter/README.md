@@ -5,7 +5,7 @@
 ## 文件职责
 
 - **核心**：`protocol.hpp`、`seqlock.hpp`、`safety.cpp` 和 `periodic_loop.cpp`，分别定义跨进程协议、无锁一致快照、唯一发布前安全入口，以及基于 `CLOCK_MONOTONIC` 和绝对时间的 2 ms 周期。
-- **半核心**：`shared_memory.cpp` 和 `dds_main.cpp`，负责 POSIX 共享内存以及 Unitree SDK2 的 `rt/lowstate`/`rt/arm_sdk` 适配。
+- **半核心**：`shared_memory.cpp` 和 `dds_main.cpp`，负责 POSIX 共享内存以及 Unitree SDK2 的 `rt/lowstate`/`rt/arm_sdk` 适配。`state_bridge_main.cpp` 是独立的只读硬件 shadow 入口，只订阅 LowState，编译单元中没有命令消息或 publisher。
 - **非核心**：`dry_run_main.cpp`、`core_test.cpp` 和 `build_and_test.sh`，只用于布局检查、故障注入、计时和构建验证。
 
 ## 控制链和双重 PD 约束
@@ -117,6 +117,17 @@ DDS 只读干运行（订阅状态，但不发布命令）：
 ```bash
 /tmp/hold-my-beer-mpc-unitree-arm-adapter-build/unitree_arm_adapter_dds enp3s0
 ```
+
+硬件 shadow 阶段优先使用更强隔离的 state-only binary；它没有任何可开启
+输出的参数：
+
+```bash
+/tmp/hold-my-beer-mpc-unitree-arm-adapter-build/unitree_arm_state_bridge \
+  enp3s0 --shm-name /g1_arm_mpc_shadow --unlink-on-exit
+```
+
+完整只读检查和 PREEMPT_RT shadow 运行步骤见仓库根目录
+`HARDWARE_SHADOW.md`。
 
 只有完成索引、13 维参考、weight 过渡、超时回退和急停验证后，才允许显式执行：
 

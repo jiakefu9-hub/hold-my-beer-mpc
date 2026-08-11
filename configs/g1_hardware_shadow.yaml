@@ -1,0 +1,50 @@
+# This file is deliberately fail-closed.  Do not set either verification flag
+# until the exact robot variant and IMU message semantics have been checked on
+# the target G1.  The state-only inspection path does not require them.
+hardware_shadow:
+  output_enabled: false
+  shared_memory_name: /g1_arm_mpc_shadow
+
+  # Mapping follows local Unitree SDK2 fa925bf and the repository's
+  # g1_23dof_rev_1_0 MJCF.  Physical robot variant still needs confirmation.
+  robot_model: g1_23dof_rev_1_0
+  joint_mapping: unitree_sdk2_g1_23dof_arm5
+  joint_mapping_verified: false
+  # sample_id is local callback order; the raw robot tick is checked separately
+  # after its monotonic/wrap semantics are verified on the target firmware.
+  robot_tick_monotonic_verified: false
+
+  # LowState does not encode these conventions in its IDL.  Values below are
+  # the only convention implemented by the adapter, not a hardware claim.
+  imu:
+    contract_verified: false
+    # Hardware sensor origin must physically match this MJCF site. This first
+    # adapter implements rotation, not an unknown translational lever arm.
+    model_site: imu_in_torso
+    quaternion_order: wxyz
+    orientation_semantics: world_from_imu
+    angular_velocity_frame: imu
+    linear_acceleration_frame: imu
+    linear_acceleration_semantics: specific_force
+    torso_from_imu_rotation:
+      - [1.0, 0.0, 0.0]
+      - [0.0, 1.0, 0.0]
+      - [0.0, 0.0, 1.0]
+
+  # Discover these two values using --inspect-state-only while the robot is in
+  # the intended locomotion mode, then explicitly allow only observed values.
+  allowed_mode_pr: []
+  allowed_mode_machine: []
+
+  state_timeout_ms: 20.0
+  future_tolerance_ms: 1.0
+  state_dt_min_ms: 0.2
+  state_dt_max_ms: 20.0
+  joint_position_tolerance_rad: 0.02
+  joint_velocity_abs_max_rad_s: 20.0
+  gyroscope_abs_max_rad_s: 20.0
+  accelerometer_abs_max_m_s2: 100.0
+  angular_acceleration_abs_max_rad_s2: 200.0
+  # Unitree SDK2 G1 termination defaults. Reconfirm for the physical motors.
+  motor_case_temperature_max_c: 85.0
+  motor_winding_temperature_max_c: 120.0

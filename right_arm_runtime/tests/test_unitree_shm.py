@@ -183,6 +183,19 @@ class DryRunInteropTest(unittest.TestCase):
             self.assertEqual(tuple(direct.kd), tuple(zeros))
             self.assertEqual(tuple(direct.tau), tuple(tau_ff))
 
+    def test_read_only_client_cannot_write_command_slot(self):
+        self._create_empty_layout()
+        zeros = [0.0] * protocol.ARM_SDK_JOINT_COUNT
+        with protocol.UnitreeArmSharedMemoryClient(
+            self.name, read_only=True
+        ) as client:
+            client.read_state()
+            with self.assertRaises(PermissionError):
+                client.write_direct_torque(
+                    arm_weight=0.0,
+                    tau_cmd=zeros,
+                )
+
     def test_cpp_to_python_state_and_python_to_cpp_command(self):
         # 第一阶段只有 C++ 写 synthetic state/status，Python 只读。
         self._run(

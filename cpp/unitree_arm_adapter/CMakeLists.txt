@@ -37,6 +37,14 @@ if(UNITREE_ARM_ADAPTER_BUILD_DDS)
         unitree_arm_adapter_core unitree_sdk2)
     target_compile_options(unitree_arm_adapter_dds PRIVATE
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    # Shadow integration uses a separate state-only executable.  It does not
+    # include LowCmd or instantiate any publisher, so no CLI flag can enable
+    # actuation in this process.
+    add_executable(unitree_arm_state_bridge src/state_bridge_main.cpp)
+    target_link_libraries(unitree_arm_state_bridge PRIVATE
+        unitree_arm_adapter_core unitree_sdk2)
+    target_compile_options(unitree_arm_state_bridge PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
 
 include(CTest)
