@@ -101,6 +101,7 @@ def _inspect_only(
     return {
         "mode": "unitree_lowstate_inspection_only",
         "output_capability": "absent",
+        "imu_source_topic": contract.imu_source_topic,
         "sample_count": len(samples),
         "first_sample": samples[0],
         "last_sample": samples[-1],

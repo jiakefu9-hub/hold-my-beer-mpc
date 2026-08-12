@@ -102,6 +102,7 @@ class HardwareFrameContract:
     joint_mapping_verified: bool
     robot_tick_monotonic_verified: bool
     imu_contract_verified: bool
+    imu_source_topic: str
     imu_model_site: str
     quaternion_order: str
     orientation_semantics: str
@@ -156,6 +157,7 @@ class HardwareFrameContract:
             imu_contract_verified=bool(
                 imu.get("contract_verified", False)
             ),
+            imu_source_topic=str(imu.get("source_topic", "")),
             imu_model_site=str(imu.get("model_site", "")),
             quaternion_order=str(imu.get("quaternion_order", "")),
             orientation_semantics=str(
@@ -216,6 +218,10 @@ class HardwareFrameContract:
                 "unitree_sdk2_g1_23dof_arm5",
             ),
             "quaternion_order": (self.quaternion_order, "wxyz"),
+            "imu_source_topic": (
+                self.imu_source_topic,
+                "rt/secondary_imu",
+            ),
             "imu_model_site": (self.imu_model_site, "imu_in_torso"),
             "orientation_semantics": (
                 self.orientation_semantics,

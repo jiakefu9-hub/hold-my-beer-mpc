@@ -1,6 +1,7 @@
-# This file is deliberately fail-closed.  Do not set either verification flag
-# until the exact robot variant and IMU message semantics have been checked on
-# the target G1.  The state-only inspection path does not require them.
+# Status: hardware-unverified. This file is deliberately fail-closed. Do not
+# set any verification flag until the exact robot variant, topic availability
+# and IMU message semantics have been checked on the target G1. The state-only
+# inspection path does not require them.
 hardware_shadow:
   output_enabled: false
   shared_memory_name: /g1_arm_mpc_shadow
@@ -18,6 +19,9 @@ hardware_shadow:
   # the only convention implemented by the adapter, not a hardware claim.
   imu:
     contract_verified: false
+    # The locally pinned G1 SDK example identifies LowState.imu_state as pelvis
+    # IMU and this topic as torso IMU. The target robot still must confirm it.
+    source_topic: rt/secondary_imu
     # Hardware sensor origin must physically match this MJCF site. This first
     # adapter implements rotation, not an unknown translational lever arm.
     model_site: imu_in_torso

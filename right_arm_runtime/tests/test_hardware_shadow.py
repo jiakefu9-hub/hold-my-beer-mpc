@@ -91,11 +91,15 @@ class HardwareContractTest(unittest.TestCase):
         self.assertNotIn("LowCmd_", source)
         self.assertNotIn("ChannelPublisher", source)
         self.assertNotIn("rt/arm_sdk", source)
+        self.assertIn('kLowStateTopic = "rt/lowstate"', source)
+        self.assertIn('kTorsoImuTopic = "rt/secondary_imu"', source)
+        self.assertIn("max_source_skew_us{5000}", source)
 
     def test_repository_config_is_deliberately_not_armed(self):
         payload = load_hardware_shadow_config(
             REPO_ROOT / "configs/g1_hardware_shadow.yaml"
         )["hardware_shadow"]
+        self.assertEqual(payload["imu"]["source_topic"], "rt/secondary_imu")
         HardwareFrameContract.from_mapping(payload, require_verified=False)
         with self.assertRaises(HardwareContractError):
             HardwareFrameContract.from_mapping(payload, require_verified=True)

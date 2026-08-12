@@ -1,14 +1,18 @@
 # Unitree G1 hardware shadow mode
 
-This is a read-only integration stage. It is intentionally incapable of
-publishing a robot command.
+Status: **hardware-unverified**. This is a read-only integration stage. It is
+intentionally incapable of publishing a robot command. The topic selection,
+message pairing, joint map, units and frame conversions are implemented and
+locally tested, but have not been confirmed against this repository's target
+physical G1 and firmware.
 
 ## Safety boundary
 
 The shadow path has two independent output barriers:
 
-1. `unitree_arm_state_bridge` subscribes only to `rt/lowstate`. Its source does
-   not include a LowCmd type, command topic, or publisher.
+1. `unitree_arm_state_bridge` subscribes only to the state topics
+   `rt/lowstate` and `rt/secondary_imu`. Its source does not include a LowCmd
+   type, command topic, or publisher.
 2. `run_hardware_shadow.py` opens the POSIX object with a read-only file
    descriptor and private copy-on-write mapping. It has no command sink. The
    built `ShadowArmCommand` always has `arm_weight=0`, zero `tau_ff`,
@@ -19,8 +23,8 @@ The existing output-capable adapter is not used by either shadow command. Do
 not run `unitree_arm_adapter_dds --enable-output` during this stage.
 
 ```text
-rt/lowstate
-    -> state-only C++ DDS bridge
+rt/lowstate + rt/secondary_imu (torso)
+    -> state-only C++ DDS bridge with <=5 ms arrival-time pairing
     -> protocol-v2 state slot
     -> read-only Python state source
     -> verified units / indices / frames / timestamps
@@ -50,7 +54,13 @@ velocity/IMU bounds, motor temperatures, monotonic sample IDs/timestamps, and
 raw robot tick is also required to advance monotonically (with uint32 wrap).
 An unexpected `mode_pr` or `mode_machine` is fatal.
 
-The IMU conversion implements exactly the convention declared in
+The locally pinned Unitree SDK2 G1 example distinguishes the pelvis IMU
+embedded in `rt/lowstate` from the torso IMU on `rt/secondary_imu`. This is
+software evidence for the topic selection, not confirmation of the target
+robot contract. The state-only bridge uses the latter and only emits a state
+after both topics have supplied a new sample within 5 ms host-arrival skew;
+its timestamp is the older arrival so freshness includes both sources. The
+IMU conversion then implements exactly the convention declared in
 `configs/g1_hardware_shadow.yaml`: W-from-IMU quaternion in wxyz order,
 gyro/specific force expressed in IMU, and an explicit torso-from-IMU rigid
 rotation. The checked torso pose, acceleration, angular velocity, and causal
@@ -89,6 +99,7 @@ taskset -c 5 \
   /tmp/hold-my-beer-mpc-unitree-arm-adapter-build/unitree_arm_state_bridge \
   YOUR_INTERFACE \
   --shm-name /g1_arm_mpc_shadow \
+  --max-source-skew-us 5000 \
   --unlink-on-exit
 ```
 

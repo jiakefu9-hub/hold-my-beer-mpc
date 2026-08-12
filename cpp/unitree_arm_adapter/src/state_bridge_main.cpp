@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -5,10 +6,12 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
 
+#include <unitree/idl/hg/IMUState_.hpp>
 #include <unitree/idl/hg/LowState_.hpp>
 #include <unitree/robot/channel/channel_factory.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
@@ -22,6 +25,7 @@ namespace ua = unitree_arm_adapter;
 namespace {
 
 constexpr const char* kLowStateTopic = "rt/lowstate";
+constexpr const char* kTorsoImuTopic = "rt/secondary_imu";
 volatile std::sig_atomic_t stop_requested = 0;
 
 void HandleSignal(int) { stop_requested = 1; }
@@ -30,6 +34,7 @@ struct Options {
     std::string network_interface;
     std::string shared_memory_name{"/g1_arm_mpc_shadow"};
     std::uint64_t duration_s{0};
+    std::uint64_t max_source_skew_us{5000};
     bool unlink_on_exit{false};
 };
 
@@ -47,6 +52,7 @@ void PrintUsage(const char* executable) {
         << "Usage: " << executable << " NETWORK_INTERFACE [options]\n"
         << "  --shm-name NAME   POSIX shared-memory name\n"
         << "  --duration-s N    0 means run until SIGINT/SIGTERM\n\n"
+        << "  --max-source-skew-us N  LowState/torso-IMU pairing limit\n"
         << "  --unlink-on-exit  remove this bridge's shm name on exit\n\n"
         << "This binary contains no LowCmd type and creates no publisher.\n";
 }
@@ -66,6 +72,10 @@ Options ParseOptions(int argc, char** argv) {
         } else if (argument == "--duration-s") {
             options.duration_s = ParseUnsigned(
                 require_value("--duration-s"), "--duration-s");
+        } else if (argument == "--max-source-skew-us") {
+            options.max_source_skew_us = ParseUnsigned(
+                require_value("--max-source-skew-us"),
+                "--max-source-skew-us");
         } else if (argument == "--unlink-on-exit") {
             options.unlink_on_exit = true;
         } else if (argument == "--help" || argument == "-h") {
@@ -81,14 +91,19 @@ Options ParseOptions(int argc, char** argv) {
     if (options.network_interface.empty()) {
         throw std::invalid_argument("NETWORK_INTERFACE is required");
     }
+    if (options.max_source_skew_us == 0U) {
+        throw std::invalid_argument("--max-source-skew-us must be positive");
+    }
     return options;
 }
 
 ua::RobotStatePayload ConvertState(
     const unitree_hg::msg::dds_::LowState_& message,
+    const unitree_hg::msg::dds_::IMUState_& torso_imu,
+    std::uint64_t oldest_source_timestamp_ns,
     std::uint64_t sample_id) {
     ua::RobotStatePayload state;
-    state.monotonic_timestamp_ns = ua::MonotonicNowNs();
+    state.monotonic_timestamp_ns = oldest_source_timestamp_ns;
     state.sample_id = sample_id;
     state.robot_tick = message.tick();
     state.mode_pr = message.mode_pr();
@@ -102,20 +117,130 @@ ua::RobotStatePayload ConvertState(
         state.motor_temperature_c[index][0] = motor.temperature().at(0);
         state.motor_temperature_c[index][1] = motor.temperature().at(1);
     }
-    const auto& imu = message.imu_state();
     for (std::size_t index = 0; index < 4; ++index) {
         state.imu_quaternion_wxyz[index] =
-            static_cast<double>(imu.quaternion().at(index));
+            static_cast<double>(torso_imu.quaternion().at(index));
     }
     for (std::size_t index = 0; index < 3; ++index) {
         state.imu_gyroscope[index] =
-            static_cast<double>(imu.gyroscope().at(index));
+            static_cast<double>(torso_imu.gyroscope().at(index));
         state.imu_accelerometer[index] =
-            static_cast<double>(imu.accelerometer().at(index));
-        state.imu_rpy[index] = static_cast<double>(imu.rpy().at(index));
+            static_cast<double>(torso_imu.accelerometer().at(index));
+        state.imu_rpy[index] =
+            static_cast<double>(torso_imu.rpy().at(index));
     }
     return state;
 }
+
+std::uint64_t AbsoluteDifference(
+    std::uint64_t first, std::uint64_t second) {
+    return first >= second ? first - second : second - first;
+}
+
+class PairedStateWriter {
+public:
+    PairedStateWriter(
+        ua::SharedMemoryLayout* layout,
+        std::uint64_t max_source_skew_ns)
+        : layout_(layout), max_source_skew_ns_(max_source_skew_ns) {}
+
+    void OnLowState(const void* raw_message) {
+        if (raw_message == nullptr) {
+            return;
+        }
+        ua::RobotStatePayload state;
+        std::lock_guard<std::mutex> lock(mutex_);
+        low_state_ = *static_cast<const
+            unitree_hg::msg::dds_::LowState_*>(raw_message);
+        low_state_timestamp_ns_ = ua::MonotonicNowNs();
+        ++low_state_sequence_;
+        ++low_state_count_;
+        if (TryBuildStateLocked(state)) {
+            ua::WriteSeqlock(layout_->state, state);
+        }
+    }
+
+    void OnTorsoImu(const void* raw_message) {
+        if (raw_message == nullptr) {
+            return;
+        }
+        ua::RobotStatePayload state;
+        std::lock_guard<std::mutex> lock(mutex_);
+        torso_imu_ = *static_cast<const
+            unitree_hg::msg::dds_::IMUState_*>(raw_message);
+        torso_imu_timestamp_ns_ = ua::MonotonicNowNs();
+        ++torso_imu_sequence_;
+        ++torso_imu_count_;
+        if (TryBuildStateLocked(state)) {
+            ua::WriteSeqlock(layout_->state, state);
+        }
+    }
+
+    [[nodiscard]] std::uint64_t low_state_count() const {
+        return low_state_count_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t torso_imu_count() const {
+        return torso_imu_count_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t paired_state_count() const {
+        return paired_state_count_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t rejected_skew_count() const {
+        return rejected_skew_count_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t max_accepted_skew_ns() const {
+        return max_accepted_skew_ns_.load(std::memory_order_relaxed);
+    }
+
+private:
+    bool TryBuildStateLocked(ua::RobotStatePayload& state) {
+        if (
+            low_state_sequence_ == 0U || torso_imu_sequence_ == 0U ||
+            low_state_sequence_ == published_low_state_sequence_ ||
+            torso_imu_sequence_ == published_torso_imu_sequence_) {
+            return false;
+        }
+        const std::uint64_t skew_ns = AbsoluteDifference(
+            low_state_timestamp_ns_, torso_imu_timestamp_ns_);
+        if (skew_ns > max_source_skew_ns_) {
+            ++rejected_skew_count_;
+            return false;
+        }
+        const std::uint64_t sample_id =
+            paired_state_count_.load(std::memory_order_relaxed) + 1U;
+        state = ConvertState(
+            low_state_,
+            torso_imu_,
+            std::min(low_state_timestamp_ns_, torso_imu_timestamp_ns_),
+            sample_id);
+        published_low_state_sequence_ = low_state_sequence_;
+        published_torso_imu_sequence_ = torso_imu_sequence_;
+        paired_state_count_.store(sample_id, std::memory_order_relaxed);
+        const std::uint64_t prior_max =
+            max_accepted_skew_ns_.load(std::memory_order_relaxed);
+        if (skew_ns > prior_max) {
+            max_accepted_skew_ns_.store(skew_ns, std::memory_order_relaxed);
+        }
+        return true;
+    }
+
+    ua::SharedMemoryLayout* layout_;
+    std::uint64_t max_source_skew_ns_;
+    mutable std::mutex mutex_;
+    unitree_hg::msg::dds_::LowState_ low_state_;
+    unitree_hg::msg::dds_::IMUState_ torso_imu_;
+    std::uint64_t low_state_timestamp_ns_{0};
+    std::uint64_t torso_imu_timestamp_ns_{0};
+    std::uint64_t low_state_sequence_{0};
+    std::uint64_t torso_imu_sequence_{0};
+    std::uint64_t published_low_state_sequence_{0};
+    std::uint64_t published_torso_imu_sequence_{0};
+    std::atomic<std::uint64_t> low_state_count_{0};
+    std::atomic<std::uint64_t> torso_imu_count_{0};
+    std::atomic<std::uint64_t> paired_state_count_{0};
+    std::atomic<std::uint64_t> rejected_skew_count_{0};
+    std::atomic<std::uint64_t> max_accepted_skew_ns_{0};
+};
 
 }  // namespace
 
@@ -127,29 +252,31 @@ int main(int argc, char** argv) {
         auto region = ua::SharedMemoryRegion::Open(
             options.shared_memory_name, true);
         auto* layout = region.get();
-        std::atomic<std::uint64_t> sample_id{0};
+        PairedStateWriter writer(
+            layout, options.max_source_skew_us * 1000U);
 
         unitree::robot::ChannelFactory::Instance()->Init(
             0, options.network_interface);
         auto subscriber = std::make_unique<unitree::robot::ChannelSubscriber<
             unitree_hg::msg::dds_::LowState_>>(kLowStateTopic);
         subscriber->InitChannel(
-            [layout, &sample_id](const void* raw_message) {
-                if (raw_message == nullptr) {
-                    return;
-                }
-                const auto& message = *static_cast<const
-                    unitree_hg::msg::dds_::LowState_*>(raw_message);
-                const auto state = ConvertState(
-                    message,
-                    sample_id.fetch_add(1, std::memory_order_relaxed) + 1U);
-                ua::WriteSeqlock(layout->state, state);
+            [&writer](const void* raw_message) {
+                writer.OnLowState(raw_message);
+            },
+            1);
+        auto torso_imu_subscriber =
+            std::make_unique<unitree::robot::ChannelSubscriber<
+                unitree_hg::msg::dds_::IMUState_>>(kTorsoImuTopic);
+        torso_imu_subscriber->InitChannel(
+            [&writer](const void* raw_message) {
+                writer.OnTorsoImu(raw_message);
             },
             1);
 
         std::cout
-            << "Unitree LowState read-only bridge: no LowCmd publisher is "
-               "compiled into this executable.\n";
+            << "Unitree paired LowState + secondary torso-IMU read-only "
+               "bridge: no LowCmd publisher is compiled into this "
+               "executable.\n";
         const auto started = std::chrono::steady_clock::now();
         while (!stop_requested) {
             if (options.duration_s != 0U &&
@@ -159,7 +286,13 @@ int main(int argc, char** argv) {
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        std::cout << "state samples=" << sample_id.load() << "\n";
+        std::cout
+            << "lowstate samples=" << writer.low_state_count()
+            << " torso imu samples=" << writer.torso_imu_count()
+            << " paired states=" << writer.paired_state_count()
+            << " rejected skew=" << writer.rejected_skew_count()
+            << " max accepted skew us="
+            << writer.max_accepted_skew_ns() / 1000U << "\n";
         if (options.unlink_on_exit) {
             region = ua::SharedMemoryRegion{};
             ua::SharedMemoryRegion::Unlink(options.shared_memory_name);

@@ -22,8 +22,8 @@ Usage: run_hardware_shadow.sh NETWORK_INTERFACE [options]
   --group NAME          output/service label
   --hardware-config P   verified fail-closed contract YAML
 
-This launcher starts the state-only LowState bridge. It has no command
-publisher, and the Python process opens shared memory read-only.
+This launcher starts the paired LowState/secondary-IMU state-only bridge. It
+has no command publisher, and the Python process opens shared memory read-only.
 EOF
 }
 
@@ -142,6 +142,7 @@ trap cleanup EXIT INT TERM
 taskset -c "$BRIDGE_CPU" "$STATE_BRIDGE" "$NETWORK_INTERFACE" \
     --shm-name "$SHARED_MEMORY" \
     --duration-s "$((DURATION_S + 15))" \
+    --max-source-skew-us 5000 \
     --unlink-on-exit >"$BRIDGE_LOG" 2>&1 &
 bridge_pid=$!
 
