@@ -126,8 +126,8 @@ DDS 只读干运行（订阅状态，但不发布命令）：
   enp3s0 --shm-name /g1_arm_mpc_shadow --unlink-on-exit
 ```
 
-完整只读检查和 PREEMPT_RT shadow 运行步骤见仓库根目录
-`HARDWARE_SHADOW.md`。
+完整只读检查和 PREEMPT_RT shadow 运行步骤见仓库根目录的
+[HARDWARE_SHADOW.md](../../HARDWARE_SHADOW.md)。
 
 只有完成索引、13 维参考、weight 过渡、超时回退和急停验证后，才允许显式执行：
 

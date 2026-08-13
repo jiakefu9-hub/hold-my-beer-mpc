@@ -86,6 +86,61 @@ isolcpus=domain,managed_irq,6-7 nohz_full=6-7 rcu_nocbs=6-7 irqaffinity=0-5,8-17
 按 `Ctrl-X` 或 `F10` 进行一次性启动。不要由仓库脚本修改
 `/etc/default/grub`。恢复方法：正常重启且不追加这些参数。
 
+#### 可选：当前机器已验证的持久化 isolation
+
+一次性 GRUB 编辑仍是第一次验证新机器或新 topology 时的安全默认。只有在
+`realtime_environment.py` 已确认 control CPU 7 的完整物理核确为 6--7，并且
+上述一次性参数已经完成 target gate 后，才考虑持久化。
+
+当前 XPro-16 已验证的可选配置文件是
+`/etc/default/grub.d/99-disturbance-rt.cfg`，内容必须保持为一行：
+
+```bash
+GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT isolcpus=domain,managed_irq,6-7 nohz_full=6-7 rcu_nocbs=6-7 irqaffinity=0-5,8-17"
+```
+
+这行保留发行版/其他 drop-in 已有的 `GRUB_CMDLINE_LINUX_DEFAULT`，只追加本机已
+验证参数。不要把 `6-7` 复制到另一台 CPU topology 不同的机器。手动安装步骤：
+
+```bash
+sudo install -d -m 0755 /etc/default/grub.d
+sudoedit /etc/default/grub.d/99-disturbance-rt.cfg
+sudo update-grub
+```
+
+先审查 `update-grub` 输出，再重启进入 realtime kernel。重启后验证实际生效值，
+不能只检查配置文件：
+
+```bash
+uname -a
+cat /proc/cmdline
+/home/fjk/miniforge3/envs/g1_mpc/bin/python realtime_environment.py \
+  --control-cpu 7
+```
+
+**完整 rollback：** 先让 GRUB 不再读取该 `.cfg`，重建菜单并重启。使用 `mv` 保留
+可恢复副本，不需要删除文件：
+
+```bash
+sudo mv /etc/default/grub.d/99-disturbance-rt.cfg \
+  /etc/default/grub.d/99-disturbance-rt.cfg.disabled
+sudo update-grub
+sudo reboot
+```
+
+重启后确认 `/proc/cmdline` 不再包含 `isolcpus/nohz_full/rcu_nocbs/irqaffinity`。
+如果要恢复同一份已验证配置：
+
+```bash
+sudo mv /etc/default/grub.d/99-disturbance-rt.cfg.disabled \
+  /etc/default/grub.d/99-disturbance-rt.cfg
+sudo update-grub
+sudo reboot
+```
+
+该 drop-in **只**持久化 boot isolation，不会永久设置 governor，也不会禁用
+`irqbalance`。两者仍按下一节记录原状态、临时设置和恢复。
+
 ### 3. 临时 governor 与 irqbalance
 
 先记录原状态：
@@ -149,7 +204,8 @@ service，仅临时授予 `RLIMIT_RTPRIO=20`。每个 control Python 和其 work
   区间；
 - 完整 6 ms 路径 overrun 为 0，worst sample `< 6.0 ms`；
 - 每个 run 的 p99 均 `<= 5.5 ms`；
-- critical nonfinite 为 0；正常条件 QP success 每个 run 均 `>= 99%`。
+- critical nonfinite 为 0；正常条件 QP success 每个 run 均 `>= 99%`；
+- 每个 run 都成功采集 evaluation IRQ 快照，隔离物理核上的 IRQ 增量为 0。
 
 `run_target_timing_gate.sh` 在任一条件失败时返回非零。通过的仿真 timing gate
 仍不等于真机证据；DDS、驱动、总线和真实状态估计延迟必须在后续硬件阶段单独

@@ -2,7 +2,7 @@
 
 ## 1. 目标
 
-LQR 作为当前项目中 MPC 的简化版，用于在**不显式处理硬约束**的前提下，完成右臂持杯稳定控制。其建模、符号和物理目标尽量与 `MPC_DESIGN.md` 保持一致，便于后续从 LQR 平滑切换到 MPC。
+LQR 作为当前项目中 MPC 的简化版，用于在**不显式处理硬约束**的前提下，完成右臂持杯稳定控制。其建模、符号和物理目标尽量与 [MPC_DESIGN.md](MPC_DESIGN.md) 保持一致，便于后续从 LQR 平滑切换到 MPC。
 
 系统分工保持不变：
 
@@ -16,7 +16,7 @@ LQR 作为当前项目中 MPC 的简化版，用于在**不显式处理硬约束
 
 ## 2. 坐标系与状态定义
 
-坐标系沿用 `MPC_DESIGN.md`：
+坐标系沿用 [MPC_DESIGN.md](MPC_DESIGN.md)：
 
 - `{W}`：世界系
 - `{B}`：躯干 / IMU 基座系
@@ -91,7 +91,7 @@ $
 
 ## 4. 末端物理量的局部仿射模型
 
-这一节与 `MPC_DESIGN.md` 完全一致，只是把同样的物理系数拿来服务 LQR。对每个预测步 `k`，都围绕该步工作点
+这一节与 [MPC_DESIGN.md](MPC_DESIGN.md) 完全一致，只是把同样的物理系数拿来服务 LQR。对每个预测步 `k`，都围绕该步工作点
 
 $
 \bar x_k = \begin{bmatrix} \bar q_k \\ \dot{\bar q}_k \end{bmatrix}
@@ -101,7 +101,7 @@ $
 
 ### 4.1 末端线加速度
 
-采用与 `MPC_DESIGN.md` 相同的局部仿射形式：
+采用与 [MPC_DESIGN.md](MPC_DESIGN.md) 相同的局部仿射形式：
 
 $
 {}^W a_{E,k} \approx D_{acc,k} + C_{acc,k} S_v x_k + B_{acc,k} u_k
@@ -963,7 +963,7 @@ correlation 和 gain 没有适用于所有机器人的唯一标准，还必须�
 
 ## 11. 与 MPC 的关系和区别
 
-LQR 与 `MPC_DESIGN.md` 的关系：
+LQR 与 [MPC_DESIGN.md](MPC_DESIGN.md) 的关系：
 
 - 使用相同的状态定义 `x=[q; dq]`
 - 使用相同的物理目标：末端线加速度、角加速度、torso-relative 末端位置、有方向三维重力误差、姿态正则、速度正则

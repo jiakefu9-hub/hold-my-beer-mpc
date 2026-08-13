@@ -26,7 +26,8 @@ with RightArmSimProcess(...) as runtime:
     result = runtime.execute(...)
 ```
 
-仿真中的 command/state 时间使用 MuJoCo 虚拟时间；`publish_monotonic_ns` 只测量 IPC 墙钟耗时，二者不能相减。完整协议、构建方法和 worker 单测见 `cpp/right_arm_sim_runtime/README.md`。
+仿真中的 command/state 时间使用 MuJoCo 虚拟时间；`publish_monotonic_ns` 只测量 IPC 墙钟耗时，二者不能相减。完整协议、构建方法和 worker 单测见
+[cpp/right_arm_sim_runtime/README.md](../cpp/right_arm_sim_runtime/README.md)。
 
 ## 固定 ABI
 

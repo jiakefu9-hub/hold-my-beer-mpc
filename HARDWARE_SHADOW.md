@@ -1,81 +1,76 @@
-# Unitree G1 hardware shadow mode
+# Unitree G1 硬件 Shadow 模式
 
-Status: **hardware-unverified**. This is a read-only integration stage. It is
-intentionally incapable of publishing a robot command. The topic selection,
-message pairing, joint map, units and frame conversions are implemented and
-locally tested, but have not been confirmed against this repository's target
-physical G1 and firmware.
+状态：**硬件未验证（hardware-unverified）**。这是只读集成阶段，被明确设计为
+无法发布机器人控制命令。话题选择、消息配对、关节映射、单位和坐标转换已经
+实现并通过本地测试，但尚未在本仓库的目标 G1 真机及其固件上确认。
 
-## Safety boundary
+当前系统事实、仿真结果和分阶段真机 checklist 见
+[PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)；运行完整 shadow 前还必须满足
+[REALTIME_RUNTIME.md](REALTIME_RUNTIME.md) 的目标环境要求。
 
-The shadow path has two independent output barriers:
+## 安全边界
 
-1. `unitree_arm_state_bridge` subscribes only to the state topics
-   `rt/lowstate` and `rt/secondary_imu`. Its source does not include a LowCmd
-   type, command topic, or publisher.
-2. `run_hardware_shadow.py` opens the POSIX object with a read-only file
-   descriptor and private copy-on-write mapping. It has no command sink. The
-   built `ShadowArmCommand` always has `arm_weight=0`, zero `tau_ff`,
-   `request_output=false`, `publish_performed=false`, and
-   `ready_for_output=false`.
+Shadow 路径具有两层相互独立的输出屏障：
 
-The existing output-capable adapter is not used by either shadow command. Do
-not run `unitree_arm_adapter_dds --enable-output` during this stage.
+1. `unitree_arm_state_bridge` 只订阅状态话题 `rt/lowstate` 和
+   `rt/secondary_imu`。其源码不包含 LowCmd 类型、command topic 或 publisher。
+2. `run_hardware_shadow.py` 用只读文件描述符和 private copy-on-write mapping
+   打开 POSIX shared memory，没有 command sink。生成的 `ShadowArmCommand`
+   始终满足 `arm_weight=0`、`tau_ff=0`、`request_output=false`、
+   `publish_performed=false` 和 `ready_for_output=false`。
+
+已有的 output-capable adapter 不属于任何 shadow 命令的调用链。本阶段不要运行
+`unitree_arm_adapter_dds --enable-output`。
 
 ```text
-rt/lowstate + rt/secondary_imu (torso)
-    -> state-only C++ DDS bridge with <=5 ms arrival-time pairing
+rt/lowstate + rt/secondary_imu（torso）
+    -> 仅状态 C++ DDS bridge，主机到达时间配对偏差 <= 5 ms
     -> protocol-v2 state slot
-    -> read-only Python state source
-    -> verified units / indices / frames / timestamps
-    -> template or hybrid predictor (hybrid can fall back to template)
-    -> existing KinematicsHelper + MPC
-    -> in-memory ShadowArmCommand
-    -> JSON timing/diagnostics only (no sink, no DDS publish)
+    -> 只读 Python state source
+    -> 单位 / 索引 / 坐标系 / 时间戳检查
+    -> template 或 hybrid predictor（hybrid 可回退 template）
+    -> 现有 KinematicsHelper + MPC
+    -> 内存中的 ShadowArmCommand
+    -> 仅输出 JSON timing/diagnostics（无 sink、无 DDS publish）
 ```
 
-## Implemented hardware contract
+## 已实现的硬件契约
 
-The only supported model mapping is the repository's
-`g1_23dof_rev_1_0` arm5 model:
+当前只支持仓库中的 `g1_23dof_rev_1_0` arm5 模型映射：
 
-- motors 0..11: six left-leg then six right-leg joints;
-- motor 12: waist yaw;
-- motors 15..19: left arm5;
-- motors 22..26: right arm5;
-- arm SDK command shape: left 15..19, right 22..26, waist 12..14.
+- motors 0..11：左腿 6 个关节，然后右腿 6 个关节；
+- motor 12：waist yaw；
+- motors 15..19：左臂 arm5；
+- motors 22..26：右臂 arm5；
+- Arm SDK command 顺序：左臂 15..19、右臂 22..26、waist 12..14。
 
-Joint positions are radians, velocities are rad/s, gyroscope values are
-rad/s, accelerometer values are m/s^2, and all state freshness checks use the
-bridge host's monotonic clock. Every mapped joint is checked against the MJCF
-range, and all 35 state vectors are checked for shape, finite values, declared
-velocity/IMU bounds, motor temperatures, monotonic sample IDs/timestamps, and
-20 ms freshness. The bridge timestamp is host arrival time; the independent
-raw robot tick is also required to advance monotonically (with uint32 wrap).
-An unexpected `mode_pr` or `mode_machine` is fatal.
+关节位置单位为 rad，速度为 rad/s，gyroscope 为 rad/s，accelerometer 为
+m/s^2。所有状态 freshness 检查都使用 bridge 主机的 monotonic clock。每个已
+映射关节都要检查 MJCF range；全部 35 维状态还要检查 shape、有限性、声明的
+速度/IMU 范围、电机温度、单调 sample ID/时间戳和 20 ms freshness。bridge
+时间戳使用主机到达时间；独立的原始 robot tick 还必须单调前进，并允许 uint32
+wrap。任何未列入允许集合的 `mode_pr` 或 `mode_machine` 都会立即报错。
 
-The locally pinned Unitree SDK2 G1 example distinguishes the pelvis IMU
-embedded in `rt/lowstate` from the torso IMU on `rt/secondary_imu`. This is
-software evidence for the topic selection, not confirmation of the target
-robot contract. The state-only bridge uses the latter and only emits a state
-after both topics have supplied a new sample within 5 ms host-arrival skew;
-its timestamp is the older arrival so freshness includes both sources. The
-IMU conversion then implements exactly the convention declared in
-`configs/g1_hardware_shadow.yaml`: W-from-IMU quaternion in wxyz order,
-gyro/specific force expressed in IMU, and an explicit torso-from-IMU rigid
-rotation. The checked torso pose, acceleration, angular velocity, and causal
-angular acceleration then enter the same H-frame predictor path used in
-simulation. No convention is inferred from the raw numbers.
+本地固定版本的 Unitree SDK2 G1 示例把 `rt/lowstate` 内的 IMU 视为 pelvis
+IMU，并另以 `rt/secondary_imu` 提供 torso IMU。这只是选择话题的软件依据，
+不是目标机器人硬件契约已经确认的证据。state-only bridge 使用后者，并且只有
+两个话题都提供了新样本，且主机到达时间偏差不超过 5 ms 时，才发布一个配对
+状态。配对时间戳取两个到达时刻中较早者，因此 freshness 同时覆盖两个来源。
 
-The checked-in configuration deliberately leaves the joint-map, robot-tick,
-and IMU verification flags false and the allowed mode lists empty. Full shadow
-control therefore fails closed until the physical robot contract is confirmed.
+之后的 IMU 转换严格实现 `configs/g1_hardware_shadow.yaml` 中声明的唯一约定：
+quaternion 为 wxyz 顺序、含义为 W-from-IMU，gyro/specific force 表达在 IMU
+坐标系，并显式应用 torso-from-IMU 固定旋转。检查后的 torso 姿态、线加速度、
+角速度和因果角加速度进入与仿真相同的 H-frame predictor 路径。代码绝不会根据
+原始数值“猜测”坐标约定。
 
-## Build only the state bridge
+仓库内配置有意把 joint-map、robot-tick 和 IMU verification flag 保持为
+`false`，允许的 mode 列表也保持为空。因此在目标真机契约确认前，完整 shadow
+control 必然 fail closed。
 
-The local checkout currently expects Unitree SDK2 at
-`/home/fjk/g1_ws/unitree_sdk2`. Configure the build and request only the
-state-only target:
+## 只构建 state bridge
+
+当前本地 checkout 预期 Unitree SDK2 位于 `/home/fjk/g1_ws/unitree_sdk2`。
+只配置并构建 state-only target：
 
 ```bash
 cd /home/fjk/g1_ws/disturbance-lab
@@ -90,9 +85,9 @@ cmake --build /tmp/hold-my-beer-mpc-unitree-arm-adapter-build \
   --parallel --target unitree_arm_state_bridge
 ```
 
-## First robot session: state inspection only
+## 第一次真机 session：只检查状态
 
-Choose the wired robot interface explicitly; do not guess it. In terminal 1:
+必须明确选择连接机器人的有线网卡，不能猜测。在 terminal 1 运行：
 
 ```bash
 taskset -c 5 \
@@ -103,7 +98,7 @@ taskset -c 5 \
   --unlink-on-exit
 ```
 
-In terminal 2:
+在 terminal 2 运行：
 
 ```bash
 cd /home/fjk/g1_ws/disturbance-lab
@@ -115,32 +110,30 @@ MPLCONFIGDIR=/tmp/disturbance-lab-matplotlib \
   --duration-s 10
 ```
 
-This inspection mode does not require the verification flags. It reports
-raw modes, quaternion norms, state age, IMU data, and right-arm q/dq. It does
-not run MPC and cannot write the command slot. Stop the bridge with Ctrl-C;
-`--unlink-on-exit` removes only its temporary shared-memory name.
+inspection 模式不要求 verification flag 为 true。它报告原始 mode、quaternion
+norm、state age、IMU 数据以及右臂 q/dq；它不运行 MPC，也不能写 command slot。
+用 Ctrl-C 停止 bridge；`--unlink-on-exit` 只删除该进程创建的临时 shared-memory
+名称。
 
-Before changing the verification flags, confirm from the exact robot/firmware
-documentation or a Unitree-supported interface:
+在修改任何 verification flag 前，必须根据精确机器人/固件文档或 Unitree
+支持的接口确认：
 
-- the robot is the 23-DOF arm5 variant and motor indices match;
-- the target firmware's `tick` advances monotonically with uint32 wrap;
-- LowState quaternion ordering and W/body direction;
-- gyro frame and units;
-- whether accelerometer is specific force or gravity-removed acceleration;
-- the fixed IMU-to-model-torso rotation;
-- the physical IMU origin matches the MJCF `imu_in_torso` site (otherwise a
-  measured translation and lever-arm acceleration correction are required);
-- the allowed `mode_pr` and `mode_machine` values in the intended read-only
-  locomotion state.
+- 机器人确为 23-DOF arm5 版本，且 motor indices 一致；
+- 目标固件的 `tick` 单调增加，并按 uint32 wrap；
+- LowState quaternion 顺序以及 W/body 旋转方向；
+- gyro 坐标系和单位；
+- accelerometer 表示 specific force 还是已经移除重力的 linear acceleration；
+- IMU 到模型 torso 的固定旋转；
+- 物理 IMU 原点是否与 MJCF `imu_in_torso` site 一致；若不一致，需要实测平移
+  和杆臂加速度修正；
+- 预期只读 locomotion 状态下允许的 `mode_pr` 和 `mode_machine`。
 
-Observed plausible values alone are not proof of the frame convention.
+观测值看起来合理，不能证明坐标系契约正确。
 
-## Complete target-runtime shadow run
+## 完整 target-runtime shadow 运行
 
-After those fields are verified in the YAML, the PREEMPT_RT environment is
-checked and the complete state-to-command-build path can be run with one
-command:
+只有在上述字段已经写入 YAML 并得到验证后，才能先检查 PREEMPT_RT 环境，再用
+一条命令运行完整 state-to-command-build 路径：
 
 ```bash
 cd /home/fjk/g1_ws/disturbance-lab
@@ -152,28 +145,24 @@ cd /home/fjk/g1_ws/disturbance-lab
   --group first_g1_readonly_shadow
 ```
 
-The control process uses the existing target runtime gate, CPU 7 affinity,
-SCHED_RR/10, and single-threaded numerical libraries. DDS receive threads stay
-on housekeeping CPU 5. The summary includes complete path mean/p95/p99/max,
-per-stage timing, state age, QP success, predictor diagnostics, command build
-count, source-to-command age, and a command publish count that must remain
-zero.
+控制进程使用现有 target runtime gate、CPU 7 affinity、`SCHED_RR/10` 和
+单线程数值库。DDS receive threads 留在 housekeeping CPU 5。summary 包含完整
+路径 mean/p95/p99/max、各阶段 timing、state age、QP success、predictor
+diagnostics、command build count、source-to-command age，以及必须始终为零的
+command publish count。
 
-## Inputs still missing from LowState
+## LowState 尚未提供的输入
 
-LowState does not provide the lower-body policy target, runtime walking
-command, or gait phase used to train the MLP. `LocomotionContext` defines the
-required 12 + 3 + 2 values and applies its own monotonic timestamp/freshness
-checks, but this repository does not yet know the real lower-body controller's
-transport or schema. The current runner supplies no such context, so selecting
-`hybrid_residual` explicitly falls back to template and records the reason.
+LowState 不包含 MLP 训练时使用的 lower-body policy target、runtime walking
+command 或 gait phase。`LocomotionContext` 已定义所需的 12 + 3 + 2 个值，并
+执行独立的 monotonic timestamp/freshness 检查，但本仓库目前不知道真实下肢
+控制器的 transport 或 schema。当前 runner 不提供这些上下文，因此显式选择
+`hybrid_residual` 时会回退到 template，并记录原因。
 
-The phase template also needs a verified gait epoch/phase relationship for a
-meaningful walking comparison. Until that signal is connected, its internal
-clock is only suitable for exercising the shadow computation path, not for
-claiming phase-aligned hardware prediction quality.
+相位模板还需要经过验证的 gait epoch/phase 关系，才能进行有意义的行走比较。
+在该信号接入前，内部时钟只适合验证 shadow 计算路径，不能作为真机相位对齐
+预测质量的证据。
 
-Finally, LowState alone lacks a validated floating-base pose/twist/contact
-estimator for hardware inverse dynamics. Shadow mode therefore does not invent
-a feedforward torque: `tau_ff` stays zero and the command remains explicitly
-not ready for output.
+最后，仅靠 LowState 还缺少经过验证的 floating-base pose/twist/contact estimator，
+不足以支持硬件 inverse dynamics。Shadow mode 不会虚构 feedforward torque：
+`tau_ff` 始终为零，command 也明确保持 not ready for output。

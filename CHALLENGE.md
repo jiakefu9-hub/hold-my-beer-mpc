@@ -176,3 +176,119 @@ AI 负责修改配置、批量运行和汇总曲线；我负责提出消融方�
 ### 面试时的一句话总结
 
 > 我通过关闭任务项和双向参数扫描证明，MPC 中代价占比并不等于对最优解的影响；最终没有选择误差最低但 DDQ 超限的参数，而是根据梯度敏感度、可行性和真实执行安全确定了可复现的控制基线。
+
+---
+
+## 案例 8：200 ms 历史到 54 ms 标签的因果对齐
+
+### 挑战
+
+学习模型很容易在离线 RMSE 上看起来优秀，却因为把 `mj_step` 后的状态、当前未
+完成步态周期的 heading，或未来 target 端点混入输入而发生 future leakage。相邻
+滑窗若被随机打散到 train/test，也会让 test 结果虚高。
+
+### 方法
+
+- 所有原始信号统一在 `mj_step` 前采样，并保留原始索引和 monotonic time；
+- 每个 6 ms anchor 的输入严格止于 `t`，34 个样本覆盖 `t-198 ms...t`；
+- 第 `k` 个标签只用 `[t+k*6 ms,t+(k+1)*6 ms)` 两端的世界系速度差，再用
+  anchor 前已经完成的 H-frame 旋转；
+- 18 个 episodes 按完整 episode 做 12/3/3 划分，normalization 只看 train；
+- 自动检查 stride、history/target 边界、heading 来源、有限性和 pre-step 语义。
+
+### 结果与收获
+
+最终得到 11,232 个可审计窗口，absolute MLP test acc/alpha RMSE 为
+`0.1612/0.7184`。更重要的是，这个数字有明确因果含义，可以与在线 predictor
+逐项复现，而不是由数据泄漏制造的漂亮指标。
+
+> 数据采集的时间契约就是模型的一部分；控制预测器先证明“当时能看到什么”，
+> 再讨论网络结构。
+
+---
+
+## 案例 9：为什么选择 `hybrid_residual`，而不是 RMSE 最低的 neural-only
+
+### 挑战
+
+Absolute MLP 能直接预测未来 acc/alpha，但 MPC 同时依赖未来 node omega、姿态和
+gravity/tilt。若只比较 acc/alpha，容易误判 neural-only 为最佳；若把 absolute
+输出直接加到 template，又会混淆 absolute 与 residual 的物理语义。
+
+### 方法
+
+- 保留 `template/neural/hybrid_residual/zoh` 四种明确消融模式；
+- neural-only 的 nodes、omega、rotation 明确使用 measured ZOH；
+- 重新训练 residual target：真实 absolute interval acc/alpha 减去按在线状态顺序
+  运行、含 slow bias 的 template，不复用 absolute checkpoint 硬拼；
+- hybrid 只修改 interval acc/alpha，template 的全部 nodes 与 interval
+  omega/rotation 原样保留；
+- 用末端 acc、alpha、tilt、QP、DDQ saturation 和完整 timing 共同选择模式。
+
+### 结果与收获
+
+Unseen schedule 汇总中 neural-only 的 acc/alpha 最低，但 tilt RMS 为 `0.11269`，
+比 template 的 `0.06186` 高约 82%；hybrid 的 tilt 为 `0.06021`，并同时改善
+acc/alpha。因此项目选择 hybrid，不以单一离线 RMSE 取代闭环物理目标。
+
+> 最佳预测器不是某个标签 RMSE 最低的模型，而是能在完整控制目标和安全约束下
+> 提供稳定边际收益的模型。
+
+---
+
+## 案例 10：固定时间表的 seed 重复不等于泛化
+
+### 挑战
+
+第一轮 train/test episodes 只改变随机 seed，command schedule 完全相同。MLP 可能
+通过 200 ms 历史和 gait phase 间接记住“第几秒启动、变速、停止”，在相同时间表
+上表现好却无法应对真正未见过的命令转换。
+
+### 方法
+
+设计 3 个训练外 schedule profiles，改变启动时间、速度组合、变速时刻和停止时刻，
+每个 profile 使用 2 个 seeds。所有 mode 使用相同条件成对比较，并分别检查 start、
+velocity-change、stop，不只报告最好的一次或 aggregate 均值。若泛化下降，预先
+约定先扩充多样 schedule 数据，而不是直接升级 GRU。
+
+### 结果与收获
+
+6 个 unseen 条件中 hybrid 的末端 acc/alpha 相对 template 均为 6/6 改善，配对
+平均改善 `4.91%/8.78%`；tilt 平均改善 `2.68%`，5/6 改善，最差整体退化仅
+`-0.25%`。Start 收益最稳定，stop 和 velocity-change 的 tilt 波动更大，因而后者
+仍是真机前应重点观察的瞬态。
+
+> 改 seed 只能检验随机性；改变因果输入的时间结构，才是在检验预测器是否记住了
+> 固定实验脚本。
+
+---
+
+## 案例 11：Linux 平均够快，6 ms 长尾仍不可靠
+
+### 挑战
+
+在 generic Linux 上，performance governor 后的 mean/p99 已低于 6 ms，但仍有
+极少数最大值越界。继续优化 MLP 或 QP 平均耗时无法解释这些离群值，也可能为了
+消除 OS jitter 破坏已经验证的控制语义。
+
+### 方法
+
+- 计时边界覆盖状态预处理、predictor、Kinematics/MPC、OSQP、worker IPC 和一个
+  6 ms 区间内全部 DDQ-to-torque 调用，不用 solver-only 时间代替完整路径；
+- profile 证明 predictor 不是主要长尾来源，再做 `SCHED_OTHER` 与低优先级
+  `SCHED_RR/10` A/B；
+- 使用 PREEMPT_RT，隔离完整 SMT 物理核 6--7，控制固定 CPU 7，数值库单线程，
+  `isolcpus=domain,managed_irq`、`nohz_full`、`rcu_nocbs`，并在 evaluation 两端
+  实测 IRQ 增量；
+- 保留有界 RT throttling，不使用高优先级 FIFO 或永久全局 capability。
+
+### 结果与收获
+
+PREEMPT_RT target gate 在 12 runs、9,588 个完整区间上得到
+`3.215/3.568/4.006 ms` 的 mean/mean-p99/worst-max，6 ms overrun、critical
+nonfinite 和隔离核 evaluation IRQ 增量均为 0。结论不是“Python 已经硬实时”，
+而是当前仿真软件路径在明确定义的目标 runtime 下通过；DDS、总线和真机状态年龄
+必须另测。
+
+> 实时性是完整路径、调度环境和尾部分布共同形成的系统属性，不能用一次均值或
+> 单个 kernel 函数耗时替代。

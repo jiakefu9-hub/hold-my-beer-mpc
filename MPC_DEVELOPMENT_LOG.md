@@ -1,6 +1,10 @@
 # 右臂 MPC 开发记录
 
-本文记录右臂 MPC 从设计整理、代码实现到闭环调试的主要决策、依据和实验结果。数学定义以 `MPC_DESIGN.md` 为准；本文只回答“当时发现了什么、修改了什么、结果怎样、下一步为什么这样改”。
+本文记录右臂 MPC 从设计整理、代码实现到闭环调试的主要决策、依据和实验结果。
+数学定义以 [MPC_DESIGN.md](MPC_DESIGN.md) 为准；本文只回答“当时发现了什么、
+修改了什么、结果怎样、下一步为什么这样改”。早期章节中的 horizon、timing、
+“最终保留”等表述是当时 checkout 的历史快照；当前状态以
+[PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md) 为准。
 
 ## 1. 已完成的主要阶段
 
@@ -398,3 +402,68 @@ $$
 真机部分已完成 No-SDK 和 Unitree SDK2 DDS 编译、C++ 核心测试、protocol v2 布局对照和 Python↔C++ dry-run 双向 IPC 测试。共享内存一次写 command、读 state、读 status 的总平均约 $31.4\ \mu s$，p99 约 $38.2\ \mu s$。但 LowState 不直接提供完整 floating-base 世界系位置/线速度和接触集，所以当前真机 2 ms 适配器接收已验证的前馈或最终力矩，不伪造“已完成 2 ms floating-base RNEA”。真机启用前还必须补齐状态估计、核对 13 维电机索引与 arm weight 过渡，并在吊架/急停条件下逐级授权。
 
 完成原生分项计时后又做了一次不计入五轮调参的交付验证 `20260802_213817_final_hybrid_verification`。其物理轨迹和第 5 轮指标逐项相同，完整区间 mean/p95/p99/max 为 $5.25/6.98/9.58/11.92\ \mathrm{ms}$，超时率 $10.6\%$。两次 DDQ→力矩合计 $1.50\ \mathrm{ms}$；单次中 C++ RNEA 核心、完整 RNEA C ABI、仿真接触分解诊断、C++ mapper 核心和 mapper Python/C ABI 桥平均分别为 $0.0135/0.0622/0.0713/0.3911/0.1190\ \mathrm{ms}$。每个 2 ms 拍的 C++ 执行核平均约 $0.00061\ \mathrm{ms}$，完整 Python/C ABI 桥平均 $0.0387\ \mathrm{ms}$。
+
+## 16. 学习型 predictor 与真机前冻结里程碑
+
+本节补记 `disturbance-lab` 分支上的 B0 至 hardware-shadow 阶段。详细设计见
+[DISTURBANCE_PREDICTOR.md](DISTURBANCE_PREDICTOR.md)，完整数字和证据边界见
+[PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)。
+
+### 16.1 B0：统一接口且冻结 template 行为
+
+- 新增 `reset/update/predict` 协议、factory，以及 `template/zoh` 两种实现；
+  `main_sim.py` 不再直接依赖 `PhaseDisturbancePredictor`。
+- Template adapter 继续复用 400-bin H 系模板、slow bias、node 0 measured anchor、
+  首周期 ZOH 和 node/interval 时间语义。
+- 回归测试覆盖 on-grid、off-grid、模板激活和 adapter 前后逐项数值一致。
+
+### 16.2 B1：因果 dataset
+
+- 在 `mj_step` 前采集 2 ms 原始状态，以 6 ms anchor 构造 34 x 50 历史和
+  9 x 6 未来区间标签。
+- History 只覆盖 `t-198 ms...t`，target 只覆盖 `t...t+54 ms`；H 系仅由上一
+  完整周期建立，并保存原始索引/时间戳用于 leakage 检查。
+- 第一版输入包含 torso omega/acc、gravity、下肢 q/dq/target、command 和 phase，
+  没有为了凑特征加入尚不稳定的 contact。
+
+### 16.3 B2：absolute MLP baseline
+
+- 采集 18 episodes、11,232 windows，按 episode 分为 12/3/3；normalization
+  只拟合 train episodes，并先通过 64-sample overfit sanity check。
+- MLP 为 1700-128-128-54、241,206 参数，一次 CPU inference 输出完整 horizon。
+  Test acc/alpha RMSE 为 `0.1612/0.7184`，batch-1 mean/p99/max 为
+  `0.0377/0.0492/0.0751 ms`。
+
+### 16.4 `hybrid_residual` 接入
+
+- `neural` 使用 absolute interval acc/alpha，node/omega/rotation 使用 measured
+  ZOH；`hybrid_residual` 保留完整 template 结构，只修正 interval acc/alpha。
+- 重新以 `absolute target - sequential template-with-slow-bias` 训练 residual
+  checkpoint，并保存 H 系、dt、template 和 slow-bias metadata，避免语义硬拼。
+- Safety gate 对 history、nonfinite、训练包络、QP 质量和完整区间 overrun 做整拍
+  template fallback。
+
+### 16.5 Unseen schedule 泛化与 payload 诊断
+
+- 3 个训练外 schedule profiles x 2 seeds 中，hybrid 相对 template 的 acc/alpha
+  6/6 改善，配对平均改善 `4.91%/8.78%`，tilt 平均改善 `2.68%`。
+- Neural-only tilt 明显退化，因而没有用更低离线/闭环 acc RMSE 取代 hybrid。
+- 5 g/10 g 对照表明 QP success 下降主要来自未建模 payload；10 g 正确建模后
+  平均 QP success 从 `95.47%` 恢复到 `99.25%`。
+
+### 16.6 Realtime target gate
+
+- Generic Linux 即使 performance governor + `SCHED_RR/10` 仍有极少数 6 ms
+  长尾，根因是系统调度/IRQ 环境而不是 MLP inference。
+- 在 PREEMPT_RT、完整物理核 6--7 isolation、CPU 7 performance、数值库单线程、
+  main/worker 同为 RR/10 且 evaluation IRQ 为零的条件下，12 runs、9,588 个完整
+  区间全部通过：mean/mean-p99/worst-max `3.215/3.568/4.006 ms`，overrun 为 0。
+
+### 16.7 Hardware shadow（hardware-unverified）
+
+- 新增 state-only Unitree bridge、严格 joint/IMU/时间戳契约、stale-state
+  fail-closed 和无输出 command build。
+- Shadow command 始终 `arm_weight=0`、`tau_ff=0`、`request_output=false`，路径中
+  没有 publisher；pelvis `LowState` IMU 与 torso `secondary_imu` 的选择仍须在
+  目标 G1/固件上确认。
+- 仓库具备第一次只读状态检查的代码条件，但没有真机控制授权或已验证硬件契约。
