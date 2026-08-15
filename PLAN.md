@@ -6,17 +6,17 @@
 > [PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)，仓库入口见
 > [README.md](README.md)。
 
-## 当前项目状态
+## 2026-08-12 历史快照
 
 - MPC 已冻结为 6 ms 控制周期、`N=9`，`mpc_q_ee_acc=0.01`、
   `mpc_q_ee_alpha=0.0005`。
-- disturbance predictor 已统一为 `template`、`neural`、`hybrid_residual`、
-  `zoh` 四种模式；当前综合最优仿真模式是 `hybrid_residual`，template 是安全
-  基线。设计见 [DISTURBANCE_PREDICTOR.md](DISTURBANCE_PREDICTOR.md)。
+- 当时的 predictor 路线包含 `template/neural/hybrid_residual/zoh`；这是已删除
+  neural disturbance predictor 前的历史结论，不是当前正式方案。当前设计见
+  [FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)。
 - 200 ms causal dataset、absolute/residual MLP、unseen schedule 泛化和 payload
   mismatch 诊断已经完成；当前不继续调预测精度，也没有开始 GRU。
-- PREEMPT_RT target timing gate 已严格通过；完整路径 9,588 个区间没有 6 ms
-  overrun。
+- 当时的 PREEMPT_RT target timing gate 结果只作为历史实验记录；当前冻结
+  证据是 CPU 7 / `SCHED_OTHER` 受控 MuJoCo 运行，不是真机硬实时证明。
 - hardware shadow 仍为 **硬件未验证（hardware-unverified）**，没有控制输出端。
   第一次真机工作从只读状态契约确认开始，见
   [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)。

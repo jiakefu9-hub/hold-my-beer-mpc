@@ -1,212 +1,145 @@
-# PREEMPT_RT target runtime
+# 实时运行边界与 CPU 7 冻结环境
 
-这套运行方式只准备和验证实时环境，不改变 MPC、neural predictor 或控制语义。
-仓库不会自动安装内核、修改 GRUB、改 IRQ affinity 或永久启用 capability。
+本项目有两套容易混淆、但证据等级不同的运行环境：
 
-## 目标运行定义
+1. 当前正式 MuJoCo 冻结仿真：CPU 7、单线程数值库、Python 主进程和
+   `RightArmSimProcess` worker 同核运行；
+2. 面向未来真机 shadow 的 PREEMPT_RT 环境：额外要求内核、CPU/IRQ 隔离和
+   低优先级 `SCHED_RR`。
 
-- 使用目标系统支持的 `CONFIG_PREEMPT_RT=y` 内核；`PREEMPT_DYNAMIC` 不算通过。
-- 选择一个性能核逻辑 CPU 运行控制主进程，并同时隔离该物理核的全部 SMT
-  siblings。当前 XPro-16 的推荐 control CPU 是 7，对应完整物理核为 6–7。
-- control Python 与锁步 C++ worker 固定在 control CPU，以同一低优先级
-  `SCHED_RR/10` 运行。两者通过 pipe 阻塞交接，不持续忙等。
-- 数值库和 Torch 固定单线程，control core 使用 `performance` governor。
-- control core 使用 `isolcpus=domain,managed_irq`、`nohz_full`、`rcu_nocbs`；
-  普通设备 IRQ 留在 housekeeping CPUs。保留有界 Linux RT throttling，避免
-  runaway 进程长期占满 CPU。
-- 不使用 `SCHED_FIFO`、高 RT priority、全局 capability 或永久 systemd unit。
+第一套已经用于 full-task template v2 + 24 ms startup-PD 的受控仿真；第二套只
+准备主机运行环境。两者都不是 Unitree 真机硬实时或闭环控制证据。
 
-## 只读检查
+## 正式 MuJoCo 运行链
+
+唯一正式入口是仓库根目录的 `run.sh`：
+
+```text
+run.sh
+  -> taskset CPU 7 + six numeric-library thread limits
+  -> main_sim.py
+  -> FullTaskTemplatePredictor v2 + right-arm MPC
+  -> RightArmSimProcess
+  -> cpp/right_arm_sim_runtime worker
+  -> RNEA -> MuJoCo DDQ-to-torque certification at 0/4 ms
+  -> cached certified feedforward + latest-state executor PD/guards
+  -> final_tau -> MuJoCo d.ctrl -> mj_step
+```
+
+2 ms 中间拍不重跑 mapper/forward dynamics；它复用已认证 feedforward，再用
+当前 `q/dq` 重算并限幅 PD。因此 16,074 是 mapper 调用次数，不是
+“每个 2 ms 总力矩都重做 FD 认证”的证据。
+
+正式 nominal 命令为：
+
+```bash
+cd /home/fjk/g1_ws/disturbance-lab
+MPC_CONTROL_CPU=7 MPC_CONTROL_NUM_THREADS=1 ./run.sh \
+  --full-task-smoke \
+  --disturbance-predictor full_task_template \
+  --right-arm-runtime-mode process \
+  --startup-pd-duration 0.024 \
+  --headless \
+  --no-video \
+  --run-label final_freeze
+```
+
+`--full-task-smoke` 会使 `run.sh` 拒绝隐式/自动 CPU 和多线程数值库。禁止直接用
+`python main_sim.py` 运行正式 full-task，因为这会绕过 launcher 标记、构建和
+外层 affinity 检查。
+
+## 第一个 `mj_step` 前的 fail-fast preflight
+
+正式入口在两处检查运行环境：父进程在模型构建前做第一层检查；C++ worker 已
+启动、Python GC 已关闭后，在第一个 `mj_step` 前做第二层检查并写出
+`formal_full_task_runtime_preflight.json`。必须同时满足：
+
+- parent affinity 严格等于 `[7]`；
+- C++ worker affinity 严格等于 `[7]`；
+- `OMP_NUM_THREADS=1`；
+- `OPENBLAS_NUM_THREADS=1`；
+- `MKL_NUM_THREADS=1`；
+- `NUMEXPR_NUM_THREADS=1`；
+- `VECLIB_MAXIMUM_THREADS=1`；
+- `BLIS_NUM_THREADS=1`；
+- Torch intra-op / inter-op 都等于 `1`；
+- control loop 中 Python GC 已关闭；
+- dynamic arming 为 `false`；
+- startup-PD 为 `0.024 s`，MPC handoff 是 absolute anchor `4`。
+
+任何条件不满足都会在物理仿真开始前终止，而不是在宽 affinity 或空线程环境下
+继续产生一条不可比的结果。`run_metadata.json` 保存父/worker affinity、调度
+策略、线程环境和 GC 状态；preflight JSON 保存正式门槛的逐项结果。
+
+## 6 ms 指标口径与当前证据
+
+完整 6 ms interval 从一个右臂 MPC anchor 的状态/预测开始，覆盖 MPC policy、
+两次 DDQ-to-torque 调用及剩余执行路径；不能用 solver-only timing 代替。六条
+CPU 7 受控运行的 compact evidence 位于
+[`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/)：
+
+- 7974 个完整 interval，聚合 mean `3.419 ms`，overrun `0`；
+- 16074 次 mapper 调用，未认证输出 `0`；
+- parent/worker 都固定在 CPU 7，六个数值库线程变量和 Torch 都为 1，GC 在
+  control loop 中关闭。
+
+这些数字证明的是当前主机、当前 MuJoCo process 链在受控启动环境下的重复仿真
+结果。正式六条运行记录的 scheduler 是 `SCHED_OTHER`；因此不能由
+`3.419 ms < 6 ms` 或 `overrun=0` 推导 Linux 硬实时，更不能推导 DDS、总线、
+驱动和真实传感器延迟。
+
+## 可选 PREEMPT_RT 目标环境
+
+面向未来硬件 shadow，可先运行只读 checker：
 
 ```bash
 /home/fjk/miniforge3/envs/g1_mpc/bin/python realtime_environment.py \
   --control-cpu 7
 ```
 
-checker 会检查 PREEMPT_RT、物理核 topology、boot isolation、活动 IRQ、
-irqbalance、governor、RT throttling 和所需命令。任何目标条件缺失都返回非零。
-它同时打印按当前机器 topology 生成的一次性 boot 参数建议。
+目标条件包括：
 
-对于 Linux managed MSI-X，effective affinity 可能仍显示隔离 CPU，即使
-`isolcpus=managed_irq` 已把该 CPU 从设备 queue map 中移除。checker 会保留
-这类 configured affinity 作为诊断，但只把观察窗口内计数继续增加的 IRQ
-判为 active conflict；启动阶段的历史计数不会伪装成运行期 IRQ 活动。
-target timing gate 还会在每次仿真的 evaluation 窗口两端读取
-`/proc/interrupts` 的数字 IRQ 计数；
-这两个快照都位于完整 6 ms 控制路径计时之外。任何一次 run 在物理核
-`6-7` 上出现正 IRQ 增量，或快照不可用，整批 target gate 都会失败。
+- `CONFIG_PREEMPT_RT=y`；`PREEMPT_DYNAMIC` 不算通过；
+- 当前 XPro-16 上，control CPU 7 所在物理核的 SMT siblings 6--7 一起隔离；
+- `isolcpus=domain,managed_irq,6-7`、`nohz_full=6-7`、`rcu_nocbs=6-7`；
+- 普通 IRQ 留在 housekeeping CPU，control core 使用 `performance` governor；
+- control Python 和同一控制进程链使用低优先级 `SCHED_RR/10`，保留有界 Linux
+  RT throttling。
 
-## 需要手动完成的系统步骤
-
-### 1. PREEMPT_RT kernel
-
-按照目标机 OS/vendor 的受支持方式安装并选择一个
-`CONFIG_PREEMPT_RT=y` 内核。仓库不执行内核安装。
-
-当前机器是 Ubuntu 22.04。Canonical 当前支持的、把仓库访问和安装分开的
-手动方式是：
-
-```bash
-sudo pro status
-sudo pro enable realtime-kernel --access-only
-sudo apt install linux-realtime-hwe-22.04
-```
-
-这些命令需要 Ubuntu Pro，并会安装内核包；执行前检查 Pro/Livepatch 提示和
-APT 待修改列表。官方说明见
-<https://documentation.ubuntu.com/pro/pro-client/enable_realtime_kernel/>。
-仓库不会代替用户运行这些命令。安装后重启，从 GRUB 的 Advanced options
-明确选择 `-realtime` kernel，然后验证：
-
-```bash
-uname -a
-grep '^CONFIG_PREEMPT_RT=y$' "/boot/config-$(uname -r)"
-```
-
-恢复方法：从 boot menu 重新选择原有 generic kernel。确认 generic kernel
-已实际启动后，如需关闭 Pro 服务可手动执行：
-
-```bash
-sudo pro disable realtime-kernel
-```
-
-这不会自动移除已安装 kernel。确认新内核稳定前不要删除原 generic kernel，
-也不要从仍在运行的 realtime kernel 中盲目删除 kernel 包。官方恢复说明见
-<https://documentation.ubuntu.com/real-time/latest/how-to/switch-from-realtime-to-generic-kernel/>。
-
-### 2. 一次性 CPU/IRQ isolation
-
-在 GRUB boot menu 按 `e`，只对本次启动在 `linux` 行末追加 checker 打印的
-参数。当前 XPro-16、control CPU 7 的参数是：
+当前机器的一次性 boot 参数建议是：
 
 ```text
 isolcpus=domain,managed_irq,6-7 nohz_full=6-7 rcu_nocbs=6-7 irqaffinity=0-5,8-17
 ```
 
-按 `Ctrl-X` 或 `F10` 进行一次性启动。不要由仓库脚本修改
-`/etc/default/grub`。恢复方法：正常重启且不追加这些参数。
+这组编号只适用于 checker 已确认 topology 的当前机器，不能复制到其他 CPU
+拓扑。仓库不会自动安装内核、修改 GRUB、改 IRQ affinity、停用
+`irqbalance`、改变 governor 或永久授予 capability。
 
-#### 可选：当前机器已验证的持久化 isolation
-
-一次性 GRUB 编辑仍是第一次验证新机器或新 topology 时的安全默认。只有在
-`realtime_environment.py` 已确认 control CPU 7 的完整物理核确为 6--7，并且
-上述一次性参数已经完成 target gate 后，才考虑持久化。
-
-当前 XPro-16 已验证的可选配置文件是
-`/etc/default/grub.d/99-disturbance-rt.cfg`，内容必须保持为一行：
-
-```bash
-GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT isolcpus=domain,managed_irq,6-7 nohz_full=6-7 rcu_nocbs=6-7 irqaffinity=0-5,8-17"
-```
-
-这行保留发行版/其他 drop-in 已有的 `GRUB_CMDLINE_LINUX_DEFAULT`，只追加本机已
-验证参数。不要把 `6-7` 复制到另一台 CPU topology 不同的机器。手动安装步骤：
-
-```bash
-sudo install -d -m 0755 /etc/default/grub.d
-sudoedit /etc/default/grub.d/99-disturbance-rt.cfg
-sudo update-grub
-```
-
-先审查 `update-grub` 输出，再重启进入 realtime kernel。重启后验证实际生效值，
-不能只检查配置文件：
+如果目标机使用 Ubuntu 22.04，可按供应商支持方式手动安装 realtime kernel；
+安装和恢复前都应保留原 generic kernel，并在每次 boot 后实际检查：
 
 ```bash
 uname -a
+grep '^CONFIG_PREEMPT_RT=y$' "/boot/config-$(uname -r)"
 cat /proc/cmdline
 /home/fjk/miniforge3/envs/g1_mpc/bin/python realtime_environment.py \
   --control-cpu 7
 ```
 
-**完整 rollback：** 先让 GRUB 不再读取该 `.cfg`，重建菜单并重启。使用 `mv` 保留
-可恢复副本，不需要删除文件：
+`run.sh` 仍保留 `MPC_REQUIRE_REALTIME=1` 的低优先级 `SCHED_RR` guard，但它不是
+当前 frozen simulation 命令的一部分。硬件 shadow launcher 会独立检查目标
+环境；详见 [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)。
 
-```bash
-sudo mv /etc/default/grub.d/99-disturbance-rt.cfg \
-  /etc/default/grub.d/99-disturbance-rt.cfg.disabled
-sudo update-grub
-sudo reboot
-```
+## 证据边界
 
-重启后确认 `/proc/cmdline` 不再包含 `isolcpus/nohz_full/rcu_nocbs/irqaffinity`。
-如果要恢复同一份已验证配置：
+- MuJoCo `RightArmSimProcess` 是 external-step 锁步仿真，不是 DDS 线程。
+- mapper 的 forward dynamics certification 使用 MuJoCo 当前接触求解状态，不能
+  直接迁移成真机安全证明。
+- `unitree_arm_adapter` dry-run 不包含 DDS 端到端延迟，也不包含经验证的真机
+  floating-base inverse dynamics。
+- hardware shadow 只读、只构建内存 command，不发布；它当前仍是
+  hardware-unverified。
 
-```bash
-sudo mv /etc/default/grub.d/99-disturbance-rt.cfg.disabled \
-  /etc/default/grub.d/99-disturbance-rt.cfg
-sudo update-grub
-sudo reboot
-```
-
-该 drop-in **只**持久化 boot isolation，不会永久设置 governor，也不会禁用
-`irqbalance`。两者仍按下一节记录原状态、临时设置和恢复。
-
-### 3. 临时 governor 与 irqbalance
-
-先记录原状态：
-
-```bash
-cat /sys/devices/system/cpu/cpu6/cpufreq/scaling_governor
-cat /sys/devices/system/cpu/cpu7/cpufreq/scaling_governor
-systemctl is-active irqbalance
-```
-
-仅在本次验证前执行：
-
-```bash
-sudo cpupower -c 6-7 frequency-set -g performance
-sudo systemctl stop irqbalance
-```
-
-如果 `irqbalance` 未安装或原本不是 active，不需要 stop。验证后按之前记录的
-governor 分别恢复；仅当 irqbalance 原本 active 时恢复它：
-
-```bash
-sudo cpupower -c 6 frequency-set -g <原cpu6-governor>
-sudo cpupower -c 7 frequency-set -g <原cpu7-governor>
-sudo systemctl start irqbalance
-```
-
-若 checker 仍报告 active IRQ conflict，停止验证并检查相应 IRQ 与设备；不要
-盲目写 `/proc/irq/*/smp_affinity_list`。优先修正本次 boot 的 `irqaffinity` 或
-使用目标机厂商提供的 IRQ routing 方法，重启即可撤销一次性 boot 配置。
-
-## 一键 repeated timing gate
-
-进入已激活的 `g1_mpc` 环境，在 checker PASS 后执行：
-
-```bash
-./tools/realtime/run_target_timing_gate.sh --control-cpu 7
-```
-
-脚本先再次运行只读 checker，然后创建最多 15 分钟的 transient systemd
-service，仅临时授予 `RLIMIT_RTPRIO=20`。每个 control Python 和其 worker
-由 `run.sh` 实际切换到 CPU 7 + `SCHED_RR/10`，并在运行时再次 fail-closed
-检查。unit 在结束后自动回收，没有永久 service 或 capability。
-
-中断后继续同一个 group：
-
-```bash
-./tools/realtime/run_target_timing_gate.sh \
-  --control-cpu 7 --group <之前的group> --resume
-```
-
-原始运行保存在 gitignored `evaluation/`；轻量摘要写入
-`evaluation_summary/realtime_timing_ablation/summary.json`。
-
-## 最终 timing pass/fail
-
-标准不因目标机而放宽。必须同时满足：
-
-- target runtime checker PASS，且每次运行实测 main/worker 都是指定 CPU 的
-  `SCHED_RR/10`；
-- 3 个 unseen schedules × 4 seeds，共至少 12 runs 和 9588 个完整 evaluation
-  区间；
-- 完整 6 ms 路径 overrun 为 0，worst sample `< 6.0 ms`；
-- 每个 run 的 p99 均 `<= 5.5 ms`；
-- critical nonfinite 为 0；正常条件 QP success 每个 run 均 `>= 99%`；
-- 每个 run 都成功采集 evaluation IRQ 快照，隔离物理核上的 IRQ 增量为 0。
-
-`run_target_timing_gate.sh` 在任一条件失败时返回非零。通过的仿真 timing gate
-仍不等于真机证据；DDS、驱动、总线和真实状态估计延迟必须在后续硬件阶段单独
-测量。
+因此，进入真机主动输出前仍需单独验证状态估计、DDS/驱动/总线延迟、watchdog、
+13 维 arm reference、arm weight 过渡、急停和最坏时延。

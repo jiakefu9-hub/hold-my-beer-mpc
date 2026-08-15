@@ -43,7 +43,7 @@ flowchart LR
     MPC --> SimIPC
     Startup --> Physics
     SimIPC --> Worker --> SimNative
-    SimNative -->|certified final_tau| Physics
+    SimNative -->|certified feedforward + guarded final_tau| Physics
   end
 
   subgraph Shadow[Read-only hardware shadow adapter]
@@ -119,7 +119,7 @@ run.sh
   -> C++ Pinocchio RNEA
   -> C++ MuJoCo DDQ-to-torque candidate validation
   -> C++ right-arm executor
-  -> certified final_tau
+  -> certified feedforward + latest-state executor PD/guards -> final_tau
   -> MuJoCo d.ctrl
   -> mj_step
 ```
@@ -142,9 +142,10 @@ DDQ mapper 和 simulation worker。
   PD 力矩；
 - 在 6.4 s 直接把 planned `vx/vy` 置零，保持 heading control，全程 headline
   为 `[0, 8.0 s)`；
-- 把完整 MuJoCo 状态通过 external-step IPC 交给 C++ worker，只有收到同一
-  session/request/state 的认证 `final_tau` 才写入 `d.ctrl`，随后推进 2 ms
-  `mj_step`。
+- 把完整 MuJoCo 状态通过 external-step IPC 交给 C++ worker。0/4 ms mapper
+  更新拍认证 feedforward；中间 2 ms 拍复用该 feedforward，但用当前
+  `q/dq` 重算 PD 并做限幅/超时/NaN guard。只有同一 session/request/state 的
+  有限 `final_tau` 才写入 `d.ctrl`，随后推进 2 ms `mj_step`。
 
 MuJoCo DDQ-to-torque mapper 需要 `qacc_warmstart`、约束力和外力等仿真求解器
 状态，见 [`cpp/ddq_torque_mapper/`](cpp/ddq_torque_mapper/)。因此

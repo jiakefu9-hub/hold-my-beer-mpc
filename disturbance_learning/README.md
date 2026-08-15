@@ -1,177 +1,132 @@
-# Disturbance learning pipeline
+# Full-task template data and validation
 
-本目录实现从 MuJoCo 因果采集到 absolute/residual MLP、闭环消融和 realtime 验证的
-最小流水线。模型设计和时间语义见
-[DISTURBANCE_PREDICTOR.md](../DISTURBANCE_PREDICTOR.md)，冻结实验结论见
-[PRE_HARDWARE_FREEZE.md](../PRE_HARDWARE_FREEZE.md)。
+本目录保留 `FullTaskTemplatePredictor` v2 所需的协议、固定右臂 PD 采集、离线模板
+构建、runtime-safe 资产校验、offline-online parity 和结果整理代码。当前项目不再
+开发 neural/hybrid disturbance predictor；训练、checkpoint 和 ablation 源码已从
+正式分支删除。
 
-## 1. 目录职责
+下肢行走仍由根控制循环加载 `policy/motion.pt` 并执行 Torch 推理。它是 locomotion
+controller，不是已移除的 neural disturbance predictor。
 
-| 文件 | 职责 |
+时间语义和在线行为以 [FULL_TASK_TEMPLATE.md](../FULL_TASK_TEMPLATE.md) 为准，
+平台边界见 [ARCHITECTURE.md](../ARCHITECTURE.md)。
+
+## 目录职责
+
+| 文件 | 当前职责 |
 |---|---|
-| `collect_dataset.py` | 采集一个 pre-step-aligned episode，生成 raw/windows/validation |
-| `collect_episodes.py` | 按 `mlp_baseline.yaml` 采集 18 个 seeds 并写 manifest |
-| `dataset.py` | 构造 34 x 50 history、9 x 6 target，并检查 causality/alignment |
-| `command_schedule.py` | 训练 schedule 与 unseen generalization profiles |
-| `mlp_model.py` | 共享的小型 MLP 定义与 CPU checkpoint loader |
-| `train_mlp.py` | absolute MLP：划分 episode、归一化、overfit、训练、baseline 对比和 timing |
-| `train_residual_mlp.py` | residual MLP：针对在线等价 template-with-slow-bias 训练 |
-| `run_closed_loop_ablation.py` | `template/neural/hybrid_residual` 第一轮闭环消融 |
-| `run_generalization_ablation.py` | unseen schedules、seeds 和小 payload 重复验证 |
-| `run_readiness_validation.py` | safety、payload/model-mismatch 与完整 timing 验证 |
-| `run_realtime_timing_ablation.py` | target runtime repeated timing gate 的底层 runner |
+| [`full_task_protocol.py`](full_task_protocol.py) | direct-step protocol、2/6/20 ms grid、task clock、legacy/v2 H helper；正式 v2 使用 continuous-H |
+| [`full_task_recording.py`](full_task_recording.py) | versioned 2 ms strict pre-step raw、schema/manifest、smoke summary |
+| [`full_task_fixed_pd_collector.py`](full_task_fixed_pd_collector.py) | 下肢正常运行、右臂 fixed-posture PD 的 11 build + 4 held-out 采集 |
+| [`full_task_template_builder.py`](full_task_template_builder.py) | 6 ms future window、SO(3) 平均、单一绝对时间模板与 held-out 评价 |
+| [`full_task_template_asset.py`](full_task_template_asset.py) | 小型 runtime-only loader、SHA256/schema/shape/SO(3) 校验 |
+| [`full_task_online_parity.py`](full_task_online_parity.py) | 对 held-out raw 逐 anchor 重放在线 predictor |
+| [`full_task_startup_pd.py`](full_task_startup_pd.py) | 正式 24 ms fixed-PD handoff、接触诊断和切换证据 |
+| [`full_task_runtime_preflight.py`](full_task_runtime_preflight.py) | CPU affinity、线程环境、Torch 和 GC 的正式 fail-fast 检查 |
+| `full_task_*_report.py` | 已有 full-task 运行的只读汇总与绘图，不参与在线控制 |
 
-## 2. 数据定义
+在线 predictor 只依赖 `full_task_template_asset.py`，不会为了读取 NPZ 把 collector、
+plotting 或跨 episode builder 导入控制进程。
 
-采集器在每次 2 ms `mj_step` 前记录 torso、下肢策略和 command 状态。每个 6 ms
-MPC anchor `t` 构造：
+## 冻结资产
 
-```text
-history: 34 x 50, t-198 ms ... t
-target:   9 x 6,  [t,t+6 ms) ... [t+48,t+54 ms)
-```
-
-50 个输入是 H-frame torso omega/acc、torso-frame gravity direction、12 维下肢
-`q/dq/policy target`、3 维 runtime command 和 phase sin/cos。6 个 target 通道是
-H-frame interval acc xyz 与 alpha xyz。
-
-`validate_supervised_windows()` 检查 pre-step 时间、单调索引、6 ms stride、history
-末端不晚于 anchor、target 严格位于未来、上一完整周期 H-frame、shape 和有限性。
-Train/validation/test 由训练脚本按完整 episode 划分，不能把相邻窗口随机拆开。
-
-## 3. 本地产物与 Git 边界
-
-以下目录已由仓库 `.gitignore` 排除：
+正式 runtime 只接受这组显式资产：
 
 ```text
-disturbance_learning/data/       raw episodes、window NPZ、validation、manifest
-disturbance_learning/artifacts/  checkpoint、normalization、完整训练日志
-evaluation/                      每次闭环的原始日志、图、CSV、视频
+disturbance_learning/data/full_task_template_v2/20260815_162850/
+  full_task_template.npz
+  full_task_template_manifest.json
+  episodes/heldout_pair_02_minus/episode_manifest.json
 ```
 
-不要用 `git add -f` 提交这些内容。可审查的轻量 JSON/CSV 摘要写入已跟踪的
-`evaluation_summary/`。Checkpoint 内包含 normalization、feature/target names、
-episode split 和 shape；residual checkpoint 还包含 prediction mode、H-frame、
-control dt、template variant 及 slow-bias metadata。
+| 文件 | SHA256 |
+|---|---|
+| `full_task_template.npz` | `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4` |
+| `full_task_template_manifest.json` | `7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76` |
 
-由于 checkpoint 有意不进 Git，fresh clone 的 `configs/g1.yaml` 安全默认使用
-`template`。要运行 `neural` 或 `hybrid_residual`，必须先在本地重建对应 artifact，
-或从受控的独立 artifact 备份恢复并验证 metadata；不能伪造空 checkpoint。
+NPZ 和 manifest 已纳入 Git，fresh checkout 不依赖被清理的本地 raw episode 或
+neural artifact。`configs/g1.yaml` 同时固定路径、两个 hash、schema
+`full_task_template_v2` 和 H 定义 `full_task_continuous_heading_v2`。运行时禁止
+目录扫描和“latest”选择。
 
-## 4. 采集与训练
+## 离线数据合同
 
-以下命令都从仓库根目录运行，并假设现有 `g1_mpc` 环境已经能运行 MuJoCo、Torch
-和项目 C++ 后端。`requirements-mpc.txt` 只补充 MPC 的 OSQP 依赖，不是完整锁定
-环境。仓库已跟踪 locomotion policy、MJCF 和 400-bin template。
+### Strict pre-step raw
 
-### 4.1 单 episode smoke/对齐验证
+每条 raw 样本在 2 ms `mj_step` 之前保存，描述即将执行的 `[t,t+2 ms)`：
 
-```bash
-python disturbance_learning/collect_dataset.py g1.yaml \
-  --episode-id alignment_smoke \
-  --seed 0 \
-  --output-prefix disturbance_learning/data/alignment_smoke
-```
+- task epoch/time、simulation time 和 sample index；
+- 世界系 torso SO(3) 和 omega，以及 acc/alpha 各自的 raw 与实际
+  used/filtered 值；
+- planned command 与 heading 修正后的 runtime command；
+- gait phase/cycle、heading reference/measurement/correction；
+- 下肢/torso future horizon 所需状态与初始 `q/dq` 扰动 metadata；
+- fixed right-arm PD target、gain、limit 和实际 torque；
+- Git、config、policy、XML、protocol、physics/MPC dt 与 input checksum。
 
-成功时会生成 `_raw.npz`、`_windows.npz`、`_validation.json`，并在终端打印同一份
-validation report。所有文件都保持本地。
+planned translational command 在 `t=6.4 s` 的 pre-step sample 已为零。raw 一直记录到
+至少 8.06 s，使 7.998 s 最后 headline anchor 的节点覆盖到 8.052 s。
 
-### 4.2 18-episode dataset
+### Build/held-out 设计
 
-```bash
-python disturbance_learning/collect_episodes.py
-```
+v2 使用 11 条 build：1 条 nominal 加 5 对 `+delta/-delta`；4 条 held-out 是另外
+2 对。只扰动小幅下肢初始 `q/dq`，其他条件完全冻结。采集期间：
 
-中断后可以验证并保留已经完成的 episodes：
+- 下肢 policy、direct-step command 和 heading controller 正常运行；
+- 右臂始终是配置中的 `fixed_posture_pd`；
+- 不调用右臂 MPC、online predictor、process 或 DDQ-to-torque mapper。
 
-```bash
-python disturbance_learning/collect_episodes.py --reuse-existing
-```
+因此这批数据是模板来源证据，不是闭环 MPC trajectory。其原始大文件已经压缩到
+仓库外归档；归档路径、member manifest、SHA256 和删除记录见
+[`cleanup_manifest.json`](../evaluation_summary/full_task_template_v2_final_freeze/cleanup_manifest.json)。
 
-episode 数、seed、输出目录和 split 位于 `mlp_baseline.yaml`。改变实验时应复制一份
-新的 YAML，而不是覆盖已有摘要所对应的定义。
+### 6 ms template window
 
-### 4.3 Absolute MLP
+每个 `[0,8)` anchor 保存 10 nodes、9 intervals，覆盖 54 ms。连续 H 只使用当前和
+历史 anchor yaw：前 0.8 s 为因果前缀圆周均值，之后为 `[t-0.8,t]` 滑窗，6.4 s
+起冻结最后一个停车前 H。一个 horizon 内 H 固定；不读取未来 yaw、不做额外低通。
 
-```bash
-python disturbance_learning/train_mlp.py
-```
+向量在 H 系平均，rotation 使用合法 SO(3) 均值。v2 只有一个无额外 smoothing 的
+正式模板，不维护 raw/half/full 多版本。在线时只有 node 0 被当前实测覆盖。
 
-脚本先做 64-sample overfit sanity check，再按 episode split 训练，报告 train/val/
-test 以及 start/steady/velocity-change/stop/stopped 的 RMSE，比较 ZOH/template/MLP，
-执行 batch-1 CPU timing，并验证 checkpoint save/reload parity。
+## 验证证据
 
-默认本地产物：
+轻量冻结包位于
+[`evaluation_summary/full_task_template_v2_final_freeze/`](../evaluation_summary/full_task_template_v2_final_freeze/)：
 
-```text
-disturbance_learning/artifacts/b2_mlp_baseline/mlp_checkpoint.pt
-evaluation_summary/b2_mlp_baseline/summary.json
-```
+- `template_evidence/heldout_metrics.json`：4 条 held-out 的 acc/alpha/omega/SO(3)
+  离线误差；
+- `offline_online_parity/offline_online_parity.json`：4 条 held-out 逐 anchor parity；
+- `controlled_runs_aggregate.json` 和 `controlled_runs_metrics.csv`：CPU 7 下 3 次
+  nominal + 3 次 `heldout_pair_02_minus` 的完整 6 ms、控制质量和安全统计；
+- `controlled_runs/`：六条运行的 metadata、preflight、perf intervals、handoff 与
+  mapper 诊断；
+- `representative_plots/`：nominal 和 held-out 代表图；
+- `evidence_file_manifest.json`：轻量证据到原始运行目录的 SHA256 映射。
 
-### 4.4 Residual MLP
+offline-online parity 为 PASS：除 SO(3) geodesic 的 `2.98e-8 rad` 数值上限外，
+H/world transform、nodes 1--9 和 intervals 的最大绝对误差为 0；没有 future
+leakage 或隐式插值。六条受控闭环共有 7,974 个完整 6 ms 区间，mean/p99/max 为
+`3.419/3.775/4.511 ms`，overrun 为 0；16,074 次 mapper 调用的未认证输出为 0。
 
-```bash
-python disturbance_learning/train_residual_mlp.py
-```
+这些证据只证明冻结配置下的 MuJoCo/runtime 行为，不是真机状态估计、DDS、deadline
+或可执行力矩验证。
 
-它按 episode 顺序运行与在线相同的 template 和 slow bias，再用
-`absolute target - template interval target` 训练，不读取 absolute MLP 输出作为
-residual。默认 checkpoint 为：
+## Active 与历史边界
 
-```text
-disturbance_learning/artifacts/hybrid_residual_mlp/residual_mlp_checkpoint.pt
-```
+- `full_task_template_v2` 是唯一正式在线资产；v1 比较代码只保留历史可追溯性，
+  不作为正式 runtime 候选。
+- neural/hybrid disturbance predictor、MLP dataset/training 和 ablation 已从当前
+  源码删除，不再属于后续计划。
+- 清理前的源码可由 `archive/pre-cleanup-full-task-v2-20260815`、commit
+  `70eb33b51656b958648ea013bc9bd45aa72dfa73` 或 tag
+  `checkpoint/full-task-v2-24ms-20260815` 恢复。
+- 历史 raw/checkpoint/evaluation 的仓库外 archive 仅用于审计；不要把它们恢复到
+  正式运行依赖中。
+- 正式仿真只使用根目录 [`run.sh`](../run.sh) 的唯一命令，见根
+  [README](../README.md)；不要直接运行 `main_sim.py` 绕过环境 preflight。
 
-## 5. 测试、消融与复现顺序
-
-先运行快速测试：
-
-```bash
-python -m pytest \
-  tests/test_disturbance_dataset.py \
-  tests/test_mlp_baseline.py \
-  tests/test_neural_disturbance_predictor.py
-```
-
-有本地 checkpoint 后，按风险和成本递增运行：
-
-```bash
-python disturbance_learning/run_closed_loop_ablation.py \
-  --group neural_closed_loop_reproduction
-
-python disturbance_learning/run_generalization_ablation.py \
-  --group hybrid_generalization_reproduction
-```
-
-已有 group 中断后可加 `--resume`。原始 runs 写入 `evaluation/<group>/`，默认轻量
-摘要分别更新 `evaluation_summary/neural_closed_loop_ablation/summary.json` 和
-`evaluation_summary/hybrid_generalization_validation/summary.json`。
-
-Realtime gate 不应直接调用 Python runner；在满足 PREEMPT_RT、CPU/IRQ isolation
-和 governor 条件后，使用仓库包装脚本：
-
-```bash
-./tools/realtime/run_target_timing_gate.sh \
-  --control-cpu 7 \
-  --group target_rt_reproduction
-```
-
-完整环境和恢复方法见 [REALTIME_RUNTIME.md](../REALTIME_RUNTIME.md)。
-
-## 6. Fresh-clone 最小复现
-
-1. Checkout `feat/predictor-interface`，确认 `policy/motion.pt`、
-   `resources/g1_description/scene.xml` 和
-   `disturbance_model_new_heading/templates_heading_interval/` 存在。
-2. 在已验证的 `g1_mpc` 环境运行上述三个 predictor/dataset tests。
-3. 先以 `template` 运行仿真，确认不依赖本地 checkpoint。
-4. 运行单 episode alignment smoke，检查 validation JSON 全部通过。
-5. 采集 18 episodes；不要从相邻窗口重新随机划分。
-6. 依次训练 absolute 和 residual MLP，检查 overfit、split、checkpoint parity 和
-   CPU timing。
-7. 运行闭环与 unseen-schedule ablation，结果只能与同一 checkout、配置和 schedule
-   定义下的摘要比较。
-8. 只有目标 realtime checker PASS 后才运行 repeated timing gate。
-
-轻量摘要可以复核历史结论，但不能替代重新生成 gitignored 数据/checkpoint，也不
-构成真机验证。
+固定模板知道 6.4 s 停车时刻，不能泛化到不同速度、方向或未知停止事件。任何
+未来真机适配必须先建立 hardware task epoch、continuous-H、24 ms handoff、完整
+状态估计和 fail-closed 输出合同；当前 hardware shadow 仍是只读、legacy phase
+兼容且 hardware-unverified。

@@ -1,9 +1,8 @@
 """Frozen T1 full-task timing, command, anchor, and causal-H semantics.
 
-This module is deliberately independent from the legacy ramp schedule and the
-four existing disturbance predictors.  The offline collector and the future
-online full-task predictors must share these definitions instead of copying
-time/index arithmetic into separate call sites.
+This module is deliberately independent from the legacy ramp/phase path.  The
+offline collector and the online full-task predictor share these definitions
+instead of copying time/index arithmetic into separate call sites.
 """
 
 from __future__ import annotations

@@ -1,85 +1,143 @@
 # disturbance-lab
 
-`disturbance-lab` 是从 `jiakefu9-hub/hold-my-beer-mpc@384a157` 分出的独立开发仓库，
-用于研究 Unitree G1 行走时的 torso 扰动预测与右臂 MPC 稳杯控制。项目不采用强化
-学习重新训练整机策略，而是在已有周期模板上加入一个小型监督学习残差模型：
+`disturbance-lab` 研究 Unitree G1 行走时的躯干扰动预测与右臂 MPC 稳杯控制。
+当前冻结候选只有一条：**MPC + `FullTaskTemplatePredictor` v2**。模板按固定任务的
+绝对时间查询；神经扰动预测路线已经冻结并从当前源码移除。下肢行走仍使用仓库内
+的 Torch RL policy，这与已删除的 neural disturbance predictor 是两件不同的事。
+
+当前正式结论只来自受控 MuJoCo 仿真，不是真机闭环或硬实时证据。
+
+## 冻结方案
 
 ```text
-disturbance prediction = periodic template prediction + neural residual prediction
+task t=0:       立即发布正式前进命令，heading control 开启
+[0, 24 ms):    右臂固定姿态 PD；该区间属于 headline
+20 ms:         下肢产生第一份新的 policy action
+24 ms:         6 ms anchor 4，右臂 MPC/process 接管
+[0, 6.4 s):    planned vx=0.5 m/s, vy=0
+6.4 s:         planned vx/vy 直接切为零，不使用 ramp
+[0, 8.0 s):    唯一 headline
+8.052 s:       最后一个 54 ms horizon 的末节点
 ```
 
-## 当前状态
+任务时钟、gait clock、continuous-H 和模板时钟都从 `t=0` 连续推进；24 ms 接管时
+不会 reset 或从模板开头重播。接管前最后一个物理步实际执行的右臂 PD 力矩作为
+`previous_executed_tau` 传入安全执行链。
 
-- **仿真已验证**：MPC、统一 predictor、absolute/residual MLP、闭环消融、泛化、
-  payload 诊断和 PREEMPT_RT target timing gate 均已有可复现实验依据。
-- **当前综合最优模式**：`hybrid_residual`。它保留 template 的未来姿态/角速度结构，
-  只用 MLP 修正未来 9 个区间的 H-frame 线加速度和角加速度。
-- **仓库安全默认值**：`template`。本地 residual checkpoint 未生成时，fresh clone
-  仍可运行可信模板基线。
-- **硬件未验证（hardware-unverified）**：G1 state-only bridge 和 shadow command
-  build 已实现，但目标机器人上的关节、IMU、时间戳及控制契约尚未确认；当前
-  shadow 路径没有 command publisher，不能驱动机器人。
-- **未开展**：GRU 和任何真机有效控制输出。
+正式模板资产被显式固定，不扫描“最新”目录：
 
-本文档统一使用配置值 `template`、`neural`、`hybrid_residual`、`zoh`；
-H-frame（中文简称 H 系）指重力对齐的 heading frame；`node` 指预测时刻瞬时量，
-`interval` 指紧随该 node 的 6 ms 半开区间量；所有未在目标 G1 上确认的路径统一
-标为 **硬件未验证（hardware-unverified）**。
+- [`full_task_template.npz`](disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz)，SHA256
+  `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4`；
+- [`full_task_template_manifest.json`](disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json)，SHA256
+  `7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76`。
+
+这个模板提前知道 6.4 s 的停车时刻。它是固定任务 baseline，不泛化到任意速度、
+方向或未知停车时刻。
+
+## 唯一正式仿真入口
+
+所有正式 full-task 实验必须通过仓库根目录唯一的 [`run.sh`](run.sh) 启动。
+preflight 会在第一个 `mj_step` 前检查 parent/worker 都只绑定 CPU 7、六个数值库
+线程变量和 Torch intra/inter-op 都为 1，并确认控制循环关闭 GC。正式 nominal
+命令是：
+
+```bash
+cd /home/fjk/g1_ws/disturbance-lab
+MPC_CONTROL_CPU=7 MPC_CONTROL_NUM_THREADS=1 ./run.sh \
+  --full-task-smoke \
+  --disturbance-predictor full_task_template \
+  --right-arm-runtime-mode process \
+  --startup-pd-duration 0.024 \
+  --headless \
+  --no-video \
+  --run-label final_freeze
+```
+
+不要绕过 `run.sh` 直接执行 `python main_sim.py`；宽 CPU affinity 或缺失线程环境
+不是正式运行条件。
+
+## 验证状态
+
+轻量证据在
+[`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/)。
+以下数字只引用清理前已经完成的 CPU 7 受控历史证据，包含 nominal 3 次和
+`heldout_pair_02_minus` 3 次；本文不预填后续冻结复跑结果：
+
+| 范围 | 完整 6 ms 区间 | mean / p95 / p99 / max | `>6 ms` |
+|---|---:|---|---:|
+| nominal，3 次 | 3,987 | 3.437 / 3.659 / 3.803 / 4.500 ms | 0 |
+| held-out，3 次 | 3,987 | 3.400 / 3.591 / 3.721 / 4.511 ms | 0 |
+| 合计 | 7,974 | 3.419 / 3.630 / 3.775 / 4.511 ms | 0 |
+
+六条运行的 parent/worker affinity 均为 `[7]`，线程与 GC preflight 均通过；
+`predictor fallback=0`、`QP fallback=0`、`final_unsafe=0`、
+`NO_SAFE_TORQUE=0`、跌倒和 NaN/Inf 均为 0。16,074 次 mapper 执行调用中未认证
+输出为 0。rescue 和已认证 hold-last 仍作为诊断保留，不能与未认证输出混为一谈。
+
+这些是该主机上的 MuJoCo 完整控制区间结果，不能外推为目标 G1 的 deadline、
+DDS 延迟、接触估计或实际力矩安全证据。
+
+## 架构边界
+
+项目只维护一份正式 full-task predictor 和一份 MPC；另保留的 legacy
+phase/ZOH 只服务 shadow 兼容和最小接口回归：
 
 ```mermaid
 flowchart LR
-    OBS[因果观测] --> P{统一 predictor}
-    P -->|template| T[400-bin H-frame 模板]
-    P -->|neural| N[absolute MLP]
-    P -->|hybrid_residual| H[模板 + residual MLP]
-    P -->|zoh| Z[实测零阶保持]
-    T --> D[DisturbanceHorizon]
-    N --> D
-    H --> D
-    Z --> D
-    D --> K[KinematicsHelper]
-    K --> M[9-step 右臂 MPC]
-    M --> E[仿真 C++ 执行链<br/>或 hardware shadow command build]
+  Core[Shared control core<br/>task clock + continuous-H + template + MPC]
+  Sim[MuJoCo adapter<br/>state + process + d.ctrl + mj_step]
+  Shadow[Hardware shadow adapter<br/>read-only state + legacy phase compatibility]
+  Future[Future hardware output<br/>hardware-unverified]
+  Core --> Sim
+  Core --> Shadow
+  Core -. required integration .-> Future
 ```
 
-## 主要仿真结论
+- 仿真正式链：`run.sh -> main_sim.py -> RightArmSimProcess -> C++ simulation
+  runtime -> mapper-certified feedforward + latest-state executor PD/guards -> final_tau
+  -> d.ctrl -> mj_step`。mapper 只在 0/4 ms 更新拍重做 forward-dynamics 认证。
+- hardware shadow 当前只读、`command_publish_count=0`，仍是 legacy phase-template
+  兼容路径；它尚未接入 full-task v2 的任务时钟、continuous-H 和 24 ms handoff。
+- `cpp/unitree_arm_adapter` 是未来真机适配边界，但主动真机闭环仍为
+  **hardware-unverified**。
 
-- 冻结 MPC 权重：`mpc_q_ee_acc=0.01`、`mpc_q_ee_alpha=0.0005`。
-- 18 个 episode 共 11,232 个窗口；200 ms 因果历史输入一次预测未来
-  `9 x 6 ms = 54 ms` 的 acc/alpha。
-- 6 个 unseen schedule 条件中，`hybrid_residual` 相对 template 的末端 acc 和
-  alpha 均为 6/6 改善，配对平均改善分别为 `4.91%` 和 `8.78%`；tilt 平均改善
-  `2.68%`。neural-only 虽有更低 acc/alpha，但 tilt 比 template 高约 `82%`，
-  因而不是当前推荐闭环模式。
-- PREEMPT_RT gate 在 12 runs、9,588 个完整控制区间上通过：完整路径
-  mean/mean-p99/worst-max 为 `3.215/3.568/4.006 ms`，`>6 ms` 为 0，评估期间
-  隔离物理核 IRQ 增量为 0。
-
-这些结果均来自 MuJoCo/本机 realtime 验证，不是真机控制效果。完整数值、证据
-边界和第一次真机 checklist 以
-[PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md) 为准。
+完整依赖和验证边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 推荐阅读顺序
 
-1. [PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)：当前事实基准、完整架构、
-   冻结结果与真机前缺口。
-2. [DISTURBANCE_PREDICTOR.md](DISTURBANCE_PREDICTOR.md)：template、neural、
-   `hybrid_residual`、数据时间语义和 safety fallback。
-3. [MPC_DESIGN.md](MPC_DESIGN.md)：右臂 MPC 数学、QP、执行链及 predictor 接口边界。
-4. [disturbance_learning/README.md](disturbance_learning/README.md)：数据采集、训练、
-   本地 artifact 与消融复现。
-5. [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)：PREEMPT_RT、CPU/IRQ isolation 和
-   6 ms target timing gate。
-6. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)：hardware-unverified 的只读与 shadow
-   路径，明确的无输出安全边界。
-7. [MPC_DEVELOPMENT_LOG.md](MPC_DEVELOPMENT_LOG.md) 与
-   [CHALLENGE.md](CHALLENGE.md)：阶段记录和关键工程案例。
+1. [FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)：固定任务协议、continuous-H、
+   模板 schema、在线查询、24 ms handoff 与证据边界。
+2. [ARCHITECTURE.md](ARCHITECTURE.md)：共享控制核心、MuJoCo adapter、只读 hardware
+   shadow 与未来真机输出边界。
+3. [PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)：冻结门槛、安全结论及真机前缺口。
+4. [MPC_DESIGN.md](MPC_DESIGN.md)：右臂 MPC 数学、QP 和执行合同。
+5. [HEADING_CONTROL.md](HEADING_CONTROL.md)：direct-step planned/runtime command、20 ms 命令更新
+   和 heading controller 与 continuous-H 的边界。
+6. [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)：完整 6 ms 计时口径和 CPU 7 环境。
+7. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)：只读 shadow 的能力与禁止声明。
+8. [disturbance_learning/README.md](disturbance_learning/README.md)：v2 的离线来源、
+   schema、parity 和本地产物边界。
+9. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
+   输出链。
 
-[PLAN.md](PLAN.md) 是历史路线图，已被当前冻结文档取代，不应作为现行方案。
+[CHALLENGE.md](CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。
 
-## 仓库数据边界
+## Git、证据与历史恢复
 
-`disturbance_learning/data/`、`disturbance_learning/artifacts/` 和 `evaluation/`
-均为 gitignored 本地产物；大型 episode、checkpoint、原始日志和视频不得提交。
-可审查的轻量结果保存在 `evaluation_summary/`。所有开发和 push 只面向本仓库，
-不得向只读上游 `hold-my-beer-mpc` 推送。
+正式运行所需的 v2 NPZ、manifest 和 held-out 初态 manifest 已纳入 Git。大型 raw、
+trajectory、视频和原始 evaluation 不进入活跃仓库；压缩归档、删除清单和 SHA256
+索引见
+[`cleanup_manifest.json`](evaluation_summary/full_task_template_v2_final_freeze/cleanup_manifest.json)。
+
+清理前的完整工作树可由本地分支
+`archive/pre-cleanup-full-task-v2-20260815`、commit
+`70eb33b51656b958648ea013bc9bd45aa72dfa73` 或 annotated tag
+`checkpoint/full-task-v2-24ms-20260815` 恢复。若只恢复历史 neural 文件，使用：
+
+```text
+git restore --source=<old-neural-commit> -- <path>
+```
+
+若审阅整条历史 neural 路线，应从对应旧 commit 新建独立 archive 分支，不要把它
+重新混入当前正式控制分支。下肢 `policy/motion.pt` 和 Torch 推理仍是正式行走链的
+必要组成，不属于已移除的 neural disturbance predictor。

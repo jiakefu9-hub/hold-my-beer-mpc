@@ -1,5 +1,11 @@
 # 项目难点与解决过程 (Challenge & Solution)
 
+> **Historical / Superseded 边界（2026-08-15）：** 本文保留开发过程和面试叙事。
+> 特别是案例 8--11 中的 neural/hybrid、四模式消融和 readiness 结论已冻结为
+> 历史探索，不代表当前正式方案。当前唯一仿真候选是
+> [full-task template v2 + 24 ms startup-PD + MPC](FULL_TASK_TEMPLATE.md)；最新证据边界
+> 以 [PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md) 为准。
+
 **文档说明：**
 本文档专门用于记录在“G1 双臂端盘子 (Hold My Beer)”项目中遇到的核心 Bug、架构难题以及解决过程。所有案例均按照 STAR 法则（情境、任务、行动、结果）进行结构化编写，作为极其宝贵的工程复盘与面试讲述素材。
 

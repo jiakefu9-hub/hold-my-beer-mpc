@@ -23,7 +23,8 @@ class DisturbanceInput:
     acc_world: Optional[np.ndarray] = None
     omega_world: Optional[np.ndarray] = None
     alpha_world: Optional[np.ndarray] = None
-    # 该姿态由当前实测值锚定模板相对姿态得到。
+    # 当前 node 可以是实测姿态；full-task 未来 node/interval 由当前
+    # anchor 的 W_R_H 乘以 v2 H-frame template rotation 得到。
     rot_world_body: Optional[np.ndarray] = None
 
 

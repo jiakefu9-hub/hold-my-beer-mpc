@@ -1302,8 +1302,9 @@ if __name__ == "__main__":
             )
 
             # 把 torso 世界系运动量和当前姿态打包，供 KinematicsHelper 以及
-            # LQR/MPC 局部线性化使用。MPC 前馈先把 H 模板旋到 W，
-            # 再以该 d_0（包括 R_B,0）锚定模板相对变化。
+            # LQR/MPC 局部线性化使用。full-task predictor 只用该实测量
+            # 覆盖 node 0；未来 rotation 是当前 anchor 的 W_R_H 乘以 v2
+            # H-frame template rotation，不以 node 0 姿态重新锚定。
             torso_disturbance = right_arm_helper.build_disturbance_input(
                 acc_world=torso_state.lin_acc,
                 omega_world=torso_state.ang_vel,

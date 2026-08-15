@@ -405,8 +405,10 @@ $$
 
 ## 16. 学习型 predictor 与真机前冻结里程碑
 
-本节补记 `disturbance-lab` 分支上的 B0 至 hardware-shadow 阶段。详细设计见
-[DISTURBANCE_PREDICTOR.md](DISTURBANCE_PREDICTOR.md)，完整数字和证据边界见
+本节补记 `disturbance-lab` 分支上的 B0 至 hardware-shadow 历史阶段。
+当时的 `DISTURBANCE_PREDICTOR.md` 已从当前主阅读链删除，仍可从
+`checkpoint/full-task-v2-24ms-20260815` 恢复；当前方案见
+[FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)，当前证据边界见
 [PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)。
 
 ### 16.1 B0：统一接口且冻结 template 行为

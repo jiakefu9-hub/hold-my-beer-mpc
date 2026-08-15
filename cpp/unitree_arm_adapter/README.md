@@ -1,6 +1,15 @@
 # G1 右臂 C++ 高频适配器
 
-这个目录是**独立进程、默认不发命令**的 C++ 真机运行时适配器，用于把较低频的 Python MPC 与 2 ms 状态/命令循环隔开。Python 端已由 `right_arm_runtime/unitree_shm.py` 按 protocol v2 对接；主仿真不走 DDS，而是通过 `libright_arm_executor.so` 验证相同的 PD、限幅和超时语义。
+状态：**hardware-unverified；当前项目只授权 state-only shadow，不授权主动输出**。
+
+这个目录是独立进程、默认不发命令的 C++ 硬件适配器，用于把共享 Python
+控制核心与 Unitree 2 ms 状态/命令循环隔开。Python 端由
+`right_arm_runtime/unitree_shm.py` 按 protocol v2 对接；正式 MuJoCo 仿真不走
+DDS，而是使用独立的 `cpp/right_arm_sim_runtime`。
+
+最终仿真方案的 full-task template v2、continuous-H 和 24 ms startup-PD handoff
+**尚未接入这里**。不要把本目录的 dry-run、DDS 订阅测试或只读 shadow 写成
+最终控制器已完成真机迁移。
 
 ## 文件职责
 
@@ -70,6 +79,11 @@ Python 端必须逐字段复现版本、大小、偏移和 64 字节对齐；版
 
 因此，真机上的 floating-base Pinocchio RNEA 还需要一个经过验证的 full-state estimator/接触估计接口，至少明确 base pose、twist、acceleration、接触和外力的坐标系与时间戳。在这些输入齐全前，本目录不声称已经安全实现“2 ms RNEA”；当前 2 ms 部分只负责最新状态快照、已计算命令的限幅/超时/NaN/deadline 保护和 DDS 发送。
 
+同理，MuJoCo DDQ-to-torque mapper 的 forward-dynamics certification 不能复制到
+这里：它依赖仿真接触求解状态。未来 hardware output path 必须先定义并验证真实
+状态估计、inverse dynamics、torque contract 和 fail-closed 接口；本任务没有
+增加这些能力。
+
 ## 构建与验证
 
 不依赖 Unitree SDK 的核心构建和测试：
@@ -137,3 +151,13 @@ DDS 只读干运行（订阅状态，但不发布命令）：
 ```
 
 不要把最后一条命令当作当前可直接上真机的启动说明。
+
+当前正式边界是：
+
+- `unitree_arm_state_bridge`：可用于只读状态检查，没有 publisher；
+- `run_hardware_shadow.py`：只读 state-to-MPC-to-command-build，publish count
+  必须为零，且只兼容 legacy phase template；
+- `unitree_arm_adapter_dds --enable-output`：未来输出路径，当前未获授权、未完成
+  full-task v2 + 24 ms 集成、未经过真机验收。
+
+完整说明见 [HARDWARE_SHADOW.md](../../HARDWARE_SHADOW.md)。

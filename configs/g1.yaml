@@ -4,7 +4,7 @@ xml_path: "resources/g1_description/scene.xml"
 
 # Simulation time step
 simulation_dt: 0.002
-# Locomotion policy update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
+# Locomotion policy update frequency (simulation_dt * control_decimation = 0.02 s; 50 Hz).
 control_decimation: 10
 # Arm controller period = simulation_dt * arm_control_decimation.
 arm_control_decimation: 3

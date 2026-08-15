@@ -9,12 +9,12 @@
 - 右臂 MPC 优化 5 个受控关节的期望关节加速度 `ddq_des`。
 - 下层执行器将 `ddq_des` 转换为最终关节力矩。
 
-当前 base 扰动由统一 predictor 接口提供，可配置为 `template`、`neural`、
-`hybrid_residual` 或 `zoh`。MPC 只消费统一的 `DisturbanceHorizon`，不知道内部
-来自 400-bin 周期模板、MLP 或零阶保持。当前仿真综合最优模式是
-`hybrid_residual`：template 提供完整节点以及区间 omega/rotation，小型 MLP 只
-修正区间 acc/alpha；安全 gate 触发时整拍退回完整 template preview。仓库默认
-仍为 `template`，以保证没有本地 checkpoint 的 checkout 可以运行可信基线。
+base 扰动由统一 predictor 接口提供。当前正式仿真只使用
+`full_task_template`：按 reset 后的绝对任务时间查询冻结的 v2 模板，并返回完整
+`DisturbanceHorizon`。`template` 仅保留为只读 hardware shadow 的旧 phase 兼容
+项，`zoh` 是最小保持实现；MPC 数学不按 predictor 模式分支。旧 neural/hybrid
+disturbance predictor 已退出当前开发路线，下肢 TorchScript walking policy 不受
+影响。
 
 当前 MPC 不进行整机接触力优化，也不把浮动基完整刚体动力学放进 QP。它是一个以关节加速度为输入、使用局部运动学观测模型的稀疏线性时变 QP。
 
@@ -33,7 +33,8 @@ Python 写入 MuJoCo。原同步 C ABI 路径保留为冻结回归基线。仿�
 ### 2.1 坐标系
 
 - $\{W\}$：世界惯性坐标系。
-- $\{H\}$：与重力对齐的 heading 坐标系；$x_H$ 指向上一完整步态周期的 torso 平均方位角，$z_H=z_W$。
+- $\{H\}$：与重力对齐的 continuous causal heading 坐标系，$z_H=z_W$；
+  yaw 只由当前及历史 6 ms anchor 的 torso yaw 圆周均值决定。
 - $\{B\}$：torso/IMU 坐标系。
 - $\{E\}$：右手抓持点坐标系。
 
@@ -48,9 +49,9 @@ $$
 $$
 
 当前仿真中的 $\{W\}$ 就是 MuJoCo 世界系。MPC 接收的完整扰动量及第 5 节的
-末端运动学始终使用 $\{W\}$ 表达；$\{H\}$ 用于离线模板、学习数据和在线 MLP
-输入/输出的航向归一化。运行时根据上一完整步态周期确定 ${}^W R_H$，把模板或
-学习预测旋回 $\{W\}$ 后再送入 MPC。
+末端运动学始终使用 $\{W\}$ 表达；$\{H\}$ 只用于 full-task 模板的航向归一化。
+运行时通过共享 `FullTaskContinuousHeadingFrame` 得到因果 ${}^W R_H$，再把模板
+量旋回 $\{W\}$ 后送入 MPC。
 
 ### 2.2 任务末端
 
@@ -180,13 +181,13 @@ $$
 
 ### 4.2 统一 base 扰动预测
 
-完整 predictor 设计、训练语义和实验结论见
-[DISTURBANCE_PREDICTOR.md](DISTURBANCE_PREDICTOR.md)。本节只定义 MPC 依赖的
-接口和时间语义。
+完整 predictor、模板资产和实验结论见
+[FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)。本节只定义 MPC 依赖的接口和
+时间语义。
 
-控制器每拍先调用 `update(observation)`，再调用 `predict(N, dt)`。factory 生成
-`TemplateDisturbancePredictor`、`NeuralDisturbancePredictor`、
-`ResidualHybridPredictor` 或 `ZeroOrderHoldPredictor`。四者都返回相同的
+控制器每拍先调用 `update(observation)`，再调用 `predict(N, dt)`。正式 factory
+生成 `FullTaskTemplatePredictor`；旧 phase `TemplateDisturbancePredictor` 和
+`ZeroOrderHoldPredictor` 只保留兼容/最小对照用途。三者都返回相同的
 `DisturbanceHorizon`，因此没有 mode-specific 的 MPC 数学分支。
 
 #### 4.2.1 节点量与控制区间量
@@ -221,166 +222,73 @@ $$
 `zoh` 模式下，两条序列都对当前测量做零阶保持。这里的当前加速度和角加速度
 已经经过安全限幅与 MPC 专用低延迟滤波，当前默认滤波系数为 0.5；角速度和姿态
 直接来自当前 torso/IMU 状态。下一控制周期重新测量并刷新。旧配置
-`mpc_disturbance_feedforward_enabled` 仅在没有显式配置 `disturbance_predictor`
-时用于兼容选择 `template/zoh`，不再是现行主接口。
+`mpc_disturbance_feedforward_enabled` 只服务旧调用方，不是正式 full-task 入口。
 
-#### 4.2.2 `template`：未来 6 ms H 系区间模板
+#### 4.2.2 绝对任务时间模板
 
-开启前馈时从 `disturbance_model_new_heading/templates_heading_interval` 读取模板。生成入口为：
+正式资产固定为：
 
-```bash
-./disturbance_model_new_heading/run_interval_all.sh
+```text
+disturbance_learning/data/full_task_template_v2/20260815_162850/
+  full_task_template.npz
+  full_task_template_manifest.json
 ```
 
-采集器在每次 `mj_step` 前按 $2\ \mathrm{ms}$ 记录 IMU site 的世界系线速度、角速度、姿态和传感器加速度，避免旧数据中“step 前相位、step 后状态”造成的固定 $2\ \mathrm{ms}$ 标签偏移。对起点 $t$ 和 $\Delta t=6\ \mathrm{ms}$，先在同一个世界系中构造：
+模板 schema 为 `full_task_template_v2`，协议为 `full_task_direct_step_v1`，H 系
+版本为 `full_task_continuous_heading_v2`。加载时必须验证显式路径、NPZ/manifest
+SHA256、schema、protocol、shape、6 ms anchor 网格和 SO(3) 合法性；禁止扫描
+目录或选择“最新”资产。
+
+task clock 在 reset 后第一拍绑定：`task t=0` 已能读取正式 planned command，
+`0<=t<6.4 s` 保持 `vx=0.5, vy=0`，`t=6.4 s` 直接切零。headline 只取
+`[0,8.0 s)`；raw/模板 tail 延伸到至少 8.06 s。headline 内只允许精确 6 ms
+anchor 查询，共 1,334 个，最后一个为 7.998 s；其 54 ms horizon 终点为
+8.052 s。时间倒退、协议不匹配、checksum 错误、off-grid 或缺 anchor 都
+fail closed，不插值，也不循环回模板开头。
+
+#### 4.2.3 Continuous causal-H
+
+只用当前及历史 6 ms anchor 已测得的 torso yaw：
+
+1. `t=0` 使用第一帧有效实测 yaw。
+2. `0<t<0.8 s` 对从 task epoch 到当前 anchor 的全部 yaw 做圆周均值。
+3. `0.8<=t<6.4 s` 对截至当前 anchor 的过去 0.8 s 滑动窗口做圆周均值。
+4. `t>=6.4 s` 冻结最后一个停车前有效 H，不随停车晃动更新。
+5. 每个 54 ms horizon 内冻结为查询 anchor 已确定的 H。
+
+圆周均值使用 `atan2(sum(sin yaw), sum(cos yaw))`，因而能正确跨越
+$\pm\pi$。没有额外 H 低通，不能读取 anchor 之后的 yaw。collector、offline
+builder、replay 和 online predictor 共用 `FullTaskContinuousHeadingFrame`。
+
+#### 4.2.4 模板查询与世界系输出
+
+对任一 H 系模板向量 $z\in\{a_B,\omega_B,\alpha_B\}$，在查询 anchor $i$
+已经确定的 H 下转换为世界系：
 
 $$
-{}^W\bar a_B(t)=
-\frac{{}^Wv_B(t+\Delta t)-{}^Wv_B(t)}{\Delta t},
-\qquad
-{}^W\bar\alpha_B(t)=
-\frac{{}^W\omega_B(t+\Delta t)-{}^W\omega_B(t)}{\Delta t},
+{}^W\hat z_{k|i}={}^WR_{H,i}\,{}^H T_z(i,k).
 $$
 
-$$
-{}^W\bar\omega_B(t)=
-\frac{1}{\Delta t}\int_t^{t+\Delta t}{}^W\omega_B(s)\,ds.
-$$
-
-角速度积分由三个 $2\ \mathrm{ms}$ 子区间的复合梯形公式计算。随后使用该区间起点所属的 ${}^HR_W(t)$ 把三个世界系向量旋入 H 系。不能直接对两个不同周期 H 系下的端点速度做差，否则跨周期时会把坐标系变化误当成物理加速度。
-
-模板周期为 $T=0.8\ \mathrm{s}$，使用 400 个均匀的区间起点，相邻起点相差 $2\ \mathrm{ms}$。每个区间模板值表示“从该相位开始的未来 6 ms 平均扰动”，而不是把整个周期切成互不重叠的 6 ms 块。运行时在相邻 2 ms 起点间做周期插值，所以当前控制拍即使落在某个 6 ms 窗口内部，也可以按实际连续相位得到对应的滑动区间预测，不要求控制时钟与模板的固定 6 ms 边界重合。
-
-每个文件显式保存节点模板、区间模板、姿态四元数及其旋转矩阵：
-
-- `raw`：节点和区间量都使用相位 bin 原始均值；
-- `half_smoothed`：节点角速度、节点角加速度和姿态做 21 点、约 42 ms 的环形平滑，节点线加速度和三个区间量保持原始；
-- `fully_smoothed`：在 half 的基础上平滑节点线加速度，并对三个区间量再做 3 点、约 6 ms 的环形平滑。
-
-新区间模板的六轮闭环对照中，`raw` 得到最低的统一任务评分，当前默认使用 `raw`。`fully_smoothed` 的区间预测误差更低，但闭环效果和 DDQ 安全指标反而更差，因此模板选择以同配置闭环效果为准，不能只比较模板 RMS。
-
-#### 4.2.3 H 系定义与 H 到 W 的转换
-
-把第 $j$ 个步态周期记为 $C_j=[jT,(j+1)T)$。对 $j\ge1$，当前周期使用的 heading yaw 来自上一完整周期 $C_{j-1}$ 内 torso yaw 的圆周均值：
+姿态使用合法旋转乘法：
 
 $$
-\psi_{H,j}
-=\operatorname{atan2}
-\left(
-\sum_{t\in C_{j-1}}\sin\psi_B^W(t),
-\sum_{t\in C_{j-1}}\cos\psi_B^W(t)
-\right),
+{}^W\hat R_{B,k|i}={}^WR_{H,i}\,{}^H T_R(i,k).
 $$
 
-$$
-{}^WR_{H,j}=R_z(\psi_{H,j}),
-\qquad
-{}^HR_{W,j}=R_z(-\psi_{H,j}).
-$$
+节点 $k=0$ 始终被当前实测
+$({}^Wa_B,{}^W\omega_B,{}^W\alpha_B,{}^WR_B)$ 覆盖；nodes 1--9 和全部
+9 个 intervals 来自该绝对任务时间 anchor 保存的模板。第一版不增加模板平滑、
+slow bias 或隐式相位插值。8.0 s 后 hidden tail 只允许显式 terminal hold/ZOH，
+不得计入 headline fallback；正常 `[0,8)` predictor fallback 必须为 0。
 
-${}^WR_{H,j}$ 在整个 $C_j$ 内保持不变，只在周期边界用刚结束的完整周期更新。第一个周期尚无历史，预测自动退化为零阶保持；约 $0.8\ \mathrm{s}$ 后才启用模板。当前 evaluation 前有 3 个 warm-up 周期，因此正式评价开始时 H 已初始化。
+#### 4.2.5 24 ms startup-PD handoff
 
-对任一 H 系模板向量 $z\in\{a_B,\omega_B,\alpha_B\}$：
-
-$$
-{}^WT_z(\phi)={}^WR_H\,{}^HT_z(\phi).
-$$
-
-姿态模板同样先转换到世界系：
-
-$$
-{}^WR_{B,\mathrm{tpl}}(\phi)
-={}^WR_H\,{}^HR_B^{\mathrm{tpl}}(\phi).
-$$
-
-若本轮 54 ms 预测窗口跨过步态周期边界，本轮仍冻结当前 ${}^WR_H$；边界后的下一次求解再使用新完成周期计算的 H 系。
-
-#### 4.2.4 高频模板加低频测量偏差
-
-用 $i$ 表示真实 MPC 控制拍，用 $k$ 表示该拍内部的预测步。对三个向量分别维护慢偏差 $b_{z,i}$：
-
-$$
-\beta=1-\exp\left(-\frac{\Delta t}{\tau_b}\right),
-$$
-
-$$
-b_{z,i}
-=(1-\beta)b_{z,i-1}
-+\beta\left({}^Wz_i^{\mathrm{meas}}-{}^WT_z^{\mathrm{node}}(\phi_i)\right).
-$$
-
-当前 `mpc_disturbance_slow_bias_enabled: true`，且默认 $\tau_b=0.4\ \mathrm{s}$。快速、周期性的落脚冲击由模板直接提供；这个量更直观地理解为“缓慢更新的长期模板修正量”，只补偿模板和当前机器人之间持续存在的均值差，不再用带延迟的瞬时 $d_0$ 误差平移整条未来曲线。
-
-以任一标量分量为例，$\Delta t=0.006\ \mathrm{s}$、$\tau_b=0.4\ \mathrm{s}$ 时 $\beta\approx0.0149$。若原修正量 $b_0=0$，只有一次冲击使“测量减模板”等于 $4$，则
-
-$$
-b_1=0.9851\times0+0.0149\times4=0.0596.
-$$
-
-若下一拍差值恢复为零，则 $b_2=0.9851\times0.0596=0.0587$，之后继续衰减；因此单次冲击不会把 $4$ 整体加到未来模板。
-
-若“测量减模板”长期恒等于 $1$，则每隔 $6\ \mathrm{ms}$ 更新
-
-$$
-b_i=0.9851b_{i-1}+0.0149,
-$$
-
-因此 $b_1=0.0149$、$b_2=0.0296$、$b_3=0.0440$；一般地
-
-$$
-b_n=1-0.9851^n
-=1-\exp\left(-\frac{0.006n}{0.4}\right).
-$$
-
-经过 $60\ \mathrm{ms}$（10 拍）有 $b_{10}=0.1393$，经过约 $0.4\ \mathrm{s}$（67 拍）有 $b_{67}\approx0.634$，时间足够长时 $b_n\rightarrow1$。例如未来模板值为 $2$，则对应预测依次被修正为 $2.0149$、$2.0296$、$2.0440$，长时间后趋近 $3$。
-
-节点 $k=0$ 严格取本拍测量；未来节点和控制区间分别为：
-
-$$
-{}^W\hat z_{0|i}^{\mathrm{node}}
-={}^Wz_i^{\mathrm{meas}},
-$$
-
-$$
-{}^W\hat z_{k|i}^{\mathrm{node}}
-={}^WT_z^{\mathrm{node}}(\phi_{i,k})+b_{z,i},
-\qquad k=1,\ldots,N,
-$$
-
-$$
-{}^W\hat{\bar z}_{k|i}^{\mathrm{int}}
-={}^WT_z^{\mathrm{int}}(\phi_{i,k})+b_{z,i},
-\qquad k=0,\ldots,N-1.
-$$
-
-这里“高频模板预测 + 低频测量偏差”就是上面两项的相加：模板负责未来随步态快速变化的波形，慢偏差负责不同运行回合之间缓慢变化的基线。
-
-姿态不能使用向量加法。程序对模板四元数做最短路径 SLERP，并以当前实测姿态锚定模板相对转动：
-
-$$
-{}^WR_{B,k}
-={}^WR_{B,0}
-\left({}^WR_{B,\mathrm{tpl}}(\phi_0)\right)^T
-{}^WR_{B,\mathrm{tpl}}(\phi_k).
-$$
-
-因此 $R_{B,0}$ 严格等于当前测量，未来步只复用模板相对姿态变化，不会把采集时的绝对航向强加给当前机器人。最终，预测器一次返回 $N+1$ 个 `nodes` 和 $N$ 个 `intervals`，避免在两个独立调用中重复更新 H 系或慢偏差状态。
-
-#### 4.2.5 `neural`、`hybrid_residual` 与安全回退
-
-学习型 predictor 使用截至当前时刻的 34 个 6 ms 历史样本，约 200 ms，一次
-MLP inference 直接输出未来 9 个区间的 H 系 `acc/alpha`，不做自回归：
-
-- `neural` 使用 absolute MLP；节点以及区间 omega/rotation 使用当前测量 ZOH；
-- `hybrid_residual` 使用针对在线等价 template-with-slow-bias 重新训练的 residual
-  MLP，只修正区间 acc/alpha，其他 template 字段完全不变；
-- `template` 保留上述成熟相位模板实现；`zoh` 保留无未来信息的消融基线。
-
-Residual checkpoint 在加载时校验 `dt`、horizon、H 系定义、template variant 和
-slow-bias 语义。history/H 未就绪、时间断点、nonfinite、输入/输出超训练可信范围、
-上一完整控制区间 overrun 或连续 QP 质量恶化时，predictor 返回**完整 template
-preview**，不会把部分 neural correction 留在 horizon 内。QP 自身的失败仍由
-第 9.1 节 MPC 回退处理。
+task/template/gait/H 时钟都从 `t=0` 推进，但右臂在 `[0,24 ms)` 只执行配置中的
+固定姿态 PD；下肢第一份新 policy 动作仍在 20 ms。MPC 在合法 6 ms anchor 4
+首次接管，直接查询绝对任务时间 24 ms 的 horizon，不 reset 或重播模板。切换前
+最后一个 2 ms 物理拍实际执行的 PD 力矩作为 mapper 的
+`previous_executed_tau`。startup-PD 段和第一个 MPC 区间都属于同一 `[0,8)`
+headline。
 
 ### 4.3 逐步线性化与实时迭代
 
@@ -674,11 +582,11 @@ $$
 
 其中肩部正则仍强于肘部和腕部，使后两者承担更多补偿，但比上一轮略微降低。该项仍需与重力和加速度任务的实际代价对照，不能仅靠继续增大 $Q_q$ 解决已经发生的硬约束不可行。
 
-当前进入重新加入末端加速度代价之前的基线权重为
+当前 full-task v2 冻结权重为
 
 $$
-Q_a=0,\qquad
-Q_\alpha=0,\qquad
+Q_a=0.01I_3,\qquad
+Q_\alpha=0.0005I_3,\qquad
 Q_\omega=8I_3,\qquad
 Q_g=30I_2,\qquad
 Q_v=0.08I_5,\qquad
@@ -687,7 +595,10 @@ $$
 
 $Q_g$ 的两个对角元素可以分别配置，但它们对应右手末端局部系中的 $x,y$ 倾斜分量，而不是两个独立的世界系安全方向。六轮闭环实验中，提高 $y$ 权重能够降低右手 $y$ 分量，却会把一部分误差转移到 $x$，并增加关节盒恢复和 QP 回退。因此当前默认仍保留 $Q_g=30I_2$，用二维范数评价整体正立程度；$Q_\omega=8I_3$ 用于补上已经存在的末端角速度。
 
-这里把 $Q_a,Q_\alpha$ 置零是有意保留的“端平 + 角速度”基线，不表示第 5 节的加速度模型或第 6.2 节的代价定义被删除；进入下一阶段时将分别恢复 `mpc_q_ee_acc` 和 `mpc_q_ee_alpha`，做单变量闭环比较。控制器 API 在缺少 `mpc_q_ee_omega` 时仍回退到 $Q_\omega=0$，用于兼容旧配置；这不等于当前实验关闭了角速度项。
+历史调参曾使用 $Q_a=Q_\alpha=0$ 的“端平 + 角速度”基线，但它不是
+当前配置。冻结方案已恢复上述线/角加速度代价，本次清理不再调整这些权重。
+控制器 API 在缺少 `mpc_q_ee_omega` 时仍回退到 $Q_\omega=0$ 以兼容旧配置；
+这不等于当前正式配置关闭了角速度项。
 
 ### 6.2 单步代价
 
@@ -1128,8 +1039,11 @@ $$
 1. 读取当前右臂 $q,\dot q$，设置 $x_{\mathrm{meas}}$。
 2. 读取当前 base 的 $a_B,\omega_B,\alpha_B,R_B$；对 $a_B,\alpha_B$ 限幅并使用 MPC 专用低延迟通道滤波。
 3. 用当前完整因果观测调用统一 predictor 的 `update()` 和 `predict(N, dt)`，得到
-   $N+1$ 个节点和 $N$ 个区间。`template/neural/hybrid_residual/zoh` 的内部选择、
-   MLP 一次性 inference 和 safety fallback 都在 predictor 内完成；MPC 不分支。
+   $N+1$ 个节点和 $N$ 个区间。正式仿真使用 `full_task_template`：在
+   reset 后的绝对 task-time 6 ms anchor 上精确查询固定 v2 资产，node 0
+   由当前实测覆盖，nodes 1--9 和全部 intervals 来自模板。资产、时钟、
+   anchor 或 checksum 校验失败时 predictor fail closed；MPC 不按 predictor 模式
+   分支。
 4. 平移上一拍最优解，生成本轮工作轨迹和 OSQP warm-start；首次运行使用零输入滚动。
 5. 对每个预测步根据 $\bar q_k$ 计算 scratch 中的 $p_E-p_B$，再按 $R_{B,k}R_{B,0}^T$ 一致修正位置差、Jacobian、Jacobian 导数和末端姿态；线/角加速度模型使用同下标 6 ms 区间扰动，角速度和二维重力模型使用节点扰动。
 6. 构造每步与终端代价，更新稀疏 $P,q_{\mathrm{osqp}}$。
@@ -1318,7 +1232,10 @@ $$
 2. 若没有严格候选，但存在“总误差改善且满足瞬时加速度上限”的候选，按 $(e_{\max},e)$ 的字典序选择，优先控制最差关节误差。
 3. 若连上述候选也不存在，在“仅总误差改善”的候选中选择总误差最小者；若没有任何改善候选，则保留 $\tau_{\mathrm{nom}}$。
 
-第 2、3 类结果不应标记为严格安全候选，必须分别记录 `tracking_safety_satisfied` 和 `qacc_safety_satisfied`。第 3 类只允许在当前 MPC 仿真验证阶段用于暴露执行链问题；真机不得执行已知超过瞬时加速度上限的候选，而应改用经完整前向动力学检查的保持/制动回退，或启用第 10.5 节的安全救援。
+第 2、3 类结果不应标记为严格安全候选，必须分别记录
+`tracking_safety_satisfied` 和 `qacc_safety_satisfied`。它们可以作为后续
+second pass/rescue 的临时 best 工作点，但不是可写入执行器的最终力矩；只有
+第 10.5 节最终标记 `final_output_certified=true` 的输出才能执行。
 
 ### 10.5 第二轮和安全救援的当前策略
 
@@ -1339,11 +1256,31 @@ $$
 
 启用时，应在第一轮已接受力矩处重新构建 $G_{\tau,1}$，针对剩余残差再做一次阻尼最小二乘和同样的按需候选验收，不能直接复用第一轮 Jacobian。
 
-若两轮后仍超过瞬时加速度上限，当前仿真最多再做两轮额外安全救援，并单独记录触发率、成功率和耗时。若安全救援仍失败，程序取上一仿真步实际执行的右臂力矩，在本拍当前整机状态、非右臂力矩和接触条件下用已由本拍基线 `mj_forward` 刷新的位置/速度缓存重新调用 `mj_forwardSkip`。只有其最大瞬时关节加速度不超过上限时才保持该力矩；不能因为它上一拍已经执行过，就跳过本拍验收。该候选也不等同于名义力矩，不能退回已经由动力学判定为超限的名义力矩。
+若两轮后仍超过瞬时加速度上限，当前仿真最多再做两轮额外安全救援，
+并单独记录触发率、成功率和耗时。若安全救援仍失败，程序取上一仿真步
+实际执行的右臂力矩，在本拍当前整机状态、非右臂力矩和接触条件下重新调用
+`mj_forwardSkip`。只有其最大瞬时关节加速度不超过上限时才能 hold-last；“上一拍
+已执行”不是本拍安全证据。
 
-启用这两层处理的直接原因是旧运行中已经出现“完整前向动力学准确预测瞬时加速度超限，但仍执行不安全候选”的样本。仿真阶段保留两轮验收便于隔离 DDQ 执行误差；实时部署可根据耗时和危险样本统计降级为一轮验收，但保持候选仍必须重新验收。
+正常 candidate、second pass、rescue 和重新验收的 hold-last 全部失败时，
+调用方传入本拍按当前 MPC `q_ref/dq_ref` 计算的 `right_arm_tau_pd`
+作为 `safe_hold_tau`，而不是硬编码零力矩。它与 `[0,24 ms)` 的固定姿态 PD
+启动段是不同语义。
+先对力矩限幅后的 safe-hold 执行当前状态 forward-dynamics 验收；若 nonfinite 或
+$\max|qacc|>10\ \mathrm{rad/s^2}$，立即返回 `NO_SAFE_TORQUE`。safe-hold 通过后，在它与
+当前 best torque 之间最多尝试 4 个有界凸插值，$\lambda=0.8,0.6,0.4,0.2$，
+从最接近 best 的点开始：
 
-实时部署时可以固定为一轮验收；这里的“一轮”表示至少对两个候选做真实动力学检查，必要时继续其余比例，而不是直接执行未验收的局部线性修正。
+$$
+\tau(\lambda)=\tau_{\mathrm{safe}}
++\lambda(\tau_{\mathrm{best}}-\tau_{\mathrm{safe}}).
+$$
+
+每个中间点都必须重新经过真实 forward dynamics；首个安全点是该有界候选中
+离 best 最近的力矩。中间点都失败时直接使用已验证的 safe-hold。只有
+`final_output_certified=true` 的力矩才能返回；`NO_SAFE_TORQUE` 使 `main_sim`
+终止，不得写入未认证的 `final_pass.tau_cmd`。这一完整次序是当前冻结链，
+不应在无新的安全验收前自动降级或删除其中轮次。
 
 ### 10.6 最终执行
 
@@ -1362,6 +1299,9 @@ q, dq, measured base motion
         -> C++ model-ranked, on-demand mj_forwardSkip validation
         -> C++ optional second pass / safety rescue
         -> if still unsafe: validate previous executed torque in current state
+        -> if still unsafe: certify clipped current right-arm PD safe-hold
+        -> bounded 4-point line search toward safe-hold
+        -> NO_SAFE_TORQUE if no certified output
         -> accepted feedforward held only between validation updates
         -> C++ 2 ms latest-state PD / limits / timeout / NaN guard
         -> response final_tau (validation at 0/4 ms, PD at 0/2/4 ms)
@@ -1387,9 +1327,9 @@ q, dq, measured base motion
 - QP 组装时间和求解时间；
 - 关节角、速度、加速度约束的最小裕量和激活率；
 - 各代价项的单独数值；
-- $N+1$ 个节点扰动和 $N$ 个 6 ms 区间扰动；predictor mode/metadata、inference
-  timing、fallback reason/count；template 模式还记录模板版本、SHA-256、慢偏差和
-  终端姿态预测变化量。
+- $N+1$ 个节点扰动和 $N$ 个 6 ms 区间扰动；predictor mode/metadata、
+  task time、anchor index、continuous-H yaw、资产版本/SHA-256、predictor timing、
+  terminal hold 和 fallback reason/count。
 
 ### 11.2 物理效果
 
@@ -1450,11 +1390,11 @@ $$
 并用区间内角速度的复合梯形平均得到 ${}^W\bar\omega_{B,i}^{\mathrm{real}}$。这样比较的是同一物理量、同一 6 ms 区间和同一世界系，不再把“区间起点滤波值”与“随后区间平均值”混在一起。
 
 `mpc_diagnostics.json` 记录区间扰动的总体向量误差、误差相对实际 RMS 的百分比，
-以及 $\|\bar a_B\|>5\ \mathrm{m/s^2}$ 冲击样本中的误差；predictor diagnostics
-另行记录所选 mode、MLP timing 与 safety fallback。模板专用图仍比较未来 6 ms
-区间模板和真实值，以及当前节点测量、同相位节点模板和上一拍对当前节点的
-$k=1$ 预测；这些节点图只评价瞬时波形，不作为 $u_k$ 所用 interval 预测的
-主要质量指标。
+以及 $\|\bar a_B\|>5\ \mathrm{m/s^2}$ 冲击样本中的误差。predictor 诊断另行记录
+task time、查询 anchor、continuous-H yaw、查询原因码、terminal hold 和
+fallback。模板专用图比较绝对 task-time 上未来 6 ms 区间的模板与真值，
+以及节点姿态的 SO(3) 误差。这些节点图只评价瞬时波形；$u_k$ 的主要
+预测质量指标始终是同下标、同一 6 ms 物理区间的 interval truth-vs-prediction。
 
 第二层判断控制器一步模型结果。把实际采用的 $u_0=ddq_{\mathrm{des}}$ 和预测的 $x_1$ 代入仿射任务模型，记录一步末端线加速度、角速度、角加速度、二维重力误差，以及由 $Q_A,Q_\alpha,Q_\omega,Q_G,Q_q,Q_v,R$ 得到的七项加权代价。这组“一步七项代价”是为了对齐同一个真实控制区间而构造的诊断量，不是单独的阶段代价 $\ell_0$，也不是整个时域的 objective：线/角加速度来自 $(x_0,u_0)$，角速度、重力、姿态和关节速度来自 $x_1$，输入代价来自 $u_0$。实际末端角速度在下一次控制更新前直接读取 MuJoCo 世界系 site 角速度，只有线/角加速度使用 6 ms 区间的速度差分。只有 OSQP 成功时，这些量才是 QP 优化结果；求解失败时记录的是回退输入的一步模型预测，诊断图用红色标记回退样本，不能称为“MPC 理想值”。通用 `metrics.png` 在 MPC 实验中也把主重力范数明确画成 $x,y$ 二维，$z$ 只保留为不进入代价的诊断分量。
 
@@ -1470,7 +1410,9 @@ $$
 
 $ddq_{\mathrm{des}}$ 模型结果与上述回代结果的差主要反映 DDQ 执行误差；上述回代结果与 MuJoCo 末端速度差分加速度的差主要反映区间模板误差、区间起点运动学近似、局部线性化和当前未建模的浮动基/接触反作用。两部分相加才是 QP 理想结果与真实末端响应之间的总差，因此不能仅凭总差直接断言力矩执行失败。
 
-当前仿真用这些数据评估已启用的按需第二轮和安全救援是否值得保留；实时版本仍可根据危险样本减少量和耗时实验降级为一轮。
+当前冻结仿真保留按需 second pass、最多两轮 rescue、hold-last、safe-hold
+和有界线搜索的完整次序。任何减少轮次的建议都只能作为未来独立设计，
+并必须重新通过同等安全验收；它不是当前正式路径的可选降级。
 
 ### 11.5 真机相关时间口径
 
@@ -1480,36 +1422,46 @@ $ddq_{\mathrm{des}}$ 模型结果与上述回代结果的差主要反映 DDQ 执
 
 `mj_step` 物理推进、评估记录/绘图、viewer/video 和实时 sleep 不属于真机控制算法，单独统计但不进入上述区间；仿真无法测到的传感器/总线、电机驱动通信、固件和目标计算机实时调度延迟也明确列在 `timing_scope.not_measurable_in_simulation`。仿真 C++ mapper 内的 MuJoCo 接触验收同样不会原样出现在真机上；真机的 2 ms C++ 适配器已实现 LowState 读取、共享内存、限幅、超时、NaN、过热、deadline 保护和可选 `rt/arm_sdk` 发送，但完整 floating-base RNEA 仍需要经验证的 base pose/twist 与接触状态估计。
 
-当前默认独立进程零延迟回合 `20260804_203511_process_delay0` 的完整 6 ms 区间 mean/p95/p99/max 为 $3.067/3.402/3.917/5.807\ \mathrm{ms}$，evaluation 超时率为 0。平均值严格分解为 MPC 更新 $1.612\ \mathrm{ms}$、两次 DDQ→力矩 $1.012\ \mathrm{ms}$、中间拍只重算执行器的进程桥 $0.031\ \mathrm{ms}$ 和其余右臂路径 $0.412\ \mathrm{ms}$。独立进程 3198 次往返的 mean/p99/max 为 $0.182/0.397/0.593\ \mathrm{ms}$，其中 worker 计算均值 $0.147\ \mathrm{ms}$、通知排队均值 $0.019\ \mathrm{ms}$、复制与 IPC 余量均值 $0.035\ \mathrm{ms}$。这些结果覆盖 Python 到独立 C++ 进程再返回最终力矩的完整仿真调用，但仍不是目标真机上的硬实时证明。
+当前冻结证据是 CPU 7 上的 3 条 nominal 和 3 条
+`heldout_pair_02_minus` 回合。parent 与 C++ worker affinity 均为 `[7]`，六个数值库
+线程环境变量均为 1，Torch intra/inter-op 均为 1，控制循环内 GC 关闭。
+7,974 个完整 6 ms 区间的 mean/p95/p99/max 为
+$3.419/3.630/3.775/4.511\ \mathrm{ms}$，overrun 为 0。平均值分解为 MPC policy
+$1.943\ \mathrm{ms}$、两次 DDQ-to-torque 合计 $1.037\ \mathrm{ms}$、C++ executor
+bridge $0.037\ \mathrm{ms}$ 和其他右臂路径 $0.402\ \mathrm{ms}$；predictor 的加权
+mean 为 $0.403\ \mathrm{ms}$。这是当前主机 `SCHED_OTHER` 下的受控 MuJoCo
+证据，不是 PREEMPT_RT、DDS、驱动器或真机硬实时证明。
 
-### 11.6 独立进程一致性与延迟阶段门
+### 11.6 冻结一致性与安全证据
 
-`20260804_203227_process_shadow_smoke` 对 400 个物理步逐拍比较同步基线和独立进程：RNEA 最大误差为 0，验收后前馈最大误差为 $4.44\times10^{-16}\ \mathrm{N\,m}$，mapper 输出、候选分支和最终力矩最大误差均为 0。随后同步回合 `20260804_203251_parity_sync_smoke` 与进程回合 `20260804_203308_parity_process_smoke` 的 `qpos/qvel/qacc/ctrl`、`ddq_des`、RNEA 力矩、验收后前馈、最终控制力矩和所有救援分支数组逐元素相同。
+4 条 held-out raw episode 的 offline-online replay 均为 PASS：查询索引严格为
+0--1333，H yaw 最大误差为 0，nodes 1--9 与 intervals 的向量和旋转矩阵
+最大绝对误差为 0，SO(3) geodesic 数值上界为
+$2.98\times10^{-8}\ \mathrm{rad}$，headline 内 predictor fallback 与 terminal hold 均为 0。
 
-同一冻结配置的命令激活延迟结果如下；效果和安全只统计正式 evaluation 区间：
-
-| 延迟 | 完整区间 mean / p99 / max [ms] | 超时率 | QP 成功率 | 右端线加速度 RMS | 右端角加速度 RMS | 二维重力误差 RMS | 平均五关节 DDQ RMSE |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 0 ms | 3.067 / 3.917 / 5.807 | 0 | 99.62% | 2.929 | 6.520 | 0.0151 | 0.804 |
-| 2 ms | 3.085 / 3.738 / 4.588 | 0 | 99.62% | 2.928 | 6.349 | 0.0138 | 1.005 |
-| 4 ms | 3.004 / 3.587 / 3.981 | 0 | 99.34% | 2.925 | 6.363 | 0.0157 | 0.896 |
-| 6 ms | 3.069 / 3.841 / 5.414 | 0 | 99.34% | 2.999 | 6.834 | 0.0148 | 0.816 |
-
-四组 evaluation 内最终不安全候选均为 0。4 ms 回合仅在启动期 $0.094\ \mathrm{s}$ 发生一次真实的未满足救援执行更新；$0.096\ \mathrm{s}$ 只是未重算拍沿用诊断标志，不是第二个事件，二者都不属于当前没有启动模板的 evaluation 指标。由此，进入 $Q_a,Q_\alpha$ 调参前的仿真阶段门已经满足：独立进程实际执行最终力矩、同步路径数值等价、时间戳和可配置延迟可测、完整 6 ms p99 小于预算且 evaluation 安全指标通过。硬件 LowState/DDS、真实 base/contact 估计及驱动器延迟仍是上真机阶段任务，不是继续调整仿真代价前可以假装完成的事项。
+六条受控闭环共执行 16,074 次 mapper 调用：未认证输出、final unsafe、
+`NO_SAFE_TORQUE`、QP fallback、predictor fallback、跌倒和 NaN/Inf 均为 0。
+process/runtime、RNEA、mapper 和 executor 还有独立的 C++ 单元测试与
+Python/C++ 数值 parity。这些结果只证明冻结仿真路径的数值一致性、认证
+输出合同与当前主机时间余量；硬件 LowState/DDS、真实 base/contact 估计、
+力矩 ownership 切换和驱动器延迟仍未验证。
 
 ---
 
 ## 12. 已知局限与后续扩展
 
-1. 周期 template 主要适用于与采集时相近的下肢策略、$0.8\ \mathrm{s}$ 周期和
-   平地条件；H 系只能消除绝对航向差异。`hybrid_residual` 已在 unseen command
-   schedules 的 MuJoCo 闭环中稳定改善 acc/alpha 并维持 tilt，但尚未覆盖地形、
-   新下肢策略或目标 G1 硬件，不能把仿真泛化结论外推为真机保证。
+1. `full_task_template` 是固定绝对任务时间 baseline，提前知道 6.4 s
+   停车时刻。它只在同一命令、heading、下肢策略、payload、physics 和
+   task-time origin 下验证，不泛化到任意速度、方向、地形、未知停车时刻或新的
+   下肢策略。
 2. 关节角盒只在当前模型中做过工程抽样验证，不能替代真机几何标定和独立安全验证。
 3. 二维重力误差不能区分正立和倒立。若以后明显放宽关节角盒、允许从任意构型启动或加入更大的姿态自由度，应恢复第三维误差，或增加保证末端朝上的半空间条件。
 4. 低权重关节姿态正则只用于数值与构型偏好，碰撞安全主要来自硬边界和验证，不应通过增大 $Q_q$ 间接实现。
 5. `ddq_des` 约束不等于真实接触加速度保证，下层前向动力学验收仍然必要。
-6. 即使启用两轮验收和安全救援，仍可能出现没有安全改善候选的离散时刻。当前仿真已把“上一仿真步实际执行且在本拍重新验收安全的力矩”纳入候选；若该候选在当前状态下也不安全，仍需在真机部署前增加独立的紧急制动或停机策略。
+6. 即使启用 second pass、rescue、hold-last 和经验收的 safe-hold，仍可能
+   出现没有安全力矩的离散时刻。当前仿真在 `NO_SAFE_TORQUE` 时终止，不输出
+   未认证 candidate；真机仍需不依赖 MuJoCo forward dynamics 的独立 fail-closed、
+   紧急制动和停机策略。
 7. 当前 QP 不显式限制力矩。若以后需要在预测时域内考虑力矩上限，可在工作点冻结
 
 $$
@@ -1520,17 +1472,13 @@ $$
 
 8. 如果需要主动接触、推压环境或严格处理浮动基耦合，应升级为包含整机动力学、接触力和摩擦锥的 whole-body MPC，而不是继续扩展当前运动学积分器。
 
-9. `zoh` 并不是完全忽略 base 运动，而是每拍测量当前扰动并在 54 ms 时域内零阶
-   保持。template 提供未来节点和区间结构，neural-only 只为区间 acc/alpha 提供
-   absolute 预测，hybrid 在 template 上增加 residual。因此各 mode 的差值表示
-   不同未来信息的附加收益，不是全部 base 补偿的收益。
-10. 即使模板完全准确，5 个关节 DDQ 也不能同时独立消除三维线加速度、三维角加速度、三维角速度和二维重力误差；关节盒、DQ/DDQ 上限和互相冲突的任务会留下不可消除残差。当前保留回合中，6 ms 区间 base 线加速度和角加速度预测误差分别约为实际 RMS 的 14.0% 和 25.3%，也不是完全已知未来。
-11. 当前 PREEMPT_RT target gate 在 12 runs、9,588 个完整区间上得到完整路径
-    mean/mean-p99/worst-max `3.215/3.568/4.006 ms`，6 ms overrun 和 evaluation
-    期间隔离核 IRQ 增量均为 0。这只证明当前本机锁步仿真软件路径通过严格预算；
-    DDS、驱动、总线和真实状态估计延迟仍未测量，不得宣称真机硬实时已验证。
-12. 当前角速度模型冻结 $J_\omega(\bar q_k)$，忽略 $\partial(J_\omega\dot q)/\partial q$。若以后角速度任务权重明显增大、关节运动范围放宽或模型/实际角速度开始出现显著偏差，应恢复完整的一阶线性化。
-13. 最终保留回合中，按“任一关节真实区间 DDQ 超过配置上限”的统一口径，超限区间为 0，真实 DDQ 最大绝对值为 $7.788\ \mathrm{rad/s^2}$。早期区间模板实验的 $7/8.334$ 只保留在开发日志中，不再作为当前结论。真机仍需保留独立硬限幅和执行层故障回退。
+9. `zoh` 仅是统一 predictor 接口和安全诊断所需的最小当前测量保持；
+   legacy phase template 只为当前只读 hardware shadow 兼容保留。二者都不是
+   最终仿真候选，也不得在正式入口中自动替代 pinned full-task v2。
+10. 即使模板完全准确，5 个关节 DDQ 也不能同时独立消除三维线加速度、
+    三维角加速度、三维角速度和二维重力误差；关节盒、DQ/DDQ 上限和
+    互相冲突的任务会留下不可消除残差。当前角速度模型还冻结
+    $J_\omega(\bar q_k)$，忽略 $\partial(J_\omega\dot q)/\partial q$。
 
 ---
 
@@ -1540,22 +1488,29 @@ $$
 - `right_grasp_site` 是唯一任务末端。
 - 状态为 $x=[q;\dot q]$，输入为 $u=\ddot q$。
 - 状态方程严格采用 $x_{k+1}=Ax_k+Bu_k$，不加入额外扰动项。
-- `main_sim.py` 只依赖统一 predictor 接口，配置值统一为 `template`、`neural`、
-  `hybrid_residual` 或 `zoh`；旧 `mpc_disturbance_feedforward_enabled` 只保留兼容。
-- `mpc_disturbance_template` 只能选择 `raw`、`half_smoothed` 或 `fully_smoothed`。
-- 当前默认模板为 `raw`；模板选择以同配置闭环任务代价和安全指标为主，预测误差为辅。
-- 三种模板均从 `disturbance_model_new_heading/templates_heading_interval` 读取，schema 必须为 2，坐标系必须为 `heading`，区间长度必须与 MPC 的 6 ms 控制周期一致。
-- $H_j$ 由上一完整周期 $C_{j-1}$ 的 torso yaw 圆周均值定义，并在当前周期内保持；第一个周期自动回退到零阶保持。
-- 模板的 $a_B,\omega_B,\alpha_B,R_B$ 先从 H 系转换到 W 系，MPC 接收的节点和区间扰动始终使用世界系表达。
-- 每次预测一次性生成 $N+1$ 个节点量和 $N$ 个区间量；节点 $k=0$ 等于当前测量，未来向量使用模板加慢偏差，未来姿态使用当前测量锚定的模板相对转动。
-- `neural` 的 absolute MLP 只替换 interval acc/alpha，nodes 与 interval
-  omega/rotation 使用 measured ZOH；`hybrid_residual` 只修正 template interval
-  acc/alpha，其他 template 字段保持不变。
-- hybrid checkpoint 的 H 系、horizon、控制周期、模板和 slow-bias metadata 必须
-  与在线配置一致；异常、超可信范围或控制质量 gate 触发时整拍回退完整 template。
+- `main_sim.py` 只依赖统一 predictor 接口；正式入口显式选择
+  `full_task_template`。legacy `template` 只供只读 shadow 兼容，`zoh` 只是最小
+  hold 实现，不是正式默认。
+- 运行时只从配置中的显式 v2 NPZ 和 manifest 路径加载，校验固定 SHA256、
+  `full_task_template_v2` schema、`full_task_direct_step_v1` protocol、shape、
+  6 ms anchor 网格和 SO(3) 合法性；禁止扫描“最新”资产。
+- continuous-H 在前 0.8 s 使用因果前缀 yaw 圆周均值，之后使用过去
+  0.8 s 的 6 ms anchor 滑动窗，6.4 s 时冻结停车前最后有效 H；不读未来、
+  不额外低通，每个 54 ms horizon 内 H 固定。
+- 模板的 $a_B,\omega_B,\alpha_B,R_B$ 从 H 系转回 W 系，MPC 接收的
+  节点和区间扰动始终使用世界系表达。
+- 每次查询生成 10 个 nodes 和 9 个 intervals；node 0 等于当前实测，
+  nodes 1--9 和全部 intervals 使用该绝对 task-time anchor 的单一原始 v2 模板。
+  不加 slow bias、额外平滑或隐式插值，也不循环回模板开头。
+- `[0,24 ms)` 右臂执行固定姿态 PD；24 ms/anchor 4 接管时直接查询该
+  绝对 task time，不 reset 时钟或 H。切换前最后一个真实 PD 力矩必须作为
+  mapper 的 `previous_executed_tau`。
 - 每个 $u_k$ 只与同下标、覆盖 $[t_k,t_{k+1})$ 的 6 ms 区间扰动配对；重力、姿态、角速度状态项和终端项使用节点扰动。
 - MPC 的加速度与角加速度测量使用独立低延迟滤波通道，当前系数为 0.5；它不改变离线区间模板中的落脚高频波形。
-- 离线模板文件不包含 $p_B$，但包含 Markley 均值姿态四元数及其旋转矩阵；完整扰动点中的 $R_{B,k}$ 由当前实测姿态锚定模板相对姿态得到。
+- 离线模板文件不包含 $p_B$，但包含合法 SO(3) 均值姿态四元数及其
+  旋转矩阵。node 0 姿态由当前实测覆盖；nodes 1--9 和 intervals 的
+  $R_{B,k}$ 直接由当前 anchor 的 ${}^W R_H$ 乘以 v2 H-frame template rotation 得到，
+  不以 node 0 实测姿态重新锚定模板相对姿态。
 - scratch 中直接由该步工作构型计算 ${}^Wp_E-{}^Wp_B$；世界系平移严格相消，$p_B$ 不进入模板。未来步用 $R_{B,k}R_{B,0}^T$ 同步旋转该位置差和各运动学量。
 - 每拍只求解一个 QP，并使用上一拍解平移 warm-start。
 - $x_0=x_{\mathrm{meas}}$ 被完整写入等式约束。
