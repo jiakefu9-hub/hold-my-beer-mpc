@@ -1,7 +1,11 @@
 """右臂高频执行层的 Python/C++ 边界。"""
 
 from .cpp_executor import CppExecutorResult, CppRightArmExecutor
-from .cpp_ddq_mapper import CppDdqMapperResult, CppDdqTorqueMapper
+from .cpp_ddq_mapper import (
+    CppDdqMapperResult,
+    CppDdqTorqueMapper,
+    CppNoSafeTorqueError,
+)
 from .sim_process import (
     RightArmSimProcess,
     SimProcessResult,
@@ -24,6 +28,7 @@ __all__ = (
     "CommandWriteReceipt",
     "CppDdqMapperResult",
     "CppDdqTorqueMapper",
+    "CppNoSafeTorqueError",
     "CppExecutorResult",
     "CppRightArmExecutor",
     "RightArmSimProcess",

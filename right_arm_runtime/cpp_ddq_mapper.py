@@ -40,6 +40,7 @@ class _Request(ctypes.Structure):
     _fields_ = [
         ("desired_qacc", ctypes.c_double * ARM_DOF),
         ("tau_nominal", ctypes.c_double * ARM_DOF),
+        ("safe_hold_tau", ctypes.c_double * ARM_DOF),
         ("has_previous_executed_tau", ctypes.c_int32),
         ("previous_executed_tau", ctypes.c_double * ARM_DOF),
     ]
@@ -112,6 +113,11 @@ class _Output(ctypes.Structure):
         ("hold_last_safe_used", ctypes.c_int32),
         ("hold_last_safe_satisfied", ctypes.c_int32),
         ("hold_last_safe_qacc", ctypes.c_double * ARM_DOF),
+        ("safe_hold_used", ctypes.c_int32),
+        ("safety_line_search_used", ctypes.c_int32),
+        ("safety_line_search_attempts", ctypes.c_int32),
+        ("final_output_certified", ctypes.c_int32),
+        ("no_safe_torque", ctypes.c_int32),
         ("full_forward_calls", ctypes.c_int32),
         ("forward_skip_calls", ctypes.c_int32),
         ("validated_pass_count", ctypes.c_int32),
@@ -120,6 +126,7 @@ class _Output(ctypes.Structure):
         ("second_pass_elapsed_ns", ctypes.c_uint64),
         ("rescue_elapsed_ns", ctypes.c_uint64),
         ("hold_last_elapsed_ns", ctypes.c_uint64),
+        ("safety_line_search_elapsed_ns", ctypes.c_uint64),
         ("total_elapsed_ns", ctypes.c_uint64),
     ]
 
@@ -132,6 +139,10 @@ class CppDdqMapperResult:
     full_forward_calls: int
     forward_skip_calls: int
     validated_pass_count: int
+
+
+class CppNoSafeTorqueError(RuntimeError):
+    """原生 mapper 明确报告当前状态不存在认证安全力矩。"""
 
 
 class CppDdqTorqueMapper:
@@ -150,7 +161,7 @@ class CppDdqTorqueMapper:
             )
         self._library = ctypes.CDLL(str(self.library_path))
         self._configure_signatures()
-        if int(self._library.ddq_torque_mapper_abi_version()) != 1:
+        if int(self._library.ddq_torque_mapper_abi_version()) != 2:
             raise RuntimeError("C++ DDQ→力矩 ABI 版本不匹配。")
         self._error = ctypes.create_string_buffer(2048)
         self._handle = self._library.ddq_torque_mapper_create(
@@ -189,6 +200,7 @@ class CppDdqTorqueMapper:
             for name in (
                 "desired_qacc",
                 "tau_nominal",
+                "safe_hold_tau",
                 "previous_executed_tau",
             )
         }
@@ -353,6 +365,7 @@ class CppDdqTorqueMapper:
         desired_qacc,
         tau_nominal,
         previous_executed_tau,
+        safe_hold_tau,
         perturbation,
         regularization,
         validation_scales=(1.0, 0.5, 0.25, 0.125),
@@ -375,8 +388,10 @@ class CppDdqTorqueMapper:
         self._state.ctrl_count = ctrl.size
         desired = self._array(desired_qacc, (ARM_DOF,), "desired_qacc")
         nominal = self._array(tau_nominal, (ARM_DOF,), "tau_nominal")
+        safe_hold = self._array(safe_hold_tau, (ARM_DOF,), "safe_hold_tau")
         np.copyto(self._request_views["desired_qacc"], desired)
         np.copyto(self._request_views["tau_nominal"], nominal)
+        np.copyto(self._request_views["safe_hold_tau"], safe_hold)
         has_previous = previous_executed_tau is not None
         self._request.has_previous_executed_tau = int(has_previous)
         if has_previous:
@@ -413,7 +428,10 @@ class CppDdqTorqueMapper:
                 if status_text
                 else str(status)
             )
-            raise RuntimeError(self._error_text(f"C++ DDQ→力矩 {name}"))
+            error = self._error_text(f"C++ DDQ→力矩 {name}")
+            if status == 6:
+                raise CppNoSafeTorqueError(error)
+            raise RuntimeError(error)
 
         output = self._output
         values = {
@@ -443,6 +461,7 @@ class CppDdqTorqueMapper:
             "second_pass_joint_error_rejections",
             "second_pass_qacc_limit_rejections",
             "safety_fallback_attempts",
+            "safety_line_search_attempts",
         ):
             values[name] = int(getattr(output, name))
         for name in (
@@ -458,6 +477,10 @@ class CppDdqTorqueMapper:
             "hold_last_safe_available",
             "hold_last_safe_used",
             "hold_last_safe_satisfied",
+            "safe_hold_used",
+            "safety_line_search_used",
+            "final_output_certified",
+            "no_safe_torque",
         ):
             values[name] = bool(getattr(output, name))
         for field, native_name in (
@@ -466,6 +489,10 @@ class CppDdqTorqueMapper:
             ("second_pass_time", "second_pass_elapsed_ns"),
             ("rescue_time", "rescue_elapsed_ns"),
             ("hold_last_time", "hold_last_elapsed_ns"),
+            (
+                "safety_line_search_time",
+                "safety_line_search_elapsed_ns",
+            ),
         ):
             values[field] = float(getattr(output, native_name)) * 1e-9
         wall_elapsed_time = (time.perf_counter_ns() - wall_start) * 1e-9

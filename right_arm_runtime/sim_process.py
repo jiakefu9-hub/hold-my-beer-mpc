@@ -41,8 +41,8 @@ from .unitree_shm import (
 
 
 PROTOCOL_MAGIC = 0x475253494D525431
-PROTOCOL_VERSION = 1
-LAYOUT_SIZE = 9920
+PROTOCOL_VERSION = 2
+LAYOUT_SIZE = 9984
 REQUEST_SLOT_OFFSET = 64
 REQUEST_PAYLOAD_OFFSET = 72
 RESPONSE_SLOT_OFFSET = 7168
@@ -73,6 +73,7 @@ STATUS_NAMES = {
     7: "executor_error",
     8: "no_cached_feedforward",
     9: "internal_error",
+    10: "NO_SAFE_TORQUE",
 }
 
 DEFAULT_WORKER_PATH = Path(
@@ -191,7 +192,7 @@ class _Response(ctypes.Structure):
 
 _EXPECTED_LAYOUT = {
     "request_payload_size": 7088,
-    "response_payload_size": 2728,
+    "response_payload_size": 2752,
     "request.qpos_offset": 112,
     "request.qvel_offset": 624,
     "request.reference_qacc_offset": 1136,
@@ -200,8 +201,8 @@ _EXPECTED_LAYOUT = {
     "request.executor_config_offset": 6736,
     "response.rnea_output_offset": 80,
     "response.mapper_output_offset": 216,
-    "response.executor_output_offset": 1688,
-    "response.final_tau_offset": 2176,
+    "response.executor_output_offset": 1712,
+    "response.final_tau_offset": 2200,
 }
 
 
@@ -400,6 +401,11 @@ class SimProcessShadowValidator:
             "hold_last_safe_available",
             "hold_last_safe_used",
             "hold_last_safe_satisfied",
+            "safe_hold_used",
+            "safety_line_search_used",
+            "safety_line_search_attempts",
+            "final_output_certified",
+            "no_safe_torque",
             "full_forward_calls",
             "forward_skip_calls",
             "validated_pass_count",
@@ -649,8 +655,20 @@ class RightArmSimProcess:
                     raise SimRuntimeError("等待C++共享内存超时。")
                 time.sleep(0.001)
         try:
-            if os.fstat(descriptor).st_size != LAYOUT_SIZE:
-                raise SimRuntimeLayoutError("C++共享内存大小不匹配。")
+            # shm_open makes the name visible before ftruncate necessarily
+            # publishes the final size.  This race is observable when both
+            # processes share one CPU, so wait within the same startup budget.
+            observed_size = int(os.fstat(descriptor).st_size)
+            while observed_size != LAYOUT_SIZE:
+                if self._process.poll() is not None:
+                    raise SimRuntimeError(self._worker_failure("启动失败"))
+                if time.monotonic() >= deadline:
+                    raise SimRuntimeLayoutError(
+                        "C++共享内存大小不匹配："
+                        f"expected={LAYOUT_SIZE}, observed={observed_size}。"
+                    )
+                time.sleep(0.001)
+                observed_size = int(os.fstat(descriptor).st_size)
             self._mapping = mmap.mmap(
                 descriptor,
                 LAYOUT_SIZE,
@@ -659,17 +677,30 @@ class RightArmSimProcess:
             )
         finally:
             os.close(descriptor)
-        magic = int.from_bytes(self._mapping[0:8], "little")
-        version = int.from_bytes(self._mapping[8:12], "little")
-        size = int.from_bytes(self._mapping[12:16], "little")
-        if (magic, version, size) != (
-            PROTOCOL_MAGIC,
-            PROTOCOL_VERSION,
-            LAYOUT_SIZE,
-        ):
-            raise SimRuntimeLayoutError(
-                "C++共享内存magic/version/layout_size不匹配。"
+        # shm_open/ftruncate makes the path and final size visible before the
+        # worker has necessarily initialized the header.  With parent and
+        # worker intentionally pinned to one CPU, the parent can otherwise see
+        # the transient all-zero header and misreport an ABI mismatch.  Wait
+        # only for the startup header; the ready pipe below remains the model-
+        # load barrier and no control-loop timing is affected.
+        observed_header = (0, 0, 0)
+        expected_header = (PROTOCOL_MAGIC, PROTOCOL_VERSION, LAYOUT_SIZE)
+        while True:
+            observed_header = (
+                int.from_bytes(self._mapping[0:8], "little"),
+                int.from_bytes(self._mapping[8:12], "little"),
+                int.from_bytes(self._mapping[12:16], "little"),
             )
+            if observed_header == expected_header:
+                break
+            if self._process.poll() is not None:
+                raise SimRuntimeError(self._worker_failure("启动失败"))
+            if time.monotonic() >= deadline:
+                raise SimRuntimeLayoutError(
+                    "C++共享内存magic/version/layout_size不匹配："
+                    f"expected={expected_header}, observed={observed_header}。"
+                )
+            time.sleep(0.001)
         # 共享内存会在模型加载前出现；必须等到Pinocchio/MuJoCo句柄都
         # 构造完成，避免把约0.4 s的一次性启动成本误算进首个控制拍。
         ready, _, _ = select.select(
@@ -910,6 +941,13 @@ class RightArmSimProcess:
             )
             raise SimRuntimeError(
                 f"C++执行失败[{STATUS_NAMES.get(status, status)}]：{error_text}"
+            )
+        if (
+            int(response.mapper_output.final_output_certified) != 1
+            or int(response.mapper_output.no_safe_torque) != 0
+        ):
+            raise SimRuntimeError(
+                "NO_SAFE_TORQUE: C++响应没有认证的 mapper 最终输出。"
             )
         final_tau = np.array(response.final_tau, dtype=np.float64, copy=True)
         if not (

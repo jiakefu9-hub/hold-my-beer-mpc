@@ -29,6 +29,7 @@ typedef enum DdqTorqueMapperStatus {
   DDQ_TORQUE_MAPPER_MODEL_ERROR = 3,
   DDQ_TORQUE_MAPPER_NUMERICAL_ERROR = 4,
   DDQ_TORQUE_MAPPER_INTERNAL_ERROR = 5,
+  DDQ_TORQUE_MAPPER_NO_SAFE_TORQUE = 6,
 } DdqTorqueMapperStatus;
 
 typedef struct DdqTorqueMapperHandle DdqTorqueMapperHandle;
@@ -55,10 +56,11 @@ typedef struct DdqTorqueMapperState {
   int32_t xfrc_applied_count;
 } DdqTorqueMapperState;
 
-/* 【核心输入】本拍右臂期望加速度、名义力矩及可选上一拍安全力矩。 */
+/* 【核心输入】本拍右臂期望加速度、名义力矩、PD safe-hold 及可选上一拍安全力矩。 */
 typedef struct DdqTorqueMapperRequest {
   double desired_qacc[DDQ_TORQUE_MAPPER_ARM_DOF];
   double tau_nominal[DDQ_TORQUE_MAPPER_ARM_DOF];
+  double safe_hold_tau[DDQ_TORQUE_MAPPER_ARM_DOF];
   int32_t has_previous_executed_tau;
   double previous_executed_tau[DDQ_TORQUE_MAPPER_ARM_DOF];
 } DdqTorqueMapperRequest;
@@ -137,6 +139,11 @@ typedef struct DdqTorqueMapperOutput {
   int32_t hold_last_safe_used;
   int32_t hold_last_safe_satisfied;
   double hold_last_safe_qacc[DDQ_TORQUE_MAPPER_ARM_DOF];
+  int32_t safe_hold_used;
+  int32_t safety_line_search_used;
+  int32_t safety_line_search_attempts;
+  int32_t final_output_certified;
+  int32_t no_safe_torque;
 
   /* 【非核心诊断】真实 MuJoCo 调用数及 C++ 内部耗时，单位 ns。 */
   int32_t full_forward_calls;
@@ -147,6 +154,7 @@ typedef struct DdqTorqueMapperOutput {
   uint64_t second_pass_elapsed_ns;
   uint64_t rescue_elapsed_ns;
   uint64_t hold_last_elapsed_ns;
+  uint64_t safety_line_search_elapsed_ns;
   uint64_t total_elapsed_ns;
 } DdqTorqueMapperOutput;
 

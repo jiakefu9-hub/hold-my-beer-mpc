@@ -47,6 +47,7 @@ class NativeRequest(ctypes.Structure):
     _fields_ = [
         ("desired_qacc", ctypes.c_double * ARM_DOF),
         ("tau_nominal", ctypes.c_double * ARM_DOF),
+        ("safe_hold_tau", ctypes.c_double * ARM_DOF),
         ("has_previous_executed_tau", ctypes.c_int32),
         ("previous_executed_tau", ctypes.c_double * ARM_DOF),
     ]
@@ -119,6 +120,11 @@ class NativeOutput(ctypes.Structure):
         ("hold_last_safe_used", ctypes.c_int32),
         ("hold_last_safe_satisfied", ctypes.c_int32),
         ("hold_last_safe_qacc", ctypes.c_double * ARM_DOF),
+        ("safe_hold_used", ctypes.c_int32),
+        ("safety_line_search_used", ctypes.c_int32),
+        ("safety_line_search_attempts", ctypes.c_int32),
+        ("final_output_certified", ctypes.c_int32),
+        ("no_safe_torque", ctypes.c_int32),
         ("full_forward_calls", ctypes.c_int32),
         ("forward_skip_calls", ctypes.c_int32),
         ("validated_pass_count", ctypes.c_int32),
@@ -127,6 +133,7 @@ class NativeOutput(ctypes.Structure):
         ("second_pass_elapsed_ns", ctypes.c_uint64),
         ("rescue_elapsed_ns", ctypes.c_uint64),
         ("hold_last_elapsed_ns", ctypes.c_uint64),
+        ("safety_line_search_elapsed_ns", ctypes.c_uint64),
         ("total_elapsed_ns", ctypes.c_uint64),
     ]
 
@@ -144,6 +151,7 @@ class Case:
     data: mujoco.MjData
     desired_qacc: np.ndarray
     tau_nominal: np.ndarray
+    safe_hold_tau: np.ndarray
     previous_tau: np.ndarray | None
     params: dict
 
@@ -214,6 +222,7 @@ class NativeMapper:
         request = NativeRequest(
             (ctypes.c_double * ARM_DOF)(*case.desired_qacc),
             (ctypes.c_double * ARM_DOF)(*case.tau_nominal),
+            (ctypes.c_double * ARM_DOF)(*case.safe_hold_tau),
             int(case.previous_tau is not None),
             (ctypes.c_double * ARM_DOF)(*previous),
         )
@@ -290,11 +299,21 @@ def make_case(model: mujoco.MjModel, rng: np.random.Generator, index: int) -> Ca
             max_abs_qacc=100.0,
         )
     elif index % 3 == 2:
-        params.update(max_joint_error=1.0, max_abs_qacc=2.0)
+        # 随机浮动基/接触状态并不保证任意给定 hold torque 能满足很小的
+        # 绝对 qacc 门槛；parity 基准只比较成功返回路径，专门的安全门
+        # 单测另外覆盖 line-search 与 NO_SAFE_TORQUE。
+        params.update(max_joint_error=1.0, max_abs_qacc=100.0)
     desired_qacc = rng.uniform(-7.0, 7.0, ARM_DOF)
     tau_nominal = rng.uniform(-20.0, 20.0, ARM_DOF)
     previous_tau = rng.uniform(-12.0, 12.0, ARM_DOF) if index % 2 else None
-    return Case(data, desired_qacc, tau_nominal, previous_tau, params)
+    return Case(
+        data,
+        desired_qacc,
+        tau_nominal,
+        np.zeros(ARM_DOF, dtype=np.float64),
+        previous_tau,
+        params,
+    )
 
 
 def python_compute(model, scratch, qvel_indices, ctrl_indices, limits, case, function):
@@ -309,6 +328,7 @@ def python_compute(model, scratch, qvel_indices, ctrl_indices, limits, case, fun
         ctrl_indices,
         limits,
         previous_executed_tau=case.previous_tau,
+        safe_hold_tau=case.safe_hold_tau,
         **case.params,
     )
 
@@ -394,6 +414,11 @@ def main():
         "hold_last_safe_available",
         "hold_last_safe_used",
         "hold_last_safe_satisfied",
+        "safe_hold_used",
+        "safety_line_search_used",
+        "safety_line_search_attempts",
+        "final_output_certified",
+        "no_safe_torque",
     )
     coverage = {"second": 0, "rescue": 0, "hold_attempt": 0, "hold_used": 0}
     try:
@@ -414,6 +439,7 @@ def main():
                 desired_qacc=case.desired_qacc,
                 tau_nominal=case.tau_nominal,
                 previous_executed_tau=case.previous_tau,
+                safe_hold_tau=case.safe_hold_tau,
                 **case.params,
             )
             array_pairs = {
@@ -646,6 +672,7 @@ def main():
             "desired_qacc": benchmark_case.desired_qacc,
             "tau_nominal": benchmark_case.tau_nominal,
             "previous_executed_tau": benchmark_case.previous_tau,
+            "safe_hold_tau": benchmark_case.safe_hold_tau,
             **benchmark_case.params,
         }
         # 先完成一次稳定 data pointer 和参数缓存绑定，再测生产热路径。

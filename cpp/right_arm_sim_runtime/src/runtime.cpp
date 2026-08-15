@@ -419,6 +419,7 @@ private:
                 response.rnea_output.tau_ff[joint] + request.tau_pd[joint],
                 request.executor_config.tau_min[joint],
                 request.executor_config.tau_max[joint]);
+            mapper_request.safe_hold_tau[joint] = request.tau_pd[joint];
             mapper_request.previous_executed_tau[joint] =
                 request.previous_executed_tau[joint];
         }
@@ -451,10 +452,20 @@ private:
             static_cast<std::int32_t>(error.size()));
         if (mapper_status != DDQ_TORQUE_MAPPER_OK) {
             response.status = static_cast<std::uint32_t>(
-                RuntimeStatus::kMapperError);
+                mapper_status == DDQ_TORQUE_MAPPER_NO_SAFE_TORQUE
+                    ? RuntimeStatus::kNoSafeTorque
+                    : RuntimeStatus::kMapperError);
             CopyError(
                 response.error,
                 std::string("ddq_torque_mapper_compute: ") + error.data());
+            return false;
+        }
+        if (response.mapper_output.final_output_certified == 0 ||
+            response.mapper_output.no_safe_torque != 0) {
+            response.status = static_cast<std::uint32_t>(
+                RuntimeStatus::kNoSafeTorque);
+            CopyError(response.error,
+                      "mapper returned no certified final output");
             return false;
         }
         for (std::size_t joint = 0; joint < kArmDof; ++joint) {
@@ -516,6 +527,7 @@ const char* RuntimeStatusString(RuntimeStatus status) noexcept {
         case RuntimeStatus::kNoCachedFeedforward:
             return "no_cached_feedforward";
         case RuntimeStatus::kInternalError: return "internal_error";
+        case RuntimeStatus::kNoSafeTorque: return "NO_SAFE_TORQUE";
     }
     return "unknown";
 }

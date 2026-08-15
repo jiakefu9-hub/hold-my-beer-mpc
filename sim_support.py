@@ -448,17 +448,27 @@ class ForwardDynamicsMappingResult:
     hold_last_safe_used: bool
     hold_last_safe_satisfied: bool
     hold_last_safe_qacc: np.ndarray
+    safe_hold_used: bool
+    safety_line_search_used: bool
+    safety_line_search_attempts: int
+    final_output_certified: bool
+    no_safe_torque: bool
     elapsed_time: float = 0.0
     baseline_time: float = 0.0
     first_pass_time: float = 0.0
     second_pass_time: float = 0.0
     rescue_time: float = 0.0
     hold_last_time: float = 0.0
+    safety_line_search_time: float = 0.0
     backend: str = "python_mujoco"
     core_elapsed_time: float = 0.0
     full_forward_calls: int = 0
     forward_skip_calls: int = 0
     validated_pass_count: int = 0
+
+
+class NoSafeTorqueError(RuntimeError):
+    """当前状态不存在经过 mapper 实际验收的可输出右臂力矩。"""
 
 
 @dataclass
@@ -2108,12 +2118,18 @@ def build_right_arm_control_record(
             "forward_dynamics_hold_last_safe_used": False,
             "forward_dynamics_hold_last_safe_satisfied": False,
             "forward_dynamics_hold_last_safe_qacc": zeros,
+            "forward_dynamics_safe_hold_used": False,
+            "forward_dynamics_safety_line_search_used": False,
+            "forward_dynamics_safety_line_search_attempts": 0,
+            "forward_dynamics_final_output_certified": False,
+            "forward_dynamics_no_safe_torque": False,
             "forward_dynamics_mapping_time": 0.0,
             "forward_dynamics_baseline_time": 0.0,
             "forward_dynamics_first_pass_time": 0.0,
             "forward_dynamics_second_pass_time": 0.0,
             "forward_dynamics_rescue_time": 0.0,
             "forward_dynamics_hold_last_time": 0.0,
+            "forward_dynamics_safety_line_search_time": 0.0,
         }
     else:
         mapping_values = {
@@ -2167,12 +2183,18 @@ def build_right_arm_control_record(
             "forward_dynamics_hold_last_safe_used": mapping_result.hold_last_safe_used,
             "forward_dynamics_hold_last_safe_satisfied": mapping_result.hold_last_safe_satisfied,
             "forward_dynamics_hold_last_safe_qacc": mapping_result.hold_last_safe_qacc,
+            "forward_dynamics_safe_hold_used": mapping_result.safe_hold_used,
+            "forward_dynamics_safety_line_search_used": mapping_result.safety_line_search_used,
+            "forward_dynamics_safety_line_search_attempts": mapping_result.safety_line_search_attempts,
+            "forward_dynamics_final_output_certified": mapping_result.final_output_certified,
+            "forward_dynamics_no_safe_torque": mapping_result.no_safe_torque,
             "forward_dynamics_mapping_time": mapping_result.elapsed_time,
             "forward_dynamics_baseline_time": mapping_result.baseline_time,
             "forward_dynamics_first_pass_time": mapping_result.first_pass_time,
             "forward_dynamics_second_pass_time": mapping_result.second_pass_time,
             "forward_dynamics_rescue_time": mapping_result.rescue_time,
             "forward_dynamics_hold_last_time": mapping_result.hold_last_time,
+            "forward_dynamics_safety_line_search_time": mapping_result.safety_line_search_time,
         }
 
     return {
@@ -2765,6 +2787,7 @@ def local_forward_dynamics_torque_mapping(
     enable_second_pass=True,
     max_safety_rescue_passes=2,
     previous_executed_tau=None,
+    safe_hold_tau=None,
 ):
     """局部线性求力矩；候选按模型排序并按需验收。"""
     mapping_start = time.perf_counter()
@@ -2779,9 +2802,14 @@ def local_forward_dynamics_torque_mapping(
         if previous_executed_tau is None
         else np.asarray(previous_executed_tau, dtype=np.float64)
     )
+    safe_hold_tau = np.asarray(safe_hold_tau, dtype=np.float64)
     joint_count = len(qvel_indices)
     if desired_qacc.shape != (joint_count,) or tau_nominal.shape != (joint_count,):
         raise ValueError("前向动力学映射的 desired_qacc/tau_nominal 维度不正确。")
+    if safe_hold_tau.shape != (joint_count,):
+        raise ValueError("safe_hold_tau 维度不正确。")
+    if not np.all(np.isfinite(safe_hold_tau)):
+        raise ValueError("safe_hold_tau 包含 NaN 或 Inf。")
     if fixed_ctrl.shape != (model.nu,) or torque_limits.shape != (joint_count, 2):
         raise ValueError("前向动力学映射的 ctrl/torque_limits 维度不正确。")
     if (
@@ -3080,29 +3108,94 @@ def local_forward_dynamics_torque_mapping(
             safety_fallback_satisfied = True
         hold_last_time = time.perf_counter() - hold_last_start
 
-    zero_vector = np.zeros(joint_count, dtype=np.float64)
-    zero_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
-    tau_cmd = (
+    # 正常候选、second pass、rescue 和 hold-last 均不安全时，才进入
+    # 当前 PD safe-hold 的最终安全门。所有候选都用当前状态的真实
+    # forward dynamics 验收，插值本身从不被当作安全证据。
+    safe_hold_used = False
+    safety_line_search_used = False
+    safety_line_search_attempts = 0
+    safety_line_search_time = 0.0
+    final_output_certified = bool(safety_fallback_satisfied)
+    certified_tau = (
         np.clip(previous_executed_tau, torque_limits[:, 0], torque_limits[:, 1])
         if hold_last_safe_used
-        else final_pass["tau_cmd"]
+        else final_pass["tau_cmd"].copy()
     )
-    tau_correction = tau_cmd - tau_nominal
-    qacc_predicted = (
+    certified_qacc = (
         hold_last_safe_qacc.copy()
         if hold_last_safe_used
+        else final_pass["qacc_validated"].copy()
+    )
+    if not final_output_certified:
+        final_safety_start = time.perf_counter()
+        clipped_safe_hold_tau = np.clip(
+            safe_hold_tau, torque_limits[:, 0], torque_limits[:, 1]
+        )
+        scratch.ctrl[:] = fixed_ctrl
+        scratch.ctrl[ctrl_indices] = clipped_safe_hold_tau
+        scratch.qacc_warmstart[:] = qacc_warmstart
+        mujoco.mj_forwardSkip(
+            model, scratch, mujoco.mjtStage.mjSTAGE_VEL, 1
+        )
+        safe_hold_qacc = scratch.qacc[qvel_indices].copy()
+        safe_hold_certified = bool(
+            np.all(np.isfinite(safe_hold_qacc))
+            and np.max(np.abs(safe_hold_qacc)) <= float(max_abs_qacc)
+        )
+        if not safe_hold_certified:
+            raise NoSafeTorqueError(
+                "NO_SAFE_TORQUE: clipped PD safe-hold failed current-state "
+                "forward-dynamics certification"
+            )
+        for line_search_lambda in (0.8, 0.6, 0.4, 0.2):
+            safety_line_search_attempts += 1
+            candidate_tau = np.clip(
+                clipped_safe_hold_tau
+                + line_search_lambda
+                * (final_pass["tau_cmd"] - clipped_safe_hold_tau),
+                torque_limits[:, 0],
+                torque_limits[:, 1],
+            )
+            scratch.ctrl[:] = fixed_ctrl
+            scratch.ctrl[ctrl_indices] = candidate_tau
+            scratch.qacc_warmstart[:] = qacc_warmstart
+            mujoco.mj_forwardSkip(
+                model, scratch, mujoco.mjtStage.mjSTAGE_VEL, 1
+            )
+            candidate_qacc = scratch.qacc[qvel_indices].copy()
+            if (
+                np.all(np.isfinite(candidate_qacc))
+                and np.max(np.abs(candidate_qacc)) <= float(max_abs_qacc)
+            ):
+                certified_tau = candidate_tau
+                certified_qacc = candidate_qacc
+                safety_line_search_used = True
+                break
+        if not safety_line_search_used:
+            certified_tau = clipped_safe_hold_tau
+            certified_qacc = safe_hold_qacc
+            safe_hold_used = True
+        safety_line_search_time = time.perf_counter() - final_safety_start
+        safety_fallback_satisfied = True
+        final_output_certified = True
+
+    zero_vector = np.zeros(joint_count, dtype=np.float64)
+    zero_matrix = np.zeros((joint_count, joint_count), dtype=np.float64)
+    tau_cmd = certified_tau
+    tau_correction = tau_cmd - tau_nominal
+    qacc_predicted = (
+        certified_qacc.copy()
+        if hold_last_safe_used or safe_hold_used or safety_line_search_used
         else final_pass["qacc_predicted"]
     )
     qacc_validated = (
-        hold_last_safe_qacc.copy()
-        if hold_last_safe_used
-        else final_pass["qacc_validated"]
+        certified_qacc.copy()
     )
     qacc_prediction_error = qacc_predicted - desired_qacc
     qacc_validation_error = qacc_validated - desired_qacc
     qacc_linearization_error = (
         zero_vector.copy()
-        if hold_last_safe_used
+        if hold_last_safe_used or safe_hold_used or safety_line_search_used
         else final_pass["qacc_linearization_error"]
     )
     gain_matrix = final_pass["gain_matrix"]
@@ -3113,7 +3206,9 @@ def local_forward_dynamics_torque_mapping(
         tau_correction_raw=first_pass["correction_raw"],
         tau_correction=tau_correction,
         tau_cmd_raw=(
-            tau_cmd.copy() if hold_last_safe_used else final_pass["tau_cmd_raw"]
+            tau_cmd.copy()
+            if hold_last_safe_used or safe_hold_used or safety_line_search_used
+            else final_pass["tau_cmd_raw"]
         ),
         qacc_baseline=qacc_baseline,
         qacc_predicted=qacc_predicted,
@@ -3195,11 +3290,17 @@ def local_forward_dynamics_torque_mapping(
         hold_last_safe_used=hold_last_safe_used,
         hold_last_safe_satisfied=hold_last_safe_satisfied,
         hold_last_safe_qacc=hold_last_safe_qacc,
+        safe_hold_used=safe_hold_used,
+        safety_line_search_used=safety_line_search_used,
+        safety_line_search_attempts=safety_line_search_attempts,
+        final_output_certified=final_output_certified,
+        no_safe_torque=False,
         baseline_time=baseline_time,
         first_pass_time=first_pass_time,
         second_pass_time=second_pass_time,
         rescue_time=rescue_time,
         hold_last_time=hold_last_time,
+        safety_line_search_time=safety_line_search_time,
     )
     mapping_result.elapsed_time = time.perf_counter() - mapping_start
     return tau_cmd, mapping_result
@@ -3265,6 +3366,7 @@ def forward_dynamics_result_from_cpp_mapper_response(
             "second_pass_joint_error_rejections",
             "second_pass_qacc_limit_rejections",
             "safety_fallback_attempts",
+            "safety_line_search_attempts",
         )
         bool_names = (
             "validation_improved",
@@ -3279,6 +3381,10 @@ def forward_dynamics_result_from_cpp_mapper_response(
             "hold_last_safe_available",
             "hold_last_safe_used",
             "hold_last_safe_satisfied",
+            "safe_hold_used",
+            "safety_line_search_used",
+            "final_output_certified",
+            "no_safe_torque",
         )
         values = {
             name: np.array(
@@ -3313,6 +3419,10 @@ def forward_dynamics_result_from_cpp_mapper_response(
             ("second_pass_time", "second_pass_elapsed_ns"),
             ("rescue_time", "rescue_elapsed_ns"),
             ("hold_last_time", "hold_last_elapsed_ns"),
+            (
+                "safety_line_search_time",
+                "safety_line_search_elapsed_ns",
+            ),
         ):
             values[field] = float(getattr(response, native_name)) * 1e-9
     if "tau_cmd" not in values:
@@ -3352,6 +3462,7 @@ def cpp_local_forward_dynamics_torque_mapping(
     desired_qacc,
     tau_nominal,
     previous_executed_tau=None,
+    safe_hold_tau=None,
     perturbation=0.1,
     regularization=5.0,
     validation_scales=(1.0, 0.5, 0.25, 0.125),
@@ -3370,6 +3481,7 @@ def cpp_local_forward_dynamics_torque_mapping(
         desired_qacc=desired_qacc,
         tau_nominal=tau_nominal,
         previous_executed_tau=previous_executed_tau,
+        safe_hold_tau=safe_hold_tau,
         perturbation=perturbation,
         regularization=regularization,
         validation_scales=validation_scales,
@@ -3524,6 +3636,7 @@ def apply_computed_torque_control(
             forward_dynamics_max_safety_rescue_passes
         ),
         "previous_executed_tau": previous_executed_tau,
+        "safe_hold_tau": tau_pd,
     }
     if mapping_backend_name == "python":
         tau_cmd, mapping_result = local_forward_dynamics_torque_mapping(
@@ -5040,9 +5153,19 @@ def create_eval_run_dir(
     directory_name = timestamp + (f"_{safe_label}" if safe_label else "")
     run_dir = os.path.join(base_dir, experiment_name, directory_name)
     os.makedirs(run_dir, exist_ok=False)
-    with open(os.path.join(run_dir, "run_metadata.json"), "w", encoding="utf-8") as f:
-        json.dump(_to_serializable(run_metadata), f, indent=2, ensure_ascii=False)
+    save_run_metadata(run_dir, run_metadata)
     return run_dir
+
+
+def save_run_metadata(run_dir, run_metadata):
+    """Write or refresh one rollout's metadata after live-worker preflight."""
+
+    with open(
+        os.path.join(run_dir, "run_metadata.json"), "w", encoding="utf-8"
+    ) as f:
+        json.dump(
+            _to_serializable(run_metadata), f, indent=2, ensure_ascii=False
+        )
 
 
 def build_run_metadata(config_file, experiment_name, policy_type, controller_notes, controller_meta, cmd_nominal, simulation_dt, gait_period, warmup_cycles, evaluation_cycles, cooldown_cycles):
@@ -5179,12 +5302,18 @@ def init_eval_buffers():
             "right_arm_forward_dynamics_hold_last_safe_used": [],
             "right_arm_forward_dynamics_hold_last_safe_satisfied": [],
             "right_arm_forward_dynamics_hold_last_safe_qacc": [],
+            "right_arm_forward_dynamics_safe_hold_used": [],
+            "right_arm_forward_dynamics_safety_line_search_used": [],
+            "right_arm_forward_dynamics_safety_line_search_attempts": [],
+            "right_arm_forward_dynamics_final_output_certified": [],
+            "right_arm_forward_dynamics_no_safe_torque": [],
             "right_arm_forward_dynamics_mapping_time": [],
             "right_arm_forward_dynamics_baseline_time": [],
             "right_arm_forward_dynamics_first_pass_time": [],
             "right_arm_forward_dynamics_second_pass_time": [],
             "right_arm_forward_dynamics_rescue_time": [],
             "right_arm_forward_dynamics_hold_last_time": [],
+            "right_arm_forward_dynamics_safety_line_search_time": [],
             "torso_lin_vel_world": [],
             "torso_ang_vel_world": [],
             "torso_acc_world_raw": [],
@@ -6917,6 +7046,42 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         ),
         dtype=bool,
     )
+    safe_hold_used_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safe_hold_used", []
+        ),
+        dtype=bool,
+    )
+    line_search_used_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safety_line_search_used", []
+        ),
+        dtype=bool,
+    )
+    line_search_attempts_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safety_line_search_attempts", []
+        ),
+        dtype=np.int64,
+    )
+    final_certified_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_final_output_certified", []
+        ),
+        dtype=bool,
+    )
+    no_safe_torque_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_no_safe_torque", []
+        ),
+        dtype=bool,
+    )
+    line_search_time_all = np.asarray(
+        trajectory_data.get(
+            "right_arm_forward_dynamics_safety_line_search_time", []
+        ),
+        dtype=np.float64,
+    )
     branch_arrays_valid = all(
         value.shape == execution_mask.shape
         for value in (
@@ -6926,6 +7091,12 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
             rescue_satisfied_all,
             rescue_attempts_all,
             hold_used_all,
+            safe_hold_used_all,
+            line_search_used_all,
+            line_search_attempts_all,
+            final_certified_all,
+            no_safe_torque_all,
+            line_search_time_all,
         )
     )
     execution_branch_summary = {}
@@ -6958,6 +7129,34 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
                 np.count_nonzero(final_safe & ~hold_used)
             ),
             "hold_last_succeeded_count": int(np.count_nonzero(hold_used)),
+            "safe_hold_used_count": int(
+                np.count_nonzero(executed & safe_hold_used_all)
+            ),
+            "safety_line_search_used_count": int(
+                np.count_nonzero(executed & line_search_used_all)
+            ),
+            "safety_line_search_attempt_count": int(
+                np.sum(line_search_attempts_all[executed])
+            ),
+            "safety_line_search_max_attempts_per_call": int(
+                np.max(line_search_attempts_all[executed], initial=0)
+            ),
+            "safety_line_search_extra_time_ms": {
+                "total": float(np.sum(line_search_time_all[executed]) * 1e3),
+                "mean_when_triggered": float(
+                    np.mean(line_search_time_all[executed & (line_search_time_all > 0.0)])
+                    * 1e3
+                )
+                if np.any(executed & (line_search_time_all > 0.0))
+                else 0.0,
+                "max": float(np.max(line_search_time_all[executed], initial=0.0) * 1e3),
+            },
+            "final_output_uncertified_count": int(
+                np.count_nonzero(executed & ~final_certified_all)
+            ),
+            "no_safe_torque_count": int(
+                np.count_nonzero(executed & no_safe_torque_all)
+            ),
             "final_unsafe_count": int(
                 np.count_nonzero(rescue & ~rescue_satisfied_all)
             ),
@@ -8060,6 +8259,7 @@ def save_control_preview(run_dir, trajectory_data):
         "right_arm_forward_dynamics_second_pass_time",
         "right_arm_forward_dynamics_rescue_time",
         "right_arm_forward_dynamics_hold_last_time",
+        "right_arm_forward_dynamics_safety_line_search_time",
         "right_arm_forward_dynamics_condition_number",
         "right_arm_forward_dynamics_validation_scale",
         "right_arm_forward_dynamics_validation_attempts",
@@ -8087,6 +8287,11 @@ def save_control_preview(run_dir, trajectory_data):
         "right_arm_forward_dynamics_hold_last_safe_available",
         "right_arm_forward_dynamics_hold_last_safe_used",
         "right_arm_forward_dynamics_hold_last_safe_satisfied",
+        "right_arm_forward_dynamics_safe_hold_used",
+        "right_arm_forward_dynamics_safety_line_search_used",
+        "right_arm_forward_dynamics_safety_line_search_attempts",
+        "right_arm_forward_dynamics_final_output_certified",
+        "right_arm_forward_dynamics_no_safe_torque",
         "heading_reference_world",
         "heading_yaw_unwrapped",
         "heading_yaw_filtered",
@@ -8327,6 +8532,27 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     forward_dynamics_hold_last_safe_qacc = control_vector(
         "forward_dynamics_hold_last_safe_qacc", 5
     )
+    forward_dynamics_safe_hold_used = bool(
+        right_arm_control.get("forward_dynamics_safe_hold_used", False)
+    )
+    forward_dynamics_safety_line_search_used = bool(
+        right_arm_control.get(
+            "forward_dynamics_safety_line_search_used", False
+        )
+    )
+    forward_dynamics_safety_line_search_attempts = int(
+        right_arm_control.get(
+            "forward_dynamics_safety_line_search_attempts", 0
+        )
+    )
+    forward_dynamics_final_output_certified = bool(
+        right_arm_control.get(
+            "forward_dynamics_final_output_certified", False
+        )
+    )
+    forward_dynamics_no_safe_torque = bool(
+        right_arm_control.get("forward_dynamics_no_safe_torque", False)
+    )
     inverse_dynamics_time = control_scalar("inverse_dynamics_time")
     inverse_dynamics_backend_time = control_scalar(
         "inverse_dynamics_backend_time"
@@ -8360,6 +8586,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     forward_dynamics_hold_last_time = control_scalar(
         "forward_dynamics_hold_last_time"
+    )
+    forward_dynamics_safety_line_search_time = control_scalar(
+        "forward_dynamics_safety_line_search_time"
     )
     tau_cmd_raw = np.asarray(right_arm_control.get("tau_cmd_raw", tau_ff + tau_pd), dtype=np.float64).copy()
     tau_limit_lower = np.asarray(right_arm_control.get("tau_limit_lower", np.full(5, -np.inf)), dtype=np.float64).copy()
@@ -8662,6 +8891,11 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_used"].append(forward_dynamics_hold_last_safe_used)
     buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_satisfied"].append(forward_dynamics_hold_last_safe_satisfied)
     buffers.trajectory_data["right_arm_forward_dynamics_hold_last_safe_qacc"].append(forward_dynamics_hold_last_safe_qacc)
+    buffers.trajectory_data["right_arm_forward_dynamics_safe_hold_used"].append(forward_dynamics_safe_hold_used)
+    buffers.trajectory_data["right_arm_forward_dynamics_safety_line_search_used"].append(forward_dynamics_safety_line_search_used)
+    buffers.trajectory_data["right_arm_forward_dynamics_safety_line_search_attempts"].append(forward_dynamics_safety_line_search_attempts)
+    buffers.trajectory_data["right_arm_forward_dynamics_final_output_certified"].append(forward_dynamics_final_output_certified)
+    buffers.trajectory_data["right_arm_forward_dynamics_no_safe_torque"].append(forward_dynamics_no_safe_torque)
     buffers.trajectory_data["right_arm_forward_dynamics_mapping_time"].append(
         forward_dynamics_mapping_time
     )
@@ -8679,6 +8913,9 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     buffers.trajectory_data["right_arm_forward_dynamics_hold_last_time"].append(
         forward_dynamics_hold_last_time
+    )
+    buffers.trajectory_data["right_arm_forward_dynamics_safety_line_search_time"].append(
+        forward_dynamics_safety_line_search_time
     )
     buffers.trajectory_data["torso_lin_vel_world"].append(torso_lin_vel)
     buffers.trajectory_data["torso_ang_vel_world"].append(torso_ang_vel)

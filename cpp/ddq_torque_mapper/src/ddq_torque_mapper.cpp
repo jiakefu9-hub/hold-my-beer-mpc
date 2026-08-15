@@ -21,7 +21,9 @@
 namespace {
 
 constexpr int kArmDof = DDQ_TORQUE_MAPPER_ARM_DOF;
-constexpr int kAbiVersion = 1;
+constexpr int kAbiVersion = 2;
+constexpr std::array<double, 4> kSafetyLineSearchLambdas = {
+    0.8, 0.6, 0.4, 0.2};
 
 using Clock = std::chrono::steady_clock;
 using Vector5 = Eigen::Matrix<double, kArmDof, 1>;
@@ -224,6 +226,7 @@ int validate_inputs(const DdqTorqueMapperHandle& handle,
       !all_finite(state->xfrc_applied, 6 * model->nbody) ||
       !all_finite(request->desired_qacc, kArmDof) ||
       !all_finite(request->tau_nominal, kArmDof) ||
+      !all_finite(request->safe_hold_tau, kArmDof) ||
       (request->has_previous_executed_tau != 0 &&
        !all_finite(request->previous_executed_tau, kArmDof))) {
     error = "输入包含空指针、NaN 或 Inf。";
@@ -514,6 +517,8 @@ const char* ddq_torque_mapper_status_string(const int32_t status) {
       return "numerical error";
     case DDQ_TORQUE_MAPPER_INTERNAL_ERROR:
       return "internal error";
+    case DDQ_TORQUE_MAPPER_NO_SAFE_TORQUE:
+      return "NO_SAFE_TORQUE";
     default:
       return "unknown status";
   }
@@ -738,21 +743,102 @@ int32_t ddq_torque_mapper_compute(
       output->hold_last_elapsed_ns = elapsed_ns(hold_start);
     }
 
-    const Vector5 tau_cmd = hold_last_safe_used ? hold_tau : final_pass.tau_cmd;
-    const Vector5 qacc_predicted =
-        hold_last_safe_used ? hold_last_safe_qacc : final_pass.qacc_predicted;
-    const Vector5 qacc_validated =
+    // 【最终安全门】正常候选、second pass、rescue 和本拍重新验收的
+    // hold-last 都失败后，才验证调用方提供的当前 PD safe-hold。safe-hold
+    // 自身不安全时 fail closed；绝不再返回 final_pass 的未认证力矩。
+    bool safe_hold_used = false;
+    bool safety_line_search_used = false;
+    int safety_line_search_attempts = 0;
+    bool final_output_certified = safety_fallback_satisfied;
+    Vector5 certified_tau =
+        hold_last_safe_used ? hold_tau : final_pass.tau_cmd;
+    Vector5 certified_qacc =
         hold_last_safe_used ? hold_last_safe_qacc : final_pass.qacc_validated;
+    if (!final_output_certified) {
+      const auto final_safety_start = Clock::now();
+      const Vector5 safe_hold_tau =
+          clip_vector(load_vector5(request->safe_hold_tau),
+                      handle->torque_lower,
+                      handle->torque_upper);
+      prepare_ctrl(*handle, safe_hold_tau, handle->warmstart);
+      mj_forwardSkip(handle->model.get(), handle->scratch.get(), mjSTAGE_VEL, 1);
+      ++forward_skip_calls;
+      const Vector5 safe_hold_qacc = read_right_arm_qacc(*handle);
+      const bool safe_hold_certified =
+          safe_hold_qacc.allFinite() &&
+          max_abs(safe_hold_qacc) <= params->max_abs_qacc;
+      if (!safe_hold_certified) {
+        output->safety_line_search_attempts = 0;
+        output->final_output_certified = 0;
+        output->no_safe_torque = 1;
+        output->forward_skip_calls = forward_skip_calls;
+        output->validated_pass_count = validated_pass_count;
+        output->safety_line_search_elapsed_ns =
+            elapsed_ns(final_safety_start);
+        output->total_elapsed_ns = elapsed_ns(total_start);
+        set_error(error_message, error_message_capacity,
+                  "NO_SAFE_TORQUE: clipped PD safe-hold failed current-state "
+                  "forward-dynamics certification");
+        return DDQ_TORQUE_MAPPER_NO_SAFE_TORQUE;
+      }
+
+      // 这是 safe-hold 与 best_tau 之间的凸插值。lambda 从接近 1 向 0
+      // 回退；每个中间点都必须经过真实 forward dynamics，首个安全点
+      // 即为这组有界候选中离 best_tau 最近者。
+      for (const double lambda : kSafetyLineSearchLambdas) {
+        ++safety_line_search_attempts;
+        const Vector5 candidate_tau = clip_vector(
+            safe_hold_tau + lambda * (final_pass.tau_cmd - safe_hold_tau),
+            handle->torque_lower,
+            handle->torque_upper);
+        prepare_ctrl(*handle, candidate_tau, handle->warmstart);
+        mj_forwardSkip(
+            handle->model.get(), handle->scratch.get(), mjSTAGE_VEL, 1);
+        ++forward_skip_calls;
+        const Vector5 candidate_qacc = read_right_arm_qacc(*handle);
+        if (candidate_qacc.allFinite() &&
+            max_abs(candidate_qacc) <= params->max_abs_qacc) {
+          certified_tau = candidate_tau;
+          certified_qacc = candidate_qacc;
+          safety_line_search_used = true;
+          break;
+        }
+      }
+      if (!safety_line_search_used) {
+        certified_tau = safe_hold_tau;
+        certified_qacc = safe_hold_qacc;
+        safe_hold_used = true;
+      }
+      safety_fallback_satisfied = true;
+      final_output_certified = true;
+      output->safety_line_search_elapsed_ns =
+          elapsed_ns(final_safety_start);
+    }
+
+    const Vector5 tau_cmd = certified_tau;
+    const bool direct_certified_fallback =
+        safe_hold_used || safety_line_search_used;
+    const Vector5 qacc_predicted = direct_certified_fallback
+        ? certified_qacc
+        : (hold_last_safe_used
+               ? hold_last_safe_qacc
+               : final_pass.qacc_predicted);
+    const Vector5 qacc_validated = certified_qacc;
     const Vector5 qacc_prediction_error = qacc_predicted - desired_qacc;
     const Vector5 qacc_validation_error = qacc_validated - desired_qacc;
     const Vector5 qacc_linearization_error =
-        hold_last_safe_used ? Vector5::Zero() : final_pass.qacc_linearization_error;
+        (hold_last_safe_used || direct_certified_fallback)
+            ? Vector5::Zero()
+            : final_pass.qacc_linearization_error;
 
     store_vector5(tau_cmd, output->tau_cmd);
     store_vector5(tau_nominal, output->tau_nominal);
     store_vector5(first_pass.correction_raw, output->tau_correction_raw);
     store_vector5(tau_cmd - tau_nominal, output->tau_correction);
-    store_vector5(hold_last_safe_used ? tau_cmd : final_pass.tau_cmd_raw,
+    store_vector5(
+                  (hold_last_safe_used || direct_certified_fallback)
+                      ? tau_cmd
+                      : final_pass.tau_cmd_raw,
                   output->tau_cmd_raw);
     store_vector5(qacc_baseline, output->qacc_baseline);
     store_vector5(qacc_predicted, output->qacc_predicted);
@@ -836,6 +922,13 @@ int32_t ddq_torque_mapper_compute(
     output->hold_last_safe_satisfied =
         static_cast<int32_t>(hold_last_safe_satisfied);
     store_vector5(hold_last_safe_qacc, output->hold_last_safe_qacc);
+    output->safe_hold_used = static_cast<int32_t>(safe_hold_used);
+    output->safety_line_search_used =
+        static_cast<int32_t>(safety_line_search_used);
+    output->safety_line_search_attempts = safety_line_search_attempts;
+    output->final_output_certified =
+        static_cast<int32_t>(final_output_certified);
+    output->no_safe_torque = 0;
     output->forward_skip_calls = forward_skip_calls;
     output->validated_pass_count = validated_pass_count;
     output->total_elapsed_ns = elapsed_ns(total_start);

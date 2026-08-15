@@ -1,0 +1,361 @@
+{
+  "collector_schema_extension_version": "full_task_fixed_pd_extension_v2",
+  "protocol": {
+    "name": "full_task_direct_step",
+    "version": "full_task_direct_step_v1",
+    "physics_dt": 0.002,
+    "anchor_dt": 0.006,
+    "policy_dt": 0.02,
+    "gait_period": 0.8,
+    "stop_time": 6.4,
+    "headline_interval": "[0.0,8.0)",
+    "record_end": 8.06,
+    "horizon": 9,
+    "planned_command": "nominal vx/vy for [0,6.4), direct zero vx/vy for [6.4,8.06]; planned wz is nominal feedforward",
+    "task_t0": "planned command visible; no claim of physical motion; first lower-body policy consumption is 20 ms"
+  },
+  "time_semantics": {
+    "strict_pre_step": "state/commands/final ctrl describe [t,t+2ms) and are saved before mj_step",
+    "template_anchor": "6ms absolute task-time grid",
+    "horizon_frame": "H frozen from anchor through its complete 54ms future window"
+  },
+  "episode": {
+    "episode_id": "heldout_pair_02_minus",
+    "role": "heldout",
+    "pair_id": "heldout_pair_02",
+    "pair_seed": 4102,
+    "sign": -1,
+    "initial_lower_q_offset_rad": [
+      -0.0003951434950944079,
+      0.0024490684431391946,
+      0.005583409752412668,
+      0.001672508593580433,
+      0.007007670647517819,
+      -0.001566892126522003,
+      0.010314223996966933,
+      0.0002878334529494862,
+      0.0017488974806982392,
+      0.00039593622739851045,
+      0.0013482231942699443,
+      0.00770744468727639
+    ],
+    "initial_lower_dq_rad_s": [
+      0.005237634168621501,
+      0.012594515268565039,
+      -0.0008212634654266317,
+      -0.01587046683162143,
+      -0.01490462000354187,
+      -0.009102644450201699,
+      0.0051151943442091,
+      0.010375596775277749,
+      0.00015991710719299082,
+      -0.014356489966427459,
+      0.013310587369280522,
+      0.0030117728854349157
+    ]
+  },
+  "right_arm": {
+    "right_arm_mode": "fixed_posture_pd",
+    "mechanism_source": "B1_fixed_joint_space_pd_semantics",
+    "upper_body_target": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "upper_body_kp": [
+      100.0,
+      80.0,
+      80.0,
+      60.0,
+      80.0,
+      30.0,
+      80.0,
+      80.0,
+      60.0,
+      80.0,
+      30.0
+    ],
+    "upper_body_kd": [
+      15.0,
+      5.0,
+      5.0,
+      3.0,
+      2.0,
+      1.0,
+      5.0,
+      5.0,
+      3.0,
+      2.0,
+      1.0
+    ],
+    "right_arm_target": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "right_arm_kp": [
+      80.0,
+      80.0,
+      60.0,
+      80.0,
+      30.0
+    ],
+    "right_arm_kd": [
+      5.0,
+      5.0,
+      3.0,
+      2.0,
+      1.0
+    ],
+    "right_arm_actuator_indices": [
+      18,
+      19,
+      20,
+      21,
+      22
+    ],
+    "right_arm_ctrl_limited": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "right_arm_ctrl_range": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "command_semantics": "B1 direct joint-space PD; requested torque is checked against ctrl range and no new clipping or mapping is inserted"
+  },
+  "heading_control": {
+    "enabled": true,
+    "filter_cycles": 1.0,
+    "kp": 0.6,
+    "kd": 0.1,
+    "yaw_rate_feedforward": 0.0127,
+    "max_abs_yaw_rate": 0.25
+  },
+  "control_chain": {
+    "lower_body_policy": "torchscript locomotion policy",
+    "right_arm_mode": "fixed_posture_pd",
+    "mpc_called": false,
+    "old_template_predictor_called": false,
+    "neural_called": false,
+    "hybrid_residual_called": false,
+    "zoh_called": false,
+    "process_called": false,
+    "ddq_to_torque_mapping_called": false
+  },
+  "causal_h": {
+    "anchor_count": 1344,
+    "max_adjacent_h_yaw_jump_rad": 0.0004409792734149353,
+    "min_circular_concentration": 0.9999695129577665,
+    "cycle_boundary_anchor_indices": [
+      134,
+      267,
+      400,
+      534,
+      667,
+      800,
+      934,
+      1067,
+      1200,
+      1334
+    ],
+    "cycle_boundary_task_times": [
+      0.8040000000000006,
+      1.6020000000000012,
+      2.3999999999999573,
+      3.2039999999998687,
+      4.001999999999781,
+      4.799999999999693,
+      5.603999999999605,
+      6.401999999999517,
+      7.199999999999429,
+      8.003999999999342
+    ],
+    "cycle_boundary_h_yaw_jump_rad": [
+      6.380607192785563e-05,
+      6.847534958271707e-05,
+      3.418952906898178e-06,
+      7.630904664313737e-06,
+      7.2625853194049905e-06,
+      3.6215626886436027e-06,
+      1.6591019930418257e-06,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "max_cycle_boundary_h_yaw_jump_rad": 6.847534958271707e-05,
+    "h_filtering": "none; values are the shared causal circular means",
+    "additional_low_pass_filter": "none"
+  },
+  "heading_frame": {
+    "version": "full_task_continuous_heading_v2",
+    "definition": "causal prefix before 0.8s; causal trailing 0.8s circular mean until 6.4s; then freeze the last pre-stop H; one anchor H is fixed across its 54ms window",
+    "additional_low_pass_filter": "none"
+  },
+  "assets": {
+    "config": {
+      "path": "configs/g1.yaml",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/configs/g1.yaml",
+      "sha256": "5728b73ee46bb371ce224b75b7cd9f57df10c0b8585c58d590c31c6041125913",
+      "size_bytes": 13407
+    },
+    "policy": {
+      "path": "policy/motion.pt",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/policy/motion.pt",
+      "sha256": "cf668f75b90d1abf73d2b87612a6e76bccc61ff7e083b63582d3f6aaa3c1759d",
+      "size_bytes": 145745
+    },
+    "xml": {
+      "path": "resources/g1_description/scene.xml",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/resources/g1_description/scene.xml",
+      "sha256": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+      "size_bytes": 867
+    },
+    "raw": {
+      "path": "disturbance_learning/data/full_task_template_v2/20260815_162850/episodes/heldout_pair_02_minus/full_task_fixed_pd_raw.npz",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/episodes/heldout_pair_02_minus/full_task_fixed_pd_raw.npz",
+      "sha256": "d731c248e6a58490a88ac219873c0646f051d1c0802354bec5c66b7aeb1bd87f",
+      "size_bytes": 6311351
+    },
+    "summary": {
+      "path": "disturbance_learning/data/full_task_template_v2/20260815_162850/episodes/heldout_pair_02_minus/episode_summary.json",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/episodes/heldout_pair_02_minus/episode_summary.json",
+      "sha256": "37e3fce8d1a51470710800688447cd055e0088435a5d2884a1db89065908e6b2",
+      "size_bytes": 2469
+    },
+    "plots": []
+  },
+  "git": {
+    "head": "afc126ef22b96da56aa8f234f60241bce617c2a3",
+    "branch": "feat/full-task-predictors",
+    "status_short": "M configs/g1.yaml\n M disturbance_predictor.py\n M main_sim.py\n?? PREDICTOR_DEVELOPMENT_TASKBOOK.md\n?? disturbance_learning/full_task_closed_loop_report.py\n?? disturbance_learning/full_task_fixed_pd_collector.py\n?? disturbance_learning/full_task_online_parity.py\n?? disturbance_learning/full_task_protocol.py\n?? disturbance_learning/full_task_recording.py\n?? disturbance_learning/full_task_template_builder.py\n?? tests/test_full_task_predictor.py\n?? tests/test_full_task_protocol.py\n?? tests/test_full_task_template_builder.py"
+  },
+  "validation": {
+    "status": "PASS",
+    "smoke_passed": true,
+    "right_arm_mode": "fixed_posture_pd",
+    "xy_start_world_m": [
+      -0.0039635,
+      0.0
+    ],
+    "xy_at_headline_end_world_m": [
+      3.223967077825893,
+      0.02507915718662529
+    ],
+    "xy_displacement_m": 3.2280280016425804,
+    "xy_arc_length_m": 3.358385408163414,
+    "distance_gate_m": [
+      2.8,
+      3.6
+    ],
+    "fallen": false,
+    "nan_inf_free": true,
+    "max_abs_roll_rad": 0.07027659885102568,
+    "max_abs_pitch_rad": 0.07250078817225622,
+    "torso_height_min_m": 0.8043852616713535,
+    "direct_step_effective": true,
+    "heading_enabled": true,
+    "right_arm_pd_saturation_sample_count": 0,
+    "right_arm_pd_requested_tau_abs_max": [
+      5.9907562729182775,
+      1.0636117153832931,
+      1.0269028347097573,
+      3.3246826930923747,
+      0.08357986193681131
+    ],
+    "right_arm_pd_position_error_abs_max_rad": [
+      0.03773769120712709,
+      0.007628765333169991,
+      0.005377815298225957,
+      0.03331139713721886,
+      0.0027415550250610246
+    ],
+    "first_frame_command_visible_time_s": 0.0,
+    "first_policy_command_consumed_time_s": 0.020000000000000004,
+    "raw_sample_count": 4030,
+    "first_raw_time": 0.0,
+    "last_raw_time": 8.05799999999936,
+    "covered_interval_end": 8.059999999999361,
+    "headline_anchor_count": 1334,
+    "recorded_anchor_count": 1344,
+    "last_headline_anchor": 7.997999999999341,
+    "last_horizon_node": 8.052,
+    "tail_complete": true,
+    "first_policy_command_consumed_time": 0.020000000000000004,
+    "unexpected_nonfinite_count": 0,
+    "rotation_valid": true,
+    "strict_pre_step": true,
+    "anchor_count": 1344,
+    "max_adjacent_h_yaw_jump_rad": 0.0004409792734149353,
+    "min_circular_concentration": 0.9999695129577665,
+    "cycle_boundary_anchor_indices": [
+      134,
+      267,
+      400,
+      534,
+      667,
+      800,
+      934,
+      1067,
+      1200,
+      1334
+    ],
+    "cycle_boundary_task_times": [
+      0.8040000000000006,
+      1.6020000000000012,
+      2.3999999999999573,
+      3.2039999999998687,
+      4.001999999999781,
+      4.799999999999693,
+      5.603999999999605,
+      6.401999999999517,
+      7.199999999999429,
+      8.003999999999342
+    ],
+    "cycle_boundary_h_yaw_jump_rad": [
+      6.380607192785563e-05,
+      6.847534958271707e-05,
+      3.418952906898178e-06,
+      7.630904664313737e-06,
+      7.2625853194049905e-06,
+      3.6215626886436027e-06,
+      1.6591019930418257e-06,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "max_cycle_boundary_h_yaw_jump_rad": 6.847534958271707e-05,
+    "h_filtering": "none; values are the shared causal circular means"
+  }
+}

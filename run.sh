@@ -22,6 +22,27 @@ export BLIS_NUM_THREADS="$CONTROL_NUM_THREADS"
 export OMP_DYNAMIC=FALSE
 export MKL_DYNAMIC=FALSE
 export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
+export DISTURBANCE_LAB_FORMAL_LAUNCHER="disturbance_lab_run_sh"
+
+# 正式 full-task 入口不接受 auto CPU 或多线程数值库。这样即使调用者
+# 忘记 taskset，Python 侧也会在第一个 mj_step 前再次 fail closed。
+FORMAL_FULL_TASK=0
+for argument in "${RUN_ARGS[@]}"; do
+    if [[ "$argument" == "--full-task-smoke" ]]; then
+        FORMAL_FULL_TASK=1
+        break
+    fi
+done
+if [[ "$FORMAL_FULL_TASK" == "1" ]]; then
+    if [[ "${MPC_CONTROL_CPU:-}" != "7" ]]; then
+        echo "[run.sh] 正式 full-task 要求显式设置 MPC_CONTROL_CPU=7。" >&2
+        exit 2
+    fi
+    if [[ "$CONTROL_NUM_THREADS" != "1" ]]; then
+        echo "[run.sh] 正式 full-task 要求 MPC_CONTROL_NUM_THREADS=1。" >&2
+        exit 2
+    fi
+fi
 
 # 构建目录可配置时，加载路径必须与它们同步，避免误加载 /tmp
 # 中上一次的共享库。

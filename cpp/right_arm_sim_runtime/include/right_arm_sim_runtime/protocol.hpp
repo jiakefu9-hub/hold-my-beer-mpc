@@ -11,7 +11,7 @@
 namespace right_arm_sim_runtime {
 
 constexpr std::uint64_t kSharedMemoryMagic = 0x475253494d525431ULL;
-constexpr std::uint32_t kProtocolVersion = 1;
+constexpr std::uint32_t kProtocolVersion = 2;
 constexpr std::size_t kArmDof = 5;
 
 // 固定上限只服务进程间POD布局。启动后仍必须与scene.xml的真实维度相等。
@@ -46,6 +46,7 @@ enum class RuntimeStatus : std::uint32_t {
     kExecutorError = 7,
     kNoCachedFeedforward = 8,
     kInternalError = 9,
+    kNoSafeTorque = 10,
 };
 
 struct MapperConfigPayload {

@@ -1,7 +1,9 @@
 import gc
+import json
 import os
 import time
 from contextlib import nullcontext
+from pathlib import Path
 
 # viewer 使用 GLFW，离屏视频渲染改用独立 EGL 上下文，避免退出时 GLFW 重复销毁。
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -32,6 +34,28 @@ from disturbance_learning.command_schedule import (
     DEFAULT_SCHEDULE_TIMING,
     GENERALIZATION_SCHEDULE_PROFILES,
     command_schedule,
+)
+from disturbance_learning.full_task_protocol import (
+    DEFAULT_FULL_TASK_PROTOCOL,
+    FullTaskClock,
+    PRE_STEP_EVENT_ORDER,
+    direct_step_planned_command,
+)
+from disturbance_learning.full_task_recording import (
+    FullTaskRawRecorder,
+    save_full_task_smoke_artifacts,
+)
+from disturbance_learning.full_task_runtime_preflight import (
+    validate_formal_full_task_runtime,
+)
+from disturbance_learning.full_task_startup_pd import (
+    FORMAL_STARTUP_PD_DURATION_S,
+    FixedStartupPdHandoff,
+    StartupPdTraceRecorder,
+    mapping_safety_snapshot,
+    measure_foot_ground_contacts,
+    resolve_foot_contact_ids,
+    save_startup_pd_artifacts,
 )
 from kinematics_helper import KinematicsHelper
 from payload_model import create_modeled_payload_mjcf
@@ -69,6 +93,7 @@ from sim_support import (
     record_eval_step,
     resolve_right_arm_control_context,
     resolve_scene_ids,
+    save_run_metadata,
     update_torso_motion_state,
 )
 
@@ -86,6 +111,14 @@ if __name__ == "__main__":
     parser.add_argument("--headless", action="store_true", help="不启动交互 viewer，适合服务器和自动测试")
     parser.add_argument("--no-video", action="store_true", help="不创建离屏视频")
     parser.add_argument("--smoke-test", action="store_true", help="只运行一个步态周期并关闭 viewer/video")
+    parser.add_argument(
+        "--full-task-smoke",
+        action="store_true",
+        help=(
+            "运行 T2 direct-step 闭环：正式 MPC/process "
+            "控制链、[0,8)s headline 和 8.06s strict pre-step raw tail。"
+        ),
+    )
     parser.add_argument("--run-label", default="", help="追加到评估目录名的简短实验标签")
     parser.add_argument(
         "--evaluation-group",
@@ -106,9 +139,42 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--disturbance-predictor",
-        choices=("template", "zoh", "neural", "hybrid_residual"),
+        choices=(
+            "template",
+            "full_task_template",
+            "zoh",
+            "neural",
+            "hybrid_residual",
+        ),
         default=None,
         help="只覆盖本次运行的 disturbance predictor。",
+    )
+    parser.add_argument(
+        "--full-task-initial-manifest",
+        default=None,
+        help=(
+            "显式使用一条 T1 held-out episode manifest 中的下肢 q/dq 初态；"
+            "禁止目录扫描。仅与 --full-task-smoke 一起使用。"
+        ),
+    )
+    parser.add_argument(
+        "--startup-pd-duration",
+        type=float,
+        choices=(FORMAL_STARTUP_PD_DURATION_S,),
+        default=None,
+        help=(
+            "正式 full-task 固定为0.024秒右臂姿态PD，并在anchor 4切换到"
+            "MPC/process；省略时也使用同一24ms正式方案。"
+        ),
+    )
+    parser.add_argument(
+        "--full-task-short-end",
+        type=float,
+        default=None,
+        help=(
+            "只用于startup-PD短smoke；必须覆盖切换后至少0.2秒且落在"
+            "2ms物理网格。短运行不冒充完整[0,8)验收。"
+        ),
     )
     parser.add_argument(
         "--predictor-ablation",
@@ -146,6 +212,63 @@ if __name__ == "__main__":
         ),
     )
     args = parser.parse_args()
+    full_task_smoke_active = bool(args.full_task_smoke)
+    if full_task_smoke_active and (
+        args.smoke_test
+        or args.predictor_ablation
+        or args.predictor_schedule_profile is not None
+        or args.predictor_payload_kg != 0.0
+        or args.mpc_command_delay_ms not in (None, 0.0)
+    ):
+        raise ValueError(
+            "--full-task-smoke 不能与旧 smoke/ablation/schedule、payload "
+            "或非零 MPC command delay 组合。"
+        )
+    if full_task_smoke_active and args.disturbance_predictor not in (
+        None,
+        "full_task_template",
+    ):
+        raise ValueError(
+            "正式 full-task 闭环只允许continuous-H full_task_template v2。"
+        )
+    if full_task_smoke_active and args.right_arm_runtime_mode not in (None, "process"):
+        raise ValueError("T2 full-task 闭环必须使用正式 process 执行链。")
+    if args.full_task_initial_manifest is not None and not full_task_smoke_active:
+        raise ValueError(
+            "--full-task-initial-manifest 只能与 --full-task-smoke 一起使用。"
+        )
+    if args.startup_pd_duration is not None and not full_task_smoke_active:
+        raise ValueError("--startup-pd-duration 只能与 --full-task-smoke 一起使用。")
+    startup_pd_handoff = None
+    if full_task_smoke_active:
+        startup_duration = (
+            FORMAL_STARTUP_PD_DURATION_S
+            if args.startup_pd_duration is None
+            else float(args.startup_pd_duration)
+        )
+        startup_pd_handoff = FixedStartupPdHandoff(startup_duration)
+    startup_pd_active = startup_pd_handoff is not None
+    if startup_pd_active and args.disturbance_predictor not in (
+        None,
+        "full_task_template",
+    ):
+        raise ValueError("startup-PD handoff只允许continuous-H full_task_template v2。")
+    if args.full_task_short_end is not None:
+        if startup_pd_handoff is None:
+            raise ValueError("--full-task-short-end要求显式startup-PD模式。")
+        full_task_short_end = startup_pd_handoff.validate_short_smoke_end(
+            args.full_task_short_end
+        )
+    else:
+        full_task_short_end = None
+    if full_task_smoke_active:
+        # Parent-side check rejects direct ``python main_sim.py`` and wide or
+        # incomplete thread environments before model construction.  The live
+        # worker and GC state are checked again immediately before mj_step.
+        validate_formal_full_task_runtime(
+            torch_num_threads=torch.get_num_threads(),
+            torch_num_interop_threads=torch.get_num_interop_threads(),
+        )
     schedule_profile = (
         None
         if args.predictor_schedule_profile is None
@@ -352,6 +475,21 @@ if __name__ == "__main__":
         if predictor_ablation_active:
             disturbance_command_schedule_enabled = True
             heading_control_enabled = False
+        if full_task_smoke_active:
+            if arm_controller != "mpc":
+                raise ValueError("T2 full-task 闭环要求 arm_controller=mpc。")
+            if str(config.get("disturbance_predictor", "")).lower() != (
+                "full_task_template"
+            ):
+                raise ValueError(
+                    "正式 full-task 闭环要求continuous-H full_task_template v2。"
+                )
+            if requested_right_arm_execution_runtime != "process":
+                raise ValueError(
+                    "T2 full-task 闭环要求 right_arm_execution_runtime=process。"
+                )
+            if not heading_control_enabled:
+                raise ValueError("T2 full-task 闭环要求 heading control 开启。")
 
     # ==============================
     # 2. 初始化主循环状态【非核心代码】
@@ -369,7 +507,28 @@ if __name__ == "__main__":
     cooldown_cycles = int(config.get("cooldown_cycles", 2))
     viewer_enabled = bool(config.get("viewer_enabled", True)) and not args.headless
     record_video = bool(config.get("record_video", True)) and not args.no_video
-    if args.smoke_test:
+    if full_task_smoke_active:
+        protocol = DEFAULT_FULL_TASK_PROTOCOL
+        if not np.isclose(simulation_dt, protocol.physics_dt, atol=1e-12):
+            raise ValueError("full-task protocol 要求 simulation_dt=2 ms。")
+        if not np.isclose(
+            simulation_dt * control_decimation,
+            protocol.policy_dt,
+            atol=1e-12,
+        ):
+            raise ValueError("full-task protocol 要求 policy update=20 ms。")
+        if not np.isclose(
+            simulation_dt * arm_control_decimation,
+            protocol.mpc_dt,
+            atol=1e-12,
+        ):
+            raise ValueError("full-task protocol 要求 MPC anchor=6 ms。")
+        warmup_cycles = 0
+        evaluation_cycles = int(round(protocol.headline_end / protocol.gait_period))
+        cooldown_cycles = 0
+        viewer_enabled = False
+        record_video = False
+    elif args.smoke_test:
         warmup_cycles = 0
         evaluation_cycles = 1
         cooldown_cycles = 0
@@ -383,10 +542,25 @@ if __name__ == "__main__":
         record_video = False
     if warmup_cycles < 0 or evaluation_cycles <= 0 or cooldown_cycles < 0:
         raise ValueError("warmup/evaluation/cooldown 周期必须分别满足 >=0、>0、>=0。")
-    total_cycles = warmup_cycles + evaluation_cycles + cooldown_cycles
-    eval_start_time = warmup_cycles * gait_period
-    eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
-    eval_duration = total_cycles * gait_period
+    if full_task_smoke_active:
+        full_task_run_end = (
+            protocol.record_end
+            if full_task_short_end is None
+            else full_task_short_end
+        )
+        total_cycles = full_task_run_end / protocol.gait_period
+        eval_start_time = 0.0
+        eval_end_time = (
+            protocol.headline_end
+            if full_task_short_end is None
+            else full_task_short_end
+        )
+        eval_duration = full_task_run_end
+    else:
+        total_cycles = warmup_cycles + evaluation_cycles + cooldown_cycles
+        eval_start_time = warmup_cycles * gait_period
+        eval_end_time = (warmup_cycles + evaluation_cycles) * gait_period
+        eval_duration = total_cycles * gait_period
     run_label = "".join(
         character
         for character in str(args.run_label).strip().lower().replace(" ", "_")
@@ -397,7 +571,11 @@ if __name__ == "__main__":
         character
         for character in str(args.evaluation_group).strip().lower().replace(" ", "_")
         if character.isalnum() or character in {"_", "-"}
-    ) or experiment_name
+    ) or (
+        "t2_full_task_closed_loop"
+        if full_task_smoke_active
+        else experiment_name
+    )
     buffers = init_eval_buffers()
 
     # ==============================
@@ -468,7 +646,63 @@ if __name__ == "__main__":
                 "runtime payload model mass mismatch: "
                 f"{payload_metadata['simulated_mass_kg']} vs {expected_mass}"
             )
-    if schedule_profile is not None:
+    full_task_initial_manifest = None
+    if args.full_task_initial_manifest is not None:
+        full_task_initial_manifest_path = Path(
+            args.full_task_initial_manifest
+        ).expanduser()
+        if not full_task_initial_manifest_path.is_absolute():
+            full_task_initial_manifest_path = (
+                Path(repo_dir) / full_task_initial_manifest_path
+            )
+        full_task_initial_manifest_path = (
+            full_task_initial_manifest_path.resolve()
+        )
+        try:
+            manifest_payload = json.loads(
+                full_task_initial_manifest_path.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                "无法读取显式 full-task 初态 manifest: "
+                f"{full_task_initial_manifest_path}"
+            ) from exc
+        episode = manifest_payload.get("episode", {})
+        manifest_protocol = manifest_payload.get("protocol", {})
+        if (
+            episode.get("role") != "heldout"
+            or manifest_protocol.get("version")
+            != protocol.protocol_version
+        ):
+            raise ValueError(
+                "full-task 初态 manifest 必须是冻结协议的 held-out episode。"
+            )
+        initial_lower_q_offset = np.asarray(
+            episode.get("initial_lower_q_offset_rad"), dtype=np.float64
+        )
+        initial_lower_dq = np.asarray(
+            episode.get("initial_lower_dq_rad_s"), dtype=np.float64
+        )
+        if (
+            initial_lower_q_offset.shape != (12,)
+            or initial_lower_dq.shape != (12,)
+            or not np.all(np.isfinite(initial_lower_q_offset))
+            or not np.all(np.isfinite(initial_lower_dq))
+            or np.max(np.abs(initial_lower_q_offset)) > 0.018 + 1e-12
+            or np.max(np.abs(initial_lower_dq)) > 0.03 + 1e-12
+        ):
+            raise ValueError(
+                "held-out 初态不满足 T1 冻结的 q/dq 形状或扰动界限。"
+            )
+        d.qpos[7:19] += initial_lower_q_offset
+        d.qvel[6:18] = initial_lower_dq
+        full_task_initial_manifest = {
+            "path": str(full_task_initial_manifest_path),
+            "episode_id": str(episode.get("episode_id", "")),
+            "pair_id": episode.get("pair_id"),
+            "sign": int(episode.get("sign", 0)),
+        }
+    elif schedule_profile is not None:
         initial_rng = np.random.default_rng(args.predictor_ablation_seed)
         initial_lower_q_offset = np.clip(
             initial_rng.normal(0.0, 0.006, size=12), -0.018, 0.018
@@ -626,6 +860,11 @@ if __name__ == "__main__":
         controller_meta["mpc_config"]["disturbance_feedforward"] = (
             predictor_metadata
         )
+        if full_task_smoke_active and arm_policy.horizon != protocol.horizon:
+            raise ValueError(
+                "T2 protocol horizon 与冻结 MPC horizon 不一致："
+                f"{protocol.horizon} vs {arm_policy.horizon}。"
+            )
     controller_meta["heading_control"] = {
         "enabled": heading_control_enabled,
         "reference_frame": "world",
@@ -636,27 +875,75 @@ if __name__ == "__main__":
         "yaw_rate_feedforward": float(cmd_nominal[2]),
         "max_abs_yaw_rate": heading_max_yaw_rate,
     }
-    controller_meta["disturbance_command_schedule"] = {
-        "enabled": disturbance_command_schedule_enabled,
-        "definition": (
-            "heading_warmup/start/steady/velocity_change/stop/stopped"
-            if disturbance_command_schedule_enabled
-            else "disabled_constant_command"
-        ),
-        "start_command": cmd_nominal.copy(),
-        "changed_command": disturbance_command_changed.copy(),
-        "profile": (
-            "legacy_default" if schedule_profile is None else schedule_profile.name
-        ),
-        "timing_s": {
-            name: list(window)
-            for name, window in active_schedule_timing.stage_windows().items()
-        },
-        "seed": int(args.predictor_ablation_seed),
-        "initial_lower_q_offset": initial_lower_q_offset.copy(),
-        "initial_lower_dq": initial_lower_dq.copy(),
-        "payload": payload_metadata,
-    }
+    if full_task_smoke_active:
+        controller_meta["disturbance_command_schedule"] = {
+            "enabled": True,
+            "definition": protocol.protocol_version,
+            "source": "disturbance_learning.full_task_protocol",
+            "legacy_ramp_schedule_used": False,
+            "nominal_command": cmd_nominal.copy(),
+            "stop_time": protocol.stop_time,
+            "headline_interval": [0.0, protocol.headline_end],
+            "record_end": protocol.record_end,
+            "heading_control_enabled": True,
+            "planned_translation_after_stop": [0.0, 0.0],
+            "planned_wz_after_stop": float(cmd_nominal[2]),
+            "initial_lower_q_offset": initial_lower_q_offset.copy(),
+            "initial_lower_dq": initial_lower_dq.copy(),
+            "payload": payload_metadata,
+            "initial_manifest": full_task_initial_manifest,
+        }
+        controller_meta["full_task_protocol"] = {
+            "protocol_name": protocol.protocol_name,
+            "protocol_version": protocol.protocol_version,
+            "raw_schema_version": protocol.raw_schema_version,
+            "physics_dt": protocol.physics_dt,
+            "mpc_dt": protocol.mpc_dt,
+            "policy_dt": protocol.policy_dt,
+            "gait_period": protocol.gait_period,
+            "stop_time": protocol.stop_time,
+            "headline_end": protocol.headline_end,
+            "record_end": protocol.record_end,
+            "horizon": protocol.horizon,
+            "headline_anchor_count": protocol.headline_anchor_count,
+            "last_headline_anchor": protocol.last_headline_anchor_time,
+            "last_horizon_node": protocol.last_horizon_node_time,
+            "pre_step_event_order": PRE_STEP_EVENT_ORDER,
+        }
+        controller_meta["fixed_startup_pd_handoff"] = {
+            "enabled": True,
+            "dynamic_arming_enabled": False,
+            "duration_s": float(startup_pd_handoff.duration_s),
+            "handoff_anchor_index": startup_pd_handoff.takeover_anchor_index,
+            "right_arm_startup_mode": "fixed_posture_pd",
+            "right_arm_startup_target_source": "config.arm_waist_target[6:11]",
+            "right_arm_startup_target_dq": [0.0] * 5,
+            "task_template_gait_clock_origin": "simulation_time_zero",
+            "handoff_resets_any_clock": False,
+            "short_smoke_end_s": full_task_short_end,
+        }
+    else:
+        controller_meta["disturbance_command_schedule"] = {
+            "enabled": disturbance_command_schedule_enabled,
+            "definition": (
+                "heading_warmup/start/steady/velocity_change/stop/stopped"
+                if disturbance_command_schedule_enabled
+                else "disabled_constant_command"
+            ),
+            "start_command": cmd_nominal.copy(),
+            "changed_command": disturbance_command_changed.copy(),
+            "profile": (
+                "legacy_default" if schedule_profile is None else schedule_profile.name
+            ),
+            "timing_s": {
+                name: list(window)
+                for name, window in active_schedule_timing.stage_windows().items()
+            },
+            "seed": int(args.predictor_ablation_seed),
+            "initial_lower_q_offset": initial_lower_q_offset.copy(),
+            "initial_lower_dq": initial_lower_dq.copy(),
+            "payload": payload_metadata,
+        }
     performance_runtime = build_performance_runtime_config(
         config=config,
         arm_control_dt=arm_control_dt,
@@ -931,16 +1218,139 @@ if __name__ == "__main__":
         max_abs_yaw_rate=heading_max_yaw_rate,
     )
     heading_state = heading_controller.last_output
-    cmd_runtime = (
-        command_schedule(
-            0.0,
-            cmd_nominal,
-            disturbance_command_changed,
-            active_schedule_timing,
-        ).command.astype(np.float32)
-        if disturbance_command_schedule_enabled
-        else cmd_nominal.copy()
-    )
+    right_arm_dry_warmup = None
+    def perform_right_arm_dry_warmup(*, phase, fixed_ctrl, tau_pd):
+        """Prime the real process without advancing time or changing d.ctrl."""
+
+        dry_warmup_time = float(d.time)
+        dry_warmup_ctrl = d.ctrl.copy()
+        dry_right_arm_q = d.qpos[
+            right_arm_id_index_scratch.qpos_indices
+        ].copy()
+        dry_right_arm_dq = d.qvel[
+            right_arm_id_index_scratch.qvel_indices
+        ].copy()
+        dry_result = right_arm_sim_process.execute(
+            simulation_time=dry_warmup_time,
+            command_timestamp=dry_warmup_time,
+            command_id=1,
+            command_source_state_id=1,
+            execution_state_id=1,
+            mapping_update_due=True,
+            mujoco_timestep=m.opt.timestep,
+            friction_breakaway_steps=ddq_pinocchio_friction_breakaway_steps,
+            qpos=d.qpos,
+            qvel=d.qvel,
+            reference_qacc=d.qacc,
+            fixed_ctrl=np.asarray(fixed_ctrl, dtype=np.float64),
+            qacc_warmstart=d.qacc_warmstart,
+            qfrc_applied=d.qfrc_applied,
+            xfrc_applied=d.xfrc_applied,
+            right_arm_q=dry_right_arm_q,
+            right_arm_dq=dry_right_arm_dq,
+            q_ref=right_arm_target,
+            dq_ref=np.zeros(5, dtype=np.float64),
+            ddq_des=np.zeros(5, dtype=np.float64),
+            tau_passive=d.qfrc_passive[
+                right_arm_id_index_scratch.qvel_indices
+            ],
+            friction_loss=m.dof_frictionloss[
+                right_arm_id_index_scratch.qvel_indices
+            ],
+            tau_pd=np.asarray(tau_pd, dtype=np.float64),
+            previous_executed_tau=None,
+        )
+        if (
+            float(d.time) != dry_warmup_time
+            or not np.array_equal(d.ctrl, dry_warmup_ctrl)
+        ):
+            raise RuntimeError(
+                "full-task dry warm-up 修改了 MuJoCo time 或真实 d.ctrl。"
+            )
+        return {
+            "performed": True,
+            "phase": str(phase),
+            "before_task_clock_reset_and_command_publish": bool(
+                phase == "pre_task_legacy"
+            ),
+            "during_fixed_startup_pd": bool(phase == "fixed_startup_pd"),
+            "simulation_time_s": dry_warmup_time,
+            "mujoco_time_advanced": False,
+            "real_ctrl_modified": False,
+            "roundtrip_elapsed_ms": (
+                dry_result.roundtrip_elapsed_time * 1e3
+            ),
+            "worker_elapsed_ms": dry_result.worker_elapsed_time * 1e3,
+            "final_output_certified": bool(
+                dry_result.mapper_output.final_output_certified
+            ),
+        }
+    if (
+        full_task_smoke_active
+        and right_arm_sim_process is not None
+        and not startup_pd_active
+    ):
+        # 保留既有非startup实验的pre-task dry warm-up语义。
+        legacy_dry_tau_pd = pd_control(
+            right_arm_target,
+            d.qpos[right_arm_id_index_scratch.qpos_indices],
+            arm_waist_kps[6:11],
+            np.zeros(5, dtype=np.float64),
+            d.qvel[right_arm_id_index_scratch.qvel_indices],
+            arm_waist_kds[6:11],
+        )
+        right_arm_dry_warmup = perform_right_arm_dry_warmup(
+            phase="pre_task_legacy",
+            fixed_ctrl=d.ctrl.copy(),
+            tau_pd=legacy_dry_tau_pd,
+        )
+    full_task_clock = None
+    full_task_recorder = None
+    startup_pd_trace_recorder = None
+    startup_foot_contact_ids = None
+    startup_pd_artifacts = None
+    last_executed_right_arm_tau = None
+    last_policy_update_task_time = np.nan
+    if full_task_smoke_active:
+        full_task_clock = FullTaskClock(protocol)
+        full_task_clock.reset(
+            float(d.time),
+            epoch_label=f"t2_closed_loop_{Path(run_dir).name}",
+        )
+        initial_task_time = full_task_clock.observe(float(d.time))
+        cmd_planned = direct_step_planned_command(
+            initial_task_time, cmd_nominal, protocol
+        ).planned_command.astype(np.float32)
+        cmd_runtime = cmd_planned.copy()
+        full_task_recorder = FullTaskRawRecorder(
+            protocol=protocol,
+            clock=full_task_clock,
+            nominal_command=cmd_nominal,
+            heading_frame_version=(
+                str(config["full_task_heading_frame_version"])
+                if str(config.get("disturbance_predictor", "template"))
+                == "full_task_template"
+                else "full_task_cycle_held_heading_v1"
+            ),
+        )
+        if startup_pd_handoff is not None:
+            startup_pd_trace_recorder = StartupPdTraceRecorder(
+                handoff=startup_pd_handoff,
+                runtime_mode=right_arm_execution_runtime,
+            )
+            startup_foot_contact_ids = resolve_foot_contact_ids(m)
+    else:
+        cmd_planned = (
+            command_schedule(
+                0.0,
+                cmd_nominal,
+                disturbance_command_changed,
+                active_schedule_timing,
+            ).command.astype(np.float32)
+            if disturbance_command_schedule_enabled
+            else cmd_nominal.copy()
+        )
+        cmd_runtime = cmd_planned.copy()
     heading_yaw_rate_command_runtime = float(cmd_runtime[2])
     predictor_world_down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
     predictor_gravity_direction = np.empty(3, dtype=np.float64)
@@ -964,6 +1374,32 @@ if __name__ == "__main__":
     if performance_runtime.disable_gc_during_control:
         gc.collect()
         gc.disable()
+    formal_runtime_preflight = None
+    if full_task_smoke_active:
+        worker_snapshot = performance_runtime.metadata["scheduler"].get(
+            "right_arm_worker"
+        )
+        if worker_snapshot is None:
+            raise RuntimeError(
+                "formal full-task runtime preflight requires a live process worker"
+            )
+        formal_runtime_preflight = validate_formal_full_task_runtime(
+            worker_affinity=worker_snapshot["cpu_affinity"],
+            torch_num_threads=torch.get_num_threads(),
+            torch_num_interop_threads=torch.get_num_interop_threads(),
+            gc_disabled_during_control=not gc.isenabled(),
+        ).as_dict()
+        performance_runtime.metadata["formal_full_task_preflight"] = (
+            formal_runtime_preflight
+        )
+        run_metadata["runtime_timing_environment"] = performance_runtime.metadata
+        save_run_metadata(run_dir, run_metadata)
+        preflight_path = Path(run_dir) / "formal_full_task_runtime_preflight.json"
+        preflight_path.write_text(
+            json.dumps(formal_runtime_preflight, indent=2, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
     viewer_context = mujoco.viewer.launch_passive(m, d) if viewer_enabled else nullcontext(None)
     with viewer_context as viewer:
         # viewer 和离屏 renderer 分别使用 GLFW/EGL。后创建 renderer，
@@ -1000,7 +1436,21 @@ if __name__ == "__main__":
             #      映射反求使右臂实际加速度接近 ddq_des 的最终力矩。
 
             arm_policy_update_due = counter % arm_control_decimation == 0
-            if arm_policy_update_due:
+            startup_pd_decision = (
+                startup_pd_handoff.decision(counter)
+                if startup_pd_handoff is not None
+                else None
+            )
+            mpc_control_enabled = bool(
+                startup_pd_decision is None
+                or startup_pd_decision.mpc_control_enabled
+            )
+            mpc_policy_update_due = bool(
+                arm_policy_update_due and mpc_control_enabled
+            )
+            # 启动PD段仍在每个6ms锚点推进template/H和预热MPC缓存，
+            # 但完整控制区间只从24ms正式接管锚点开始统计。
+            if mpc_policy_update_due:
                 perf_monitor.begin_arm_interval(counter * simulation_dt)
             # 真机相关右臂路径从整机参考加速度和当前状态处理开始，
             # 到最终力矩写入为止；不包含腿部 PD、MuJoCo 物理推进和画图。
@@ -1041,8 +1491,10 @@ if __name__ == "__main__":
             
             # right_arm_obs 是上层右臂控制器看到的“当前观测”；其中包含右臂状态、torso 姿态与运动信息，以及右臂控制周期。
             right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
+            current_predictor_diagnostics = None
             if arm_policy_update_due:
-                perf_monitor.start_arm_control()
+                if mpc_control_enabled:
+                    perf_monitor.start_arm_control()
                 disturbance_prediction_start = time.perf_counter()
                 disturbance_horizon = None
                 if disturbance_predictor is not None:
@@ -1088,6 +1540,11 @@ if __name__ == "__main__":
                     disturbance_horizon = disturbance_predictor.predict(
                         arm_policy.horizon,
                         arm_control_dt,
+                    )
+                    current_predictor_diagnostics = (
+                        disturbance_predictor.get_last_diagnostics(
+                            copy_data=False
+                        )
                     )
                 disturbance_prediction_time = (
                     time.perf_counter() - disturbance_prediction_start
@@ -1157,20 +1614,21 @@ if __name__ == "__main__":
                     else:
                         # 【核心延迟模型】同一次 MPC 求解的 q/dq/ddq 必须
                         # 作为一个命令包发布，不能只延迟其中某一项。
-                        mpc_command_delay_line.publish(
-                            counter * simulation_dt,
-                            generated_target_right_arm_q,
-                            generated_target_right_arm_dq,
-                            generated_raw_right_arm_ddq,
-                            generated_desired_right_arm_ddq,
-                        )
-                        mpc_diagnostics = controller_diagnostics
-                        if disturbance_predictor is not None:
-                            mpc_diagnostics["disturbance_predictor_diagnostics"] = (
-                                disturbance_predictor.get_last_diagnostics(
-                                    copy_data=False
-                                )
+                        # 固定PD启动段允许求解器/preflight预热，但生成结果不
+                        # 发布进命令延迟线；因此它不可能成为右臂控制输出。
+                        if mpc_control_enabled:
+                            mpc_command_delay_line.publish(
+                                counter * simulation_dt,
+                                generated_target_right_arm_q,
+                                generated_target_right_arm_dq,
+                                generated_raw_right_arm_ddq,
+                                generated_desired_right_arm_ddq,
                             )
+                            mpc_diagnostics = controller_diagnostics
+                            if current_predictor_diagnostics is not None:
+                                mpc_diagnostics[
+                                    "disturbance_predictor_diagnostics"
+                                ] = current_predictor_diagnostics
                     diagnostics_time = time.perf_counter() - diagnostics_start
                     if arm_controller == "mpc":
                         # 【非核心诊断】把上层控制拍拆开计时，确认优化真正作用于
@@ -1192,8 +1650,9 @@ if __name__ == "__main__":
                 else:
                     # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
                     target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
-                perf_monitor.finish_arm_control()
-                if arm_controller == "mpc":
+                if mpc_control_enabled:
+                    perf_monitor.finish_arm_control()
+                if arm_controller == "mpc" and mpc_control_enabled:
                     perf_monitor.record_mpc_timing(controller_diagnostics)
 
             if mpc_command_delay_line is not None:
@@ -1209,6 +1668,14 @@ if __name__ == "__main__":
                 if command_activation.activated:
                     last_mpc_command_activation_counter = counter
 
+            if startup_pd_decision is not None and not mpc_control_enabled:
+                # 启动保护必须是真正的固定姿态PD，不能复用MPC刚生成的
+                # q_ref/dq_ref；MPC/template预热结果在这一段完全不接到右臂。
+                target_right_arm_q = right_arm_target.copy()
+                target_right_arm_dq = np.zeros(5, dtype=np.float32)
+                raw_right_arm_ddq = np.zeros(5, dtype=np.float64)
+                desired_right_arm_ddq = np.zeros(5, dtype=np.float32)
+
             # 把“固定的腰/左臂目标”和“在线计算的右臂目标”拼回完整上肢目标
             target_arm_waist_q = np.concatenate([waist_left_target_q, target_right_arm_q])
             target_arm_waist_dq = np.concatenate([waist_left_target_dq, target_right_arm_dq])
@@ -1220,12 +1687,27 @@ if __name__ == "__main__":
             )
             # 只切出右臂 5 维的 PD 力矩；LQR/MPC 后面还要和逆动力学前馈叠加
             right_arm_tau_pd = tau_arm_waist[6:11].copy()
+            if (
+                startup_pd_decision is not None
+                and right_arm_dry_warmup is None
+                and counter == 0
+            ):
+                # task/template/gait clocks和前进命令都已经从t=0生效；dry
+                # preflight在固定PD启动段内完成，但不推进物理、不改d.ctrl。
+                startup_dry_fixed_ctrl = d.ctrl.copy()
+                startup_dry_fixed_ctrl[12:23] = tau_arm_waist
+                right_arm_dry_warmup = perform_right_arm_dry_warmup(
+                    phase="fixed_startup_pd",
+                    fixed_ctrl=startup_dry_fixed_ctrl,
+                    tau_pd=right_arm_tau_pd,
+                )
             inverse_result = None
             mapping_result = None
             cpp_executor_result = None
             process_result = None
+            previous_executed_tau = None
             ddq_execution_updated = False
-            if acceleration_controller:
+            if acceleration_controller and mpc_control_enabled:
                 # 【核心代码】第二层执行（LQR/MPC 共用）：
                 # 用 desired_right_arm_ddq 作为右臂期望加速度，由配置选择
                 # MuJoCo inverse 或 Pinocchio RNEA 计算 tau_ff。
@@ -1277,12 +1759,19 @@ if __name__ == "__main__":
 
                 fixed_ctrl_for_mapping = d.ctrl.copy()
                 fixed_ctrl_for_mapping[12:18] = tau_arm_waist[:6]
-                previous_executed_tau = (
-                    d.ctrl[right_arm_id_index_scratch.ctrl_indices].copy()
-                    if controller_setup.execution_hold_last_safe
-                    and d.time > 0.0
-                    else None
-                )
+                if startup_pd_decision is not None:
+                    previous_executed_tau = (
+                        None
+                        if last_executed_right_arm_tau is None
+                        else last_executed_right_arm_tau.copy()
+                    )
+                else:
+                    previous_executed_tau = (
+                        d.ctrl[right_arm_id_index_scratch.ctrl_indices].copy()
+                        if controller_setup.execution_hold_last_safe
+                        and d.time > 0.0
+                        else None
+                    )
 
                 # sync是冻结基线；shadow先跑sync再逐拍核对独立进程。
                 if right_arm_execution_runtime in {"sync", "shadow"}:
@@ -1463,7 +1952,7 @@ if __name__ == "__main__":
                             mapping_result = cached_mapping_result
                         tau_arm_waist[6:11] = right_arm_tau
                         cpp_executor_result = process_result.executor_result
-            if cpp_right_arm_executor is not None:
+            if cpp_right_arm_executor is not None and mpc_control_enabled:
                 # 【核心代码】C++ 每个 2 ms 仿真拍都读取最新右臂 q/dq，
                 # 只在这一处合成 PD、执行参考/力矩限幅及超时/NaN 保护。
                 # 局部 MuJoCo 映射给出的最终力矩先减去本拍 Python PD，
@@ -1501,7 +1990,7 @@ if __name__ == "__main__":
                     tau_arm_waist[6:11] = (
                         cpp_executor_result.predicted_total_tau_limited
                     )
-            if process_result is not None:
+            if process_result is not None and mpc_control_enabled:
                 if process_shadow_validator is not None:
                     # 【核心验收】先比较三层力矩和mapper分支；任何一拍
                     # 超过1e-9都立即停止，不能用相似轨迹掩盖错帧或错分支。
@@ -1518,6 +2007,14 @@ if __name__ == "__main__":
                 # 上一行证明它与冻结同步链相同。
                 tau_arm_waist[6:11] = process_result.final_tau
                 cpp_executor_result = process_result.executor_result
+            if acceleration_controller and mpc_control_enabled and (
+                mapping_result is None
+                or not bool(mapping_result.final_output_certified)
+                or bool(mapping_result.no_safe_torque)
+            ):
+                raise RuntimeError(
+                    "NO_SAFE_TORQUE: 拒绝把未认证右臂力矩写入 d.ctrl。"
+                )
             # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
             d.ctrl[12:23] = tau_arm_waist
             perf_monitor.finish_right_arm_path()
@@ -1525,9 +2022,134 @@ if __name__ == "__main__":
             # --- 7.3 写入力矩并推进物理【核心代码】---
             # 到这里 d.ctrl 已经准备好；mj_step 会真正让整机往前走一拍。
             # 这一小段很重要，因为它定义了“控制输出最终如何进入仿真执行层”。
+            policy_update_applied = bool(
+                np.isfinite(last_policy_update_task_time)
+                and np.isclose(
+                    last_policy_update_task_time,
+                    counter * simulation_dt,
+                    atol=1e-12,
+                    rtol=0.0,
+                )
+            )
+            if startup_pd_trace_recorder is not None:
+                task_time_now = full_task_clock.observe(float(d.time))
+                contact_state = measure_foot_ground_contacts(
+                    m, d, startup_foot_contact_ids
+                )
+                mapping_snapshot = mapping_safety_snapshot(mapping_result)
+                fixed_posture_pd_tau = (
+                    right_arm_tau_pd.copy()
+                    if not mpc_control_enabled
+                    else pd_control(
+                        right_arm_target,
+                        right_arm_q,
+                        arm_waist_kps[6:11],
+                        np.zeros(5, dtype=np.float64),
+                        right_arm_dq,
+                        arm_waist_kds[6:11],
+                    )
+                )
+                startup_pd_trace_recorder.append(
+                    sample_index=counter,
+                    simulation_time=float(d.time),
+                    task_time=task_time_now,
+                    mpc_anchor=arm_policy_update_due,
+                    mpc_control_enabled=mpc_control_enabled,
+                    policy_update_applied=policy_update_applied,
+                    predictor_updated=current_predictor_diagnostics is not None,
+                    predictor_task_time=(
+                        float(current_predictor_diagnostics["task_time"])
+                        if current_predictor_diagnostics is not None
+                        else np.nan
+                    ),
+                    predictor_template_anchor_index=(
+                        int(current_predictor_diagnostics["template_anchor_index"])
+                        if current_predictor_diagnostics is not None
+                        else -1
+                    ),
+                    predictor_fallback_used=(
+                        bool(current_predictor_diagnostics["fallback_used"])
+                        if current_predictor_diagnostics is not None
+                        else False
+                    ),
+                    gait_phase_cycles=(task_time_now % gait_period) / gait_period,
+                    left_foot_contact_count=int(contact_state["left_count"]),
+                    right_foot_contact_count=int(contact_state["right_count"]),
+                    raw_torso_acceleration_norm_m_s2=float(
+                        np.linalg.norm(raw_torso_acc)
+                    ),
+                    base_vertical_velocity_m_s=float(d.qvel[2]),
+                    planned_command=cmd_planned.copy(),
+                    runtime_command=cmd_runtime.copy(),
+                    fixed_posture_pd_tau=fixed_posture_pd_tau,
+                    actual_right_arm_tau=d.ctrl[
+                        right_arm_id_index_scratch.ctrl_indices
+                    ].copy(),
+                    desired_right_arm_ddq=desired_right_arm_ddq.copy(),
+                    previous_executed_tau_available=(
+                        previous_executed_tau is not None
+                    ),
+                    previous_executed_tau=(
+                        np.full(5, np.nan, dtype=np.float64)
+                        if previous_executed_tau is None
+                        else previous_executed_tau.copy()
+                    ),
+                    **mapping_snapshot,
+                )
+            if full_task_recorder is not None:
+                # 【T2 沿用 T1 冻结时序】这是唯一的 full-task raw 入口。
+                # 当前 state、planned/runtime command 和最终 d.ctrl 全部描述
+                # 即将执行的 [t,t+2 ms)；必须先 append，再调用 mj_step。
+                # 20 ms policy update 在上一物理区间结束后提交，因此 t=6.4 s
+                # 这条 pre-step sample 已经看到直接切零后的 planned vx/vy。
+                full_task_recorder.append(
+                    simulation_time=float(d.time),
+                    sample_index=counter,
+                    planned_command=cmd_planned,
+                    runtime_command=cmd_runtime,
+                    policy_update_applied=policy_update_applied,
+                    policy_command_consumed_time=last_policy_update_task_time,
+                    mpc_anchor=arm_policy_update_due,
+                    torso_position_world=d.xpos[scene_ids.torso_id].copy(),
+                    torso_rotation_world=torso_state.rotmat,
+                    torso_linear_velocity_world=torso_state.lin_vel,
+                    torso_angular_velocity_world=torso_state.ang_vel,
+                    torso_linear_acceleration_world_raw=raw_torso_acc,
+                    torso_linear_acceleration_world_used=torso_state.lin_acc,
+                    torso_angular_acceleration_world_raw=raw_torso_alpha,
+                    torso_angular_acceleration_world_used=torso_state.ang_acc,
+                    lower_body_q=leg_q,
+                    lower_body_dq=leg_dq,
+                    lower_body_policy_target=target_dof_pos,
+                    right_arm_q=right_arm_q,
+                    right_arm_dq=right_arm_dq,
+                    right_arm_ddq_des=desired_right_arm_ddq,
+                    generalized_qpos=d.qpos,
+                    generalized_qvel=d.qvel,
+                    generalized_qacc=d.qacc,
+                    actuator_ctrl=d.ctrl,
+                    heading_state=heading_state,
+                    mpc_diagnostics=(
+                        mpc_diagnostics if mpc_control_enabled else None
+                    ),
+                    runtime_mapping_safety_fallback_used=(
+                        bool(mapping_result.safety_fallback_used)
+                        if mapping_result is not None
+                        else False
+                    ),
+                    runtime_executor_flags=(
+                        int(cpp_executor_result.flags)
+                        if cpp_executor_result is not None
+                        else 0
+                    ),
+                )
+            executed_right_arm_tau_this_step = d.ctrl[
+                right_arm_id_index_scratch.ctrl_indices
+            ].copy()
             perf_monitor.start_mj_step()
             mujoco.mj_step(m, d)
             perf_monitor.finish_mj_step()
+            last_executed_right_arm_tau = executed_right_arm_tau_this_step
             record_eval_step(
                 m,
                 d,
@@ -1536,7 +2158,7 @@ if __name__ == "__main__":
                 scene_ids,
                 buffers,
                 right_arm_control=build_right_arm_control_record(
-                    arm_policy_updated=arm_policy_update_due,
+                    arm_policy_updated=mpc_policy_update_due,
                     ddq_execution_updated=ddq_execution_updated,
                     target_q=target_right_arm_q,
                     target_dq=target_right_arm_dq,
@@ -1563,7 +2185,7 @@ if __name__ == "__main__":
                     mpc_diagnostics=(
                         mpc_diagnostics
                         if arm_controller == "mpc"
-                        and arm_policy_update_due
+                        and mpc_policy_update_due
                         else None
                     ),
                 ),
@@ -1597,21 +2219,28 @@ if __name__ == "__main__":
 
                 obs[:3] = omega
                 obs[3:6] = gravity_orientation
-                cmd_active = (
-                    command_schedule(
-                        count,
-                        cmd_nominal,
-                        disturbance_command_changed,
-                        active_schedule_timing,
-                    ).command.astype(np.float32)
-                    if disturbance_command_schedule_enabled
-                    else cmd_nominal.copy()
-                )
+                if full_task_clock is not None:
+                    task_time = full_task_clock.observe(float(d.time))
+                    cmd_planned = direct_step_planned_command(
+                        task_time, cmd_nominal, protocol
+                    ).planned_command.astype(np.float32)
+                else:
+                    cmd_planned = (
+                        command_schedule(
+                            count,
+                            cmd_nominal,
+                            disturbance_command_changed,
+                            active_schedule_timing,
+                        ).command.astype(np.float32)
+                        if disturbance_command_schedule_enabled
+                        else cmd_nominal.copy()
+                    )
+                cmd_active = cmd_planned.copy()
                 if heading_control_enabled:
                     torso_yaw_world = quat_to_yaw_wxyz(d.xquat[scene_ids.torso_id].copy())
                     heading_state = heading_controller.update(torso_yaw_world, torso_state.ang_vel[2])
                     cmd_active[2] = heading_state.yaw_rate_command
-                if count < eval_end_time:
+                if full_task_smoke_active or count < eval_end_time:
                     command_scale = 1.0
                 else:
                     cooldown_ratio = np.clip((count - eval_end_time) / max(eval_duration - eval_end_time, 1e-8), 0.0, 1.0)
@@ -1628,6 +2257,8 @@ if __name__ == "__main__":
                 action = policy(obs_tensor).detach().numpy().squeeze()
                 # 将动作转换为目标关节位置
                 target_dof_pos = action * action_scale + default_angles
+                if full_task_smoke_active:
+                    last_policy_update_task_time = task_time
 
             # --- 7.5 调试可视化与步时统计【非核心代码】---
             if viewer is not None:
@@ -1675,6 +2306,86 @@ if __name__ == "__main__":
         mpc_cost_definition=mpc_cost_definition,
         arm_controller=arm_controller,
     )
+    if startup_pd_trace_recorder is not None:
+        startup_pd_artifacts = save_startup_pd_artifacts(
+            startup_pd_trace_recorder,
+            Path(run_dir),
+            dry_warmup=right_arm_dry_warmup,
+        )
+        print(
+            "[startup-PD] handoff artifacts: "
+            f"summary={startup_pd_artifacts['summary_path']} | "
+            f"trace={startup_pd_artifacts['trace_path']}"
+        )
+    full_task_artifacts = None
+    if full_task_recorder is not None:
+        legacy_template_path = Path(
+            str(
+                predictor_metadata.get(
+                    "path",
+                    Path(repo_dir)
+                    / str(config["mpc_disturbance_template_dir"])
+                    / "heading_disturbance_template.npz",
+                )
+            )
+        )
+        if full_task_short_end is None:
+            full_task_artifacts = save_full_task_smoke_artifacts(
+                recorder=full_task_recorder,
+                run_dir=Path(run_dir),
+                repo_dir=Path(repo_dir),
+                config_path=Path(config_path),
+                policy_path=Path(policy_path),
+                xml_path=Path(source_xml_path),
+                legacy_template_path=legacy_template_path,
+                predictor_metadata=predictor_metadata,
+                control_chain={
+                    "arm_controller": arm_controller,
+                    "disturbance_predictor": str(
+                        config.get("disturbance_predictor", "template")
+                    ),
+                    "right_arm_execution_runtime": right_arm_execution_runtime,
+                    "right_arm_execution_runtime_requested": (
+                        requested_right_arm_execution_runtime
+                    ),
+                    "mpc_ddq_execution_mode": mpc_ddq_execution_mode,
+                    "mpc_command_delay_ms": mpc_command_delay_ms,
+                    "robot_model_backends": controller_meta["robot_model_backends"],
+                    "mpc_config": controller_meta["mpc_config"],
+                    "heading_control": controller_meta["heading_control"],
+                    "payload": payload_metadata,
+                    "locomotion_policy_update_dt": (
+                        simulation_dt * control_decimation
+                    ),
+                    "gait_time_origin": "task_epoch_zero",
+                    "right_arm_dry_warmup": right_arm_dry_warmup,
+                    "fixed_startup_pd_handoff": controller_meta[
+                        "fixed_startup_pd_handoff"
+                    ],
+                    "formal_full_task_runtime_preflight": (
+                        formal_runtime_preflight
+                    ),
+                },
+                initial_lower_q_offset=initial_lower_q_offset,
+                initial_lower_dq=initial_lower_dq,
+                heading_enabled=heading_control_enabled,
+            )
+            print(
+                "[T2] full-task strict pre-step artifacts: "
+                f"status={full_task_artifacts['summary']['status']} | "
+                f"raw={full_task_artifacts['raw_path']} | "
+                f"manifest={full_task_artifacts['manifest_path']}"
+            )
+        else:
+            short_raw_path = Path(run_dir) / "full_task_short_pre_step_raw.npz"
+            np.savez_compressed(
+                short_raw_path,
+                **full_task_recorder.to_arrays(),
+            )
+            print(
+                "[startup-PD] partial strict pre-step raw (diagnostic only): "
+                f"{short_raw_path.resolve()}"
+            )
     if mpc_command_delay_line is not None:
         mpc_command_delay_line.save_report(
             run_dir, eval_start_time, eval_end_time
