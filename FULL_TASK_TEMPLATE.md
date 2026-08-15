@@ -203,6 +203,27 @@ p95/p99/max 是 `3.419/3.630/3.775/4.511 ms`，overrun 为 0。16,074 次 mapper
 和
 [`offline_online_parity.json`](evaluation_summary/full_task_template_v2_final_freeze/offline_online_parity/offline_online_parity.json)。
 
+### 8.3 阶段 5 最终冻结复跑
+
+清理后的正式入口又完成 nominal 与 `heldout_pair_02_minus` 各一条完整运行；轻量
+证据写入 `evaluation_summary/full_task_template_v2_final_freeze/final_runs/`。
+
+| 场景 | 完整区间 | mean / p95 / p99 / max | overrun | tilt RMS | position RMS | XY displacement |
+|---|---:|---|---:|---:|---:|---:|
+| nominal | 1,329 | 3.357623 / 3.731724 / 4.038419 / 4.732786 ms | 0 | 0.002617404 rad | 0.013735420 m | 3.222744 m |
+| held-out | 1,329 | 3.433966 / 3.599877 / 4.143100 / 4.476452 ms | 0 | 0.002573218 rad | 0.013679703 m | 3.212114 m |
+
+两条的 parent/worker affinity 都是 `[7]`，六个数值库线程变量都是 `1`，Torch
+intra/inter-op 为 `1/1`，GC 在控制循环关闭，dynamic arming 为 `false`，24 ms
+handoff 对应 anchor 4。每条有 2,679 次 mapper 调用；nominal 的 rescue/hold-last
+为 `2/0`，held-out 为 `3/1`，但所有最终输出都通过认证。predictor/QP fallback、
+final unsafe、`NO_SAFE_TORQUE`、未认证输出、跌倒及 NaN/Inf 均为 0，显式冻结门
+全部 PASS。
+
+原始 `full_task_smoke_summary.status=FAIL` 是旧聚合器把任何已认证的
+rescue/hold-last 也当作失败所致。它是保留的旧门字段，并非安全门失败；这里不删除
+或改写原始证据，只按当前逐项合同解释它。
+
 ## 9. 局限与硬件状态
 
 - 模板仅覆盖冻结的命令、heading controller、payload、physics、policy 和 task-time

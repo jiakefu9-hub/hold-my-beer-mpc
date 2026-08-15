@@ -32776,7 +32776,7 @@
     "selected_repository_file_count": 5291
   },
   "post_cleanup": {
-    "measured_at_utc": "2026-08-15T20:31:59.124910Z",
+    "measured_at_utc": "2026-08-15T21:31:49.889832Z",
     "measurement_basis": "Current regular-file, directory apparent, and allocated bytes. The cleanup manifest itself is excluded from evaluation_summary usage so repeated finalization remains stable.",
     "roots": {
       "evaluation": {
@@ -32805,17 +32805,17 @@
       },
       "evaluation_summary": {
         "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation_summary",
-        "file_count": 126,
-        "directory_count_including_root": 26,
-        "regular_file_bytes": 15955498,
-        "apparent_bytes_including_directories": 16061994,
-        "allocated_bytes": 16355328
+        "file_count": 178,
+        "directory_count_including_root": 32,
+        "regular_file_bytes": 27705050,
+        "apparent_bytes_including_directories": 27836122,
+        "allocated_bytes": 28254208
       }
     },
     "cleanup_scope_regular_file_bytes": 4006051,
     "cleanup_scope_file_count": 3,
-    "selected_repository_regular_file_bytes_excluding_cleanup_manifest": 19961549,
-    "selected_repository_file_count_excluding_cleanup_manifest": 129
+    "selected_repository_regular_file_bytes_excluding_cleanup_manifest": 31711101,
+    "selected_repository_file_count_excluding_cleanup_manifest": 181
   },
   "archive_summary": {
     "status": "PASS",
@@ -32913,13 +32913,29 @@
       "copied_file_count": 107,
       "offline_online_parity_pass": true
     },
+    "additional_final_run_evidence": {
+      "status": "PASS",
+      "root_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/final_runs",
+      "file_manifest_schema_version": "full_task_template_v2_final_freeze_two_run_files_v1",
+      "archive_manifest_schema_version": "disturbance-lab-final-freeze-run-archive-v1",
+      "declared_output_file_count": 50,
+      "verified_package_file_count": 52,
+      "builder_checksum_matches": true,
+      "all_output_sizes_and_checksums_match": true,
+      "exact_file_set_matches": true,
+      "archive_size_and_checksum_match": true,
+      "archive_absolute_path": "/home/fjk/g1_ws/disturbance-lab-archives/20260815_pre_cleanup/final_freeze_full_runs.tar.zst",
+      "archive_sha256": "14cb190cfa800f45d22e4466551b16a268f259246c099c14b685b675cb6c2d4d",
+      "deletion_completed": true,
+      "fixed_sources_absent": true
+    },
     "usage_excluding_cleanup_manifest": {
       "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation_summary/full_task_template_v2_final_freeze",
-      "file_count": 110,
-      "directory_count_including_root": 14,
-      "regular_file_bytes": 15414654,
-      "apparent_bytes_including_directories": 15471998,
-      "allocated_bytes": 15728640
+      "file_count": 162,
+      "directory_count_including_root": 20,
+      "regular_file_bytes": 27164206,
+      "apparent_bytes_including_directories": 27246126,
+      "allocated_bytes": 27627520
     }
   },
   "deletion_log": {
@@ -32981,7 +32997,7 @@
   },
   "finalization": {
     "status": "PASS",
-    "finalized_at_utc": "2026-08-15T20:31:59.124958Z",
+    "finalized_at_utc": "2026-08-15T21:31:49.889858Z",
     "core_assets_verified": true,
     "all_archive_groups_verified_and_completed": true,
     "all_external_archives_present_and_checksum_unchanged": true,

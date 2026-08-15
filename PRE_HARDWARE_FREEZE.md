@@ -157,6 +157,28 @@ offline-online replay 对 4 条 held-out episode 均通过。原始运行中某�
 区间、认证输出、QP/predictor fallback、稳定性和控制质量门为准，证据包没有删除
 或改写原字段。
 
+### 5.3 阶段 5 最终冻结复跑
+
+清理后的正式分支又完成 nominal 与 `heldout_pair_02_minus` 各一条完整 `[0,8)`
+复跑。轻量证据位于
+`evaluation_summary/full_task_template_v2_final_freeze/final_runs/`。
+
+| 场景 | 完整区间 | mean / p95 / p99 / max | overrun | tilt RMS | position RMS | XY displacement |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| nominal | 1,329 | 3.357623 / 3.731724 / 4.038419 / 4.732786 ms | 0 | 0.002617404 rad | 0.013735420 m | 3.222744 m |
+| held-out | 1,329 | 3.433966 / 3.599877 / 4.143100 / 4.476452 ms | 0 | 0.002573218 rad | 0.013679703 m | 3.212114 m |
+
+两条运行的 parent/worker affinity 均为 `[7]`，六个数值库线程变量均为 `1`，Torch
+intra/inter-op 为 `1/1`，控制循环 GC 关闭，dynamic arming 为 `false`，MPC 在
+24 ms 的 absolute anchor 4 接管。两条各记录 2,679 次 mapper 调用；nominal 的
+rescue/hold-last 为 `2/0`，held-out 为 `3/1`。全部输出均已认证，且 predictor/QP
+fallback、final unsafe、`NO_SAFE_TORQUE`、未认证输出、跌倒和 NaN/Inf 均为 0；
+显式冻结验收门全部 PASS。
+
+两条保留的旧 `full_task_smoke_summary.status` 均为 `FAIL`，仅因为旧聚合门把任意
+已认证 rescue/hold-last 也视作失败。这不是 `final_unsafe`、`NO_SAFE_TORQUE` 或
+未认证输出事件，不能用它否定逐项安全门的 PASS 结论。
+
 ## 6. 已验证与未验证边界
 
 | 模块 | 当前状态 |

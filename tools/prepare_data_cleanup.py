@@ -44,6 +44,17 @@ DEFAULT_ARCHIVE_ROOT = Path(
 DEFAULT_EVIDENCE_ROOT = (
     REPO_ROOT / "evaluation_summary" / "full_task_template_v2_final_freeze"
 )
+DEFAULT_FINAL_RUN_ARCHIVE = Path(
+    "/home/fjk/g1_ws/disturbance-lab-archives/20260815_pre_cleanup/"
+    "final_freeze_full_runs.tar.zst"
+)
+FINAL_RUN_SOURCE_PATHS = (
+    "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze",
+    (
+        "evaluation/t2_full_task_closed_loop/"
+        "20260815_231555_final_freeze_heldout_pair_02_minus"
+    ),
+)
 DELETE_CONFIRMATION = "DELETE_VERIFIED_ARCHIVED_SOURCES"
 SCHEMA_VERSION = "disturbance-lab-data-cleanup-v1"
 CHECKPOINT_BRANCH = "archive/pre-cleanup-full-task-v2-20260815"
@@ -1008,7 +1019,159 @@ def _audit_archive_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _audit_compact_evidence(repo_root: Path, evidence_root: Path) -> dict[str, Any]:
+def _audit_additional_final_run_evidence(
+    repo_root: Path,
+    final_runs_root: Path,
+    *,
+    expected_archive_path: Path,
+) -> dict[str, Any]:
+    """Strictly audit the separately-built two-run freeze evidence package."""
+
+    final_runs_root = final_runs_root.resolve(strict=True)
+    file_manifest_path = final_runs_root / "final_freeze_file_manifest.json"
+    archive_manifest_path = final_runs_root / "final_freeze_archive_manifest.json"
+    for path in (file_manifest_path, archive_manifest_path):
+        if path.is_symlink() or not path.is_file():
+            raise CleanupError(f"final-run manifest is missing or unsafe: {path}")
+
+    file_manifest = json.loads(file_manifest_path.read_text(encoding="utf-8"))
+    if (
+        file_manifest.get("schema_version")
+        != "full_task_template_v2_final_freeze_two_run_files_v1"
+    ):
+        raise CleanupError("final-run file manifest schema mismatch")
+    if file_manifest.get("status") != "PASS":
+        raise CleanupError("final-run file manifest is not PASS")
+    if file_manifest.get("output_repository_path") != _relative_path(
+        repo_root, final_runs_root
+    ):
+        raise CleanupError("final-run output root mismatch")
+    validation = file_manifest.get("validation", {})
+    if not validation or not all(value is True for value in validation.values()):
+        raise CleanupError("final-run validation gates are not all PASS")
+
+    builder = file_manifest.get("builder", {})
+    builder_relative = builder.get("repository_path", "")
+    builder_path = repo_root / builder_relative
+    if (
+        builder_path.is_symlink()
+        or not builder_path.is_file()
+        or not _is_relative_to(builder_path.resolve(strict=True), repo_root)
+        or sha256_file(builder_path) != builder.get("sha256")
+    ):
+        raise CleanupError("final-run evidence builder checksum mismatch")
+
+    declared_paths: set[str] = set()
+    for record in [
+        *file_manifest.get("copied_files", []),
+        *file_manifest.get("generated_files", []),
+    ]:
+        package_path = record.get("output_package_path", "")
+        pure = _validate_declared_relative_path(package_path)
+        relative_path = (PurePosixPath(_relative_path(repo_root, final_runs_root)) / pure).as_posix()
+        if relative_path in declared_paths:
+            raise CleanupError(f"duplicate final-run output: {relative_path}")
+        lexical_path = repo_root.joinpath(*PurePosixPath(relative_path).parts)
+        if lexical_path.is_symlink() or not lexical_path.is_file():
+            raise CleanupError(f"final-run output is missing or unsafe: {relative_path}")
+        path = lexical_path.resolve(strict=True)
+        if not _is_relative_to(path, final_runs_root):
+            raise CleanupError(f"final-run output escapes package: {relative_path}")
+        if path.stat().st_size != int(record.get("bytes", -1)):
+            raise CleanupError(f"final-run output size mismatch: {relative_path}")
+        if sha256_file(path) != record.get("sha256"):
+            raise CleanupError(f"final-run output checksum mismatch: {relative_path}")
+        declared_paths.add(relative_path)
+
+    archive_manifest = json.loads(archive_manifest_path.read_text(encoding="utf-8"))
+    if (
+        archive_manifest.get("schema_version")
+        != "disturbance-lab-final-freeze-run-archive-v1"
+    ):
+        raise CleanupError("final-run archive manifest schema mismatch")
+    if archive_manifest.get("status") != "VERIFIED_ARCHIVE_SOURCE_DELETED":
+        raise CleanupError("final-run archive manifest status mismatch")
+    if archive_manifest.get("source_relative_paths") != list(FINAL_RUN_SOURCE_PATHS):
+        raise CleanupError("final-run archive source list mismatch")
+
+    archive_path = Path(archive_manifest.get("archive_absolute_path", ""))
+    if archive_path != expected_archive_path:
+        raise CleanupError("final-run archive path mismatch")
+    if archive_path.is_symlink() or not archive_path.is_file():
+        raise CleanupError("final-run archive is missing or unsafe")
+    archive_verification = archive_manifest.get("archive_verification", {})
+    required_archive_gates = (
+        "zstd_test_passed",
+        "tar_listing_passed",
+        "member_paths_exact",
+        "member_types_exact",
+        "archived_file_size_sha256_exact",
+    )
+    if archive_verification.get("status") != "verified" or not all(
+        archive_verification.get(field) is True for field in required_archive_gates
+    ):
+        raise CleanupError("final-run archive verification gates are incomplete")
+    if archive_path.stat().st_size != int(
+        archive_verification.get("archive_size_bytes", -1)
+    ):
+        raise CleanupError("final-run archive size mismatch")
+    if sha256_file(archive_path) != archive_verification.get("archive_sha256"):
+        raise CleanupError("final-run archive checksum mismatch")
+
+    expected_realpaths = [str((repo_root / path).resolve(strict=False)) for path in FINAL_RUN_SOURCE_PATHS]
+    deletion = archive_manifest.get("deletion", {})
+    if deletion.get("status") != "completed":
+        raise CleanupError("final-run archive deletion is not completed")
+    if archive_manifest.get("allowed_delete_realpaths") != expected_realpaths:
+        raise CleanupError("final-run allowed delete realpaths mismatch")
+    if deletion.get("deleted_realpaths") != expected_realpaths:
+        raise CleanupError("final-run deleted realpaths mismatch")
+    for relative_path in FINAL_RUN_SOURCE_PATHS:
+        source = repo_root / relative_path
+        if source.exists() or source.is_symlink():
+            raise CleanupError(f"archived final-run source still exists: {source}")
+
+    manifest_paths = {
+        _relative_path(repo_root, file_manifest_path),
+        _relative_path(repo_root, archive_manifest_path),
+    }
+    expected_files = declared_paths | manifest_paths
+    actual_files, _ = _walk_source_member(
+        repo_root, _relative_path(repo_root, final_runs_root)
+    )
+    actual_paths = {_relative_path(repo_root, path) for path in actual_files}
+    if actual_paths != expected_files:
+        raise CleanupError(
+            "final-run evidence file set is not exact: "
+            f"missing={sorted(expected_files - actual_paths)[:10]}, "
+            f"unexpected={sorted(actual_paths - expected_files)[:10]}"
+        )
+
+    return {
+        "status": "PASS",
+        "root_repository_path": _relative_path(repo_root, final_runs_root),
+        "file_manifest_schema_version": file_manifest["schema_version"],
+        "archive_manifest_schema_version": archive_manifest["schema_version"],
+        "declared_output_file_count": len(declared_paths),
+        "verified_package_file_count": len(actual_paths),
+        "builder_checksum_matches": True,
+        "all_output_sizes_and_checksums_match": True,
+        "exact_file_set_matches": True,
+        "archive_size_and_checksum_match": True,
+        "archive_absolute_path": str(archive_path),
+        "archive_sha256": archive_verification["archive_sha256"],
+        "deletion_completed": True,
+        "fixed_sources_absent": True,
+        "verified_repository_paths": sorted(expected_files),
+    }
+
+
+def _audit_compact_evidence(
+    repo_root: Path,
+    evidence_root: Path,
+    *,
+    final_run_archive_path: Path = DEFAULT_FINAL_RUN_ARCHIVE,
+) -> dict[str, Any]:
     evidence_root = evidence_root.resolve(strict=True)
     evidence_manifest_path = evidence_root / "evidence_file_manifest.json"
     if evidence_manifest_path.is_symlink() or not evidence_manifest_path.is_file():
@@ -1068,6 +1231,12 @@ def _audit_compact_evidence(repo_root: Path, evidence_root: Path) -> dict[str, A
         if path.stat().st_size != int(asset["bytes"]) or sha256_file(path) != asset["sha256"]:
             raise CleanupError(f"frozen evidence asset checksum mismatch: {path}")
 
+    additional_final_run_evidence = _audit_additional_final_run_evidence(
+        repo_root,
+        evidence_root / "final_runs",
+        expected_archive_path=final_run_archive_path,
+    )
+
     excluded = {
         (evidence_root / "cleanup_manifest.json").resolve(strict=False),
         evidence_manifest_path.resolve(strict=True),
@@ -1078,11 +1247,15 @@ def _audit_compact_evidence(repo_root: Path, evidence_root: Path) -> dict[str, A
         for path in actual_files
         if path.resolve(strict=False) not in excluded
     }
-    if actual_declared != set(declared):
+    additional_paths = set(
+        additional_final_run_evidence.pop("verified_repository_paths")
+    )
+    expected_all = set(declared) | additional_paths
+    if actual_declared != expected_all:
         raise CleanupError(
             "compact evidence contains unmanifested or missing outputs: "
-            f"missing={sorted(set(declared) - actual_declared)[:10]}, "
-            f"unexpected={sorted(actual_declared - set(declared))[:10]}"
+            f"missing={sorted(expected_all - actual_declared)[:10]}, "
+            f"unexpected={sorted(actual_declared - expected_all)[:10]}"
         )
 
     return {
@@ -1095,11 +1268,12 @@ def _audit_compact_evidence(repo_root: Path, evidence_root: Path) -> dict[str, A
         "evidence_manifest_sha256": sha256_file(evidence_manifest_path),
         "evidence_manifest_schema_version": evidence_manifest["schema_version"],
         "declared_output_file_count": len(declared),
-        "verified_output_file_count": len(actual_declared),
+        "verified_output_file_count": len(declared),
         "all_declared_output_sizes_and_checksums_match": True,
         "all_frozen_asset_sizes_and_checksums_match": True,
         "builder_checksum_matches": True,
         "validation": validation,
+        "additional_final_run_evidence": additional_final_run_evidence,
         "usage_excluding_cleanup_manifest": _tree_usage(
             evidence_root,
             excluded_files=(evidence_root / "cleanup_manifest.json",),

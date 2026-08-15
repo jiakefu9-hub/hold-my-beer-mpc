@@ -77,6 +77,28 @@ MPC_CONTROL_CPU=7 MPC_CONTROL_NUM_THREADS=1 ./run.sh \
 这些是该主机上的 MuJoCo 完整控制区间结果，不能外推为目标 G1 的 deadline、
 DDS 延迟、接触估计或实际力矩安全证据。
 
+### 阶段 5 最终冻结复跑
+
+清理后又从正式 `run.sh` 路径各执行了一条 nominal 和
+`heldout_pair_02_minus`。轻量证据写入
+`evaluation_summary/full_task_template_v2_final_freeze/final_runs/`：
+
+| 场景 | 完整 6 ms 区间 | mean / p95 / p99 / max | `>6 ms` | tilt RMS | position RMS | XY displacement |
+|---|---:|---|---:|---:|---:|---:|
+| nominal | 1,329 | 3.357623 / 3.731724 / 4.038419 / 4.732786 ms | 0 | 0.002617404 rad | 0.013735420 m | 3.222744 m |
+| held-out | 1,329 | 3.433966 / 3.599877 / 4.143100 / 4.476452 ms | 0 | 0.002573218 rad | 0.013679703 m | 3.212114 m |
+
+两条运行都确认 parent/worker affinity 为 `[7]`、六个数值库线程环境变量为 `1`、
+Torch intra/inter-op 为 `1/1`、控制循环 GC 关闭、dynamic arming 为 `false`，并在
+24 ms 的 anchor 4 接管。每条各有 2,679 次 mapper 调用；nominal 的
+rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认证。
+`predictor fallback`、`QP fallback`、`final_unsafe`、`NO_SAFE_TORQUE`、未认证输出、
+跌倒和 NaN/Inf 均为 0，因此显式冻结验收门均为 PASS。
+
+两条原始 `full_task_smoke_summary.status` 仍为 `FAIL`，原因是旧聚合门把任意一次
+已经认证通过的 rescue/hold-last 也判为失败。该字段是保留的旧汇总语义，不代表
+安全门失败，也不覆盖上述逐项冻结验收结果。
+
 ## 架构边界
 
 项目只维护一份正式 full-task predictor 和一份 MPC；另保留的 legacy

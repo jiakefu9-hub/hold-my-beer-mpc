@@ -1,0 +1,777 @@
+{
+  "frozen_template": {
+    "anchor_count": 1334,
+    "heading_frame_version": "full_task_continuous_heading_v2",
+    "horizon": 9,
+    "manifest_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+    "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+    "protocol_version": "full_task_direct_step_v1",
+    "schema_version": "full_task_template_v2",
+    "template_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+    "template_sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4"
+  },
+  "provenance": {
+    "copied_file_contract": "13-item JSON/CSV whitelist and per-run representative plots",
+    "quality": "recomputed from metrics.npz and trajectory.npz; arrays are hashed but not copied",
+    "timing": "recomputed from all 1329 perf_intervals.csv rows per run"
+  },
+  "runs": [
+    {
+      "control_quality": {
+        "ddq_tracking_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 15.792882235980663,
+          "mean": 1.3241650819969668,
+          "p95": 3.445723470857969,
+          "p99": 8.799240593889566,
+          "rms": 2.0092838825125563
+        },
+        "position_error_norm_m": {
+          "count": 4000,
+          "max": 0.027715762371252197,
+          "mean": 0.01250649795800815,
+          "p95": 0.02459307557931569,
+          "p99": 0.027346900260515245,
+          "rms": 0.013735420341185463
+        },
+        "predictor_fallback": {
+          "headline_count": 0,
+          "headline_update_count": 1330
+        },
+        "predictor_interval_acc_error_norm_m_s2": {
+          "count": 1330,
+          "max": 5.151551072813397,
+          "mean": 0.41308751645069297,
+          "p95": 1.5505480755664591,
+          "p99": 3.9305202680820015,
+          "rms": 0.7877521186656179
+        },
+        "predictor_interval_alpha_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 37.026086409855445,
+          "mean": 2.9547886468957234,
+          "p95": 9.190009823849648,
+          "p99": 17.48474223829906,
+          "rms": 4.717713066401541
+        },
+        "predictor_interval_omega_error_norm_rad_s": {
+          "count": 1330,
+          "max": 0.20092146171815722,
+          "mean": 0.0173061872681935,
+          "p95": 0.0450710762268096,
+          "p99": 0.08197728334183693,
+          "rms": 0.025389023351577167
+        },
+        "predictor_orientation_geodesic_error_rad": {
+          "count": 1330,
+          "max": 0.007642912492341019,
+          "mean": 0.0018416436112011823,
+          "p95": 0.004957594989984015,
+          "p99": 0.006975659465956129,
+          "rms": 0.0022924419457075527
+        },
+        "qp": {
+          "fallback_count": 0,
+          "feasible_fallback_count": 0,
+          "success_count": 1330,
+          "update_count": 1330
+        },
+        "right_ee_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 70.42581952334596,
+          "mean": 4.23594107031085,
+          "p95": 15.700819945363378,
+          "p99": 28.965897487331908,
+          "rms": 7.045140289052242
+        },
+        "right_ee_linear_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 15.761053758587177,
+          "mean": 2.176057756275697,
+          "p95": 5.926690546345557,
+          "p99": 10.823602788151662,
+          "rms": 2.9415089284031826
+        },
+        "sample_counts": {
+          "ddq_tracking": 1330,
+          "interval_prediction": 1330,
+          "metrics_headline": 4000,
+          "orientation_prediction": 1330,
+          "trajectory_headline": 4000
+        },
+        "tilt_angle_rad": {
+          "count": 4000,
+          "max": 0.007573684156195679,
+          "mean": 0.002175200660621608,
+          "p95": 0.005713166414536852,
+          "p99": 0.007238219237733482,
+          "rms": 0.0026174037696090435
+        },
+        "torso_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 10.591180477650585,
+          "mean": 1.903990098298918,
+          "p95": 4.693288835965967,
+          "p99": 9.308459603108009,
+          "rms": 2.473740797690904
+        },
+        "torso_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 47.497413856817204,
+          "mean": 6.874337006476376,
+          "p95": 22.747410079827567,
+          "p99": 34.52347096939802,
+          "rms": 9.862905601566462
+        }
+      },
+      "formal_environment": {
+        "dynamic_arming_enabled": false,
+        "gc_disabled_during_control": true,
+        "launcher": "disturbance_lab_run_sh",
+        "mpc_handoff_anchor_index": 4,
+        "parent_cpu_affinity": [
+          7
+        ],
+        "passed": true,
+        "requested_control_cpu": 7,
+        "right_arm_runtime_mode": "process",
+        "startup_pd_duration_s": 0.024,
+        "thread_environment": {
+          "BLIS_NUM_THREADS": 1,
+          "MKL_NUM_THREADS": 1,
+          "NUMEXPR_NUM_THREADS": 1,
+          "OMP_NUM_THREADS": 1,
+          "OPENBLAS_NUM_THREADS": 1,
+          "VECLIB_MAXIMUM_THREADS": 1
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "worker_cpu_affinity": [
+          7
+        ]
+      },
+      "handoff": {
+        "first_lower_policy_update_simulation_time_s": 0.020000000000000004,
+        "first_lower_policy_update_task_time_s": 0.020000000000000004,
+        "mpc_handoff_simulation_time_s": 0.024000000000000007,
+        "mpc_handoff_task_time_s": 0.024000000000000007,
+        "previous_tau_available": true,
+        "previous_tau_matches_last_executed_pd": true,
+        "startup_pd_prefix_included_in_headline": true,
+        "tau_jump_l2_nm": 6.619200331835519,
+        "tau_jump_max_abs_nm": 4.548473965588034,
+        "template_absolute_task_time_s": 0.024,
+        "template_anchor_index": 4
+      },
+      "headline": "[0.0,8.0)",
+      "protocol_and_raw_contract": {
+        "direct_step_effective": true,
+        "heading_enabled": true,
+        "headline_anchor_count": 1334,
+        "last_horizon_node_s": 8.052,
+        "last_raw_time_s": 8.05799999999936,
+        "raw_sample_count": 4030,
+        "strict_pre_step": true,
+        "tail_complete": true
+      },
+      "run_id": "20260815_231454_final_freeze",
+      "safety": {
+        "certified_control_gate_pass": true,
+        "certified_fallbacks": {
+          "final_output_uncertified_count": 0,
+          "hold_last_succeeded_count": 0,
+          "legacy_runtime_mapping_safety_fallback_count": 3,
+          "one_rescue_pass_count": 0,
+          "rescue_succeeded_before_hold_count": 2,
+          "rescue_used_count": 2,
+          "safe_hold_used_count": 0,
+          "safety_line_search_used_count": 0,
+          "second_pass_accepted_count": 135,
+          "second_pass_triggered_count": 137,
+          "two_rescue_pass_count": 2
+        },
+        "fallen": false,
+        "mapper_execution_call_count": 2679,
+        "mapper_final_output_uncertified_count": 0,
+        "mapper_final_unsafe_count": 0,
+        "mapper_hold_last_succeeded_count": 0,
+        "mapper_no_safe_torque_count": 0,
+        "mapper_rescue_used_count": 2,
+        "mapper_safe_hold_used_count": 0,
+        "mapper_safety_line_search_used_count": 0,
+        "nan_inf_count": 0,
+        "predictor_fallback_count": 0,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "qp_update_count": 1330,
+        "runtime_executor_nonzero_flag_count": 0
+      },
+      "scenario": "nominal",
+      "source_run_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze",
+      "source_smoke_status": {
+        "is_final_freeze_acceptance_gate": false,
+        "legacy_runtime_mapping_safety_fallback_count": 3,
+        "note": "Preserved verbatim. The legacy smoke gate treats a mapping safety fallback as failure; final-freeze acceptance instead requires every selected output to be certified and requires zero final_unsafe, NO_SAFE_TORQUE, QP/predictor fallback, fall, NaN/Inf, and complete-interval overrun.",
+        "smoke_passed": false,
+        "status": "FAIL"
+      },
+      "timing": {
+        "budget_ms": 6.0,
+        "complete_6ms_ms": {
+          "count": 1329,
+          "max": 4.732785986561794,
+          "mean": 3.3576231023095766,
+          "overrun_count": 0,
+          "overrun_fraction": 0.0,
+          "p95": 3.731723797682207,
+          "p99": 4.038418602722231,
+          "rms": 3.3633062748467495
+        },
+        "components_ms": {
+          "all_ddq_to_torque_calls": {
+            "count": 1329,
+            "max": 1.7567399918334559,
+            "mean": 1.0309190196243985,
+            "p95": 1.25180240283953,
+            "p99": 1.4374928339384496,
+            "rms": 1.0371783716877863
+          },
+          "cpp_executor_bridge": {
+            "count": 1329,
+            "max": 0.07793100000000001,
+            "mean": 0.03772752972159518,
+            "p95": 0.048323999999999985,
+            "p99": 0.06068468000000003,
+            "rms": 0.038140492425659415
+          },
+          "ddq_call_1": {
+            "count": 1329,
+            "max": 0.9582189959473908,
+            "mean": 0.5174926049580136,
+            "p95": 0.6449061998864636,
+            "p99": 0.7403977576177567,
+            "rms": 0.5217213521944661
+          },
+          "ddq_call_2": {
+            "count": 1329,
+            "max": 0.8494969952153042,
+            "mean": 0.5134264146663848,
+            "p95": 0.6268819997785613,
+            "p99": 0.7122305597295057,
+            "rms": 0.5167780210727984
+          },
+          "mpc_policy_update": {
+            "count": 1329,
+            "max": 2.3004239992587827,
+            "mean": 1.8939783783988506,
+            "p95": 2.022865398612339,
+            "p99": 2.1002976383897476,
+            "rms": 1.8954047067863615
+          },
+          "other_right_arm_path": {
+            "count": 1329,
+            "max": 0.6030169954695552,
+            "mean": 0.3949981745647325,
+            "p95": 0.4296201970406331,
+            "p99": 0.47938992172763983,
+            "rms": 0.39551902280239787
+          }
+        },
+        "definition": "complete 6 ms right-arm intervals in [0,8)",
+        "first_interval_start_simulation_time_s": 0.024,
+        "last_interval_end_simulation_time_s": 7.998,
+        "max_abs_composition_error_ms": 0.0,
+        "max_abs_ddq_sum_error_ms": 0.0,
+        "predictor_time_ms": {
+          "count": 1329,
+          "max": 0.4899800042039715,
+          "mean": 0.3774415177386499,
+          "p50": 0.3814770025201142,
+          "p95": 0.41143619891954586,
+          "p99": 0.4312733205733821,
+          "source": "perf_summary.json: total.real_hardware_control.mpc_breakdown.disturbance_prediction_time"
+        }
+      },
+      "xy": {
+        "arc_length_m": 3.348566238023936,
+        "displacement_m": 3.222744384939758
+      }
+    },
+    {
+      "control_quality": {
+        "ddq_tracking_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 16.531866814869062,
+          "mean": 1.324924261957043,
+          "p95": 3.726295030672857,
+          "p99": 8.260043752192407,
+          "rms": 2.038862231504514
+        },
+        "position_error_norm_m": {
+          "count": 4000,
+          "max": 0.02442577494577801,
+          "mean": 0.013007977287787223,
+          "p95": 0.021625722646637296,
+          "p99": 0.024122503664449242,
+          "rms": 0.01367970296679454
+        },
+        "predictor_fallback": {
+          "headline_count": 0,
+          "headline_update_count": 1330
+        },
+        "predictor_interval_acc_error_norm_m_s2": {
+          "count": 1330,
+          "max": 5.731530263553336,
+          "mean": 0.4245655870931835,
+          "p95": 1.6767444902557982,
+          "p99": 4.24158925354193,
+          "rms": 0.8216080693964698
+        },
+        "predictor_interval_alpha_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 38.903245515720286,
+          "mean": 3.00914760903529,
+          "p95": 9.492811765576898,
+          "p99": 17.838601808514706,
+          "rms": 4.813462457260724
+        },
+        "predictor_interval_omega_error_norm_rad_s": {
+          "count": 1330,
+          "max": 0.18627959432086552,
+          "mean": 0.017869814303893915,
+          "p95": 0.047767961860118266,
+          "p99": 0.08237531866916098,
+          "rms": 0.025331231248815117
+        },
+        "predictor_orientation_geodesic_error_rad": {
+          "count": 1330,
+          "max": 0.0044998699515867305,
+          "mean": 0.002099564229287247,
+          "p95": 0.003609429992852901,
+          "p99": 0.004186875266188125,
+          "rms": 0.0022666810708613086
+        },
+        "qp": {
+          "fallback_count": 0,
+          "feasible_fallback_count": 0,
+          "success_count": 1330,
+          "update_count": 1330
+        },
+        "right_ee_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 61.28812034358065,
+          "mean": 4.198840896363992,
+          "p95": 15.815827943203212,
+          "p99": 29.59669902504647,
+          "rms": 7.048757099975255
+        },
+        "right_ee_linear_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 15.948769808373413,
+          "mean": 2.1828526620519644,
+          "p95": 5.951593698620427,
+          "p99": 10.856866459804737,
+          "rms": 2.9605531850680005
+        },
+        "sample_counts": {
+          "ddq_tracking": 1330,
+          "interval_prediction": 1330,
+          "metrics_headline": 4000,
+          "orientation_prediction": 1330,
+          "trajectory_headline": 4000
+        },
+        "tilt_angle_rad": {
+          "count": 4000,
+          "max": 0.006995778994550064,
+          "mean": 0.0023364916036191577,
+          "p95": 0.0043931493825279215,
+          "p99": 0.005646797327820065,
+          "rms": 0.002573218408181173
+        },
+        "torso_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 10.72003562952487,
+          "mean": 1.904254087189372,
+          "p95": 4.703545136370873,
+          "p99": 9.269676253117785,
+          "rms": 2.471313298597545
+        },
+        "torso_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 48.32035513582182,
+          "mean": 6.85053265149449,
+          "p95": 22.33930024817331,
+          "p99": 35.038367355911845,
+          "rms": 9.875012024540991
+        }
+      },
+      "formal_environment": {
+        "dynamic_arming_enabled": false,
+        "gc_disabled_during_control": true,
+        "launcher": "disturbance_lab_run_sh",
+        "mpc_handoff_anchor_index": 4,
+        "parent_cpu_affinity": [
+          7
+        ],
+        "passed": true,
+        "requested_control_cpu": 7,
+        "right_arm_runtime_mode": "process",
+        "startup_pd_duration_s": 0.024,
+        "thread_environment": {
+          "BLIS_NUM_THREADS": 1,
+          "MKL_NUM_THREADS": 1,
+          "NUMEXPR_NUM_THREADS": 1,
+          "OMP_NUM_THREADS": 1,
+          "OPENBLAS_NUM_THREADS": 1,
+          "VECLIB_MAXIMUM_THREADS": 1
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "worker_cpu_affinity": [
+          7
+        ]
+      },
+      "handoff": {
+        "first_lower_policy_update_simulation_time_s": 0.020000000000000004,
+        "first_lower_policy_update_task_time_s": 0.020000000000000004,
+        "mpc_handoff_simulation_time_s": 0.024000000000000007,
+        "mpc_handoff_task_time_s": 0.024000000000000007,
+        "previous_tau_available": true,
+        "previous_tau_matches_last_executed_pd": true,
+        "startup_pd_prefix_included_in_headline": true,
+        "tau_jump_l2_nm": 5.74416049284359,
+        "tau_jump_max_abs_nm": 3.866085709186183,
+        "template_absolute_task_time_s": 0.024,
+        "template_anchor_index": 4
+      },
+      "headline": "[0.0,8.0)",
+      "protocol_and_raw_contract": {
+        "direct_step_effective": true,
+        "heading_enabled": true,
+        "headline_anchor_count": 1334,
+        "last_horizon_node_s": 8.052,
+        "last_raw_time_s": 8.05799999999936,
+        "raw_sample_count": 4030,
+        "strict_pre_step": true,
+        "tail_complete": true
+      },
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "safety": {
+        "certified_control_gate_pass": true,
+        "certified_fallbacks": {
+          "final_output_uncertified_count": 0,
+          "hold_last_succeeded_count": 1,
+          "legacy_runtime_mapping_safety_fallback_count": 5,
+          "one_rescue_pass_count": 1,
+          "rescue_succeeded_before_hold_count": 2,
+          "rescue_used_count": 3,
+          "safe_hold_used_count": 0,
+          "safety_line_search_used_count": 0,
+          "second_pass_accepted_count": 135,
+          "second_pass_triggered_count": 138,
+          "two_rescue_pass_count": 2
+        },
+        "fallen": false,
+        "mapper_execution_call_count": 2679,
+        "mapper_final_output_uncertified_count": 0,
+        "mapper_final_unsafe_count": 0,
+        "mapper_hold_last_succeeded_count": 1,
+        "mapper_no_safe_torque_count": 0,
+        "mapper_rescue_used_count": 3,
+        "mapper_safe_hold_used_count": 0,
+        "mapper_safety_line_search_used_count": 0,
+        "nan_inf_count": 0,
+        "predictor_fallback_count": 0,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "qp_update_count": 1330,
+        "runtime_executor_nonzero_flag_count": 0
+      },
+      "scenario": "heldout_pair_02_minus",
+      "source_run_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus",
+      "source_smoke_status": {
+        "is_final_freeze_acceptance_gate": false,
+        "legacy_runtime_mapping_safety_fallback_count": 5,
+        "note": "Preserved verbatim. The legacy smoke gate treats a mapping safety fallback as failure; final-freeze acceptance instead requires every selected output to be certified and requires zero final_unsafe, NO_SAFE_TORQUE, QP/predictor fallback, fall, NaN/Inf, and complete-interval overrun.",
+        "smoke_passed": false,
+        "status": "FAIL"
+      },
+      "timing": {
+        "budget_ms": 6.0,
+        "complete_6ms_ms": {
+          "count": 1329,
+          "max": 4.47645199164981,
+          "mean": 3.4339658269394406,
+          "overrun_count": 0,
+          "overrun_fraction": 0.0,
+          "p95": 3.5998773993924256,
+          "p99": 4.143100359360687,
+          "rms": 3.436593850295593
+        },
+        "components_ms": {
+          "all_ddq_to_torque_calls": {
+            "count": 1329,
+            "max": 1.6565580008318648,
+            "mean": 1.0303677628658157,
+            "p95": 1.148417402873747,
+            "p99": 1.4345606774440969,
+            "rms": 1.033673351383883
+          },
+          "cpp_executor_bridge": {
+            "count": 1329,
+            "max": 0.06879400000000001,
+            "mean": 0.03697313769751693,
+            "p95": 0.04517119999999999,
+            "p99": 0.05538088000000001,
+            "rms": 0.03721621013623552
+          },
+          "ddq_call_1": {
+            "count": 1329,
+            "max": 0.8739759941818193,
+            "mean": 0.5167087237024347,
+            "p95": 0.6026941991876811,
+            "p99": 0.722157439449802,
+            "rms": 0.5191619179257079
+          },
+          "ddq_call_2": {
+            "count": 1329,
+            "max": 0.8197220013244078,
+            "mean": 0.5136590391633811,
+            "p95": 0.5802586005302146,
+            "p99": 0.7132042385637765,
+            "rms": 0.5156172702759768
+          },
+          "mpc_policy_update": {
+            "count": 1329,
+            "max": 2.2649340025964193,
+            "mean": 1.9560660721534535,
+            "p95": 2.026325797487516,
+            "p99": 2.138479717832525,
+            "rms": 1.956761597729407
+          },
+          "other_right_arm_path": {
+            "count": 1329,
+            "max": 0.540918987190418,
+            "mean": 0.4105588542226545,
+            "p95": 0.43385799665088054,
+            "p99": 0.4656740766385962,
+            "rms": 0.41083901298639275
+          }
+        },
+        "definition": "complete 6 ms right-arm intervals in [0,8)",
+        "first_interval_start_simulation_time_s": 0.024,
+        "last_interval_end_simulation_time_s": 7.998,
+        "max_abs_composition_error_ms": 4.440892098500626e-16,
+        "max_abs_ddq_sum_error_ms": 0.0,
+        "predictor_time_ms": {
+          "count": 1329,
+          "max": 0.46786200255155563,
+          "mean": 0.38696402476075964,
+          "p50": 0.3921450042980723,
+          "p95": 0.4103132014279254,
+          "p99": 0.4350934416288511,
+          "source": "perf_summary.json: total.real_hardware_control.mpc_breakdown.disturbance_prediction_time"
+        }
+      },
+      "xy": {
+        "arc_length_m": 3.3403456414252046,
+        "displacement_m": 3.2121141125986563
+      }
+    }
+  ],
+  "schema_version": "full_task_template_v2_final_freeze_two_run_evidence_v1",
+  "scope": {
+    "control_candidate": "MPC + FullTaskTemplatePredictor v2",
+    "hardware_claim": "controlled MuJoCo simulation only; not hardware real-time evidence",
+    "headline": "[0.0,8.0)",
+    "mpc_handoff": "simulation/task time 0.024 s; absolute template anchor 4",
+    "source_selection": "two explicit run directories; no latest-run scan",
+    "startup_pd_prefix": "[0.0,0.024) is included in the headline"
+  },
+  "status": "PASS",
+  "two_run_aggregate": {
+    "all_certified_control_gates_pass": true,
+    "all_environment_preflights_pass": true,
+    "all_legacy_smoke_status_fields_preserved": true,
+    "complete_interval_count": 2658,
+    "control_quality": {
+      "ddq_tracking_error_norm_rad_s2": {
+        "count": 2660,
+        "max": 16.531866814869062,
+        "mean": 1.3245446719770049,
+        "p95": 3.6440476669153976,
+        "p99": 8.623200916098218,
+        "rms": 2.024127085879281
+      },
+      "position_error_norm_m": {
+        "count": 8000,
+        "max": 0.027715762371252197,
+        "mean": 0.012757237622897688,
+        "p95": 0.023555157477653108,
+        "p99": 0.02660598166766122,
+        "rms": 0.013707589963388509
+      },
+      "predictor_interval_acc_error_norm_m_s2": {
+        "count": 2660,
+        "max": 5.731530263553336,
+        "mean": 0.4188265517719382,
+        "p95": 1.6475829657524497,
+        "p99": 4.023882375037048,
+        "rms": 0.804858130405466
+      },
+      "predictor_interval_alpha_error_norm_rad_s2": {
+        "count": 2660,
+        "max": 38.903245515720286,
+        "mean": 2.981968127965507,
+        "p95": 9.434405881884961,
+        "p99": 17.753607661851944,
+        "rms": 4.765828228354137
+      },
+      "predictor_interval_omega_error_norm_rad_s": {
+        "count": 2660,
+        "max": 0.20092146171815722,
+        "mean": 0.01758800078604371,
+        "p95": 0.047436295346464506,
+        "p99": 0.08306223887462309,
+        "rms": 0.025360143762682797
+      },
+      "predictor_orientation_geodesic_error_rad": {
+        "count": 2660,
+        "max": 0.007642912492341019,
+        "mean": 0.001970603920244215,
+        "p95": 0.003951742008566966,
+        "p99": 0.006280919805560106,
+        "rms": 0.0022795978978144807
+      },
+      "right_ee_angular_acceleration_norm_rad_s2": {
+        "count": 8000,
+        "max": 70.42581952334596,
+        "mean": 4.21739098333742,
+        "p95": 15.795968378481763,
+        "p99": 29.140063623228176,
+        "rms": 7.046948926552493
+      },
+      "right_ee_linear_acceleration_norm_m_s2": {
+        "count": 8000,
+        "max": 15.948769808373413,
+        "mean": 2.1794552091638306,
+        "p95": 5.938585727834315,
+        "p99": 10.829884968001172,
+        "rms": 2.95104641928011
+      },
+      "tilt_angle_rad": {
+        "count": 8000,
+        "max": 0.007573684156195679,
+        "mean": 0.002255846132120383,
+        "p95": 0.0048575155661253,
+        "p99": 0.006630388435203569,
+        "rms": 0.002595405119568627
+      },
+      "torso_acceleration_norm_m_s2": {
+        "count": 8000,
+        "max": 10.72003562952487,
+        "mean": 1.904122092744145,
+        "p95": 4.703545136370871,
+        "p99": 9.30816336352358,
+        "rms": 2.472527346055601
+      },
+      "torso_angular_acceleration_norm_rad_s2": {
+        "count": 8000,
+        "max": 48.32035513582182,
+        "mean": 6.8624348289854336,
+        "p95": 22.453057678786465,
+        "p99": 34.72466713812986,
+        "rms": 9.868960669448438
+      }
+    },
+    "legacy_smoke_status_is_acceptance_gate": false,
+    "run_count": 2,
+    "safety_totals": {
+      "mapper_execution_call_count": 5358,
+      "mapper_final_output_uncertified_count": 0,
+      "mapper_final_unsafe_count": 0,
+      "mapper_hold_last_succeeded_count": 1,
+      "mapper_no_safe_torque_count": 0,
+      "mapper_rescue_used_count": 5,
+      "mapper_safe_hold_used_count": 0,
+      "mapper_safety_line_search_used_count": 0,
+      "nan_inf_count": 0,
+      "predictor_fallback_count": 0,
+      "qp_failure_count": 0,
+      "qp_fallback_count": 0
+    },
+    "timing": {
+      "complete_6ms_ms": {
+        "budget_ms": 6.0,
+        "count": 2658,
+        "max": 4.732785986561794,
+        "mean": 3.3957944646245086,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p95": 3.6737350546900416,
+        "p99": 4.081487872608704,
+        "rms": 3.4001475254989306
+      },
+      "components_ms": {
+        "all_ddq_to_torque_calls": {
+          "count": 2658,
+          "max": 1.7567399918334559,
+          "mean": 1.0306433912451072,
+          "p95": 1.2192881516966736,
+          "p99": 1.4373849566618446,
+          "rms": 1.0354273446403945
+        },
+        "cpp_executor_bridge": {
+          "count": 2658,
+          "max": 0.07793100000000001,
+          "mean": 0.03735033370955606,
+          "p95": 0.04712425,
+          "p99": 0.057774539999999985,
+          "rms": 0.03768118535407441
+        },
+        "ddq_call_1": {
+          "count": 2658,
+          "max": 0.9582189959473908,
+          "mean": 0.5171006643302242,
+          "p95": 0.6262874470849056,
+          "p99": 0.7362742308032455,
+          "rms": 0.5204432084098713
+        },
+        "ddq_call_2": {
+          "count": 2658,
+          "max": 0.8494969952153042,
+          "mean": 0.513542726914883,
+          "p95": 0.6138618522527395,
+          "p99": 0.7160175504395735,
+          "rms": 0.5161979719404016
+        },
+        "mpc_policy_update": {
+          "count": 2658,
+          "max": 2.3004239992587827,
+          "mean": 1.925022225276152,
+          "p95": 2.0248765467840713,
+          "p99": 2.106217630062019,
+          "rms": 1.9263274582552723
+        },
+        "other_right_arm_path": {
+          "count": 2658,
+          "max": 0.6030169954695552,
+          "mean": 0.4027785143936935,
+          "p95": 0.4322867930822814,
+          "p99": 0.4757196983397868,
+          "rms": 0.4032517774233594
+        }
+      },
+      "predictor_time_ms": {
+        "count": 2658,
+        "max": 0.4899800042039715,
+        "per_run_p95_max": 0.41143619891954586,
+        "per_run_p95_min": 0.4103132014279254,
+        "per_run_p99_max": 0.4350934416288511,
+        "per_run_p99_min": 0.4312733205733821,
+        "source": "weighted per-run perf_summary values; pooled raw predictor samples were not persisted",
+        "weighted_mean": 0.3822027712497048
+      }
+    }
+  }
+}

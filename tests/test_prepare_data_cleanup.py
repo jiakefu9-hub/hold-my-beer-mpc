@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tools.prepare_data_cleanup import (
     CleanupError,
+    FINAL_RUN_SOURCE_PATHS,
     _assert_group_deleted,
     _audit_archive_summary,
     _audit_compact_evidence,
@@ -29,6 +30,77 @@ class PrepareDataCleanupTest(unittest.TestCase):
         ):
             (root / relative).mkdir(parents=True, exist_ok=True)
         return root
+
+    def _add_final_run_evidence(self, repo: Path, evidence: Path):
+        final_runs = evidence / "final_runs"
+        copied = final_runs / "runs" / "final" / "result.json"
+        generated = final_runs / "aggregate.json"
+        final_builder = repo / "tools" / "final_builder.py"
+        copied.parent.mkdir(parents=True)
+        final_builder.parent.mkdir(parents=True, exist_ok=True)
+        copied.write_text('{"pass": true}\n', encoding="utf-8")
+        generated.write_text('{"aggregate": true}\n', encoding="utf-8")
+        final_builder.write_text("# final builder\n", encoding="utf-8")
+        file_manifest = {
+            "schema_version": "full_task_template_v2_final_freeze_two_run_files_v1",
+            "status": "PASS",
+            "output_repository_path": (
+                "evaluation_summary/full_task_template_v2_final_freeze/final_runs"
+            ),
+            "builder": {
+                "repository_path": "tools/final_builder.py",
+                "sha256": hashlib.sha256(final_builder.read_bytes()).hexdigest(),
+            },
+            "validation": {"all_test_gates_pass": True},
+            "copied_files": [
+                {
+                    "output_package_path": "runs/final/result.json",
+                    "bytes": copied.stat().st_size,
+                    "sha256": hashlib.sha256(copied.read_bytes()).hexdigest(),
+                }
+            ],
+            "generated_files": [
+                {
+                    "output_package_path": "aggregate.json",
+                    "bytes": generated.stat().st_size,
+                    "sha256": hashlib.sha256(generated.read_bytes()).hexdigest(),
+                }
+            ],
+        }
+        (final_runs / "final_freeze_file_manifest.json").write_text(
+            json.dumps(file_manifest), encoding="utf-8"
+        )
+        archive = repo.parent / "final_freeze_full_runs.tar.zst"
+        archive.write_bytes(b"verified final archive")
+        expected_realpaths = [
+            str((repo / relative).resolve(strict=False))
+            for relative in FINAL_RUN_SOURCE_PATHS
+        ]
+        archive_manifest = {
+            "schema_version": "disturbance-lab-final-freeze-run-archive-v1",
+            "status": "VERIFIED_ARCHIVE_SOURCE_DELETED",
+            "archive_absolute_path": str(archive),
+            "source_relative_paths": list(FINAL_RUN_SOURCE_PATHS),
+            "allowed_delete_realpaths": expected_realpaths,
+            "archive_verification": {
+                "status": "verified",
+                "archive_size_bytes": archive.stat().st_size,
+                "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                "zstd_test_passed": True,
+                "tar_listing_passed": True,
+                "member_paths_exact": True,
+                "member_types_exact": True,
+                "archived_file_size_sha256_exact": True,
+            },
+            "deletion": {
+                "status": "completed",
+                "deleted_realpaths": expected_realpaths,
+            },
+        }
+        (final_runs / "final_freeze_archive_manifest.json").write_text(
+            json.dumps(archive_manifest), encoding="utf-8"
+        )
+        return archive, copied
 
     def test_cleanup_root_and_escape_are_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -251,12 +323,81 @@ class PrepareDataCleanupTest(unittest.TestCase):
                 json.dumps(evidence_manifest), encoding="utf-8"
             )
             (evidence / "cleanup_manifest.json").write_text("{}\n", encoding="utf-8")
-            result = _audit_compact_evidence(repo, evidence)
+            final_archive, _ = self._add_final_run_evidence(repo, evidence)
+            result = _audit_compact_evidence(
+                repo, evidence, final_run_archive_path=final_archive
+            )
             self.assertEqual(result["status"], "PASS")
             self.assertEqual(result["verified_output_file_count"], 1)
+            self.assertEqual(
+                result["additional_final_run_evidence"]["status"], "PASS"
+            )
             output.write_text("tampered\n", encoding="utf-8")
             with self.assertRaises(CleanupError):
-                _audit_compact_evidence(repo, evidence)
+                _audit_compact_evidence(
+                    repo, evidence, final_run_archive_path=final_archive
+                )
+
+    def test_compact_evidence_audit_rejects_final_run_tamper_and_extra_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary).resolve()
+            evidence = repo / "evaluation_summary" / "full_task_template_v2_final_freeze"
+            output = evidence / "controlled_runs" / "summary.json"
+            builder = repo / "tools" / "builder.py"
+            output.parent.mkdir(parents=True)
+            builder.parent.mkdir(parents=True)
+            output.write_text('{"pass": true}\n', encoding="utf-8")
+            builder.write_text("# builder\n", encoding="utf-8")
+            payload = output.read_bytes()
+            evidence_manifest = {
+                "schema_version": "full_task_template_v2_compact_evidence_files_v1",
+                "status": "PASS",
+                "repository_root": str(repo),
+                "output_absolute_path": str(evidence),
+                "builder": {
+                    "repository_path": "tools/builder.py",
+                    "sha256": hashlib.sha256(builder.read_bytes()).hexdigest(),
+                },
+                "validation": {
+                    "all_16074_mapper_outputs_certified": True,
+                    "all_7974_complete_intervals_within_6ms": True,
+                    "all_copy_checksums_match": True,
+                    "all_six_certified_control_gates_pass": True,
+                    "all_six_runtime_preflights_pass": True,
+                    "offline_online_parity_pass": True,
+                },
+                "copied_files": [{
+                    "output_repository_path": (
+                        "evaluation_summary/full_task_template_v2_final_freeze/"
+                        "controlled_runs/summary.json"
+                    ),
+                    "bytes": len(payload),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                }],
+                "generated_files": [],
+                "frozen_assets": {},
+            }
+            (evidence / "evidence_file_manifest.json").write_text(
+                json.dumps(evidence_manifest), encoding="utf-8"
+            )
+            (evidence / "cleanup_manifest.json").write_text("{}\n", encoding="utf-8")
+            final_archive, final_output = self._add_final_run_evidence(repo, evidence)
+            _audit_compact_evidence(
+                repo, evidence, final_run_archive_path=final_archive
+            )
+            final_output.write_text("tampered\n", encoding="utf-8")
+            with self.assertRaises(CleanupError):
+                _audit_compact_evidence(
+                    repo, evidence, final_run_archive_path=final_archive
+                )
+            final_output.write_text('{"pass": true}\n', encoding="utf-8")
+            (evidence / "final_runs" / "unexpected.txt").write_text(
+                "unexpected\n", encoding="utf-8"
+            )
+            with self.assertRaises(CleanupError):
+                _audit_compact_evidence(
+                    repo, evidence, final_run_archive_path=final_archive
+                )
 
 
 if __name__ == "__main__":

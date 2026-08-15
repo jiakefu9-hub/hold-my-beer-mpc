@@ -88,6 +88,28 @@ CPU 7 受控运行的 compact evidence 位于
 `3.419 ms < 6 ms` 或 `overrun=0` 推导 Linux 硬实时，更不能推导 DDS、总线、
 驱动和真实传感器延迟。
 
+### 阶段 5 最终冻结复跑
+
+清理后的正式入口又运行了 nominal 与 `heldout_pair_02_minus` 各一条；轻量证据
+写入 `evaluation_summary/full_task_template_v2_final_freeze/final_runs/`。
+
+| 场景 | 完整区间 | mean | p95 | p99 | max | overrun |
+|---|---:|---:|---:|---:|---:|---:|
+| nominal | 1,329 | 3.357623 ms | 3.731724 ms | 4.038419 ms | 4.732786 ms | 0 |
+| held-out | 1,329 | 3.433966 ms | 3.599877 ms | 4.143100 ms | 4.476452 ms | 0 |
+
+两条都满足 parent/worker affinity `[7]`、六个数值库线程变量 `1`、Torch `1/1`、
+控制循环 GC 关闭、dynamic arming `false` 以及 24 ms/anchor 4 handoff。每条各有
+2,679 次 mapper 调用；nominal rescue/hold-last 为 `2/0`，held-out 为 `3/1`。
+predictor/QP fallback、final unsafe、`NO_SAFE_TORQUE`、未认证输出、跌倒与 NaN/Inf
+均为 0，所有显式冻结验收门 PASS。
+
+两条旧 `full_task_smoke_summary.status` 都是 `FAIL`，是因为旧聚合逻辑把任意已认证
+rescue/hold-last 也作为失败条件；它不是安全门失败，也不改变本节逐项门控结论。
+控制质量同时保持在冻结水平：nominal/held-out 的 tilt RMS 分别为
+`0.002617404/0.002573218 rad`，position RMS 为
+`0.013735420/0.013679703 m`，XY displacement 为 `3.222744/3.212114 m`。
+
 ## 可选 PREEMPT_RT 目标环境
 
 面向未来硬件 shadow，可先运行只读 checker：

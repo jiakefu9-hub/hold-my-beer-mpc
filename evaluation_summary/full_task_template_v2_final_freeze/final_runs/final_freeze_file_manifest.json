@@ -1,0 +1,513 @@
+{
+  "builder": {
+    "repository_path": "tools/build_final_freeze_run_evidence.py",
+    "sha256": "f11e4e3253a9ebaa1a06575bb3d0bcdf3596b1135a426a31bea0cc039be23b0d"
+  },
+  "copied_files": [
+    {
+      "bytes": 12931,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/run_metadata.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "e1117200ad08cbe38054d7440b7ae26eabee53d10b2662bcd20b263e0740c308",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/formal_full_task_runtime_preflight.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 18002,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/perf_summary.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "7ba579f3af7091dae0bc49f8f16541d6ac017f357106daa83bdbee29897e409b",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/perf_summary.json"
+    },
+    {
+      "bytes": 401630,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/perf_intervals.csv",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "9052f01a44ca6a284326c4029ed16483f69db3409d671fa72ca428b69882e89a",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/perf_intervals.csv"
+    },
+    {
+      "bytes": 3765,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/startup_pd_handoff_summary.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "4f38398496637c1a6f9f1c4376f6efe0f7f925957dce54b8dd5dd4af5390937d",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16909,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/right_arm_diagnostics.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "d0fe4ef119b30b1c645253b65f22fb775780b760fd24e8b6e25d3f8141de3dd4",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25912,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/mpc_diagnostics.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "db93f6ec6006637f1def5328ef3d29618f7eba803fb9d2ac7d8c3b25cfdbd07d",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8194,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/mpc_tracking_diagnostics.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "0cefb49fcc6ab57db8c629db69e1f29c06cabcc39c1662cbc213ad7c1b4f73b4",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2449,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/full_task_smoke_summary.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "83d5eed3eb9967a0b63195eb367357624abb17cc25b9c02c7fe4c51ba067ae09",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 30027,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/full_task_manifest.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "709401cdf7be3b6261ee9462b09f76d037f96be18eeff74f814b62307b300628",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/full_task_manifest.json"
+    },
+    {
+      "bytes": 446,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/heading_control_diagnostics.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "8e934d7c6860eff2316b145b9ae9f287458e3a7eec30070d70c130d1220febde",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/mpc_command_delay_summary.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4054,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231454_final_freeze/summary.json",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "ac6340bcbf2d8ef5d6f9f4ceee1676b3f76e182cc7456996af4145a132d80e44",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/summary.json"
+    },
+    {
+      "bytes": 1068244,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/metrics.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "0f0adeec0417a66c28c72bdec4a48d1add3f0134b21a9225439dd6910837dff1",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/metrics.png"
+    },
+    {
+      "bytes": 300661,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/startup_pd_handoff_transition.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "7fab35b8587f7a0f39ff2e4ab64931c79c8692962940c853d76c78d7ec9afc89",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/startup_pd_handoff_transition.png"
+    },
+    {
+      "bytes": 415164,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/base_disturbance_interval_template_prediction_vs_actual.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "13fe34551876fbd1e2a1f4d68a93cdf79725d329ef20ac243b679917be2ec6dc",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/base_disturbance_interval_template_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 831797,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/mpc_end_effector_task_prediction_vs_actual.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "79ffbe3ddbd8d1cf96c6f9e07203e8f51d7b5f9f9a5a42283807eb3dd7bec840",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/mpc_end_effector_task_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 2104021,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/ddq_tracking.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "c2597495eb5cd2d1dbcd307f0dbe4dd57ac481030f9ab7ba87a319a796cc19b5",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/ddq_tracking.png"
+    },
+    {
+      "bytes": 35101,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/full_task_xy_trajectory.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "e4a01d2ccc29bd22f26dcab4fd8ed251f2bf5aafa9882b82c54483579a687bd3",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/full_task_xy_trajectory.png"
+    },
+    {
+      "bytes": 70024,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/full_task_planned_runtime_commands.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "f3e9e05d059d59e08c3ffa70eb2b2de1a182a968db81b2ec29e61fa8b3f18760",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/full_task_planned_runtime_commands.png"
+    },
+    {
+      "bytes": 39620,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/full_task_event_grid.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "4b533f213cd78ad03ead7a92fe2d665e000f50e49763ac438ca72503685a6c1b",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/full_task_event_grid.png"
+    },
+    {
+      "bytes": 50005,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/full_task_tail_coverage.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "93b565a9f3edf7d126355ecf854ea3623ca0fbf7d42ab0a5b1c1eda6adda9856",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/full_task_tail_coverage.png"
+    },
+    {
+      "bytes": 187768,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/full_task_torso_rpy.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "9601e04c531fb8bf03f88c8923b6566f89ed064be43533daf2feb99ed1e21d50",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/full_task_torso_rpy.png"
+    },
+    {
+      "bytes": 199694,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231454_final_freeze/plots/heading_control.png",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "9343b4838f4c1d7bb598df9a72e19846a4e2075024364bff96d5337dd6507e70",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/heading_control.png"
+    },
+    {
+      "bytes": 13619,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/run_metadata.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "ccbd28304010a85415dbbde301c7d7f75d2da6e5334fe57a67bfc952c93b32c2",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/formal_full_task_runtime_preflight.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 18003,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/perf_summary.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "c1fbb3da874e99dbefe0fe2f056f95a017af92425c431e920c7c7ca580260bb6",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/perf_summary.json"
+    },
+    {
+      "bytes": 401072,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/perf_intervals.csv",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "71f556d0e9efdd6e2be9dbbcb70b13e1da0158d29b607ba361b82a8b764d6e4e",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/perf_intervals.csv"
+    },
+    {
+      "bytes": 3761,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/startup_pd_handoff_summary.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "c68398704567b267d5e26e1e517d328b66325d13a63686f254cb1bb4f6606cba",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16974,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/right_arm_diagnostics.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "800405a397df411b21a8cc45085cd06278126d07ebaa6c40f72cc4c263470170",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25825,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/mpc_diagnostics.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "01828580a841a741f00a5a9222bf6c6a864520fc53f1aa6620aa52d92fdc9614",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8203,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/mpc_tracking_diagnostics.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "259f86b2e95d9ef3429912b781993abf14a7ba2bd9d5f2ac73ab5d858c1be953",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2454,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_smoke_summary.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "f145765ebf9dd5564ccae1f7b547f49bf7f77a6d88a54f2d084b0c45081930c7",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 30782,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_manifest.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "42a4605aa1fa4dd90ce6af8c1d53b2f44f5f82127dc5e8146685135dcb810919",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_manifest.json"
+    },
+    {
+      "bytes": 448,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/heading_control_diagnostics.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "e280da7713e8b8384eafefaeef1902785fbe7e50a18efcead3dd4959c7a23ff3",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/mpc_command_delay_summary.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4065,
+      "category": "final_run_13_file_whitelist",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/summary.json",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "c45efc7f305f76a65efe3da0e6f695bf8496d6a56755b5bb0faa392d9d9b5d41",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/summary.json"
+    },
+    {
+      "bytes": 1107095,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/metrics.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "14da2c53a08a92f768aa05f06dc0e22edbbed25260afbf1331ab5fff03273042",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/metrics.png"
+    },
+    {
+      "bytes": 303672,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/startup_pd_handoff_transition.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "f5d2ab2c3d7ef92968c268b14965361aa3e6ccedf5affbad9fb60550c6b534a0",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/startup_pd_handoff_transition.png"
+    },
+    {
+      "bytes": 417894,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/base_disturbance_interval_template_prediction_vs_actual.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "6614f22bd83d1c061ae4bd21fbe87e3599010318ebc92e67a992d73d91406eca",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/base_disturbance_interval_template_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 841210,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/mpc_end_effector_task_prediction_vs_actual.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "bc0c2027f836dfff51f349248c29ba8bf23386088e543f26f6b8b6725e31377d",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/mpc_end_effector_task_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 2066744,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/ddq_tracking.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "3ce26126ead3e105af6140e7117427cb3c06cd0f4fff1b22f5f38cf845604bfa",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/ddq_tracking.png"
+    },
+    {
+      "bytes": 35171,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/full_task_xy_trajectory.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "85ba13e76861fdc3c1aacc2b80cdcfd0529711120df2faee0fe4b3afdab5817e",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_xy_trajectory.png"
+    },
+    {
+      "bytes": 69670,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/full_task_planned_runtime_commands.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "c6a17b2760a4809c98b89bcff818dd34ec23ff95528d5aa6c9b0df2e003075aa",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_planned_runtime_commands.png"
+    },
+    {
+      "bytes": 39620,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/full_task_event_grid.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "4b533f213cd78ad03ead7a92fe2d665e000f50e49763ac438ca72503685a6c1b",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_event_grid.png"
+    },
+    {
+      "bytes": 50005,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/full_task_tail_coverage.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "93b565a9f3edf7d126355ecf854ea3623ca0fbf7d42ab0a5b1c1eda6adda9856",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_tail_coverage.png"
+    },
+    {
+      "bytes": 187253,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/full_task_torso_rpy.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "5ff6c12067f766a02afd43b97d273abcc6a29753d81c291a6c64f4be1cd73950",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/full_task_torso_rpy.png"
+    },
+    {
+      "bytes": 199014,
+      "category": "final_run_representative_plot",
+      "output_package_path": "runs/20260815_231555_final_freeze_heldout_pair_02_minus/plots/heading_control.png",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "8544ba5f9635684cf72d686394e70b46fd3908e75ebac9d68a19c8c0f8916449",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/heading_control.png"
+    }
+  ],
+  "derived_only_source_files": [
+    {
+      "bytes": 731728,
+      "copied_to_evidence_package": false,
+      "purpose": "recompute full-headline control quality",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "2c9ca17a8855ed9f83bc86dc5c6c43b67d2e438b34e797f18cdcdeff8991cec5",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/metrics.npz"
+    },
+    {
+      "bytes": 26600739,
+      "copied_to_evidence_package": false,
+      "purpose": "recompute full-headline control quality",
+      "run_id": "20260815_231454_final_freeze",
+      "sha256": "19a9b1d9cad3a49b3c62e465332fe0e9218ff4b409710dddc887c76662778406",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231454_final_freeze/trajectory.npz"
+    },
+    {
+      "bytes": 731728,
+      "copied_to_evidence_package": false,
+      "purpose": "recompute full-headline control quality",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "6ce30201d66cd76c1cf942cd0ef5d34bac27cd8ca2492c2c48a9baf6bd087fe7",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/metrics.npz"
+    },
+    {
+      "bytes": 26600739,
+      "copied_to_evidence_package": false,
+      "purpose": "recompute full-headline control quality",
+      "run_id": "20260815_231555_final_freeze_heldout_pair_02_minus",
+      "sha256": "6913776024b4a3ae76e1ecc13dba36e3ee8f775fd13ba40d86effc3bcecc7dfb",
+      "source_repository_path": "evaluation/t2_full_task_closed_loop/20260815_231555_final_freeze_heldout_pair_02_minus/trajectory.npz"
+    }
+  ],
+  "frozen_template": {
+    "anchor_count": 1334,
+    "heading_frame_version": "full_task_continuous_heading_v2",
+    "horizon": 9,
+    "manifest_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+    "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+    "protocol_version": "full_task_direct_step_v1",
+    "schema_version": "full_task_template_v2",
+    "template_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+    "template_sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4"
+  },
+  "generated_files": [
+    {
+      "bytes": 27351,
+      "category": "generated_two_run_aggregate_json",
+      "output_package_path": "final_freeze_runs.json",
+      "sha256": "e35e152721846e151d4dababf1583dd8fd2094ecb6ce157958248bd94e1a37a2"
+    },
+    {
+      "bytes": 1821,
+      "category": "generated_two_run_metrics_csv",
+      "output_package_path": "final_freeze_runs.csv",
+      "sha256": "491632a3c74abc3db661a6aafa88115d0a83043f20b3be49eaaca7b3242dfe28"
+    }
+  ],
+  "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/final_runs",
+  "schema_version": "full_task_template_v2_final_freeze_two_run_files_v1",
+  "selection": {
+    "excluded_large_artifacts": [
+      "trajectory.npz",
+      "metrics.npz",
+      "full_task_nominal_raw.npz",
+      "control_preview.csv",
+      "metrics_preview.csv",
+      "mpc_diagnostics_preview.csv",
+      "mpc_tracking_preview.csv",
+      "startup_pd_handoff_trace.npz",
+      "video"
+    ],
+    "representative_plot_count_per_run": 11,
+    "representative_plots": [
+      "metrics.png",
+      "startup_pd_handoff_transition.png",
+      "base_disturbance_interval_template_prediction_vs_actual.png",
+      "mpc_end_effector_task_prediction_vs_actual.png",
+      "ddq_tracking.png",
+      "full_task_xy_trajectory.png",
+      "full_task_planned_runtime_commands.png",
+      "full_task_event_grid.png",
+      "full_task_tail_coverage.png",
+      "full_task_torso_rpy.png",
+      "heading_control.png"
+    ],
+    "whitelist_file_count_per_run": 13,
+    "whitelist_files": [
+      "run_metadata.json",
+      "formal_full_task_runtime_preflight.json",
+      "perf_summary.json",
+      "perf_intervals.csv",
+      "startup_pd_handoff_summary.json",
+      "right_arm_diagnostics.json",
+      "mpc_diagnostics.json",
+      "mpc_tracking_diagnostics.json",
+      "full_task_smoke_summary.json",
+      "full_task_manifest.json",
+      "heading_control_diagnostics.json",
+      "mpc_command_delay_summary.json",
+      "summary.json"
+    ]
+  },
+  "source_selection": {
+    "root_repository_path": "evaluation/t2_full_task_closed_loop",
+    "run_ids": [
+      "20260815_231454_final_freeze",
+      "20260815_231555_final_freeze_heldout_pair_02_minus"
+    ],
+    "selection_method": "fixed constants; no directory scan"
+  },
+  "status": "PASS",
+  "validation": {
+    "all_2658_complete_intervals_within_6ms": true,
+    "all_copy_checksums_match": true,
+    "all_source_smoke_status_fields_preserved_but_not_gating": true,
+    "all_two_certified_control_gates_pass": true,
+    "all_two_runtime_preflights_pass": true,
+    "large_arrays_and_video_not_copied": true
+  }
+}
