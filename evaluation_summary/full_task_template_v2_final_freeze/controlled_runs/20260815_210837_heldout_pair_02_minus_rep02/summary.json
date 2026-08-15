@@ -1,0 +1,144 @@
+{
+  "gait_period": 0.8,
+  "total_cycles": 10.075,
+  "warmup_cycles": 0,
+  "evaluation_cycles": 10,
+  "cooldown_cycles": 0,
+  "eval_start_time": 0.0,
+  "eval_end_time": 8.0,
+  "walk_distance_xy": 3.212170395830319,
+  "gravity_error_norm_definition": "signed_xy_used_by_mpc_cost",
+  "yaw_mean": 0.001427823875296537,
+  "yaw_slope": 0.004482447764656585,
+  "yaw_final_drift": 0.018937015165548663,
+  "max_abs_yaw_error": 0.03762348887108587,
+  "heading_sample_count": 3990,
+  "heading_error_mean": -2.5885684325307738e-05,
+  "heading_error_rms": 0.010898909540763524,
+  "heading_error_max_abs": 0.02909823102882731,
+  "heading_filtered_drift_slope": 0.0038210279073011156,
+  "heading_yaw_rate_command_mean": 0.012705073725931956,
+  "heading_yaw_rate_command_min": -0.005623996257781982,
+  "heading_yaw_rate_command_max": 0.03155992552638054,
+  "heading_command_saturation_fraction": 0.0,
+  "left_acc_mean": 1.8802517247136474,
+  "left_acc_std": 1.342523388108538,
+  "left_acc_rms": 2.3103496696186645,
+  "left_alpha_mean": 7.012953544215125,
+  "left_alpha_std": 8.046082607674615,
+  "left_alpha_rms": 10.673376351597625,
+  "left_tilt_mean": 0.788165946572396,
+  "left_tilt_std": 0.17123601744660547,
+  "left_tilt_rms": 0.8065527465747887,
+  "left_acc_xyz_mean": [
+    0.0046192642807437925,
+    0.017596830357809436,
+    -0.007630565110109624
+  ],
+  "left_acc_xyz_std": [
+    0.909234413732508,
+    1.276156870347109,
+    1.6976580360874785
+  ],
+  "left_acc_xyz_rms": [
+    0.9092461474859261,
+    1.2762781852608664,
+    1.6976751847795628
+  ],
+  "left_alpha_xyz_mean": [
+    -0.0814148649730276,
+    -0.025354579011640944,
+    -0.0020574400560493854
+  ],
+  "left_alpha_xyz_std": [
+    7.348861477932693,
+    6.7332182012014234,
+    3.8172889474122194
+  ],
+  "left_alpha_xyz_rms": [
+    7.349312444173361,
+    6.733265938581867,
+    3.8172895018710626
+  ],
+  "left_tilt_xyz_mean": [
+    0.6913386597629113,
+    -0.054993420898900296,
+    0.03322349448954947
+  ],
+  "left_tilt_xyz_std": [
+    0.17953187973413945,
+    0.3705701260780747,
+    0.014622868788632967
+  ],
+  "left_tilt_xyz_rms": [
+    0.7142694437841021,
+    0.3746284755376771,
+    0.03629915808537032
+  ],
+  "left_tilt_xyz_norm_mean": 0.7888970835914417,
+  "left_tilt_xyz_norm_std": 0.17171590894835514,
+  "left_tilt_xyz_norm_rms": 0.8073691608459181,
+  "left_upright_alignment_mean": 0.9966133033140113,
+  "left_upright_alignment_min": 0.9924051705616613,
+  "left_inverted_fraction": 0.0,
+  "right_acc_mean": 2.1828526620519644,
+  "right_acc_std": 2.0000073543337114,
+  "right_acc_rms": 2.9605531850680005,
+  "right_alpha_mean": 4.198840896363992,
+  "right_alpha_std": 5.661688068188921,
+  "right_alpha_rms": 7.048757099975255,
+  "right_tilt_mean": 0.02292094669738283,
+  "right_tilt_std": 0.010575931757910212,
+  "right_tilt_rms": 0.025243219486670847,
+  "right_acc_xyz_mean": [
+    0.001549897921209441,
+    0.02410131652813761,
+    0.007638460327038358
+  ],
+  "right_acc_xyz_std": [
+    0.9175201894395205,
+    1.7142554174817122,
+    2.232424378451282
+  ],
+  "right_acc_xyz_rms": [
+    0.9175214985016427,
+    1.7144248335298362,
+    2.232437446285959
+  ],
+  "right_alpha_xyz_mean": [
+    -0.00960289568455339,
+    -0.002792253530982084,
+    -0.006322484341150415
+  ],
+  "right_alpha_xyz_std": [
+    3.9485219277774153,
+    3.5221196610748273,
+    4.657111159000733
+  ],
+  "right_alpha_xyz_rms": [
+    3.9485336049911743,
+    3.522120767891083,
+    4.657115450694486
+  ],
+  "right_tilt_xyz_mean": [
+    -0.011493485560240678,
+    -0.0028529705699169897,
+    3.247819268932739e-05
+  ],
+  "right_tilt_xyz_std": [
+    0.016697633391245387,
+    0.014770562541336456,
+    3.091532673540611e-05
+  ],
+  "right_tilt_xyz_rms": [
+    0.020270944013338267,
+    0.015043568687659993,
+    4.4839607798485385e-05
+  ],
+  "right_tilt_xyz_norm_mean": 0.022920973650070158,
+  "right_tilt_xyz_norm_std": 0.010575968398943696,
+  "right_tilt_xyz_norm_rms": 0.025243259311005507,
+  "right_upright_alignment_mean": 0.9999966892769939,
+  "right_upright_alignment_min": 0.9999755296379301,
+  "right_inverted_fraction": 0.0
+}

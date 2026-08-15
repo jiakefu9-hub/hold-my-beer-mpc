@@ -1,0 +1,337 @@
+{
+  "definition": {
+    "alignment": "one arm-control interval: prediction at update k versus response immediately before update k+1",
+    "ddq_real": "(dq[k+1] - dq[k]) / arm_control_interval",
+    "model_cost": "one-step model acceleration and predicted end-of-interval state",
+    "actual_cost": "interval-average end-effector acceleration, measured end-of-interval state, and commanded ddq control cost",
+    "cost_error": "actual_cost - one_step_model_cost",
+    "evaluation_window": [
+      0.0,
+      8.0
+    ]
+  },
+  "sample_count": 1329,
+  "cost_sample_count": 0,
+  "joint_names": [
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint"
+  ],
+  "cost_term_names": [
+    "linear_acceleration",
+    "angular_acceleration",
+    "position",
+    "gravity",
+    "posture",
+    "velocity",
+    "control"
+  ],
+  "interval_dt_mean": 0.005999999999999998,
+  "forward_dynamics_validation": {
+    "definition": "rank candidates with the local model; validate at least two with mj_forwardSkip and select the minimum-error real-safe candidate, evaluating more only when needed",
+    "first_pass": {
+      "sample_count": 2659,
+      "selections": [
+        {
+          "candidate_index": 1,
+          "label": "first",
+          "scale": 1.0,
+          "count": 2218,
+          "fraction": 0.8341481760060173
+        },
+        {
+          "candidate_index": 2,
+          "label": "second",
+          "scale": 0.5,
+          "count": 315,
+          "fraction": 0.1184655885671305
+        },
+        {
+          "candidate_index": 3,
+          "label": "third",
+          "scale": 0.25,
+          "count": 90,
+          "fraction": 0.03384731101918014
+        },
+        {
+          "candidate_index": 4,
+          "label": "fourth",
+          "scale": 0.125,
+          "count": 31,
+          "fraction": 0.011658518239939826
+        },
+        {
+          "candidate_index": 0,
+          "label": "fallback",
+          "scale": 0.0,
+          "count": 5,
+          "fraction": 0.00188040616773223
+        }
+      ],
+      "safety": {
+        "safe_candidate_count": {
+          "total": 4627,
+          "mean_per_pass": 1.7401278676194059,
+          "zero_candidate_passes": 121,
+          "zero_candidate_fraction": 0.04550582925911997
+        },
+        "total_error_rejections": {
+          "total": 397,
+          "mean_per_pass": 0.14930424971793907
+        },
+        "joint_error_rejections": {
+          "total": 911,
+          "mean_per_pass": 0.34261000376081235
+        },
+        "qacc_limit_rejections": {
+          "total": 430,
+          "mean_per_pass": 0.1617149304249718
+        }
+      },
+      "tracking_safety_satisfied_fraction": 0.95449417074088,
+      "qacc_safety_satisfied_fraction": 0.9853328318916886
+    },
+    "second_pass": {
+      "sample_count": 137,
+      "selections": [
+        {
+          "candidate_index": 1,
+          "label": "first",
+          "scale": 1.0,
+          "count": 107,
+          "fraction": 0.781021897810219
+        },
+        {
+          "candidate_index": 2,
+          "label": "second",
+          "scale": 0.5,
+          "count": 15,
+          "fraction": 0.10948905109489052
+        },
+        {
+          "candidate_index": 3,
+          "label": "third",
+          "scale": 0.25,
+          "count": 13,
+          "fraction": 0.0948905109489051
+        },
+        {
+          "candidate_index": 4,
+          "label": "fourth",
+          "scale": 0.125,
+          "count": 2,
+          "fraction": 0.014598540145985401
+        },
+        {
+          "candidate_index": 0,
+          "label": "fallback",
+          "scale": 0.0,
+          "count": 0,
+          "fraction": 0.0
+        }
+      ],
+      "safety": {
+        "safe_candidate_count": {
+          "total": 207,
+          "mean_per_pass": 1.510948905109489,
+          "zero_candidate_passes": 12,
+          "zero_candidate_fraction": 0.08759124087591241
+        },
+        "total_error_rejections": {
+          "total": 35,
+          "mean_per_pass": 0.25547445255474455
+        },
+        "joint_error_rejections": {
+          "total": 93,
+          "mean_per_pass": 0.6788321167883211
+        },
+        "qacc_limit_rejections": {
+          "total": 43,
+          "mean_per_pass": 0.31386861313868614
+        }
+      },
+      "tracking_safety_satisfied_fraction": 0.9124087591240876,
+      "qacc_safety_satisfied_fraction": 0.9854014598540146,
+      "triggered_count": 137,
+      "triggered_fraction_of_evaluation_steps": 0.05152312899586311,
+      "accepted_count": 134,
+      "accepted_fraction_given_triggered": 0.9781021897810219
+    },
+    "final_safety_fallback": {
+      "used_count": 3,
+      "used_fraction": 0.0011282437006393381,
+      "satisfied_fraction_when_used": 1.0,
+      "attempt_count": 5,
+      "one_rescue_pass_count": 1,
+      "two_rescue_pass_count": 2,
+      "final_unsafe_count": 0
+    },
+    "hold_last_safe": {
+      "available_fraction": 0.000376081233546446,
+      "used_count": 1,
+      "used_fraction": 0.000376081233546446,
+      "satisfied_fraction_when_available": 1.0
+    },
+    "first_pass_residual_norm": {
+      "sample_count": 2659,
+      "mean": 1.1379067746625278,
+      "rms": 2.2844339728436336,
+      "p95": 4.785233867710877,
+      "max": 23.87601150514245
+    },
+    "final_residual_norm": {
+      "sample_count": 2659,
+      "mean": 0.8226610842447889,
+      "rms": 1.377726735898608,
+      "p95": 3.5495454711708954,
+      "max": 8.871713586751122
+    }
+  },
+  "ddq_tracking": {
+    "reference_rms": [
+      1.5756463583800406,
+      2.2353688135287015,
+      2.2870756387824187,
+      1.2423781546443666,
+      2.895211209920127
+    ],
+    "actual_rms": [
+      1.9383133991204644,
+      2.119763875649557,
+      2.349877343813347,
+      1.673833119999165,
+      2.739133658290598
+    ],
+    "rmse": [
+      1.1976460506348372,
+      0.5005122449674182,
+      0.8233767140370758,
+      1.2379373511662572,
+      0.5096723377750007
+    ],
+    "mae": [
+      0.6165518965969838,
+      0.3206062020802745,
+      0.46189041390955476,
+      0.6374863044853583,
+      0.38767273623360565
+    ],
+    "abs_max": [
+      12.268057602637898,
+      4.004215776232661,
+      8.543947949437099,
+      11.162552980810176,
+      2.98082153574365
+    ],
+    "normalized_rmse": [
+      0.7600982569884308,
+      0.22390589057978363,
+      0.3600128916048534,
+      0.996425562167599,
+      0.17603977769520363
+    ],
+    "correlation": [
+      0.7873856408455976,
+      0.9749713830006853,
+      0.9372971635090981,
+      0.6765029046236931,
+      0.9851673787897807
+    ],
+    "gain": [
+      0.9677848390722534,
+      0.9245540920469193,
+      0.963031759384147,
+      0.911151787264778,
+      0.9320492157504505
+    ],
+    "error_norm_rms": 2.0383995095386984,
+    "error_norm_p95": 3.7267650847827496,
+    "error_norm_max": 16.531866814869062,
+    "spike_diagnostics": {
+      "definition": "an arm interval is a spike when any |ddq_real_j| exceeds that joint's configured ddq limit",
+      "count": 28,
+      "fraction": 0.021068472535741158,
+      "max_abs_ddq_real": 14.07351508560754,
+      "final_validated_unsafe_fraction_given_spike": 0.0,
+      "right_arm_contact_fraction_given_spike": 0.0,
+      "contact_count_changed_fraction_given_spike": 0.5,
+      "recovery_active_fraction_given_spike": 0.0
+    }
+  },
+  "cost_tracking": {
+    "reference_rms": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "actual_rms": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "rmse": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "mae": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "abs_max": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "normalized_rmse": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "correlation": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gain": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+}

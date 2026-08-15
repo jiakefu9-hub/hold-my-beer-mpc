@@ -1,0 +1,671 @@
+{
+  "right_arm_joint_names": [
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint"
+  ],
+  "right_arm_ddq_saturation_limit": 8.0,
+  "right_arm_ddq_saturation_threshold": 7.99,
+  "right_arm_ddq_saturation_count": [
+    21,
+    3,
+    60,
+    0,
+    27
+  ],
+  "right_arm_ddq_saturation_fraction": [
+    0.005210918114143921,
+    0.0007444168734491315,
+    0.01488833746898263,
+    0.0,
+    0.006699751861042184
+  ],
+  "right_arm_ddq_saturation_percent": [
+    0.5210918114143921,
+    0.07444168734491315,
+    1.488833746898263,
+    0.0,
+    0.6699751861042184
+  ],
+  "right_arm_ddq_saturation_any_fraction": 0.018610421836228287,
+  "right_arm_tau_limit_lower": [
+    -25.0,
+    -25.0,
+    -25.0,
+    -25.0,
+    -25.0
+  ],
+  "right_arm_tau_limit_upper": [
+    25.0,
+    25.0,
+    25.0,
+    25.0,
+    25.0
+  ],
+  "right_arm_tau_saturation_count": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "right_arm_tau_saturation_fraction": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "right_arm_tau_saturation_percent": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "right_arm_tau_saturation_any_fraction": 0.0,
+  "right_arm_tau_clip_delta_abs_max": [
+    0.10850788128887967,
+    0.11020388554821986,
+    0.0623441451518858,
+    0.033523237107790926,
+    0.04148999618761316
+  ],
+  "right_arm_torque_gap": {
+    "execution_call_count": 2679,
+    "nominal_to_selected": {
+      "per_joint_mae": [
+        0.171858318265579,
+        0.08911672721715527,
+        0.08962670037791116,
+        0.11896244342996841,
+        0.024598967668128902
+      ],
+      "per_joint_rms": [
+        0.3572754064852541,
+        0.13986705395900648,
+        0.14740570156039634,
+        0.2224420110254376,
+        0.03453171951007522
+      ],
+      "per_joint_abs_max": [
+        4.241651237540113,
+        1.7340222780623118,
+        2.194791062716894,
+        2.634021744859205,
+        0.13099263871467676
+      ],
+      "vector_norm_rms": 0.46862547693894263,
+      "vector_norm_p95": 0.7852301309231867,
+      "vector_norm_max": 4.99621535229406
+    },
+    "selected_to_executed": {
+      "per_joint_mae": [
+        4.89012007860278e-18,
+        5.423681909213041e-18,
+        3.1932769024933276e-18,
+        7.096890368311237e-18,
+        2.036147058681997e-18
+      ],
+      "per_joint_rms": [
+        3.435322847052258e-17,
+        2.262264510281745e-17,
+        1.2246516963642473e-17,
+        4.443080198991989e-17,
+        7.23293401042406e-18
+      ],
+      "per_joint_abs_max": [
+        4.440892098500626e-16,
+        2.220446049250313e-16,
+        1.1102230246251565e-16,
+        4.440892098500626e-16,
+        2.7755575615628914e-17
+      ],
+      "vector_norm_rms": 6.219579612323774e-17,
+      "vector_norm_p95": 1.1443916996305594e-16,
+      "vector_norm_max": 4.577566798522237e-16
+    },
+    "nominal_to_executed": {
+      "per_joint_mae": [
+        0.171858318265579,
+        0.08911672721715529,
+        0.08962670037791116,
+        0.11896244342996841,
+        0.024598967668128902
+      ],
+      "per_joint_rms": [
+        0.3572754064852541,
+        0.13986705395900648,
+        0.14740570156039634,
+        0.2224420110254376,
+        0.03453171951007522
+      ],
+      "per_joint_abs_max": [
+        4.241651237540113,
+        1.7340222780623118,
+        2.194791062716894,
+        2.634021744859205,
+        0.13099263871467676
+      ],
+      "vector_norm_rms": 0.4686254769389427,
+      "vector_norm_p95": 0.7852301309231867,
+      "vector_norm_max": 4.99621535229406
+    }
+  },
+  "right_arm_execution_branches": {
+    "execution_call_count": 2679,
+    "first_pass_only_count": 2542,
+    "second_pass_triggered_count": 137,
+    "second_pass_accepted_count": 135,
+    "rescue_used_count": 2,
+    "one_rescue_pass_count": 0,
+    "two_rescue_pass_count": 2,
+    "rescue_succeeded_before_hold_count": 2,
+    "hold_last_succeeded_count": 0,
+    "safe_hold_used_count": 0,
+    "safety_line_search_used_count": 0,
+    "safety_line_search_attempt_count": 0,
+    "safety_line_search_max_attempts_per_call": 0,
+    "safety_line_search_extra_time_ms": {
+      "total": 0.0,
+      "mean_when_triggered": 0.0,
+      "max": 0.0
+    },
+    "final_output_uncertified_count": 0,
+    "no_safe_torque_count": 0,
+    "final_unsafe_count": 0
+  },
+  "right_arm_ddq_raw_rms": [
+    1.5656328092638958,
+    2.2697212632466823,
+    2.2722170961255803,
+    1.237593135184151,
+    2.9081882070778433
+  ],
+  "right_arm_ddq_raw_abs_max": [
+    8.00026103815314,
+    8.000073914871574,
+    8.000705663250475,
+    6.429106610897517,
+    8.000609395425258
+  ],
+  "right_arm_ddq_rms": [
+    1.5656305867599345,
+    2.2697210655240063,
+    2.272213199397298,
+    1.2375931349168356,
+    2.908184060807444
+  ],
+  "right_arm_ddq_abs_max": [
+    8.0,
+    8.0,
+    8.0,
+    6.429106712341309,
+    8.0
+  ],
+  "right_arm_qacc_rms": [
+    2.965671483644939,
+    2.249006239697597,
+    2.5586950487208524,
+    2.8742827197629586,
+    2.8550849049566933
+  ],
+  "right_arm_qacc_abs_max": [
+    78.72287702302245,
+    10.835397417057928,
+    25.366424315625597,
+    77.97268365373746,
+    10.305897106885777
+  ],
+  "right_arm_tau_inverse_rms": [
+    1.9042834792506058,
+    0.5375881280599178,
+    0.2997077280348784,
+    1.8672307716902545,
+    0.1400391409859491
+  ],
+  "right_arm_tau_inverse_abs_max": [
+    5.531892493575745,
+    1.9955974512957815,
+    1.713805847678798,
+    3.4887872515033314,
+    0.28380014439094176
+  ],
+  "right_arm_tau_constraint_rms": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "right_arm_tau_constraint_abs_max": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "right_arm_tau_contact_rms": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "right_arm_tau_contact_abs_max": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "right_arm_tau_constraint_total_rms": [
+    0.09714582003055382,
+    0.09921966090324107,
+    0.09684757134338938,
+    0.09564816462367269,
+    0.09933091664949083
+  ],
+  "right_arm_tau_constraint_total_abs_max": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1
+  ],
+  "right_arm_tau_constraint_noncontact_rms": [
+    0.09714582003055382,
+    0.09921966090324107,
+    0.09684757134338938,
+    0.09564816462367269,
+    0.09933091664949083
+  ],
+  "right_arm_tau_constraint_noncontact_abs_max": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1
+  ],
+  "right_arm_tau_constraint_nonfriction_rms": [
+    0.04305993624390419,
+    0.017309824476405233,
+    0.0475830855359655,
+    0.040648687497101196,
+    0.01604502894855301
+  ],
+  "right_arm_tau_constraint_nonfriction_abs_max": [
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.2
+  ],
+  "right_arm_tau_constraint_friction_rms": [
+    0.1000000000000026,
+    0.1000000000000026,
+    0.1000000000000026,
+    0.1000000000000026,
+    0.1000000000000026
+  ],
+  "right_arm_tau_constraint_friction_abs_max": [
+    0.1,
+    0.1,
+    0.1,
+    0.1,
+    0.1
+  ],
+  "right_arm_tau_ff_rms": [
+    1.9096182916780442,
+    0.539389233667495,
+    0.3052754665126671,
+    1.8724894816013586,
+    0.14060481941256472
+  ],
+  "right_arm_tau_ff_abs_max": [
+    5.531892493575745,
+    1.9955974512957815,
+    1.5372687751539518,
+    3.6887872515033315,
+    0.28380014439094176
+  ],
+  "right_arm_tau_pd_rms": [
+    0.10066546666473282,
+    0.06946686246144183,
+    0.03532717438554115,
+    0.04194219754925677,
+    0.03174445921025145
+  ],
+  "right_arm_tau_pd_abs_max": [
+    2.0283779456656177,
+    0.331781507209849,
+    0.1878627129559677,
+    0.8366169139697883,
+    0.11518024737312318
+  ],
+  "right_arm_tau_nominal_rms": [
+    1.9145419830245871,
+    0.579095440500613,
+    0.3147520227190015,
+    1.872679521140696,
+    0.1627473491679196
+  ],
+  "right_arm_tau_nominal_abs_max": [
+    5.631950056726221,
+    2.0678485779979647,
+    1.519768668519998,
+    3.7044793447576154,
+    0.3567537009966645
+  ],
+  "right_arm_tau_mapping_correction_raw_rms": [
+    0.3781855623017207,
+    0.14987393424831255,
+    0.1814253718809138,
+    0.291161035374583,
+    0.03609440337854413
+  ],
+  "right_arm_tau_mapping_correction_raw_abs_max": [
+    3.927894696332431,
+    2.3964226485634903,
+    3.273062470160616,
+    3.2079013286174423,
+    0.2178853462964011
+  ],
+  "right_arm_tau_mapping_correction_rms": [
+    0.3572754064852541,
+    0.13986705395900648,
+    0.14740570156039634,
+    0.2224420110254376,
+    0.03453171951007522
+  ],
+  "right_arm_tau_mapping_correction_abs_max": [
+    4.241651237540113,
+    1.7340222780623118,
+    2.194791062716894,
+    2.634021744859205,
+    0.13099263871467676
+  ],
+  "right_arm_tau_raw_rms": [
+    1.9291116999894964,
+    0.6185035137874961,
+    0.34957891030846966,
+    1.8801952623115885,
+    0.1411195269927982
+  ],
+  "right_arm_tau_raw_abs_max": [
+    6.538271989093288,
+    2.4555147022313375,
+    2.065545368857644,
+    3.7626982717906756,
+    0.29337737781716305
+  ],
+  "right_arm_ctrl_rms": [
+    1.9296263199088133,
+    0.6140573229177068,
+    0.3498820492354421,
+    1.8804108232869066,
+    0.13807574141913417
+  ],
+  "right_arm_ctrl_abs_max": [
+    6.620823630085831,
+    2.4555147022313375,
+    2.10257147964255,
+    3.7626982717906756,
+    0.29337737781716305
+  ],
+  "right_arm_qacc_mapping_baseline_rms": [
+    5.024640736579075,
+    2.8732456856540955,
+    4.925179314912544,
+    4.627456931636148,
+    5.126856949114745
+  ],
+  "right_arm_qacc_mapping_baseline_abs_max": [
+    59.68195944612536,
+    13.228687321062681,
+    53.06941979934145,
+    40.262649434038714,
+    18.16599359469884
+  ],
+  "right_arm_qacc_mapping_predicted_rms": [
+    1.8182119760650501,
+    2.2697943832866705,
+    2.4435166155278187,
+    1.4602669941625466,
+    2.9984556317401445
+  ],
+  "right_arm_qacc_mapping_predicted_abs_max": [
+    10.82295497706482,
+    8.111300347409841,
+    10.84004553076977,
+    8.70911263078165,
+    8.55921428558489
+  ],
+  "right_arm_qacc_mapping_prediction_error_rms": [
+    0.6914252041139937,
+    0.43340490989758956,
+    0.4747271047892455,
+    0.68909866074115,
+    0.432993231255263
+  ],
+  "right_arm_qacc_mapping_prediction_error_abs_max": [
+    10.519481792848634,
+    8.402942632545292,
+    5.656323696418306,
+    7.171433793005466,
+    4.738053715137484
+  ],
+  "right_arm_qacc_mapping_validated_rms": [
+    1.8219471973362225,
+    2.272354504167175,
+    2.4298585152169774,
+    1.465387518523702,
+    2.975081628732827
+  ],
+  "right_arm_qacc_mapping_validated_abs_max": [
+    9.98486931010217,
+    8.111300347410081,
+    9.290843760288514,
+    8.062523412020655,
+    8.78848644842517
+  ],
+  "right_arm_qacc_mapping_validation_error_rms": [
+    0.6960544718483013,
+    0.5216590841893839,
+    0.5910980033692528,
+    0.7905884109502891,
+    0.481864150064928
+  ],
+  "right_arm_qacc_mapping_validation_error_abs_max": [
+    8.858904238574116,
+    7.976411029615669,
+    5.77603680194838,
+    6.231878804476709,
+    4.872814980094459
+  ],
+  "right_arm_qacc_mapping_linearization_error_rms": [
+    0.6444591807666366,
+    0.27989240017606515,
+    0.5865316540152947,
+    0.965748454271997,
+    0.2794674896189848
+  ],
+  "right_arm_qacc_mapping_linearization_error_abs_max": [
+    6.224708128953397,
+    2.621423981107158,
+    5.906220518006362,
+    8.452426790691309,
+    2.692795167759142
+  ],
+  "right_arm_qacc_mapping_model_error_rms": [
+    1.099127413162591e-14,
+    5.989917151907903e-15,
+    9.160464565639982e-15,
+    2.3093539064685433e-14,
+    6.854789594122769e-15
+  ],
+  "right_arm_qacc_mapping_model_error_abs_max": [
+    8.171241461241152e-14,
+    5.950795411990839e-14,
+    1.0236256287043943e-13,
+    2.184918912462308e-13,
+    5.1514348342607263e-14
+  ],
+  "right_arm_forward_dynamics_singular_values_rms": [
+    85.00980846049711,
+    36.077502545669574,
+    29.623666451044304,
+    10.889717181574673,
+    7.212260729473065
+  ],
+  "right_arm_forward_dynamics_singular_values_abs_max": [
+    89.2574613157696,
+    40.53207435367346,
+    37.00099825761328,
+    15.0935604026155,
+    11.718711876760658
+  ],
+  "right_arm_ddq_postprocess_delta_rms": [
+    9.674214054662727e-06,
+    2.0174237989823495e-06,
+    2.094816666070769e-05,
+    3.0437385357940047e-08,
+    2.5339483609610395e-05
+  ],
+  "right_arm_ddq_postprocess_delta_abs_max": [
+    0.0002610381531393813,
+    7.39148715744875e-05,
+    0.0007056632504749416,
+    2.217569221585336e-07,
+    0.0006093954252577305
+  ],
+  "right_arm_qacc_mapping_prediction_error_norm_rms": 1.2464407548604601,
+  "right_arm_qacc_mapping_prediction_error_norm_max": 15.760341799935219,
+  "right_arm_qacc_mapping_validation_error_norm_rms": 1.4011566551000425,
+  "right_arm_qacc_mapping_validation_error_norm_max": 12.82061931983116,
+  "right_arm_qacc_mapping_linearization_error_norm_rms": 1.359580423217152,
+  "right_arm_qacc_mapping_linearization_error_norm_max": 8.723524118904535,
+  "right_arm_qacc_mapping_model_error_norm_rms": 2.8651370167820264e-14,
+  "right_arm_qacc_mapping_model_error_norm_max": 2.2211931036751195e-13,
+  "right_arm_forward_dynamics_condition_number_mean": 16.643533890082697,
+  "right_arm_forward_dynamics_condition_number_p95": 51.40516013027323,
+  "right_arm_forward_dynamics_condition_number_max": 93.62531964467976,
+  "right_arm_forward_dynamics_validation_scale_mean": 0.8909107876073161,
+  "right_arm_forward_dynamics_validation_attempts_mean": 2.1235535647629713,
+  "right_arm_forward_dynamics_validation_attempts_max": 4.0,
+  "right_arm_forward_dynamics_validation_fallback_fraction": 0.0011198208286674132,
+  "right_arm_forward_dynamics_validation_scale_1p0_fraction": 0.811123553564763,
+  "right_arm_forward_dynamics_validation_scale_0p5_fraction": 0.1366181410974244,
+  "right_arm_forward_dynamics_validation_scale_0p25_fraction": 0.04068682344158268,
+  "right_arm_forward_dynamics_validation_scale_0p125_fraction": 0.010451661067562523,
+  "right_arm_forward_dynamics_validation_scale_0p0_fraction": 0.0011198208286674132,
+  "right_arm_qacc_tracking_error_rms": [
+    2.5305840000262347,
+    0.834053788390457,
+    1.3604798996185783,
+    2.653323517885765,
+    0.8606960364555415
+  ],
+  "right_arm_qacc_tracking_error_abs_max": [
+    78.72287702302245,
+    13.270908529271063,
+    24.398773008042742,
+    77.97268365373746,
+    7.200768121997138
+  ],
+  "right_arm_qacc_instantaneous_tracking_error_rms": [
+    2.5305840000262347,
+    0.834053788390457,
+    1.3604798996185783,
+    2.653323517885765,
+    0.8606960364555415
+  ],
+  "right_arm_qacc_instantaneous_tracking_error_abs_max": [
+    78.72287702302245,
+    13.270908529271063,
+    24.398773008042742,
+    77.97268365373746,
+    7.200768121997138
+  ],
+  "torso_acc_world_raw_rms": [
+    0.6032880202874176,
+    1.5928699854869932,
+    1.9440442348588505
+  ],
+  "torso_acc_world_raw_abs_max": [
+    6.784215499127811,
+    5.533995489550005,
+    11.445103061153988
+  ],
+  "torso_acc_world_raw_norm_rms": 2.584666170548061,
+  "torso_acc_world_raw_norm_max": 11.46006023763305,
+  "torso_acc_world_used_rms": [
+    0.5841855437839586,
+    1.562177896858187,
+    1.832929249291526
+  ],
+  "torso_acc_world_used_abs_max": [
+    4.153264498351009,
+    5.283473384508437,
+    10.551304470530354
+  ],
+  "torso_acc_world_used_norm_rms": 2.47816508003539,
+  "torso_acc_world_used_norm_max": 10.591180477650585,
+  "torso_alpha_world_raw_rms": [
+    7.129482309194971,
+    4.978840691477678,
+    6.850230193731693
+  ],
+  "torso_alpha_world_raw_abs_max": [
+    40.81089572682755,
+    114.01504687542118,
+    48.8243406864752
+  ],
+  "torso_alpha_world_raw_norm_rms": 11.069960539015092,
+  "torso_alpha_world_raw_norm_max": 114.0150473154903,
+  "torso_alpha_world_used_rms": [
+    6.734653422475148,
+    3.895290511260249,
+    6.086848920959113
+  ],
+  "torso_alpha_world_used_abs_max": [
+    30.7953771759924,
+    37.5,
+    38.903578482846626
+  ],
+  "torso_alpha_world_used_norm_rms": 9.878186811077798,
+  "torso_alpha_world_used_norm_max": 47.497413856817204,
+  "right_ee_position_error_torso_rms": [
+    0.008208555026749227,
+    0.0052127421964962405,
+    0.009831990435382207
+  ],
+  "right_ee_position_error_torso_abs_max": [
+    0.014176633510759429,
+    0.010101103052152921,
+    0.02324583169505956
+  ],
+  "right_ee_position_error_torso_norm_rms": 0.013828271502821662,
+  "right_ee_position_error_torso_norm_max": 0.027715762371252197,
+  "right_ee_gravity_error_end_rms": [
+    0.021862685259556987,
+    0.014491482580596567,
+    6.312377995589796e-05
+  ],
+  "right_ee_gravity_error_end_abs_max": [
+    0.07423170718236337,
+    0.05122909333828993,
+    0.00028135284789065906
+  ],
+  "right_ee_gravity_error_end_norm_rms": 0.02622945021829052,
+  "right_ee_gravity_error_end_norm_max": 0.07429766399739753,
+  "right_ee_upright_alignment_mean": 0.9999964255406301,
+  "right_ee_upright_alignment_min": 0.9999713197912445,
+  "right_ee_inverted_fraction": 0.0,
+  "any_contact_fraction": 0.9982630272952854,
+  "right_arm_constraint_active_fraction": 0.0,
+  "right_arm_contact_constraint_active_fraction": 0.0,
+  "right_arm_total_constraint_active_fraction": 1.0
+}

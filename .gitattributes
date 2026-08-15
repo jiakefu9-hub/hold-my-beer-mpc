@@ -1,0 +1,3 @@
+# Preserve the byte-exact CSV evidence emitted by the simulation recorder.
+# These files use the producer's CRLF convention and are checksum-verified.
+evaluation_summary/full_task_template_v2_final_freeze/**/*.csv -text -diff

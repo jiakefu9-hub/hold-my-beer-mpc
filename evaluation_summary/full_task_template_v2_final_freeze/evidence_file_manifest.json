@@ -1,0 +1,1180 @@
+{
+  "builder": {
+    "repository_path": "tools/build_final_freeze_evidence.py",
+    "sha256": "6174f6719d9b722cceb59282cc890280e3097b99d4235a37735da4966b356d63"
+  },
+  "copied_files": [
+    {
+      "bytes": 12897,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/run_metadata.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/run_metadata.json",
+      "sha256": "725cedca5777d40b59e159c91bb2918c5c14a647efa74d08d05b92a2a6d7c714",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/run_metadata.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/formal_full_task_runtime_preflight.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/formal_full_task_runtime_preflight.json",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/formal_full_task_runtime_preflight.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 18024,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/perf_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/perf_summary.json",
+      "sha256": "b9c850418314f1b4ccf9102590fdeb2229556d103479583d8f366451caad518d",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/perf_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/perf_summary.json"
+    },
+    {
+      "bytes": 401144,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/perf_intervals.csv",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/perf_intervals.csv",
+      "sha256": "7dac86a5774565b4e366a09a25f063c355489718c25a2051ea0beae2750e7b3c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/perf_intervals.csv",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/perf_intervals.csv"
+    },
+    {
+      "bytes": 3765,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/startup_pd_handoff_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/startup_pd_handoff_summary.json",
+      "sha256": "d9b31e38893a309f7c695977c67e9d0008f45eaa44d90bb8139e3f475226147c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/startup_pd_handoff_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16909,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/right_arm_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/right_arm_diagnostics.json",
+      "sha256": "d0fe4ef119b30b1c645253b65f22fb775780b760fd24e8b6e25d3f8141de3dd4",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/right_arm_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25912,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/mpc_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/mpc_diagnostics.json",
+      "sha256": "db93f6ec6006637f1def5328ef3d29618f7eba803fb9d2ac7d8c3b25cfdbd07d",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8194,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/mpc_tracking_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/mpc_tracking_diagnostics.json",
+      "sha256": "0cefb49fcc6ab57db8c629db69e1f29c06cabcc39c1662cbc213ad7c1b4f73b4",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_tracking_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2449,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/full_task_smoke_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/full_task_smoke_summary.json",
+      "sha256": "83d5eed3eb9967a0b63195eb367357624abb17cc25b9c02c7fe4c51ba067ae09",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_smoke_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 31449,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/full_task_manifest.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/full_task_manifest.json",
+      "sha256": "12fbf1c89bdde84ce4a5bc8a0f02e3daa742457e93e1cd4c72c857d9f467f2b3",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_manifest.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_manifest.json"
+    },
+    {
+      "bytes": 446,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/heading_control_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/heading_control_diagnostics.json",
+      "sha256": "8e934d7c6860eff2316b145b9ae9f287458e3a7eec30070d70c130d1220febde",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/heading_control_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/mpc_command_delay_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/mpc_command_delay_summary.json",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_command_delay_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4054,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210609_nominal_rep01/summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210609_nominal_rep01/summary.json",
+      "sha256": "ac6340bcbf2d8ef5d6f9f4ceee1676b3f76e182cc7456996af4145a132d80e44",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/summary.json"
+    },
+    {
+      "bytes": 12897,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/run_metadata.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/run_metadata.json",
+      "sha256": "725cedca5777d40b59e159c91bb2918c5c14a647efa74d08d05b92a2a6d7c714",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/run_metadata.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/formal_full_task_runtime_preflight.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/formal_full_task_runtime_preflight.json",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/formal_full_task_runtime_preflight.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 18015,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/perf_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/perf_summary.json",
+      "sha256": "7028a91cc59fe333c00d4be165163ac7c1dc66c680174d800dff46bfae6f5041",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/perf_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/perf_summary.json"
+    },
+    {
+      "bytes": 400915,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/perf_intervals.csv",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/perf_intervals.csv",
+      "sha256": "6ee8bf3a928ad59811ee13970fe66fd049288eb891b56440c693ad55985d1ea8",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/perf_intervals.csv",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/perf_intervals.csv"
+    },
+    {
+      "bytes": 3763,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/startup_pd_handoff_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/startup_pd_handoff_summary.json",
+      "sha256": "0ac595a0bb529e672ac9d9a7ec9a3c1e2b80f5781a5f19d239eac543cd7508a0",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/startup_pd_handoff_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16909,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/right_arm_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/right_arm_diagnostics.json",
+      "sha256": "d0fe4ef119b30b1c645253b65f22fb775780b760fd24e8b6e25d3f8141de3dd4",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/right_arm_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25912,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/mpc_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/mpc_diagnostics.json",
+      "sha256": "db93f6ec6006637f1def5328ef3d29618f7eba803fb9d2ac7d8c3b25cfdbd07d",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/mpc_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8194,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/mpc_tracking_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/mpc_tracking_diagnostics.json",
+      "sha256": "0cefb49fcc6ab57db8c629db69e1f29c06cabcc39c1662cbc213ad7c1b4f73b4",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/mpc_tracking_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2449,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/full_task_smoke_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/full_task_smoke_summary.json",
+      "sha256": "83d5eed3eb9967a0b63195eb367357624abb17cc25b9c02c7fe4c51ba067ae09",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/full_task_smoke_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 31447,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/full_task_manifest.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/full_task_manifest.json",
+      "sha256": "1bd269db1f9a690b7005fa8d4d9238b6e69e7f50ff107de47ee2a65c70d0571d",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/full_task_manifest.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/full_task_manifest.json"
+    },
+    {
+      "bytes": 446,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/heading_control_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/heading_control_diagnostics.json",
+      "sha256": "8e934d7c6860eff2316b145b9ae9f287458e3a7eec30070d70c130d1220febde",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/heading_control_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/mpc_command_delay_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/mpc_command_delay_summary.json",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/mpc_command_delay_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4054,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210704_nominal_rep02/summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210704_nominal_rep02/summary.json",
+      "sha256": "ac6340bcbf2d8ef5d6f9f4ceee1676b3f76e182cc7456996af4145a132d80e44",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/summary.json"
+    },
+    {
+      "bytes": 12897,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/run_metadata.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/run_metadata.json",
+      "sha256": "725cedca5777d40b59e159c91bb2918c5c14a647efa74d08d05b92a2a6d7c714",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/run_metadata.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/formal_full_task_runtime_preflight.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/formal_full_task_runtime_preflight.json",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/formal_full_task_runtime_preflight.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 18042,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/perf_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/perf_summary.json",
+      "sha256": "e59d916fd75703ecacac63d1dfcbf50254ca20e069584b6376ed520fe881b7b2",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/perf_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/perf_summary.json"
+    },
+    {
+      "bytes": 400710,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/perf_intervals.csv",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/perf_intervals.csv",
+      "sha256": "cade8c4b466dd7e9ec768473dc0e2f09854706f2c50ed33eea3a2fe3df74b52f",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/perf_intervals.csv",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/perf_intervals.csv"
+    },
+    {
+      "bytes": 3764,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/startup_pd_handoff_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/startup_pd_handoff_summary.json",
+      "sha256": "13c321a11a8d07b5c6c2ed361ba035ca532a8863ce07a8c5b0ae6fb0b6c95896",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/startup_pd_handoff_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16909,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/right_arm_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/right_arm_diagnostics.json",
+      "sha256": "d0fe4ef119b30b1c645253b65f22fb775780b760fd24e8b6e25d3f8141de3dd4",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/right_arm_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25912,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/mpc_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/mpc_diagnostics.json",
+      "sha256": "db93f6ec6006637f1def5328ef3d29618f7eba803fb9d2ac7d8c3b25cfdbd07d",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/mpc_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8194,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/mpc_tracking_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/mpc_tracking_diagnostics.json",
+      "sha256": "0cefb49fcc6ab57db8c629db69e1f29c06cabcc39c1662cbc213ad7c1b4f73b4",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/mpc_tracking_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2449,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/full_task_smoke_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/full_task_smoke_summary.json",
+      "sha256": "83d5eed3eb9967a0b63195eb367357624abb17cc25b9c02c7fe4c51ba067ae09",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/full_task_smoke_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 31448,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/full_task_manifest.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/full_task_manifest.json",
+      "sha256": "3c4e94821668709a2bfe621911cacd22cf80d40c20b40df840c3fa869622acbc",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/full_task_manifest.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/full_task_manifest.json"
+    },
+    {
+      "bytes": 446,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/heading_control_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/heading_control_diagnostics.json",
+      "sha256": "8e934d7c6860eff2316b145b9ae9f287458e3a7eec30070d70c130d1220febde",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/heading_control_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/mpc_command_delay_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/mpc_command_delay_summary.json",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/mpc_command_delay_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4054,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210733_nominal_rep03/summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210733_nominal_rep03/summary.json",
+      "sha256": "ac6340bcbf2d8ef5d6f9f4ceee1676b3f76e182cc7456996af4145a132d80e44",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/summary.json"
+    },
+    {
+      "bytes": 13585,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/run_metadata.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/run_metadata.json",
+      "sha256": "8831e79e368b37c33d129fb07b4cdf79d610c3ba6d8fb531469d6394ef6a9f59",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/run_metadata.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/formal_full_task_runtime_preflight.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/formal_full_task_runtime_preflight.json",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/formal_full_task_runtime_preflight.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 17972,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/perf_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/perf_summary.json",
+      "sha256": "8e5821838cbd5c34e4188a71adf72fcbcdb312a03ca7e132cf0659adff765f40",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/perf_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/perf_summary.json"
+    },
+    {
+      "bytes": 400664,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/perf_intervals.csv",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/perf_intervals.csv",
+      "sha256": "9d68da740b45e01f7f93411951e66db158d612dfe31f21927d1c3656009531b5",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/perf_intervals.csv",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/perf_intervals.csv"
+    },
+    {
+      "bytes": 3761,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/startup_pd_handoff_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/startup_pd_handoff_summary.json",
+      "sha256": "088c6308009482ec13a7399223a899af039d5b781aa093a46d93cc649d1b7470",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/startup_pd_handoff_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16974,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/right_arm_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/right_arm_diagnostics.json",
+      "sha256": "800405a397df411b21a8cc45085cd06278126d07ebaa6c40f72cc4c263470170",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/right_arm_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25825,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/mpc_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/mpc_diagnostics.json",
+      "sha256": "01828580a841a741f00a5a9222bf6c6a864520fc53f1aa6620aa52d92fdc9614",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8203,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/mpc_tracking_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/mpc_tracking_diagnostics.json",
+      "sha256": "259f86b2e95d9ef3429912b781993abf14a7ba2bd9d5f2ac73ab5d858c1be953",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_tracking_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2454,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/full_task_smoke_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/full_task_smoke_summary.json",
+      "sha256": "f145765ebf9dd5564ccae1f7b547f49bf7f77a6d88a54f2d084b0c45081930c7",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_smoke_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 32084,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/full_task_manifest.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/full_task_manifest.json",
+      "sha256": "3165b3fb136fd8c29ffc77c46a02ca35be9d96ea72b886af8059011e65c17e9c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_manifest.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_manifest.json"
+    },
+    {
+      "bytes": 448,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/heading_control_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/heading_control_diagnostics.json",
+      "sha256": "e280da7713e8b8384eafefaeef1902785fbe7e50a18efcead3dd4959c7a23ff3",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/heading_control_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/mpc_command_delay_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/mpc_command_delay_summary.json",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_command_delay_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4065,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210806_heldout_pair_02_minus_rep01/summary.json",
+      "sha256": "c45efc7f305f76a65efe3da0e6f695bf8496d6a56755b5bb0faa392d9d9b5d41",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/summary.json"
+    },
+    {
+      "bytes": 13585,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/run_metadata.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/run_metadata.json",
+      "sha256": "8831e79e368b37c33d129fb07b4cdf79d610c3ba6d8fb531469d6394ef6a9f59",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/run_metadata.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/formal_full_task_runtime_preflight.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/formal_full_task_runtime_preflight.json",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/formal_full_task_runtime_preflight.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 17976,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/perf_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/perf_summary.json",
+      "sha256": "53c4d0ccbb810f95e0fb21214ee7748f7a088bb683e384d39c529e4e6bc9567e",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/perf_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/perf_summary.json"
+    },
+    {
+      "bytes": 400844,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/perf_intervals.csv",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/perf_intervals.csv",
+      "sha256": "81a89cd9a05d018f5159db049eacf8cf0ac561b49211bc06345fdcea4a9bce16",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/perf_intervals.csv",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/perf_intervals.csv"
+    },
+    {
+      "bytes": 3761,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/startup_pd_handoff_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/startup_pd_handoff_summary.json",
+      "sha256": "1e90dee6f3f4f45a1b04baead657e6529fe76df8c9c1eade6b0b98416d761873",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/startup_pd_handoff_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16974,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/right_arm_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/right_arm_diagnostics.json",
+      "sha256": "800405a397df411b21a8cc45085cd06278126d07ebaa6c40f72cc4c263470170",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/right_arm_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25825,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/mpc_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/mpc_diagnostics.json",
+      "sha256": "01828580a841a741f00a5a9222bf6c6a864520fc53f1aa6620aa52d92fdc9614",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/mpc_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8203,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/mpc_tracking_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/mpc_tracking_diagnostics.json",
+      "sha256": "259f86b2e95d9ef3429912b781993abf14a7ba2bd9d5f2ac73ab5d858c1be953",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/mpc_tracking_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2454,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/full_task_smoke_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/full_task_smoke_summary.json",
+      "sha256": "f145765ebf9dd5564ccae1f7b547f49bf7f77a6d88a54f2d084b0c45081930c7",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/full_task_smoke_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 32084,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/full_task_manifest.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/full_task_manifest.json",
+      "sha256": "db6a40847a5b24e7db5f01e717743034cb322a8420e2b51b349205ada17289d7",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/full_task_manifest.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/full_task_manifest.json"
+    },
+    {
+      "bytes": 448,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/heading_control_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/heading_control_diagnostics.json",
+      "sha256": "e280da7713e8b8384eafefaeef1902785fbe7e50a18efcead3dd4959c7a23ff3",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/heading_control_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/mpc_command_delay_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/mpc_command_delay_summary.json",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/mpc_command_delay_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4065,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210837_heldout_pair_02_minus_rep02/summary.json",
+      "sha256": "c45efc7f305f76a65efe3da0e6f695bf8496d6a56755b5bb0faa392d9d9b5d41",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/summary.json"
+    },
+    {
+      "bytes": 13585,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/run_metadata.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/run_metadata.json",
+      "sha256": "8831e79e368b37c33d129fb07b4cdf79d610c3ba6d8fb531469d6394ef6a9f59",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/run_metadata.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/run_metadata.json"
+    },
+    {
+      "bytes": 641,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/formal_full_task_runtime_preflight.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/formal_full_task_runtime_preflight.json",
+      "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/formal_full_task_runtime_preflight.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/formal_full_task_runtime_preflight.json"
+    },
+    {
+      "bytes": 17994,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/perf_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/perf_summary.json",
+      "sha256": "1b24f5e7e2a308d34c735783081836e21812c218a9ed17ce9134e5769a04f6ae",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/perf_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/perf_summary.json"
+    },
+    {
+      "bytes": 400999,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/perf_intervals.csv",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/perf_intervals.csv",
+      "sha256": "a2ca1ff5daea2dbe2962678377d79714f332acf3331f833d841474abdc64808c",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/perf_intervals.csv",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/perf_intervals.csv"
+    },
+    {
+      "bytes": 3751,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/startup_pd_handoff_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/startup_pd_handoff_summary.json",
+      "sha256": "d0c1e94d9ad00c64c8d93f09af0768385f3d13a6f09ff1a289b59ed79599893d",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/startup_pd_handoff_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/startup_pd_handoff_summary.json"
+    },
+    {
+      "bytes": 16974,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/right_arm_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/right_arm_diagnostics.json",
+      "sha256": "800405a397df411b21a8cc45085cd06278126d07ebaa6c40f72cc4c263470170",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/right_arm_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/right_arm_diagnostics.json"
+    },
+    {
+      "bytes": 25825,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/mpc_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/mpc_diagnostics.json",
+      "sha256": "01828580a841a741f00a5a9222bf6c6a864520fc53f1aa6620aa52d92fdc9614",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/mpc_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/mpc_diagnostics.json"
+    },
+    {
+      "bytes": 8203,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/mpc_tracking_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/mpc_tracking_diagnostics.json",
+      "sha256": "259f86b2e95d9ef3429912b781993abf14a7ba2bd9d5f2ac73ab5d858c1be953",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/mpc_tracking_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/mpc_tracking_diagnostics.json"
+    },
+    {
+      "bytes": 2454,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/full_task_smoke_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/full_task_smoke_summary.json",
+      "sha256": "f145765ebf9dd5564ccae1f7b547f49bf7f77a6d88a54f2d084b0c45081930c7",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_smoke_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_smoke_summary.json"
+    },
+    {
+      "bytes": 32074,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/full_task_manifest.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/full_task_manifest.json",
+      "sha256": "2077ff01298d3aad941d09f506deac4e65a96607256cc78799d6725c90f4cc30",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_manifest.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_manifest.json"
+    },
+    {
+      "bytes": 448,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/heading_control_diagnostics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/heading_control_diagnostics.json",
+      "sha256": "e280da7713e8b8384eafefaeef1902785fbe7e50a18efcead3dd4959c7a23ff3",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/heading_control_diagnostics.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/heading_control_diagnostics.json"
+    },
+    {
+      "bytes": 464,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/mpc_command_delay_summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/mpc_command_delay_summary.json",
+      "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/mpc_command_delay_summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/mpc_command_delay_summary.json"
+    },
+    {
+      "bytes": 4065,
+      "category": "controlled_run_whitelist",
+      "output_package_path": "controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/summary.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs/20260815_210907_heldout_pair_02_minus_rep03/summary.json",
+      "sha256": "c45efc7f305f76a65efe3da0e6f695bf8496d6a56755b5bb0faa392d9d9b5d41",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/summary.json",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/summary.json"
+    },
+    {
+      "bytes": 1068244,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/nominal/metrics.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/nominal/metrics.png",
+      "sha256": "0f0adeec0417a66c28c72bdec4a48d1add3f0134b21a9225439dd6910837dff1",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/metrics.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/metrics.png"
+    },
+    {
+      "bytes": 300661,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/nominal/startup_pd_handoff_transition.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/nominal/startup_pd_handoff_transition.png",
+      "sha256": "7fab35b8587f7a0f39ff2e4ab64931c79c8692962940c853d76c78d7ec9afc89",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/startup_pd_handoff_transition.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/startup_pd_handoff_transition.png"
+    },
+    {
+      "bytes": 415164,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/nominal/base_disturbance_interval_template_prediction_vs_actual.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/nominal/base_disturbance_interval_template_prediction_vs_actual.png",
+      "sha256": "13fe34551876fbd1e2a1f4d68a93cdf79725d329ef20ac243b679917be2ec6dc",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/base_disturbance_interval_template_prediction_vs_actual.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/base_disturbance_interval_template_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 831797,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/nominal/mpc_end_effector_task_prediction_vs_actual.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/nominal/mpc_end_effector_task_prediction_vs_actual.png",
+      "sha256": "79ffbe3ddbd8d1cf96c6f9e07203e8f51d7b5f9f9a5a42283807eb3dd7bec840",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_end_effector_task_prediction_vs_actual.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/mpc_end_effector_task_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 2104021,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/nominal/ddq_tracking.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/nominal/ddq_tracking.png",
+      "sha256": "c2597495eb5cd2d1dbcd307f0dbe4dd57ac481030f9ab7ba87a319a796cc19b5",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/ddq_tracking.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/ddq_tracking.png"
+    },
+    {
+      "bytes": 35101,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/nominal/full_task_xy_trajectory.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/nominal/full_task_xy_trajectory.png",
+      "sha256": "e4a01d2ccc29bd22f26dcab4fd8ed251f2bf5aafa9882b82c54483579a687bd3",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_xy_trajectory.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_xy_trajectory.png"
+    },
+    {
+      "bytes": 70024,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/nominal/full_task_planned_runtime_commands.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/nominal/full_task_planned_runtime_commands.png",
+      "sha256": "f3e9e05d059d59e08c3ffa70eb2b2de1a182a968db81b2ec29e61fa8b3f18760",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_planned_runtime_commands.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/full_task_planned_runtime_commands.png"
+    },
+    {
+      "bytes": 1107095,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/heldout_pair_02_minus/metrics.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/heldout_pair_02_minus/metrics.png",
+      "sha256": "14da2c53a08a92f768aa05f06dc0e22edbbed25260afbf1331ab5fff03273042",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/metrics.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/metrics.png"
+    },
+    {
+      "bytes": 303672,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/heldout_pair_02_minus/startup_pd_handoff_transition.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/heldout_pair_02_minus/startup_pd_handoff_transition.png",
+      "sha256": "f5d2ab2c3d7ef92968c268b14965361aa3e6ccedf5affbad9fb60550c6b534a0",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/startup_pd_handoff_transition.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/startup_pd_handoff_transition.png"
+    },
+    {
+      "bytes": 417894,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/heldout_pair_02_minus/base_disturbance_interval_template_prediction_vs_actual.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/heldout_pair_02_minus/base_disturbance_interval_template_prediction_vs_actual.png",
+      "sha256": "6614f22bd83d1c061ae4bd21fbe87e3599010318ebc92e67a992d73d91406eca",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/base_disturbance_interval_template_prediction_vs_actual.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/base_disturbance_interval_template_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 841210,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/heldout_pair_02_minus/mpc_end_effector_task_prediction_vs_actual.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/heldout_pair_02_minus/mpc_end_effector_task_prediction_vs_actual.png",
+      "sha256": "bc0c2027f836dfff51f349248c29ba8bf23386088e543f26f6b8b6725e31377d",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_end_effector_task_prediction_vs_actual.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/mpc_end_effector_task_prediction_vs_actual.png"
+    },
+    {
+      "bytes": 2066744,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/heldout_pair_02_minus/ddq_tracking.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/heldout_pair_02_minus/ddq_tracking.png",
+      "sha256": "3ce26126ead3e105af6140e7117427cb3c06cd0f4fff1b22f5f38cf845604bfa",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/ddq_tracking.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/ddq_tracking.png"
+    },
+    {
+      "bytes": 35171,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/heldout_pair_02_minus/full_task_xy_trajectory.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/heldout_pair_02_minus/full_task_xy_trajectory.png",
+      "sha256": "85ba13e76861fdc3c1aacc2b80cdcfd0529711120df2faee0fe4b3afdab5817e",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_xy_trajectory.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_xy_trajectory.png"
+    },
+    {
+      "bytes": 69670,
+      "category": "representative_control_plot",
+      "output_package_path": "representative_plots/heldout_pair_02_minus/full_task_planned_runtime_commands.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/representative_plots/heldout_pair_02_minus/full_task_planned_runtime_commands.png",
+      "sha256": "c6a17b2760a4809c98b89bcff818dd34ec23ff95528d5aa6c9b0df2e003075aa",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_planned_runtime_commands.png",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/full_task_planned_runtime_commands.png"
+    },
+    {
+      "bytes": 9060,
+      "category": "offline_online_parity",
+      "output_package_path": "offline_online_parity/offline_online_parity.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/offline_online_parity/offline_online_parity.json",
+      "sha256": "82b4e9ae7e5ed4de5527b4e201cf6aa5f0ea81a273e28cebbb2b0ba50894f2af",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/t2_full_task_template_online/20260815_163435_offline_online_parity/offline_online_parity.json",
+      "source_repository_path": "evaluation/t2_full_task_template_online/20260815_163435_offline_online_parity/offline_online_parity.json"
+    },
+    {
+      "bytes": 79251,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/full_task_template_manifest.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/full_task_template_manifest.json",
+      "sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json"
+    },
+    {
+      "bytes": 426,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/batch_result.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/batch_result.json",
+      "sha256": "fc228750df63b1e114f840c478469fbdf215cae18531c6d092ed0a316101c2e1",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/batch_result.json",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/batch_result.json"
+    },
+    {
+      "bytes": 6060,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/heldout_metrics.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/heldout_metrics.json",
+      "sha256": "804b0cd131cdc697dceb6cdcfcf1cdba24c982e65a40e3de881b3cf3aeee0abb",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/heldout_metrics.json",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/heldout_metrics.json"
+    },
+    {
+      "bytes": 39840,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/v1_v2_comparison.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/v1_v2_comparison.json",
+      "sha256": "75aa7d198d14c11c023c9b4a228b1d6e8547ba90ec5afcceae268472f6046671",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/v1_v2_comparison.json",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/v1_v2_comparison.json"
+    },
+    {
+      "bytes": 48935,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/build_xy_trajectories.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/build_xy_trajectories.png",
+      "sha256": "b59a3e6f77ee651a3226c761328018d3711ab5b3fa7187f517876239e516c7a0",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/build_xy_trajectories.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/build_xy_trajectories.png"
+    },
+    {
+      "bytes": 428463,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/causal_h_metrics.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/causal_h_metrics.png",
+      "sha256": "0edf720218c56288c2c657881340a0aa66bbf25311323c26d7893a6519829f39",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/causal_h_metrics.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/causal_h_metrics.png"
+    },
+    {
+      "bytes": 592250,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/heldout_truth_vs_template.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/heldout_truth_vs_template.png",
+      "sha256": "cd91e04784181a4040162fc5e6b0b920871cf44791d48e5ee8d041d8ccbf8b33",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/heldout_truth_vs_template.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/heldout_truth_vs_template.png"
+    },
+    {
+      "bytes": 72673,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/initial_perturbations_and_diversity.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/initial_perturbations_and_diversity.png",
+      "sha256": "9b1c3ced2324d3ab045089d68e7125cb2d14f8e4a3791c8fab44308178da2a0e",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/initial_perturbations_and_diversity.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/initial_perturbations_and_diversity.png"
+    },
+    {
+      "bytes": 265552,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/startup_0_2p4s_build_band.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/startup_0_2p4s_build_band.png",
+      "sha256": "9a5ecfbd9ca96a3954e0e5581faa0c1edc8a4155b5b2650dc3d94f01426c1818",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/startup_0_2p4s_build_band.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/startup_0_2p4s_build_band.png"
+    },
+    {
+      "bytes": 190423,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/stop_6p2_8p0s_build_band.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/stop_6p2_8p0s_build_band.png",
+      "sha256": "9019c51a0da26366b6d47f9cb8c9dc78e3319c1fa1c1f1cad10fcd8d6efad019",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/stop_6p2_8p0s_build_band.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/stop_6p2_8p0s_build_band.png"
+    },
+    {
+      "bytes": 156545,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/v1_v2_heldout_error_comparison.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/v1_v2_heldout_error_comparison.png",
+      "sha256": "a27bc923f3fa4258f67770a4da545f148650e3e4d83905e9afedda8c89c4b91b",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v1_v2_heldout_error_comparison.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v1_v2_heldout_error_comparison.png"
+    },
+    {
+      "bytes": 29781,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/v1_v2_max_h_yaw_jump.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/v1_v2_max_h_yaw_jump.png",
+      "sha256": "9c8af106ad28416263dc7438c0d75403ad9352221d4ce7dca7955448fffea630",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v1_v2_max_h_yaw_jump.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v1_v2_max_h_yaw_jump.png"
+    },
+    {
+      "bytes": 205831,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/v2_adjacent_h_yaw_jump.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/v2_adjacent_h_yaw_jump.png",
+      "sha256": "eeaecc44ef949295320bd58745966bb4dbb35c650fedd31586223d2fae0f9e13",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v2_adjacent_h_yaw_jump.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v2_adjacent_h_yaw_jump.png"
+    },
+    {
+      "bytes": 292473,
+      "category": "template_build_and_heldout_evidence",
+      "output_package_path": "template_evidence/plots/v2_all_h_yaw_trajectories.png",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/template_evidence/plots/v2_all_h_yaw_trajectories.png",
+      "sha256": "e82e61d24e9bc7af0b554db9a38f9543a8ee6a6358a78ef72a1784f1a42baa70",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v2_all_h_yaw_trajectories.png",
+      "source_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/plots/v2_all_h_yaw_trajectories.png"
+    }
+  ],
+  "derived_only_source_files": [
+    {
+      "bytes": 731728,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality derivation",
+      "run_id": "20260815_210609_nominal_rep01",
+      "sha256": "2c9ca17a8855ed9f83bc86dc5c6c43b67d2e438b34e797f18cdcdeff8991cec5",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/metrics.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/metrics.npz"
+    },
+    {
+      "bytes": 26934931,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality and exact event-count derivation",
+      "run_id": "20260815_210609_nominal_rep01",
+      "sha256": "70040812e94a520b8abb4fc1b278ec06e4353495658aaf00bf6d7f164c673883",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/trajectory.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210609_nominal_rep01/trajectory.npz"
+    },
+    {
+      "bytes": 731728,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality derivation",
+      "run_id": "20260815_210704_nominal_rep02",
+      "sha256": "2c9ca17a8855ed9f83bc86dc5c6c43b67d2e438b34e797f18cdcdeff8991cec5",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/metrics.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/metrics.npz"
+    },
+    {
+      "bytes": 26934931,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality and exact event-count derivation",
+      "run_id": "20260815_210704_nominal_rep02",
+      "sha256": "55c447da4f313a0f9b54c4a4e876cd074381dadbf53de57be3cd921f675ec561",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/trajectory.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210704_nominal_rep02/trajectory.npz"
+    },
+    {
+      "bytes": 731728,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality derivation",
+      "run_id": "20260815_210733_nominal_rep03",
+      "sha256": "2c9ca17a8855ed9f83bc86dc5c6c43b67d2e438b34e797f18cdcdeff8991cec5",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/metrics.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/metrics.npz"
+    },
+    {
+      "bytes": 26934931,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality and exact event-count derivation",
+      "run_id": "20260815_210733_nominal_rep03",
+      "sha256": "b186cd4cf297e6c140fe3e00fa71dd53e400f0ede412274d4ce7683b713b3450",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/trajectory.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210733_nominal_rep03/trajectory.npz"
+    },
+    {
+      "bytes": 731728,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality derivation",
+      "run_id": "20260815_210806_heldout_pair_02_minus_rep01",
+      "sha256": "6ce30201d66cd76c1cf942cd0ef5d34bac27cd8ca2492c2c48a9baf6bd087fe7",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/metrics.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/metrics.npz"
+    },
+    {
+      "bytes": 26934931,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality and exact event-count derivation",
+      "run_id": "20260815_210806_heldout_pair_02_minus_rep01",
+      "sha256": "5b40c034c74bf5e91cb5c3abca368411e3012df333d4866de28cede7b13d46ce",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/trajectory.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210806_heldout_pair_02_minus_rep01/trajectory.npz"
+    },
+    {
+      "bytes": 731728,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality derivation",
+      "run_id": "20260815_210837_heldout_pair_02_minus_rep02",
+      "sha256": "6ce30201d66cd76c1cf942cd0ef5d34bac27cd8ca2492c2c48a9baf6bd087fe7",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/metrics.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/metrics.npz"
+    },
+    {
+      "bytes": 26934931,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality and exact event-count derivation",
+      "run_id": "20260815_210837_heldout_pair_02_minus_rep02",
+      "sha256": "e4cba6895210d555f96d91e0299ceb3c368690ba11f122256618f07bfef687f2",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/trajectory.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210837_heldout_pair_02_minus_rep02/trajectory.npz"
+    },
+    {
+      "bytes": 731728,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality derivation",
+      "run_id": "20260815_210907_heldout_pair_02_minus_rep03",
+      "sha256": "6ce30201d66cd76c1cf942cd0ef5d34bac27cd8ca2492c2c48a9baf6bd087fe7",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/metrics.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/metrics.npz"
+    },
+    {
+      "bytes": 26934931,
+      "copied_to_evidence_pack": false,
+      "purpose": "control quality and exact event-count derivation",
+      "run_id": "20260815_210907_heldout_pair_02_minus_rep03",
+      "sha256": "ffd961ba467a493cd90eedb48c0e44fe412bd4e9fb2bcbca5095ad99d8048c97",
+      "source_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/trajectory.npz",
+      "source_repository_path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/trajectory.npz"
+    }
+  ],
+  "frozen_assets": {
+    "template": {
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+      "bytes": 3916641,
+      "repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+      "sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4"
+    },
+    "template_manifest": {
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+      "bytes": 79251,
+      "repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+      "sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76"
+    }
+  },
+  "generated_files": [
+    {
+      "bytes": 75548,
+      "category": "generated_aggregate_json",
+      "output_package_path": "controlled_runs_aggregate.json",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs_aggregate.json",
+      "sha256": "d622fb9e23cb97db6c45ad28ba7b28f0d29d39e62211ee5fdcd4b3732555cb91"
+    },
+    {
+      "bytes": 3754,
+      "category": "generated_aggregate_csv",
+      "output_package_path": "controlled_runs_metrics.csv",
+      "output_repository_path": "evaluation_summary/full_task_template_v2_final_freeze/controlled_runs_metrics.csv",
+      "sha256": "a80ffcb8dbd577005aba93cfc73403eef3d6faabcaefad8d2a5f087f22f633cf"
+    }
+  ],
+  "output_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation_summary/full_task_template_v2_final_freeze",
+  "repository_root": "/home/fjk/g1_ws/disturbance-lab",
+  "schema_version": "full_task_template_v2_compact_evidence_files_v1",
+  "selection": {
+    "controlled_run_ids": [
+      "20260815_210609_nominal_rep01",
+      "20260815_210704_nominal_rep02",
+      "20260815_210733_nominal_rep03",
+      "20260815_210806_heldout_pair_02_minus_rep01",
+      "20260815_210837_heldout_pair_02_minus_rep02",
+      "20260815_210907_heldout_pair_02_minus_rep03"
+    ],
+    "representative_plot_files": [
+      "metrics.png",
+      "startup_pd_handoff_transition.png",
+      "base_disturbance_interval_template_prediction_vs_actual.png",
+      "mpc_end_effector_task_prediction_vs_actual.png",
+      "ddq_tracking.png",
+      "full_task_xy_trajectory.png",
+      "full_task_planned_runtime_commands.png"
+    ],
+    "representative_runs": {
+      "heldout_pair_02_minus": "20260815_210806_heldout_pair_02_minus_rep01",
+      "nominal": "20260815_210609_nominal_rep01"
+    },
+    "template_evidence_files": [
+      "full_task_template_manifest.json",
+      "batch_result.json",
+      "heldout_metrics.json",
+      "v1_v2_comparison.json",
+      "plots/build_xy_trajectories.png",
+      "plots/causal_h_metrics.png",
+      "plots/heldout_truth_vs_template.png",
+      "plots/initial_perturbations_and_diversity.png",
+      "plots/startup_0_2p4s_build_band.png",
+      "plots/stop_6p2_8p0s_build_band.png",
+      "plots/v1_v2_heldout_error_comparison.png",
+      "plots/v1_v2_max_h_yaw_jump.png",
+      "plots/v2_adjacent_h_yaw_jump.png",
+      "plots/v2_all_h_yaw_trajectories.png"
+    ],
+    "whitelist_file_count_per_run": 13,
+    "whitelist_files": [
+      "run_metadata.json",
+      "formal_full_task_runtime_preflight.json",
+      "perf_summary.json",
+      "perf_intervals.csv",
+      "startup_pd_handoff_summary.json",
+      "right_arm_diagnostics.json",
+      "mpc_diagnostics.json",
+      "mpc_tracking_diagnostics.json",
+      "full_task_smoke_summary.json",
+      "full_task_manifest.json",
+      "heading_control_diagnostics.json",
+      "mpc_command_delay_summary.json",
+      "summary.json"
+    ]
+  },
+  "status": "PASS",
+  "validation": {
+    "all_16074_mapper_outputs_certified": true,
+    "all_7974_complete_intervals_within_6ms": true,
+    "all_copy_checksums_match": true,
+    "all_six_certified_control_gates_pass": true,
+    "all_six_runtime_preflights_pass": true,
+    "controlled_run_whitelist_file_count": 78,
+    "copied_file_count": 107,
+    "offline_online_parity_pass": true
+  }
+}

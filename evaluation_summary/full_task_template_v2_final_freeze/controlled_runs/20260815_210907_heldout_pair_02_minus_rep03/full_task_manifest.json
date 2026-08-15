@@ -1,0 +1,880 @@
+{
+  "schema_version": "full_task_raw_v1",
+  "protocol": {
+    "name": "full_task_direct_step",
+    "version": "full_task_direct_step_v1",
+    "task_epoch_label": "t2_closed_loop_20260815_210907_heldout_pair_02_minus_rep03",
+    "task_epoch_index": 0,
+    "task_epoch_origin_simulation_time": 0.0,
+    "physics_dt": 0.002,
+    "mpc_dt": 0.006,
+    "policy_dt": 0.02,
+    "gait_period": 0.8,
+    "stop_time": 6.4,
+    "headline": [
+      0.0,
+      8.0
+    ],
+    "headline_interval": "[0.0,8.0)",
+    "record_end": 8.06,
+    "horizon": 9,
+    "horizon_duration": 0.054,
+    "command": "nominal vx/vy until 6.4 s, then direct zero translation; nominal wz remains heading feedforward",
+    "out_of_range": "raise ValueError; never wrap to task start",
+    "reset": "increments task epoch and restarts task time at zero"
+  },
+  "time_semantics": {
+    "sample_timing": "state_timestamp_and_commands_describe_the_interval_[t,t+physics_dt);sample_is_appended_after_ctrl_is_finalized_and_before_mujoco_mj_step",
+    "event_order": [
+      "boundary_command_and_policy_state_already_committed_from_previous_step",
+      "compute_leg_pd_from_latest_policy_target",
+      "sample_torso_and_joint_state_for_current_pre_step",
+      "run_predictor_and_mpc_when_current_time_is_a_6ms_anchor",
+      "run_ddq_to_torque_process_chain_and_write_actuator_ctrl",
+      "append_strict_pre_step_raw_sample_for_[t,t+2ms)",
+      "mujoco_mj_step_advances_[t,t+2ms)",
+      "legacy_post_step_evaluation_recording",
+      "increment_physics_counter",
+      "at_20ms_boundary_update_planned_command_heading_and_policy_for_next_step"
+    ],
+    "task_t0": "planned command is readable by recorder/predictor; no claim of physical motion",
+    "first_policy_consumption": 0.020000000000000004,
+    "anchor_grid": "task_time = anchor_index * 0.006",
+    "headline_anchor_count": 1334,
+    "last_headline_anchor": 7.998,
+    "last_horizon_node": 8.052
+  },
+  "causal_h": {
+    "version": "full_task_continuous_heading_v2",
+    "update_grid": "6ms MPC anchors only",
+    "definition": "causal prefix for t<0.8s; trailing causal 0.8s circular mean for 0.8<=t<6.4s; freeze the final pre-stop H for t>=6.4s",
+    "within_horizon": "H fixed at anchor; future yaw is never read",
+    "rotation": "R_WH is an analytic yaw SO(3) rotation; R_HB=R_WH.T@R_WB",
+    "source_codes": {
+      "causal_prefix": 0,
+      "rolling_0p8s": 1,
+      "frozen_pre_stop": 2
+    },
+    "additional_low_pass_filter": "none"
+  },
+  "episode": {
+    "identity": "nominal",
+    "dataset_role": "nominal_smoke_only_not_a_template",
+    "future_pair_id": null,
+    "initial_lower_q_offset_rad": [
+      -0.0003951434950944079,
+      0.0024490684431391946,
+      0.005583409752412668,
+      0.001672508593580433,
+      0.007007670647517819,
+      -0.001566892126522003,
+      0.010314223996966933,
+      0.0002878334529494862,
+      0.0017488974806982392,
+      0.00039593622739851045,
+      0.0013482231942699443,
+      0.00770744468727639
+    ],
+    "initial_lower_dq_rad_s": [
+      0.005237634168621501,
+      0.012594515268565039,
+      -0.0008212634654266317,
+      -0.01587046683162143,
+      -0.01490462000354187,
+      -0.009102644450201699,
+      0.0051151943442091,
+      0.010375596775277749,
+      0.00015991710719299082,
+      -0.014356489966427459,
+      0.013310587369280522,
+      0.0030117728854349157
+    ]
+  },
+  "git": {
+    "head": "afc126ef22b96da56aa8f234f60241bce617c2a3",
+    "branch": "feat/full-task-predictors",
+    "status_short": "M configs/g1.yaml\n M cpp/ddq_torque_mapper/include/ddq_torque_mapper/ddq_torque_mapper_c.h\n M cpp/ddq_torque_mapper/parity_benchmark.py\n M cpp/ddq_torque_mapper/src/ddq_torque_mapper.cpp\n M cpp/right_arm_sim_runtime/include/right_arm_sim_runtime/protocol.hpp\n M cpp/right_arm_sim_runtime/src/runtime.cpp\n M disturbance_predictor.py\n M main_sim.py\n M right_arm_runtime/__init__.py\n M right_arm_runtime/cpp_ddq_mapper.py\n M right_arm_runtime/sim_process.py\n M run.sh\n M sim_support.py\n?? PREDICTOR_DEVELOPMENT_TASKBOOK.md\n?? disturbance_learning/full_task_closed_loop_report.py\n?? disturbance_learning/full_task_fixed_pd_collector.py\n?? disturbance_learning/full_task_online_parity.py\n?? disturbance_learning/full_task_protocol.py\n?? disturbance_learning/full_task_recording.py\n?? disturbance_learning/full_task_runtime_preflight.py\n?? disturbance_learning/full_task_startup_pd.py\n?? disturbance_learning/full_task_startup_pd_report.py\n?? disturbance_learning/full_task_template_builder.py\n?? disturbance_learning/full_task_v2_closed_loop_report.py\n?? disturbance_learning/full_task_v2_comparison.py\n?? tests/test_ddq_safety_fallback.py\n?? tests/test_full_task_predictor.py\n?? tests/test_full_task_protocol.py\n?? tests/test_full_task_startup_pd.py\n?? tests/test_full_task_template_builder.py"
+  },
+  "control_chain": {
+    "arm_controller": "mpc",
+    "disturbance_predictor": "full_task_template",
+    "right_arm_execution_runtime": "process",
+    "right_arm_execution_runtime_requested": "process",
+    "mpc_ddq_execution_mode": "twice_per_interval",
+    "mpc_command_delay_ms": 0.0,
+    "robot_model_backends": {
+      "mpc_prediction_kinematics": "cpp_pinocchio",
+      "ddq_nominal_inverse_dynamics": "cpp_pinocchio",
+      "model_source": "matching_simulation_mjcf",
+      "mujoco_contact_validation_retained": true,
+      "pinocchio_friction_breakaway_steps": 5.0,
+      "nominal_inverse_dynamics_other_qacc": {
+        "mode": "measured",
+        "source": "latest_causal_mujoco_qacc_from_previous_physics_step",
+        "filter_alpha": 0.5,
+        "trend_window": 4,
+        "trend_lead_steps": 1.0,
+        "absolute_limit": 100.0,
+        "measured_blend": 0.75
+      },
+      "right_arm_executor": "cpp",
+      "right_arm_execution_runtime": "process",
+      "right_arm_execution_runtime_requested": "process",
+      "ddq_forward_dynamics_mapping": "cpp",
+      "right_arm_executor_output_semantics": "host_full_torque"
+    },
+    "mpc_config": {
+      "horizon": 9,
+      "q_ee_acc": 0.01,
+      "q_ee_alpha": 0.0005,
+      "q_ee_omega": 8.0,
+      "q_gravity": [
+        30.0,
+        30.0
+      ],
+      "q_posture": [
+        4.0,
+        4.0,
+        1.5,
+        0.2,
+        0.2
+      ],
+      "q_vel": 0.08,
+      "r_ddq": 0.0025,
+      "terminal_scale": 2.0,
+      "reg": 1e-06,
+      "max_dq": 1.0,
+      "max_ddq": 8.0,
+      "joint_limits": [
+        [
+          -0.08726646259971647,
+          0.08726646259971647
+        ],
+        [
+          -0.08726646259971647,
+          0.05235987755982989
+        ],
+        [
+          -0.3490658503988659,
+          0.08726646259971647
+        ],
+        [
+          -0.6981317007977318,
+          0.6981317007977318
+        ],
+        [
+          -0.6981317007977318,
+          0.6981317007977318
+        ]
+      ],
+      "joint_limit_margin": [
+        0.017453292519943295,
+        0.017453292519943295,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "solver_max_iter": 400,
+      "solver_check_termination": 25,
+      "solver_rho": 0.1,
+      "solver_adaptive_rho": true,
+      "solver_scaled_termination": false,
+      "solver_eps_abs": 0.001,
+      "solver_eps_rel": 0.001,
+      "solver_polishing": false,
+      "failure_braking_gain": 4.0,
+      "failure_posture_gain": 4.0,
+      "failure_max_ddq_scale": 0.5,
+      "control_dt": 0.006,
+      "torso_acc_filter_alpha": 0.5,
+      "torso_alpha_filter_alpha": 0.5,
+      "torso_acc_limit": 30.0,
+      "torso_alpha_limit": 40.0,
+      "forward_dynamics_perturbation_nm": 0.1,
+      "forward_dynamics_regularization": 5.0,
+      "forward_dynamics_second_pass_error_threshold": 5.0,
+      "forward_dynamics_max_joint_error": 4.0,
+      "forward_dynamics_max_abs_qacc": 10.0,
+      "forward_dynamics_enable_second_pass": true,
+      "forward_dynamics_safety_rescue_passes": 2,
+      "forward_dynamics_hold_last_safe": true,
+      "forward_dynamics_candidate_evaluation": "mj_forwardSkip_mjSTAGE_VEL_skip_sensors",
+      "forward_dynamics_candidate_selection": "model_ranked_then_best_real_safe_candidate_among_at_least_two_validations",
+      "forward_dynamics_evaluations_per_pass": "5 torque perturbations plus 1-4 on-demand candidate validations",
+      "forward_dynamics_scratch_copy": "physical_state_warmstart_and_external_inputs_only_before_full_mj_forward",
+      "constraint_force_reconstruction": "mj_mulJacTVec_with_selected_constraint_rows",
+      "solver": "OSQP",
+      "base_prediction": "zero_order_hold_current_measurement",
+      "gravity_error": "signed_2d_xy",
+      "torso_relative_position_cost": false,
+      "ddq_execution_mode": "twice_per_interval",
+      "command_delay": {
+        "definition": "source-state time to command activation on 2 ms grid",
+        "requested_delay_ms": 0.0,
+        "quantized_delay_ms": 0.0,
+        "delay_ticks": 0,
+        "delayed_fields": [
+          "q_ref",
+          "dq_ref",
+          "ddq_des"
+        ],
+        "torque_recomputed_from_latest_activation_state": true
+      },
+      "disturbance_predictor": {
+        "enabled": true,
+        "predictor_type": "full_task_template",
+        "baseline_scope": "fixed direct-step task; stop time 6.4 s is known in advance",
+        "path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+        "sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+        "manifest_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+        "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+        "template_schema_version": "full_task_template_v2",
+        "protocol_version": "full_task_direct_step_v1",
+        "anchor_mode": "exact_absolute_task_time_6ms_no_interpolation",
+        "node0_policy": "always_current_measurement",
+        "future_source": "T1 template nodes 1..9 and all intervals",
+        "heading_definition": "full_task_continuous_heading_v2",
+        "heading_filter": "none",
+        "template_smoothing": "none",
+        "slow_bias_enabled": false,
+        "terminal_behavior": "measurement ZOH after [0,8.0) headline",
+        "template_validation": {
+          "anchor_count": 1334,
+          "horizon": 9,
+          "node0_online_policy": "always_replace_with_current_measurement",
+          "rotation_valid": true,
+          "smoothing": "none",
+          "template_schema_version": "full_task_template_v2",
+          "heading_frame_version": "full_task_continuous_heading_v2"
+        }
+      },
+      "disturbance_feedforward": {
+        "enabled": true,
+        "predictor_type": "full_task_template",
+        "baseline_scope": "fixed direct-step task; stop time 6.4 s is known in advance",
+        "path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+        "sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+        "manifest_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+        "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+        "template_schema_version": "full_task_template_v2",
+        "protocol_version": "full_task_direct_step_v1",
+        "anchor_mode": "exact_absolute_task_time_6ms_no_interpolation",
+        "node0_policy": "always_current_measurement",
+        "future_source": "T1 template nodes 1..9 and all intervals",
+        "heading_definition": "full_task_continuous_heading_v2",
+        "heading_filter": "none",
+        "template_smoothing": "none",
+        "slow_bias_enabled": false,
+        "terminal_behavior": "measurement ZOH after [0,8.0) headline",
+        "template_validation": {
+          "anchor_count": 1334,
+          "horizon": 9,
+          "node0_online_policy": "always_replace_with_current_measurement",
+          "rotation_valid": true,
+          "smoothing": "none",
+          "template_schema_version": "full_task_template_v2",
+          "heading_frame_version": "full_task_continuous_heading_v2"
+        }
+      }
+    },
+    "heading_control": {
+      "enabled": true,
+      "reference_frame": "world",
+      "reference_source": "initial_torso_yaw",
+      "filter_cycles": 1.0,
+      "kp": 0.6,
+      "kd": 0.1,
+      "yaw_rate_feedforward": 0.01269999984651804,
+      "max_abs_yaw_rate": 0.25
+    },
+    "payload": {
+      "body": "right_bottle",
+      "added_mass_kg": 0.0,
+      "intentional_nominal_model_mismatch": false,
+      "treatment": "nominal",
+      "controller_model_includes_payload": false
+    },
+    "locomotion_policy_update_dt": 0.02,
+    "gait_time_origin": "task_epoch_zero",
+    "right_arm_dry_warmup": {
+      "performed": true,
+      "phase": "fixed_startup_pd",
+      "before_task_clock_reset_and_command_publish": false,
+      "during_fixed_startup_pd": true,
+      "simulation_time_s": 0.0,
+      "mujoco_time_advanced": false,
+      "real_ctrl_modified": false,
+      "roundtrip_elapsed_ms": 0.551482,
+      "worker_elapsed_ms": 0.458867,
+      "final_output_certified": true
+    },
+    "fixed_startup_pd_handoff": {
+      "enabled": true,
+      "dynamic_arming_enabled": false,
+      "duration_s": 0.024,
+      "handoff_anchor_index": 4,
+      "right_arm_startup_mode": "fixed_posture_pd",
+      "right_arm_startup_target_source": "config.arm_waist_target[6:11]",
+      "right_arm_startup_target_dq": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "task_template_gait_clock_origin": "simulation_time_zero",
+      "handoff_resets_any_clock": false,
+      "short_smoke_end_s": null
+    },
+    "formal_full_task_runtime_preflight": {
+      "protocol_version": "full_task_cpu7_single_thread_v1",
+      "launcher": "disturbance_lab_run_sh",
+      "requested_control_cpu": "7",
+      "parent_cpu_affinity": [
+        7
+      ],
+      "worker_cpu_affinity": [
+        7
+      ],
+      "thread_environment": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "VECLIB_MAXIMUM_THREADS": "1",
+        "BLIS_NUM_THREADS": "1"
+      },
+      "torch_num_threads": 1,
+      "torch_num_interop_threads": 1,
+      "gc_disabled_during_control": true,
+      "dynamic_arming_enabled": false,
+      "startup_pd_duration_s": 0.024,
+      "mpc_handoff_anchor_index": 4,
+      "passed": true
+    }
+  },
+  "predictor": {
+    "enabled": true,
+    "predictor_type": "full_task_template",
+    "baseline_scope": "fixed direct-step task; stop time 6.4 s is known in advance",
+    "path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+    "sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+    "manifest_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+    "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+    "template_schema_version": "full_task_template_v2",
+    "protocol_version": "full_task_direct_step_v1",
+    "anchor_mode": "exact_absolute_task_time_6ms_no_interpolation",
+    "node0_policy": "always_current_measurement",
+    "future_source": "T1 template nodes 1..9 and all intervals",
+    "heading_definition": "full_task_continuous_heading_v2",
+    "heading_filter": "none",
+    "template_smoothing": "none",
+    "slow_bias_enabled": false,
+    "terminal_behavior": "measurement ZOH after [0,8.0) headline",
+    "template_validation": {
+      "anchor_count": 1334,
+      "horizon": 9,
+      "node0_online_policy": "always_replace_with_current_measurement",
+      "rotation_valid": true,
+      "smoothing": "none",
+      "template_schema_version": "full_task_template_v2",
+      "heading_frame_version": "full_task_continuous_heading_v2"
+    }
+  },
+  "assets": {
+    "config": {
+      "path": "configs/g1.yaml",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/configs/g1.yaml",
+      "sha256": "7c8a0a952ffe4925723de7cec170dfc75c76b5691d6c1ccc93d8d67b6938eef2",
+      "size_bytes": 13529
+    },
+    "policy": {
+      "path": "policy/motion.pt",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/policy/motion.pt",
+      "sha256": "cf668f75b90d1abf73d2b87612a6e76bccc61ff7e083b63582d3f6aaa3c1759d",
+      "size_bytes": 145745
+    },
+    "simulation_and_pinocchio_model": {
+      "path": "resources/g1_description/scene.xml",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/resources/g1_description/scene.xml",
+      "sha256": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+      "size_bytes": 867
+    },
+    "predictor_asset": {
+      "path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+      "sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+      "size_bytes": 3916641
+    },
+    "main_control_source": {
+      "path": "main_sim.py",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/main_sim.py",
+      "sha256": "6940a3ac6cdabe193b064ba8f1b837f6afa43ef0aed793479ce165e98a01d77f",
+      "size_bytes": 110819
+    },
+    "protocol_source": {
+      "path": "disturbance_learning/full_task_protocol.py",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/full_task_protocol.py",
+      "sha256": "46f88be90b66836f617b888c70b48bca911ec04d42255269f7b9fc4d9ca5a776",
+      "size_bytes": 23648
+    },
+    "recording_source": {
+      "path": "disturbance_learning/full_task_recording.py",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/full_task_recording.py",
+      "sha256": "31ec19c2c5c19ab0a3d022291e07e1cbfc9b41f2fa76f8856647fd4a8ee2fd59",
+      "size_bytes": 42728
+    },
+    "raw": {
+      "path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_nominal_raw.npz",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_nominal_raw.npz",
+      "sha256": "6ee004f82c850cc12373ad2ebdf338495f0dddde1ed027d4683aabdb4e974bad",
+      "size_bytes": 5877959
+    },
+    "smoke_summary": {
+      "path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_smoke_summary.json",
+      "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_smoke_summary.json",
+      "sha256": "f145765ebf9dd5564ccae1f7b547f49bf7f77a6d88a54f2d084b0c45081930c7",
+      "size_bytes": 2454
+    },
+    "plots": [
+      {
+        "path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_xy_trajectory.png",
+        "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_xy_trajectory.png",
+        "sha256": "85ba13e76861fdc3c1aacc2b80cdcfd0529711120df2faee0fe4b3afdab5817e",
+        "size_bytes": 35171
+      },
+      {
+        "path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_planned_runtime_commands.png",
+        "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_planned_runtime_commands.png",
+        "sha256": "c6a17b2760a4809c98b89bcff818dd34ec23ff95528d5aa6c9b0df2e003075aa",
+        "size_bytes": 69670
+      },
+      {
+        "path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_torso_rpy.png",
+        "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_torso_rpy.png",
+        "sha256": "5ff6c12067f766a02afd43b97d273abcc6a29753d81c291a6c64f4be1cd73950",
+        "size_bytes": 187253
+      },
+      {
+        "path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_event_grid.png",
+        "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_event_grid.png",
+        "sha256": "4b533f213cd78ad03ead7a92fe2d665e000f50e49763ac438ca72503685a6c1b",
+        "size_bytes": 39620
+      },
+      {
+        "path": "evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_tail_coverage.png",
+        "absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation/fixed_startup_pd_cpu7_controlled/20260815_210907_heldout_pair_02_minus_rep03/full_task_tail_coverage.png",
+        "sha256": "93b565a9f3edf7d126355ecf854ea3623ca0fbf7d42ab0a5b1c1eda6adda9856",
+        "size_bytes": 50005
+      }
+    ]
+  },
+  "raw_schema": {
+    "task_epoch": {
+      "shape": "[]",
+      "unit": "index",
+      "frame": "task",
+      "meaning": "resettable task epoch index"
+    },
+    "task_time": {
+      "shape": "[]",
+      "unit": "s",
+      "frame": "task",
+      "meaning": "time since the current task epoch"
+    },
+    "simulation_time": {
+      "shape": "[]",
+      "unit": "s",
+      "frame": "MuJoCo",
+      "meaning": "monotonic simulation time at strict pre-step"
+    },
+    "physics_sample_index": {
+      "shape": "[]",
+      "unit": "index",
+      "frame": "2ms_grid",
+      "meaning": "zero-based raw interval index"
+    },
+    "planned_command": {
+      "shape": "[3]",
+      "unit": "m/s,m/s,rad/s",
+      "frame": "locomotion_command",
+      "meaning": "direct-step command before heading correction"
+    },
+    "runtime_command": {
+      "shape": "[3]",
+      "unit": "m/s,m/s,rad/s",
+      "frame": "locomotion_command",
+      "meaning": "command actually consumed by the lower-body policy"
+    },
+    "policy_update_applied": {
+      "shape": "[]",
+      "unit": "bool",
+      "frame": "20ms_grid",
+      "meaning": "policy consumed command at this boundary"
+    },
+    "policy_command_consumed_time": {
+      "shape": "[]",
+      "unit": "s",
+      "frame": "task",
+      "meaning": "latest policy update task time; NaN before first update"
+    },
+    "mpc_anchor": {
+      "shape": "[]",
+      "unit": "bool",
+      "frame": "6ms_grid",
+      "meaning": "predictor/MPC updated at this pre-step"
+    },
+    "mpc_anchor_index": {
+      "shape": "[]",
+      "unit": "index",
+      "frame": "6ms_grid",
+      "meaning": "anchor index or -1 off-grid"
+    },
+    "gait_phase": {
+      "shape": "[]",
+      "unit": "cycle_fraction",
+      "frame": "locomotion_policy",
+      "meaning": "physical gait time modulo gait period"
+    },
+    "gait_cycle_index": {
+      "shape": "[]",
+      "unit": "index",
+      "frame": "locomotion_policy",
+      "meaning": "floor(task_time/gait_period)"
+    },
+    "torso_position_world": {
+      "shape": "[3]",
+      "unit": "m",
+      "frame": "world",
+      "meaning": "torso body position"
+    },
+    "torso_rotation_world": {
+      "shape": "[3,3]",
+      "unit": "SO(3)",
+      "frame": "R_WB",
+      "meaning": "world-from-torso orientation"
+    },
+    "torso_linear_velocity_world": {
+      "shape": "[3]",
+      "unit": "m/s",
+      "frame": "world",
+      "meaning": "torso IMU-site linear velocity"
+    },
+    "torso_angular_velocity_world": {
+      "shape": "[3]",
+      "unit": "rad/s",
+      "frame": "world",
+      "meaning": "torso IMU-site angular velocity"
+    },
+    "torso_linear_acceleration_world_raw": {
+      "shape": "[3]",
+      "unit": "m/s^2",
+      "frame": "world",
+      "meaning": "causal IMU acceleration before MPC filter"
+    },
+    "torso_linear_acceleration_world_used": {
+      "shape": "[3]",
+      "unit": "m/s^2",
+      "frame": "world",
+      "meaning": "acceleration consumed by current predictor/MPC"
+    },
+    "torso_angular_acceleration_world_raw": {
+      "shape": "[3]",
+      "unit": "rad/s^2",
+      "frame": "world",
+      "meaning": "causal finite-difference alpha before MPC filter"
+    },
+    "torso_angular_acceleration_world_used": {
+      "shape": "[3]",
+      "unit": "rad/s^2",
+      "frame": "world",
+      "meaning": "alpha consumed by current predictor/MPC"
+    },
+    "lower_body_q": {
+      "shape": "[12]",
+      "unit": "rad",
+      "frame": "joint",
+      "meaning": "lower-body joint positions"
+    },
+    "lower_body_dq": {
+      "shape": "[12]",
+      "unit": "rad/s",
+      "frame": "joint",
+      "meaning": "lower-body joint velocities"
+    },
+    "lower_body_policy_target": {
+      "shape": "[12]",
+      "unit": "rad",
+      "frame": "joint",
+      "meaning": "latest lower-body policy target"
+    },
+    "right_arm_q": {
+      "shape": "[5]",
+      "unit": "rad",
+      "frame": "joint",
+      "meaning": "right-arm joint positions"
+    },
+    "right_arm_dq": {
+      "shape": "[5]",
+      "unit": "rad/s",
+      "frame": "joint",
+      "meaning": "right-arm joint velocities"
+    },
+    "right_arm_ddq_des": {
+      "shape": "[5]",
+      "unit": "rad/s^2",
+      "frame": "joint",
+      "meaning": "currently active MPC acceleration command"
+    },
+    "generalized_qpos": {
+      "shape": "[nq]",
+      "unit": "MuJoCo_qpos",
+      "frame": "model",
+      "meaning": "complete pre-step generalized position"
+    },
+    "generalized_qvel": {
+      "shape": "[nv]",
+      "unit": "MuJoCo_qvel",
+      "frame": "model",
+      "meaning": "complete pre-step generalized velocity"
+    },
+    "generalized_qacc": {
+      "shape": "[nv]",
+      "unit": "MuJoCo_qacc",
+      "frame": "model",
+      "meaning": "latest causally available acceleration"
+    },
+    "actuator_ctrl": {
+      "shape": "[nu]",
+      "unit": "actuator_input",
+      "frame": "model",
+      "meaning": "final control for upcoming physics interval"
+    },
+    "heading_reference_world": {
+      "shape": "[]",
+      "unit": "rad",
+      "frame": "world",
+      "meaning": "heading controller reference; NaN before first 20ms update"
+    },
+    "heading_measurement_world": {
+      "shape": "[]",
+      "unit": "rad",
+      "frame": "world",
+      "meaning": "instantaneous wrapped torso yaw"
+    },
+    "heading_yaw_filtered": {
+      "shape": "[]",
+      "unit": "rad",
+      "frame": "world",
+      "meaning": "heading controller moving-average yaw"
+    },
+    "heading_yaw_error": {
+      "shape": "[]",
+      "unit": "rad",
+      "frame": "world",
+      "meaning": "reference minus filtered yaw"
+    },
+    "heading_yaw_rate_correction": {
+      "shape": "[]",
+      "unit": "rad/s",
+      "frame": "world",
+      "meaning": "heading feedback correction"
+    },
+    "heading_yaw_rate_command": {
+      "shape": "[]",
+      "unit": "rad/s",
+      "frame": "world",
+      "meaning": "runtime wz after heading control"
+    },
+    "heading_command_saturated": {
+      "shape": "[]",
+      "unit": "bool",
+      "frame": "controller",
+      "meaning": "heading command saturation flag"
+    },
+    "causal_h_yaw_world": {
+      "shape": "[]",
+      "unit": "rad",
+      "frame": "world",
+      "meaning": "held H yaw available at the latest MPC anchor"
+    },
+    "causal_h_rotation_world": {
+      "shape": "[3,3]",
+      "unit": "SO(3)",
+      "frame": "R_WH",
+      "meaning": "world-from-heading rotation"
+    },
+    "torso_rotation_heading": {
+      "shape": "[3,3]",
+      "unit": "SO(3)",
+      "frame": "R_HB",
+      "meaning": "torso orientation in the held anchor H frame"
+    },
+    "causal_h_source_code": {
+      "shape": "[]",
+      "unit": "enum",
+      "frame": "task",
+      "meaning": "0 first-cycle causal prefix; 1 previous complete cycle"
+    },
+    "causal_h_source_cycle_index": {
+      "shape": "[]",
+      "unit": "index",
+      "frame": "task",
+      "meaning": "cycle used to define H"
+    },
+    "causal_h_source_sample_count": {
+      "shape": "[]",
+      "unit": "count",
+      "frame": "6ms_grid",
+      "meaning": "anchor yaw samples used by H"
+    },
+    "mpc_diagnostics_valid": {
+      "shape": "[]",
+      "unit": "bool",
+      "frame": "6ms_grid",
+      "meaning": "QP status belongs to this anchor"
+    },
+    "mpc_success": {
+      "shape": "[]",
+      "unit": "bool",
+      "frame": "6ms_grid",
+      "meaning": "OSQP solution accepted"
+    },
+    "mpc_fallback_used": {
+      "shape": "[]",
+      "unit": "bool",
+      "frame": "6ms_grid",
+      "meaning": "MPC braking fallback used"
+    },
+    "mpc_solver_status_val": {
+      "shape": "[]",
+      "unit": "OSQP_status",
+      "frame": "solver",
+      "meaning": "numeric OSQP status"
+    },
+    "runtime_mapping_safety_fallback_used": {
+      "shape": "[]",
+      "unit": "bool",
+      "frame": "2ms_execution",
+      "meaning": "DDQ-to-torque safety rescue used"
+    },
+    "runtime_executor_flags": {
+      "shape": "[]",
+      "unit": "bitmask",
+      "frame": "2ms_execution",
+      "meaning": "C++ executor status flags"
+    }
+  },
+  "validation": {
+    "status": "FAIL",
+    "smoke_passed": false,
+    "xy_start_world_m": [
+      -0.0039635,
+      0.0
+    ],
+    "xy_at_headline_end_world_m": [
+      3.2080694162816905,
+      0.022838937768477414
+    ],
+    "xy_displacement_m": 3.2121141125986563,
+    "xy_arc_length_m": 3.3403456414252046,
+    "expected_displacement_m": 3.2,
+    "displacement_difference_m": 0.012114112598656135,
+    "distance_gate_m": [
+      2.8,
+      3.6
+    ],
+    "distance_within_gate": true,
+    "max_abs_filtered_heading_error_rad": 0.02909823102882731,
+    "max_abs_raw_yaw_deviation_rad": 0.037877249245971266,
+    "max_abs_roll_rad": 0.06952946667372445,
+    "max_abs_pitch_rad": 0.07401656978069106,
+    "torso_height_min_m": 0.8044230252800683,
+    "torso_height_max_m": 0.8370000000000001,
+    "fall_definition": {
+      "min_torso_height_m": 0.45,
+      "max_abs_roll_pitch_rad": 1.0471975511965976
+    },
+    "fallen": false,
+    "nan_inf_count": 0,
+    "qp_update_count": 1340,
+    "qp_failure_count": 0,
+    "qp_fallback_count": 0,
+    "runtime_mapping_safety_fallback_count": 5,
+    "runtime_executor_nonzero_flag_count": 0,
+    "direct_step_effective": true,
+    "heading_enabled": true,
+    "command_boundary": {
+      "t_6_398": {
+        "planned": [
+          0.5,
+          0.0,
+          0.01269999984651804
+        ],
+        "runtime": [
+          0.5,
+          0.0,
+          0.013239436782896519
+        ]
+      },
+      "t_6_400": {
+        "planned": [
+          0.0,
+          0.0,
+          0.01269999984651804
+        ],
+        "runtime": [
+          0.0,
+          0.0,
+          0.013229954987764359
+        ]
+      },
+      "t_6_402": {
+        "planned": [
+          0.0,
+          0.0,
+          0.01269999984651804
+        ],
+        "runtime": [
+          0.0,
+          0.0,
+          0.013229954987764359
+        ]
+      },
+      "anchor_t_6_396": {
+        "planned": [
+          0.5,
+          0.0,
+          0.01269999984651804
+        ],
+        "runtime": [
+          0.5,
+          0.0,
+          0.013239436782896519
+        ]
+      }
+    },
+    "first_frame_command_visible_time_s": 0.0,
+    "first_policy_command_consumed_time_s": 0.020000000000000004,
+    "raw_sample_count": 4030,
+    "first_raw_time": 0.0,
+    "last_raw_time": 8.05799999999936,
+    "covered_interval_end": 8.059999999999361,
+    "headline_anchor_count": 1334,
+    "recorded_anchor_count": 1344,
+    "last_headline_anchor": 7.997999999999341,
+    "last_horizon_node": 8.052,
+    "tail_complete": true,
+    "first_policy_command_consumed_time": 0.020000000000000004,
+    "unexpected_nonfinite_count": 0,
+    "rotation_valid": true,
+    "strict_pre_step": true
+  },
+  "scope": {
+    "final_full_task_template_generated": false,
+    "batch_11_plus_4_run": false,
+    "full_task_online_predictor_added": true,
+    "t2_started": true,
+    "n1_n2_started": false
+  }
+}

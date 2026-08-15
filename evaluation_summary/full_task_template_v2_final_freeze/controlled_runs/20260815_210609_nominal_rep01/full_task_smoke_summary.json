@@ -1,0 +1,105 @@
+{
+  "status": "FAIL",
+  "smoke_passed": false,
+  "xy_start_world_m": [
+    -0.0039635,
+    0.0
+  ],
+  "xy_at_headline_end_world_m": [
+    3.218674273734574,
+    0.02621354534983848
+  ],
+  "xy_displacement_m": 3.222744384939758,
+  "xy_arc_length_m": 3.348566238023936,
+  "expected_displacement_m": 3.2,
+  "displacement_difference_m": 0.022744384939757722,
+  "distance_gate_m": [
+    2.8,
+    3.6
+  ],
+  "distance_within_gate": true,
+  "max_abs_filtered_heading_error_rad": 0.029599291359276497,
+  "max_abs_raw_yaw_deviation_rad": 0.038583481331071444,
+  "max_abs_roll_rad": 0.06836355662331446,
+  "max_abs_pitch_rad": 0.07725889962090962,
+  "torso_height_min_m": 0.8042922869307274,
+  "torso_height_max_m": 0.8370000000000001,
+  "fall_definition": {
+    "min_torso_height_m": 0.45,
+    "max_abs_roll_pitch_rad": 1.0471975511965976
+  },
+  "fallen": false,
+  "nan_inf_count": 0,
+  "qp_update_count": 1340,
+  "qp_failure_count": 0,
+  "qp_fallback_count": 0,
+  "runtime_mapping_safety_fallback_count": 3,
+  "runtime_executor_nonzero_flag_count": 0,
+  "direct_step_effective": true,
+  "heading_enabled": true,
+  "command_boundary": {
+    "t_6_398": {
+      "planned": [
+        0.5,
+        0.0,
+        0.01269999984651804
+      ],
+      "runtime": [
+        0.5,
+        0.0,
+        0.01308945007622242
+      ]
+    },
+    "t_6_400": {
+      "planned": [
+        0.0,
+        0.0,
+        0.01269999984651804
+      ],
+      "runtime": [
+        0.0,
+        0.0,
+        0.013104449957609177
+      ]
+    },
+    "t_6_402": {
+      "planned": [
+        0.0,
+        0.0,
+        0.01269999984651804
+      ],
+      "runtime": [
+        0.0,
+        0.0,
+        0.013104449957609177
+      ]
+    },
+    "anchor_t_6_396": {
+      "planned": [
+        0.5,
+        0.0,
+        0.01269999984651804
+      ],
+      "runtime": [
+        0.5,
+        0.0,
+        0.01308945007622242
+      ]
+    }
+  },
+  "first_frame_command_visible_time_s": 0.0,
+  "first_policy_command_consumed_time_s": 0.020000000000000004,
+  "raw_sample_count": 4030,
+  "first_raw_time": 0.0,
+  "last_raw_time": 8.05799999999936,
+  "covered_interval_end": 8.059999999999361,
+  "headline_anchor_count": 1334,
+  "recorded_anchor_count": 1344,
+  "last_headline_anchor": 7.997999999999341,
+  "last_horizon_node": 8.052,
+  "tail_complete": true,
+  "first_policy_command_consumed_time": 0.020000000000000004,
+  "unexpected_nonfinite_count": 0,
+  "rotation_valid": true,
+  "strict_pre_step": true
+}

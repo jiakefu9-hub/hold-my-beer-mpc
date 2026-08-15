@@ -1,0 +1,5 @@
+{
+  "template": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+  "manifest": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+  "heldout_metrics": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/heldout_metrics.json"
+}

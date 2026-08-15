@@ -1,0 +1,144 @@
+{
+  "gait_period": 0.8,
+  "total_cycles": 10.075,
+  "warmup_cycles": 0,
+  "evaluation_cycles": 10,
+  "cooldown_cycles": 0,
+  "eval_start_time": 0.0,
+  "eval_end_time": 8.0,
+  "walk_distance_xy": 3.2228331488822435,
+  "gravity_error_norm_definition": "signed_xy_used_by_mpc_cost",
+  "yaw_mean": 0.0011715029722854675,
+  "yaw_slope": 0.004788698039213574,
+  "yaw_final_drift": 0.01889432570699971,
+  "max_abs_yaw_error": 0.0385830836968652,
+  "heading_sample_count": 3990,
+  "heading_error_mean": 0.0005558897003020165,
+  "heading_error_rms": 0.011451143907212084,
+  "heading_error_max_abs": 0.029599291359276497,
+  "heading_filtered_drift_slope": 0.004136519696091989,
+  "heading_yaw_rate_command_mean": 0.013089954282724903,
+  "heading_yaw_rate_command_min": -0.006015035789459944,
+  "heading_yaw_rate_command_max": 0.03133765608072281,
+  "heading_command_saturation_fraction": 0.0,
+  "left_acc_mean": 1.8776390530784337,
+  "left_acc_std": 1.3269624794890187,
+  "left_acc_rms": 2.299208088802952,
+  "left_alpha_mean": 7.011898812283922,
+  "left_alpha_std": 7.9444157993895494,
+  "left_alpha_rms": 10.596247795672719,
+  "left_tilt_mean": 0.7973853263245828,
+  "left_tilt_std": 0.1781234469402195,
+  "left_tilt_rms": 0.817038139249097,
+  "left_acc_xyz_mean": [
+    0.004838259053355636,
+    0.017527651683714993,
+    -0.007559180847854347
+  ],
+  "left_acc_xyz_std": [
+    0.9026223969048939,
+    1.2742494988645612,
+    1.6874629152448666
+  ],
+  "left_acc_xyz_rms": [
+    0.902635363890095,
+    1.2743700419933506,
+    1.6874798462624045
+  ],
+  "left_alpha_xyz_mean": [
+    -0.08164579110076606,
+    -0.02487108232315666,
+    -0.002125578253658712
+  ],
+  "left_alpha_xyz_std": [
+    7.306238986838675,
+    6.64693441170381,
+    3.8354025886446506
+  ],
+  "left_alpha_xyz_rms": [
+    7.306695160467967,
+    6.64698094206897,
+    3.835403177641821
+  ],
+  "left_tilt_xyz_mean": [
+    0.7021390182805513,
+    -0.0513238885068304,
+    0.03409558953256389
+  ],
+  "left_tilt_xyz_std": [
+    0.18701873963150695,
+    0.37005671118198735,
+    0.015544658752455452
+  ],
+  "left_tilt_xyz_rms": [
+    0.7266190267019832,
+    0.3735988637861336,
+    0.037471931379412037
+  ],
+  "left_tilt_xyz_norm_mean": 0.7981487347210977,
+  "left_tilt_xyz_norm_std": 0.17864507799556242,
+  "left_tilt_xyz_norm_rms": 0.8178969780045223,
+  "left_upright_alignment_mean": 0.9965244047367416,
+  "left_upright_alignment_min": 0.9920095738442599,
+  "left_inverted_fraction": 0.0,
+  "right_acc_mean": 2.176057756275697,
+  "right_acc_std": 1.979203733128053,
+  "right_acc_rms": 2.9415089284031826,
+  "right_alpha_mean": 4.23594107031085,
+  "right_alpha_std": 5.629458672135438,
+  "right_alpha_rms": 7.045140289052242,
+  "right_tilt_mean": 0.02133867080458129,
+  "right_tilt_std": 0.014281135163346642,
+  "right_tilt_rms": 0.025676637109638523,
+  "right_acc_xyz_mean": [
+    0.0009471621135706415,
+    0.024375997294765948,
+    0.0076782679982688624
+  ],
+  "right_acc_xyz_std": [
+    0.9129176737499368,
+    1.7055008561142833,
+    2.215777264181682
+  ],
+  "right_acc_xyz_rms": [
+    0.9129181650953523,
+    1.7056750450923177,
+    2.215790567780244
+  ],
+  "right_alpha_xyz_mean": [
+    -0.00997397966551623,
+    -0.0022347337503540662,
+    -0.005359138270520917
+  ],
+  "right_alpha_xyz_std": [
+    3.827547527310573,
+    3.6273233388010553,
+    4.671859781685089
+  ],
+  "right_alpha_xyz_rms": [
+    3.8275605225902924,
+    3.627324027192193,
+    4.67186285544532
+  ],
+  "right_tilt_xyz_mean": [
+    0.00039249257347871643,
+    0.0007797095080745955,
+    3.360312480441063e-05
+  ],
+  "right_tilt_xyz_std": [
+    0.021197346829858986,
+    0.014463754121856291,
+    4.986244217939572e-05
+  ],
+  "right_tilt_xyz_rms": [
+    0.021200980237846764,
+    0.014484755096807703,
+    6.012847193064518e-05
+  ],
+  "right_tilt_xyz_norm_mean": 0.02133870656252485,
+  "right_tilt_xyz_norm_std": 0.014281208314833226,
+  "right_tilt_xyz_norm_rms": 0.02567670751270892,
+  "right_upright_alignment_mean": 0.9999965746050148,
+  "right_upright_alignment_min": 0.9999713197912445,
+  "right_inverted_fraction": 0.0
+}
