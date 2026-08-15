@@ -131,6 +131,58 @@ def validate_realtime_launcher_prerequisites(
     return errors
 
 
+def require_recorded_run_environment(
+    result: dict, *, policy: str, priority: int, cpu: int
+) -> None:
+    """Fail if a recorded control run did not inherit the target runtime."""
+
+    environment = result["runtime_environment"]
+    scheduler = environment["scheduler"]
+    errors = []
+    if scheduler["policy_name"] != policy:
+        errors.append(f"policy={scheduler['policy_name']}")
+    if int(scheduler["priority"]) != priority:
+        errors.append(f"priority={scheduler['priority']}")
+    if environment["cpu_affinity"] != [cpu]:
+        errors.append(f"affinity={environment['cpu_affinity']}")
+    cpu_environment = environment["cpu_frequency_at_start"].get(
+        str(cpu), {}
+    )
+    if cpu_environment.get("scaling_governor") != "performance":
+        errors.append(
+            f"governor={cpu_environment.get('scaling_governor')}"
+        )
+    worker = scheduler.get("right_arm_worker", {})
+    if worker.get("policy_name") != policy:
+        errors.append(f"worker_policy={worker.get('policy_name')}")
+    if int(worker.get("priority", -1)) != priority:
+        errors.append(f"worker_priority={worker.get('priority')}")
+    if worker.get("cpu_affinity") != [cpu]:
+        errors.append(f"worker_affinity={worker.get('cpu_affinity')}")
+    if errors:
+        raise RuntimeError(
+            "timing run environment mismatch: " + ", ".join(errors)
+        )
+
+
+def target_irq_checks(results: list[dict]) -> dict:
+    """Summarize whether every recorded evaluation window was IRQ-quiet."""
+
+    activity = [
+        result["runtime_environment"].get("evaluation_irq_activity", {})
+        for result in results
+    ]
+    return {
+        "evaluation_irq_activity_captured_for_all_runs": bool(activity)
+        and all(item.get("captured") is True for item in activity),
+        "zero_evaluation_irq_on_physical_core": bool(activity)
+        and all(
+            item.get("total_delta_on_physical_core") == 0
+            for item in activity
+        ),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Validate inherited scheduling before a control run"

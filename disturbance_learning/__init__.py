@@ -1,1 +1,1 @@
-"""Causal dataset tools for learned torso-disturbance prediction."""
+"""Absolute-time full-task template collection and runtime contracts."""

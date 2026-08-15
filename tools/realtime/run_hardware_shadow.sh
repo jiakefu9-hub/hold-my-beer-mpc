@@ -18,7 +18,7 @@ Usage: run_hardware_shadow.sh NETWORK_INTERFACE [options]
   --control-cpu N       isolated control CPU (default 7)
   --bridge-cpu N        housekeeping CPU for DDS receive threads (default 5)
   --duration-s N        shadow duration (default 30)
-  --predictor MODE      template or hybrid_residual
+  --predictor MODE      legacy phase template (the only supported shadow mode)
   --group NAME          output/service label
   --hardware-config P   verified fail-closed contract YAML
 
@@ -69,8 +69,8 @@ if (( CONTROL_CPU == BRIDGE_CPU || REALTIME_PRIORITY < 1 || REALTIME_PRIORITY > 
     echo "Use distinct control/bridge CPUs, RR priority 1..20, and positive duration." >&2
     exit 2
 fi
-if [[ "$PREDICTOR" != "template" && "$PREDICTOR" != "hybrid_residual" ]]; then
-    echo "predictor must be template or hybrid_residual" >&2
+if [[ "$PREDICTOR" != "template" ]]; then
+    echo "hardware shadow predictor must be template" >&2
     exit 2
 fi
 if [[ ! "$GROUP" =~ ^[A-Za-z0-9_.-]+$ ]]; then

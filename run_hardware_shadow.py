@@ -141,7 +141,7 @@ def main() -> None:
     )
     parser.add_argument("--shared-memory", default=None)
     parser.add_argument(
-        "--predictor", choices=("template", "hybrid_residual"), default="template"
+        "--predictor", choices=("template",), default="template"
     )
     parser.add_argument("--duration-s", type=float, default=10.0)
     parser.add_argument("--max-updates", type=int, default=0)

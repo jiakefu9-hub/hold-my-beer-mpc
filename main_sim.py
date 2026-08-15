@@ -30,11 +30,6 @@ from disturbance_predictor import (
     DisturbancePredictorObservation,
     create_disturbance_predictor,
 )
-from disturbance_learning.command_schedule import (
-    DEFAULT_SCHEDULE_TIMING,
-    GENERALIZATION_SCHEDULE_PROFILES,
-    command_schedule,
-)
 from disturbance_learning.full_task_protocol import (
     DEFAULT_FULL_TASK_PROTOCOL,
     FullTaskClock,
@@ -58,7 +53,6 @@ from disturbance_learning.full_task_startup_pd import (
     save_startup_pd_artifacts,
 )
 from kinematics_helper import KinematicsHelper
-from payload_model import create_modeled_payload_mjcf
 from robot_model_backend import CppRightArmRneaBackend, create_prediction_backend
 from right_arm_runtime import (
     CppDdqTorqueMapper,
@@ -139,13 +133,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--disturbance-predictor",
-        choices=(
-            "template",
-            "full_task_template",
-            "zoh",
-            "neural",
-            "hybrid_residual",
-        ),
+        choices=("template", "full_task_template", "zoh"),
         default=None,
         help="只覆盖本次运行的 disturbance predictor。",
     )
@@ -176,53 +164,14 @@ if __name__ == "__main__":
             "2ms物理网格。短运行不冒充完整[0,8)验收。"
         ),
     )
-    parser.add_argument(
-        "--predictor-ablation",
-        action="store_true",
-        help=(
-            "使用 0.8 s H-frame warmup 和 start/steady/change/stop/"
-            "stopped 命令日程，评估时间为 0.8~4.8 s。"
-        ),
-    )
-    parser.add_argument(
-        "--predictor-schedule-profile",
-        choices=tuple(GENERALIZATION_SCHEDULE_PROFILES),
-        default=None,
-        help="使用一个未见 command schedule，并启用 predictor 闭环评估。",
-    )
-    parser.add_argument(
-        "--predictor-ablation-seed",
-        type=int,
-        default=0,
-        help="未见日程验证的可复现下肢初始状态扰动 seed。",
-    )
-    parser.add_argument(
-        "--predictor-payload-kg",
-        type=float,
-        default=0.0,
-        help="给 MuJoCo right_bottle 增加的小幅 payload 质量。",
-    )
-    parser.add_argument(
-        "--predictor-payload-modeling",
-        choices=("unmodeled", "modeled"),
-        default="unmodeled",
-        help=(
-            "unmodeled 只修改仿真 plant；modeled 让 plant、RNEA、"
-            "候选验收和独立执行 worker 使用同一含 payload 模型。"
-        ),
-    )
     args = parser.parse_args()
     full_task_smoke_active = bool(args.full_task_smoke)
     if full_task_smoke_active and (
         args.smoke_test
-        or args.predictor_ablation
-        or args.predictor_schedule_profile is not None
-        or args.predictor_payload_kg != 0.0
         or args.mpc_command_delay_ms not in (None, 0.0)
     ):
         raise ValueError(
-            "--full-task-smoke 不能与旧 smoke/ablation/schedule、payload "
-            "或非零 MPC command delay 组合。"
+            "--full-task-smoke 不能与旧 smoke 或非零 MPC command delay 组合。"
         )
     if full_task_smoke_active and args.disturbance_predictor not in (
         None,
@@ -269,24 +218,6 @@ if __name__ == "__main__":
             torch_num_threads=torch.get_num_threads(),
             torch_num_interop_threads=torch.get_num_interop_threads(),
         )
-    schedule_profile = (
-        None
-        if args.predictor_schedule_profile is None
-        else GENERALIZATION_SCHEDULE_PROFILES[
-            args.predictor_schedule_profile
-        ]
-    )
-    predictor_ablation_active = args.predictor_ablation or schedule_profile is not None
-    active_schedule_timing = (
-        DEFAULT_SCHEDULE_TIMING
-        if schedule_profile is None
-        else schedule_profile.timing
-    )
-    if (
-        not np.isfinite(args.predictor_payload_kg)
-        or not 0.0 <= args.predictor_payload_kg <= 0.25
-    ):
-        raise ValueError("predictor payload 必须是 0~0.25 kg 的有限值。")
     config_file = args.config_file
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = config_file if os.path.isabs(config_file) else os.path.join(repo_dir, "configs", config_file)
@@ -294,6 +225,14 @@ if __name__ == "__main__":
         config = yaml.load(f, Loader=yaml.FullLoader)
         if args.disturbance_predictor is not None:
             config["disturbance_predictor"] = args.disturbance_predictor
+        if (
+            str(config.get("disturbance_predictor", "")).strip().lower()
+            == "full_task_template"
+            and not full_task_smoke_active
+        ):
+            raise ValueError(
+                "full_task_template必须通过--full-task-smoke正式入口运行。"
+            )
         policy_path = config["policy_path"]
         xml_path = config["xml_path"]
         if not os.path.isabs(policy_path):
@@ -446,35 +385,11 @@ if __name__ == "__main__":
                 "twice_per_interval 或 policy_update。"
             )
         cmd_nominal = np.array(config["cmd_init"], dtype=np.float32)
-        disturbance_command_schedule_enabled = bool(
-            config.get("disturbance_command_schedule_enabled", False)
-        )
-        disturbance_command_changed = np.asarray(
-            config.get(
-                "disturbance_command_changed",
-                [0.55 * float(cmd_nominal[0]), 0.10, -0.04],
-            ),
-            dtype=np.float32,
-        )
-        if disturbance_command_changed.shape != (3,) or not np.all(
-            np.isfinite(disturbance_command_changed)
-        ):
-            raise ValueError("disturbance_command_changed 必须是有限的 vx/vy/wz。")
-        if schedule_profile is not None:
-            cmd_nominal = np.asarray(
-                schedule_profile.start_command, dtype=np.float32
-            )
-            disturbance_command_changed = np.asarray(
-                schedule_profile.changed_command, dtype=np.float32
-            )
         heading_control_enabled = bool(config.get("heading_control_enabled", True))
         heading_filter_cycles = float(config.get("heading_filter_cycles", 1.0))
         heading_kp = float(config.get("heading_kp", 0.6))
         heading_kd = float(config.get("heading_kd", 0.1))
         heading_max_yaw_rate = float(config.get("heading_max_yaw_rate", 0.25))
-        if predictor_ablation_active:
-            disturbance_command_schedule_enabled = True
-            heading_control_enabled = False
         if full_task_smoke_active:
             if arm_controller != "mpc":
                 raise ValueError("T2 full-task 闭环要求 arm_controller=mpc。")
@@ -534,12 +449,6 @@ if __name__ == "__main__":
         cooldown_cycles = 0
         viewer_enabled = False
         record_video = False
-    elif predictor_ablation_active:
-        warmup_cycles = 1
-        evaluation_cycles = 6 if schedule_profile is not None else 5
-        cooldown_cycles = 0
-        viewer_enabled = False
-        record_video = False
     if warmup_cycles < 0 or evaluation_cycles <= 0 or cooldown_cycles < 0:
         raise ValueError("warmup/evaluation/cooldown 周期必须分别满足 >=0、>0、>=0。")
     if full_task_smoke_active:
@@ -583,69 +492,17 @@ if __name__ == "__main__":
     # MuJoCo 负责整机物理推进；TorchScript policy 负责下肢 locomotion。
     # 对论文/面试来说，需要知道“谁负责物理、谁负责走路”，但不用纠结加载语法细节。
     # ==============================
-    modeled_payload_mjcf = None
     runtime_xml_path = source_xml_path
-    if (
-        args.predictor_payload_kg > 0.0
-        and args.predictor_payload_modeling == "modeled"
-    ):
-        modeled_payload_mjcf = create_modeled_payload_mjcf(
-            source_xml_path,
-            body_name="right_bottle",
-            added_mass_kg=args.predictor_payload_kg,
-        )
-        runtime_xml_path = str(modeled_payload_mjcf.scene_path)
     m = mujoco.MjModel.from_xml_path(runtime_xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
-    payload_treatment = (
-        "nominal"
-        if args.predictor_payload_kg == 0.0
-        else args.predictor_payload_modeling
-    )
     payload_metadata = {
         "body": "right_bottle",
-        "added_mass_kg": float(args.predictor_payload_kg),
-        "intentional_nominal_model_mismatch": bool(
-            args.predictor_payload_kg > 0.0
-            and args.predictor_payload_modeling == "unmodeled"
-        ),
-        "treatment": payload_treatment,
-        "controller_model_includes_payload": bool(
-            args.predictor_payload_kg > 0.0
-            and args.predictor_payload_modeling == "modeled"
-        ),
+        "added_mass_kg": 0.0,
+        "intentional_nominal_model_mismatch": False,
+        "treatment": "nominal",
+        "controller_model_includes_payload": False,
     }
-    if args.predictor_payload_kg > 0.0:
-        payload_body_id = mujoco.mj_name2id(
-            m, mujoco.mjtObj.mjOBJ_BODY, "right_bottle"
-        )
-        if payload_body_id < 0:
-            raise ValueError("MuJoCo model 中找不到 right_bottle payload body。")
-        original_mass = (
-            float(modeled_payload_mjcf.nominal_mass_kg)
-            if modeled_payload_mjcf is not None
-            else float(m.body_mass[payload_body_id])
-        )
-        if modeled_payload_mjcf is None:
-            mass_scale = (
-                original_mass + args.predictor_payload_kg
-            ) / original_mass
-            m.body_mass[payload_body_id] = (
-                original_mass + args.predictor_payload_kg
-            )
-            m.body_inertia[payload_body_id] *= mass_scale
-            mujoco.mj_setConst(m, d)
-        payload_metadata["nominal_mass_kg"] = original_mass
-        payload_metadata["simulated_mass_kg"] = float(
-            m.body_mass[payload_body_id]
-        )
-        expected_mass = original_mass + args.predictor_payload_kg
-        if abs(payload_metadata["simulated_mass_kg"] - expected_mass) > 1e-10:
-            raise ValueError(
-                "runtime payload model mass mismatch: "
-                f"{payload_metadata['simulated_mass_kg']} vs {expected_mass}"
-            )
     full_task_initial_manifest = None
     if args.full_task_initial_manifest is not None:
         full_task_initial_manifest_path = Path(
@@ -702,16 +559,6 @@ if __name__ == "__main__":
             "pair_id": episode.get("pair_id"),
             "sign": int(episode.get("sign", 0)),
         }
-    elif schedule_profile is not None:
-        initial_rng = np.random.default_rng(args.predictor_ablation_seed)
-        initial_lower_q_offset = np.clip(
-            initial_rng.normal(0.0, 0.006, size=12), -0.018, 0.018
-        )
-        initial_lower_dq = np.clip(
-            initial_rng.normal(0.0, 0.01, size=12), -0.03, 0.03
-        )
-        d.qpos[7:19] += initial_lower_q_offset
-        d.qvel[6:18] = initial_lower_dq
     else:
         initial_lower_q_offset = np.zeros(12, dtype=np.float64)
         initial_lower_dq = np.zeros(12, dtype=np.float64)
@@ -924,22 +771,9 @@ if __name__ == "__main__":
         }
     else:
         controller_meta["disturbance_command_schedule"] = {
-            "enabled": disturbance_command_schedule_enabled,
-            "definition": (
-                "heading_warmup/start/steady/velocity_change/stop/stopped"
-                if disturbance_command_schedule_enabled
-                else "disabled_constant_command"
-            ),
+            "enabled": False,
+            "definition": "disabled_constant_command",
             "start_command": cmd_nominal.copy(),
-            "changed_command": disturbance_command_changed.copy(),
-            "profile": (
-                "legacy_default" if schedule_profile is None else schedule_profile.name
-            ),
-            "timing_s": {
-                name: list(window)
-                for name, window in active_schedule_timing.stage_windows().items()
-            },
-            "seed": int(args.predictor_ablation_seed),
             "initial_lower_q_offset": initial_lower_q_offset.copy(),
             "initial_lower_dq": initial_lower_dq.copy(),
             "payload": payload_metadata,
@@ -1340,21 +1174,9 @@ if __name__ == "__main__":
             )
             startup_foot_contact_ids = resolve_foot_contact_ids(m)
     else:
-        cmd_planned = (
-            command_schedule(
-                0.0,
-                cmd_nominal,
-                disturbance_command_changed,
-                active_schedule_timing,
-            ).command.astype(np.float32)
-            if disturbance_command_schedule_enabled
-            else cmd_nominal.copy()
-        )
+        cmd_planned = cmd_nominal.copy()
         cmd_runtime = cmd_planned.copy()
     heading_yaw_rate_command_runtime = float(cmd_runtime[2])
-    predictor_world_down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
-    predictor_gravity_direction = np.empty(3, dtype=np.float64)
-    predictor_phase_sin_cos = np.empty(2, dtype=np.float64)
 
     perf_monitor = PerformanceMonitor(
         step_budget=simulation_dt,
@@ -1498,43 +1320,10 @@ if __name__ == "__main__":
                 disturbance_prediction_start = time.perf_counter()
                 disturbance_horizon = None
                 if disturbance_predictor is not None:
-                    predictor_phase_angle = (
-                        2.0
-                        * np.pi
-                        * ((counter * simulation_dt) % gait_period)
-                        / gait_period
-                    )
-                    np.matmul(
-                        torso_state.rotmat.T,
-                        predictor_world_down,
-                        out=predictor_gravity_direction,
-                    )
-                    predictor_phase_sin_cos[0] = np.sin(
-                        predictor_phase_angle
-                    )
-                    predictor_phase_sin_cos[1] = np.cos(
-                        predictor_phase_angle
-                    )
                     disturbance_predictor.update(
                         DisturbancePredictorObservation(
                             simulation_time=counter * simulation_dt,
                             measured_disturbance=torso_disturbance,
-                            gravity_direction_torso=(
-                                predictor_gravity_direction
-                            ),
-                            lower_body_q=leg_q,
-                            lower_body_dq=leg_dq,
-                            lower_body_policy_target=target_dof_pos,
-                            runtime_command=cmd_runtime,
-                            gait_phase_sin_cos=predictor_phase_sin_cos,
-                            previous_mpc_success=(
-                                None
-                                if mpc_diagnostics is None
-                                else bool(mpc_diagnostics.get("success", False))
-                            ),
-                            previous_control_interval_overrun=(
-                                perf_monitor.last_complete_interval_overrun
-                            ),
                         )
                     )
                     disturbance_horizon = disturbance_predictor.predict(
@@ -2225,16 +2014,7 @@ if __name__ == "__main__":
                         task_time, cmd_nominal, protocol
                     ).planned_command.astype(np.float32)
                 else:
-                    cmd_planned = (
-                        command_schedule(
-                            count,
-                            cmd_nominal,
-                            disturbance_command_changed,
-                            active_schedule_timing,
-                        ).command.astype(np.float32)
-                        if disturbance_command_schedule_enabled
-                        else cmd_nominal.copy()
-                    )
+                    cmd_planned = cmd_nominal.copy()
                 cmd_active = cmd_planned.copy()
                 if heading_control_enabled:
                     torso_yaw_world = quat_to_yaw_wxyz(d.xquat[scene_ids.torso_id].copy())
@@ -2413,5 +2193,3 @@ if __name__ == "__main__":
         ):
             native_backend.close()
             closed_native_backends.add(id(native_backend))
-    if modeled_payload_mjcf is not None:
-        modeled_payload_mjcf.cleanup()

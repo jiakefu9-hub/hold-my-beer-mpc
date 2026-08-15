@@ -171,7 +171,6 @@ def run(run_paths: list[tuple[str, Path]], output_dir: Path) -> dict[str, Any]:
         "scope_disclosures": {
             "baseline": "fixed absolute-task-time template that knows the 6.4 s direct stop in advance",
             "not_general": "not validated for arbitrary speed, direction, or unknown stop time",
-            "neural_route": "frozen exploratory work; no longer in the development plan",
             "hardware_blocker": "DDQ-to-torque final_unsafe is not fail-closed and remains an independent blocker before active hardware closed loop",
             "thresholds_changed": False,
         },

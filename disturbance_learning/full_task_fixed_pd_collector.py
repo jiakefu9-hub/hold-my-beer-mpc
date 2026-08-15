@@ -427,8 +427,9 @@ def save_episode(*, output_dir: Path, raw: dict[str, np.ndarray], metadata: dict
         "heading_control": metadata["heading_control"],
         "control_chain": {
             "lower_body_policy": "torchscript locomotion policy", "right_arm_mode": "fixed_posture_pd",
-            "mpc_called": False, "old_template_predictor_called": False, "neural_called": False,
-            "hybrid_residual_called": False, "zoh_called": False, "process_called": False,
+            "right_arm_mpc_called": False,
+            "online_disturbance_predictor_called": False,
+            "right_arm_process_called": False,
             "ddq_to_torque_mapping_called": False,
         },
         "causal_h": {**causal_h_metrics(raw), "additional_low_pass_filter": "none"},

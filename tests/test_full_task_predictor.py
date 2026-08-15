@@ -24,15 +24,15 @@ from kinematics_helper import DisturbanceInput
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = (
     ROOT
-    / "disturbance_learning/data/full_task_template_v1/20260815_145617"
+    / "disturbance_learning/data/full_task_template_v2/20260815_162850"
 )
 TEMPLATE_PATH = ASSET_DIR / "full_task_template.npz"
 MANIFEST_PATH = ASSET_DIR / "full_task_template_manifest.json"
 TEMPLATE_SHA256 = (
-    "809722f787c3ad2ebecc02f0527439d288c8c6e591ee27f09138ebaf531fa2a5"
+    "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4"
 )
 MANIFEST_SHA256 = (
-    "824268f85d708cea43c265b59b990931b0135bbd7bdb29cfe130d16b6be02841"
+    "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76"
 )
 
 
@@ -64,6 +64,8 @@ def _predictor(**overrides) -> FullTaskTemplatePredictor:
         "repo_dir": str(ROOT),
         "control_dt": 0.006,
         "horizon": 9,
+        "expected_schema_version": "full_task_template_v2",
+        "expected_heading_frame_version": "full_task_continuous_heading_v2",
     }
     kwargs.update(overrides)
     return FullTaskTemplatePredictor(**kwargs)
@@ -85,6 +87,13 @@ class FullTaskTemplatePredictorTest(unittest.TestCase):
             MANIFEST_SHA256,
         )
 
+    def test_online_predictor_does_not_import_offline_builder(self) -> None:
+        source = (ROOT / "disturbance_predictor.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("full_task_template_builder", source)
+        self.assertIn("full_task_template_asset", source)
+
     def test_first_frame_is_valid_and_node0_is_measured(self) -> None:
         predictor = _predictor()
         observation = _observation(12.5, 0.0, yaw=0.42)
@@ -96,7 +105,7 @@ class FullTaskTemplatePredictorTest(unittest.TestCase):
         self.assertEqual(diagnostics["task_time"], 0.0)
         self.assertTrue(diagnostics["heading_ready"])
         self.assertEqual(
-            diagnostics["heading_source"], "first_cycle_causal_prefix"
+            diagnostics["heading_source"], "causal_prefix"
         )
         self.assertFalse(diagnostics["fallback_used"])
         np.testing.assert_array_equal(
@@ -251,8 +260,8 @@ class FullTaskTemplatePredictorTest(unittest.TestCase):
             ),
             "full_task_template_sha256": TEMPLATE_SHA256,
             "full_task_template_manifest_sha256": MANIFEST_SHA256,
-            "full_task_template_schema_version": "full_task_template_v1",
-            "full_task_heading_frame_version": "full_task_cycle_held_heading_v1",
+            "full_task_template_schema_version": "full_task_template_v2",
+            "full_task_heading_frame_version": "full_task_continuous_heading_v2",
         }
         self.assertEqual(
             resolve_disturbance_predictor_name(config), "full_task_template"

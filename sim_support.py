@@ -1795,10 +1795,18 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
         }
     elif controller_name == "mpc":
         configured_predictor = config.get("disturbance_predictor")
-        feedforward_enabled = (
-            bool(config.get("mpc_disturbance_feedforward_enabled", False))
+        predictor_name = (
+            "template"
             if configured_predictor is None
-            else str(configured_predictor).strip().lower() == "template"
+            and bool(config.get("mpc_disturbance_feedforward_enabled", False))
+            else (
+                "zoh"
+                if configured_predictor is None
+                else str(configured_predictor).strip().lower()
+            )
+        )
+        feedforward_enabled = (
+            predictor_name in {"template", "full_task_template"}
         )
         q_min = np.deg2rad(
             np.asarray(
@@ -1878,7 +1886,9 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
         notes = (
             "sparse constrained right-arm MPC with ddq input, "
             + (
-                "heading-frame phase-template base-disturbance feedforward, "
+                "absolute-task-time full-task disturbance feedforward, "
+                if predictor_name == "full_task_template"
+                else "heading-frame phase-template base-disturbance feedforward, "
                 if feedforward_enabled
                 else "zero-order-held measured base motion, "
             )
@@ -1895,9 +1905,13 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
                 **execution_metadata,
                 "solver": "OSQP",
                 "base_prediction": (
-                    "heading_to_world_measurement_anchored_phase_template"
-                    if feedforward_enabled
-                    else "zero_order_hold_current_measurement"
+                    "continuous_heading_to_world_absolute_task_template_v2"
+                    if predictor_name == "full_task_template"
+                    else (
+                        "heading_to_world_measurement_anchored_phase_template"
+                        if feedforward_enabled
+                        else "zero_order_hold_current_measurement"
+                    )
                 ),
                 "gravity_error": "signed_2d_xy",
                 "torso_relative_position_cost": False,
@@ -5410,20 +5424,8 @@ def init_eval_buffers():
             "right_mpc_template_one_step_omega_error": [],
             "right_mpc_template_one_step_alpha_error": [],
             "right_mpc_template_one_step_rotation_error_angle": [],
-            "right_mpc_predictor_neural_inference_valid": [],
-            "right_mpc_predictor_neural_inference_time": [],
             "right_mpc_predictor_fallback_used": [],
             "right_mpc_predictor_fallback_code": [],
-            "right_mpc_predictor_history_count": [],
-            "right_mpc_predictor_safety_gate_triggered": [],
-            "right_mpc_predictor_input_abs_z_max": [],
-            "right_mpc_predictor_input_rms_z": [],
-            "right_mpc_predictor_prediction_abs_z_max": [],
-            "right_mpc_predictor_acc_correction_norm_max": [],
-            "right_mpc_predictor_alpha_correction_norm_max": [],
-            "right_mpc_predictor_solver_gate_remaining": [],
-            "right_mpc_predictor_solver_failure_streak": [],
-            "right_mpc_predictor_timing_gate_remaining": [],
             "arm_policy_updated": [],
             "ddq_execution_updated": [],
             "contact_count": [],
@@ -9112,52 +9114,12 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     buffers.trajectory_data[
         "right_mpc_template_one_step_rotation_error_angle"
     ].append(template_scalar("one_step_rotation_error_angle"))
-    buffers.trajectory_data[
-        "right_mpc_predictor_neural_inference_valid"
-    ].append(
-        bool(mpc_template_diagnostics.get("neural_inference_valid", False))
-    )
-    buffers.trajectory_data[
-        "right_mpc_predictor_neural_inference_time"
-    ].append(template_scalar("neural_inference_time"))
     buffers.trajectory_data["right_mpc_predictor_fallback_used"].append(
         bool(mpc_template_diagnostics.get("fallback_used", False))
     )
     buffers.trajectory_data["right_mpc_predictor_fallback_code"].append(
         int(mpc_template_diagnostics.get("fallback_code", 0))
     )
-    buffers.trajectory_data["right_mpc_predictor_history_count"].append(
-        int(mpc_template_diagnostics.get("history_count", 0))
-    )
-    buffers.trajectory_data[
-        "right_mpc_predictor_safety_gate_triggered"
-    ].append(bool(mpc_template_diagnostics.get("safety_gate_triggered", False)))
-    for field, diagnostic_name in (
-        ("right_mpc_predictor_input_abs_z_max", "input_abs_z_max"),
-        ("right_mpc_predictor_input_rms_z", "input_rms_z"),
-        (
-            "right_mpc_predictor_prediction_abs_z_max",
-            "prediction_abs_z_max",
-        ),
-        (
-            "right_mpc_predictor_acc_correction_norm_max",
-            "acc_correction_norm_max",
-        ),
-        (
-            "right_mpc_predictor_alpha_correction_norm_max",
-            "alpha_correction_norm_max",
-        ),
-    ):
-        buffers.trajectory_data[field].append(template_scalar(diagnostic_name))
-    buffers.trajectory_data[
-        "right_mpc_predictor_solver_gate_remaining"
-    ].append(int(mpc_template_diagnostics.get("solver_gate_remaining", 0)))
-    buffers.trajectory_data[
-        "right_mpc_predictor_solver_failure_streak"
-    ].append(int(mpc_template_diagnostics.get("solver_failure_streak", 0)))
-    buffers.trajectory_data[
-        "right_mpc_predictor_timing_gate_remaining"
-    ].append(int(mpc_template_diagnostics.get("timing_gate_remaining", 0)))
     buffers.trajectory_data["arm_policy_updated"].append(arm_policy_updated)
     buffers.trajectory_data["ddq_execution_updated"].append(
         ddq_execution_updated

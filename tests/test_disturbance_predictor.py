@@ -279,6 +279,24 @@ class DisturbancePredictorRegressionTest(unittest.TestCase):
         self.assertIsInstance(legacy_zoh, ZeroOrderHoldPredictor)
         self.assertIsInstance(explicit_zoh, ZeroOrderHoldPredictor)
 
+    def test_archived_learned_modes_are_rejected(self) -> None:
+        for name in ("neural", "hybrid_residual"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                create_disturbance_predictor(
+                    {"disturbance_predictor": name},
+                    repo_dir=str(REPO_ROOT),
+                    control_dt=CONTROL_DT,
+                    horizon=HORIZON,
+                    acc_limit=30.0,
+                    alpha_limit=40.0,
+                )
+
+    def test_runtime_observation_contract_is_minimal(self) -> None:
+        self.assertEqual(
+            set(DisturbancePredictorObservation.__dataclass_fields__),
+            {"simulation_time", "measured_disturbance"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

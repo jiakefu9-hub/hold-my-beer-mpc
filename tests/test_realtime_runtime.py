@@ -4,6 +4,8 @@ import unittest
 from unittest import mock
 
 from realtime_runtime import (
+    require_recorded_run_environment,
+    target_irq_checks,
     validate_realtime_launcher_prerequisites,
     validate_realtime_snapshot,
 )
@@ -74,10 +76,6 @@ class RealtimeRuntimeGuardTest(unittest.TestCase):
 
 class RealtimeResultEnvironmentTest(unittest.TestCase):
     def test_main_and_worker_must_both_match(self):
-        from disturbance_learning.run_realtime_timing_ablation import (
-            _require_run_environment,
-        )
-
         scheduler = {
             "policy_name": "SCHED_RR",
             "priority": 10,
@@ -96,22 +94,18 @@ class RealtimeResultEnvironmentTest(unittest.TestCase):
                 },
             }
         }
-        _require_run_environment(
+        require_recorded_run_environment(
             result, policy="SCHED_RR", priority=10, cpu=7
         )
         scheduler["right_arm_worker"]["priority"] = 9
         with self.assertRaisesRegex(RuntimeError, "worker_priority"):
-            _require_run_environment(
+            require_recorded_run_environment(
                 result, policy="SCHED_RR", priority=10, cpu=7
             )
 
 
 class TargetTimingIrqGateTest(unittest.TestCase):
     def test_target_gate_requires_captured_quiet_evaluation_window(self):
-        from disturbance_learning.run_realtime_timing_ablation import (
-            _target_irq_checks,
-        )
-
         result = {
             "runtime_environment": {
                 "evaluation_irq_activity": {
@@ -121,7 +115,7 @@ class TargetTimingIrqGateTest(unittest.TestCase):
             }
         }
         self.assertEqual(
-            _target_irq_checks([result]),
+            target_irq_checks([result]),
             {
                 "evaluation_irq_activity_captured_for_all_runs": True,
                 "zero_evaluation_irq_on_physical_core": True,
@@ -131,7 +125,7 @@ class TargetTimingIrqGateTest(unittest.TestCase):
             "total_delta_on_physical_core"
         ] = 1
         self.assertFalse(
-            _target_irq_checks([result])[
+            target_irq_checks([result])[
                 "zero_evaluation_irq_on_physical_core"
             ]
         )

@@ -251,6 +251,19 @@ class ShadowCommandTest(unittest.TestCase):
 
 
 class CompleteShadowPathTest(unittest.TestCase):
+    def test_learned_predictor_is_not_a_shadow_option(self):
+        config = _controller_config()
+        config["mpc_prediction_kinematics_backend"] = "mujoco"
+        with self.assertRaisesRegex(
+            HardwareContractError, "legacy phase template only"
+        ):
+            HardwareShadowController(
+                repo_dir=REPO_ROOT,
+                controller_config=config,
+                contract=_contract(),
+                predictor_name="hybrid_residual",
+            )
+
     def test_real_state_shape_reaches_template_mpc_and_command_build(self):
         config = _controller_config()
         # Keep this integration smoke independent of the optional local C++

@@ -22,7 +22,6 @@ import yaml
 from disturbance_predictor import (
     DisturbancePredictorObservation,
     create_disturbance_predictor,
-    resolve_disturbance_predictor_name,
 )
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import create_prediction_backend
@@ -584,33 +583,6 @@ class G1HardwareStateAdapter:
 
 
 @dataclass(frozen=True)
-class LocomotionContext:
-    monotonic_timestamp_ns: int
-    lower_body_policy_target: np.ndarray
-    runtime_command: np.ndarray
-    gait_phase_sin_cos: np.ndarray
-
-    def validate_for(self, state_timestamp_ns: int, max_age_ns: int) -> None:
-        if self.monotonic_timestamp_ns <= 0:
-            raise HardwareStateError("locomotion context timestamp is invalid")
-        if self.monotonic_timestamp_ns > state_timestamp_ns:
-            raise HardwareStateError("locomotion context is from the future")
-        if state_timestamp_ns - self.monotonic_timestamp_ns > max_age_ns:
-            raise HardwareStateError("locomotion context is stale")
-        for name, value, shape in (
-            ("lower_body_policy_target", self.lower_body_policy_target, (12,)),
-            ("runtime_command", self.runtime_command, (3,)),
-            ("gait_phase_sin_cos", self.gait_phase_sin_cos, (2,)),
-        ):
-            array = np.asarray(value)
-            if array.shape != shape or not np.all(np.isfinite(array)):
-                raise HardwareStateError(f"invalid locomotion {name}")
-        phase_norm = float(np.linalg.norm(self.gait_phase_sin_cos))
-        if not np.isclose(phase_norm, 1.0, atol=0.05):
-            raise HardwareStateError("gait phase sin/cos is not unit length")
-
-
-@dataclass(frozen=True)
 class ShadowArmCommand:
     source_state_timestamp_ns: int
     source_sample_id: int
@@ -763,15 +735,15 @@ class HardwareShadowController:
             prediction_backend=self.prediction_backend,
         )
         requested_config = dict(self.config)
-        if predictor_name is not None:
-            requested_config["disturbance_predictor"] = predictor_name
-        self.predictor_requested = resolve_disturbance_predictor_name(
-            requested_config
-        )
-        if self.predictor_requested not in {"template", "hybrid_residual"}:
+        requested_name = (
+            "template" if predictor_name is None else str(predictor_name)
+        ).strip().lower()
+        if requested_name != "template":
             raise HardwareContractError(
-                "hardware shadow supports template or hybrid_residual only"
+                "hardware shadow supports the legacy phase template only"
             )
+        requested_config["disturbance_predictor"] = "template"
+        self.predictor_requested = "template"
         self.predictor = create_disturbance_predictor(
             requested_config,
             repo_dir=str(self.repo_dir),
@@ -780,27 +752,13 @@ class HardwareShadowController:
             acc_limit=float(self.config["ddq_torso_acc_limit"]),
             alpha_limit=float(self.config["ddq_torso_alpha_limit"]),
         )
-        fallback_config = dict(self.config)
-        fallback_config["disturbance_predictor"] = "template"
-        self.template_fallback = create_disturbance_predictor(
-            fallback_config,
-            repo_dir=str(self.repo_dir),
-            control_dt=self.control_dt,
-            horizon=self.policy.horizon,
-            acc_limit=float(self.config["ddq_torso_acc_limit"]),
-            alpha_limit=float(self.config["ddq_torso_alpha_limit"]),
-        )
         self.command_builder = ShadowCommandBuilder(self.config)
-        self.context_timeout_ns = int(round(20.0e6))
         self._next_control_timestamp_ns: Optional[int] = None
         self._control_index = 0
         self._previous_mpc_success: Optional[bool] = None
-        self._previous_control_overrun: Optional[bool] = None
         self._filtered_acc = np.zeros(3, dtype=np.float64)
         self._filtered_alpha = np.zeros(3, dtype=np.float64)
         self._timing_samples: list[dict] = []
-        self._fallback_count = 0
-        self._last_predictor_used: Optional[str] = None
 
     def close(self) -> None:
         close = getattr(self.prediction_backend, "close", None)
@@ -837,7 +795,6 @@ class HardwareShadowController:
         self,
         raw_state: RobotStateSnapshot,
         *,
-        context: Optional[LocomotionContext] = None,
         now_ns: Optional[int] = None,
         state_read_time_s: float = 0.0,
     ) -> Optional[ShadowCycleResult]:
@@ -868,50 +825,14 @@ class HardwareShadowController:
             rot_world_body=observation.torso_rotation_world,
         )
 
-        context_valid = context is not None
-        fallback_reason = "none"
-        if context is not None:
-            try:
-                context.validate_for(timestamp, self.context_timeout_ns)
-            except HardwareStateError as error:
-                context_valid = False
-                fallback_reason = f"invalid_locomotion_context:{error}"
-        elif self.predictor_requested == "hybrid_residual":
-            fallback_reason = "locomotion_context_unavailable"
-        active_predictor = self.predictor
-        predictor_used = self.predictor_requested
-        if self.predictor_requested == "hybrid_residual" and not context_valid:
-            active_predictor = self.template_fallback
-            predictor_used = "template"
-            self._fallback_count += 1
-        if self._last_predictor_used != predictor_used:
-            # A context dropout must not leave a stale neural history that is
-            # silently reused when context later returns.
-            active_predictor.reset()
-            self._last_predictor_used = predictor_used
-
         predictor_started = time.perf_counter()
-        active_predictor.update(
+        self.predictor.update(
             DisturbancePredictorObservation(
                 simulation_time=logical_time,
                 measured_disturbance=disturbance,
-                gravity_direction_torso=observation.gravity_direction_torso,
-                lower_body_q=observation.lower_body_q,
-                lower_body_dq=observation.lower_body_dq,
-                lower_body_policy_target=(
-                    None if not context_valid else context.lower_body_policy_target
-                ),
-                runtime_command=(
-                    None if not context_valid else context.runtime_command
-                ),
-                gait_phase_sin_cos=(
-                    None if not context_valid else context.gait_phase_sin_cos
-                ),
-                previous_mpc_success=self._previous_mpc_success,
-                previous_control_interval_overrun=self._previous_control_overrun,
             )
         )
-        horizon = active_predictor.predict(self.policy.horizon, self.control_dt)
+        horizon = self.predictor.predict(self.policy.horizon, self.control_dt)
         predictor_time = time.perf_counter() - predictor_started
 
         helper_started = time.perf_counter()
@@ -969,15 +890,14 @@ class HardwareShadowController:
         }
         self._timing_samples.append(timing)
         self._previous_mpc_success = bool(diagnostics.get("success", False))
-        self._previous_control_overrun = timing["overrun"]
         return ShadowCycleResult(
             source_sample_id=observation.sample_id,
             logical_time_s=logical_time,
             command=command,
             mpc_success=self._previous_mpc_success,
             predictor_requested=self.predictor_requested,
-            predictor_used=predictor_used,
-            predictor_fallback_reason=fallback_reason,
+            predictor_used=self.predictor_requested,
+            predictor_fallback_reason="none",
             timing_s=timing,
             diagnostics={
                 "solver_status": diagnostics.get("solver_status"),
@@ -985,7 +905,7 @@ class HardwareShadowController:
                 "current_q_safety_violation": float(
                     diagnostics.get("current_q_safety_violation", np.nan)
                 ),
-                "predictor": active_predictor.get_last_diagnostics(),
+                "predictor": self.predictor.get_last_diagnostics(),
             },
         )
 
@@ -1034,7 +954,6 @@ class HardwareShadowController:
             "output_capability": "absent",
             "control_period_ms": self.control_dt * 1e3,
             "predictor_requested": self.predictor_requested,
-            "external_template_fallback_count": self._fallback_count,
             "timing": timing,
         }
 
@@ -1048,7 +967,6 @@ __all__ = (
     "HardwareShadowController",
     "HardwareStateError",
     "HardwareStateSource",
-    "LocomotionContext",
     "ShadowArmCommand",
     "ShadowCommandBuilder",
     "ShadowCycleResult",
