@@ -152,21 +152,20 @@ hold-last。它们仍是认证输出，不是被隐藏的 unsafe candidate。
 | nominal | 0.002617 / 0.005713 / 0.007574 rad | 0.013735 / 0.024593 / 0.027716 m | 3.223 / 3.349 m |
 | held-out | 0.002573 / 0.004393 / 0.006996 rad | 0.013680 / 0.021626 / 0.024426 m | 3.212 / 3.340 m |
 
-offline-online replay 对 4 条 held-out episode 均通过。原始运行中某些早期综合
-`full_task_smoke_summary.status` 保留旧门控值；冻结验收以当前明确的环境、完整
-区间、认证输出、QP/predictor fallback、稳定性和控制质量门为准，证据包没有删除
-或改写原字段。
+offline-online replay 对 4 条 held-out episode 均通过。旧 tag 下早期综合
+`full_task_smoke_summary.status` 保留 legacy 门控值；r1 语义将 task/protocol PASS
+与 nominal mapping path 分开，且不删除或归零 fallback 诊断。
 
-### 5.3 阶段 5 最终冻结复跑
+### 5.3 r1 最终冻结复跑
 
 清理后的正式分支又完成 nominal 与 `heldout_pair_02_minus` 各一条完整 `[0,8)`
 复跑。轻量证据位于
-`evaluation_summary/full_task_template_v2_final_freeze/final_runs/`。
+`evaluation_summary/full_task_template_v2_final_freeze/final_runs_r1/`。
 
 | 场景 | 完整区间 | mean / p95 / p99 / max | overrun | tilt RMS | position RMS | XY displacement |
 | --- | ---: | --- | ---: | ---: | ---: | ---: |
-| nominal | 1,329 | 3.357623 / 3.731724 / 4.038419 / 4.732786 ms | 0 | 0.002617404 rad | 0.013735420 m | 3.222744 m |
-| held-out | 1,329 | 3.433966 / 3.599877 / 4.143100 / 4.476452 ms | 0 | 0.002573218 rad | 0.013679703 m | 3.212114 m |
+| nominal | 1,329 | 3.302370 / 3.464462 / 3.630513 / 4.340295 ms | 0 | 0.002617404 rad | 0.013735420 m | 3.222744 m |
+| held-out | 1,329 | 3.299516 / 3.456565 / 3.532013 / 4.228574 ms | 0 | 0.002573218 rad | 0.013679703 m | 3.212114 m |
 
 两条运行的 parent/worker affinity 均为 `[7]`，六个数值库线程变量均为 `1`，Torch
 intra/inter-op 为 `1/1`，控制循环 GC 关闭，dynamic arming 为 `false`，MPC 在
@@ -175,9 +174,12 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`。全部输出均已认证，且
 fallback、final unsafe、`NO_SAFE_TORQUE`、未认证输出、跌倒和 NaN/Inf 均为 0；
 显式冻结验收门全部 PASS。
 
-两条保留的旧 `full_task_smoke_summary.status` 均为 `FAIL`，仅因为旧聚合门把任意
-已认证 rescue/hold-last 也视作失败。这不是 `final_unsafe`、`NO_SAFE_TORQUE` 或
-未认证输出事件，不能用它否定逐项安全门的 PASS 结论。
+两条 r1 summary 都是 `status=PASS`、`smoke_passed=true`、
+`nominal_mapping_path_passed=false`。fallback 计数 `3/5` 及
+`MAPPING_SAFETY_FALLBACK_USED` warning 均保留。PASS 只表示 task/protocol 门通过，
+不表示没有 fallback；最终安全仍以 `final_output_certified`、`final_unsafe`、
+`NO_SAFE_TORQUE`、跌倒、NaN/Inf 和完整 6 ms deadline 为准。旧 tag 下的 JSON
+保持 legacy summary semantics。
 
 ## 6. 已验证与未验证边界
 

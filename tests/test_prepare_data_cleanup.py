@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tools.prepare_data_cleanup import (
     CleanupError,
+    FINAL_RUN_R1_SOURCE_PATHS,
     FINAL_RUN_SOURCE_PATHS,
     _assert_group_deleted,
     _audit_archive_summary,
@@ -31,8 +32,17 @@ class PrepareDataCleanupTest(unittest.TestCase):
             (root / relative).mkdir(parents=True, exist_ok=True)
         return root
 
-    def _add_final_run_evidence(self, repo: Path, evidence: Path):
-        final_runs = evidence / "final_runs"
+    def _add_final_run_evidence(
+        self,
+        repo: Path,
+        evidence: Path,
+        *,
+        package_name: str = "final_runs",
+        schema_version: str = "full_task_template_v2_final_freeze_two_run_files_v1",
+        source_paths=FINAL_RUN_SOURCE_PATHS,
+        archive_filename: str = "final_freeze_full_runs.tar.zst",
+    ):
+        final_runs = evidence / package_name
         copied = final_runs / "runs" / "final" / "result.json"
         generated = final_runs / "aggregate.json"
         final_builder = repo / "tools" / "final_builder.py"
@@ -42,10 +52,10 @@ class PrepareDataCleanupTest(unittest.TestCase):
         generated.write_text('{"aggregate": true}\n', encoding="utf-8")
         final_builder.write_text("# final builder\n", encoding="utf-8")
         file_manifest = {
-            "schema_version": "full_task_template_v2_final_freeze_two_run_files_v1",
+            "schema_version": schema_version,
             "status": "PASS",
             "output_repository_path": (
-                "evaluation_summary/full_task_template_v2_final_freeze/final_runs"
+                f"evaluation_summary/full_task_template_v2_final_freeze/{package_name}"
             ),
             "builder": {
                 "repository_path": "tools/final_builder.py",
@@ -70,17 +80,17 @@ class PrepareDataCleanupTest(unittest.TestCase):
         (final_runs / "final_freeze_file_manifest.json").write_text(
             json.dumps(file_manifest), encoding="utf-8"
         )
-        archive = repo.parent / "final_freeze_full_runs.tar.zst"
+        archive = repo.parent / archive_filename
         archive.write_bytes(b"verified final archive")
         expected_realpaths = [
             str((repo / relative).resolve(strict=False))
-            for relative in FINAL_RUN_SOURCE_PATHS
+            for relative in source_paths
         ]
         archive_manifest = {
             "schema_version": "disturbance-lab-final-freeze-run-archive-v1",
             "status": "VERIFIED_ARCHIVE_SOURCE_DELETED",
             "archive_absolute_path": str(archive),
-            "source_relative_paths": list(FINAL_RUN_SOURCE_PATHS),
+            "source_relative_paths": list(source_paths),
             "allowed_delete_realpaths": expected_realpaths,
             "archive_verification": {
                 "status": "verified",
@@ -101,6 +111,18 @@ class PrepareDataCleanupTest(unittest.TestCase):
             json.dumps(archive_manifest), encoding="utf-8"
         )
         return archive, copied
+
+    def _add_both_final_run_evidence(self, repo: Path, evidence: Path):
+        legacy_archive, legacy_output = self._add_final_run_evidence(repo, evidence)
+        r1_archive, r1_output = self._add_final_run_evidence(
+            repo,
+            evidence,
+            package_name="final_runs_r1",
+            schema_version="full_task_template_v2_final_freeze_two_run_files_r1_v1",
+            source_paths=FINAL_RUN_R1_SOURCE_PATHS,
+            archive_filename="final_freeze_full_runs_r1.tar.zst",
+        )
+        return legacy_archive, legacy_output, r1_archive, r1_output
 
     def test_cleanup_root_and_escape_are_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -323,9 +345,14 @@ class PrepareDataCleanupTest(unittest.TestCase):
                 json.dumps(evidence_manifest), encoding="utf-8"
             )
             (evidence / "cleanup_manifest.json").write_text("{}\n", encoding="utf-8")
-            final_archive, _ = self._add_final_run_evidence(repo, evidence)
+            final_archive, _, r1_archive, _ = self._add_both_final_run_evidence(
+                repo, evidence
+            )
             result = _audit_compact_evidence(
-                repo, evidence, final_run_archive_path=final_archive
+                repo,
+                evidence,
+                final_run_archive_path=final_archive,
+                final_run_r1_archive_path=r1_archive,
             )
             self.assertEqual(result["status"], "PASS")
             self.assertEqual(result["verified_output_file_count"], 1)
@@ -335,7 +362,10 @@ class PrepareDataCleanupTest(unittest.TestCase):
             output.write_text("tampered\n", encoding="utf-8")
             with self.assertRaises(CleanupError):
                 _audit_compact_evidence(
-                    repo, evidence, final_run_archive_path=final_archive
+                    repo,
+                    evidence,
+                    final_run_archive_path=final_archive,
+                    final_run_r1_archive_path=r1_archive,
                 )
 
     def test_compact_evidence_audit_rejects_final_run_tamper_and_extra_file(self):
@@ -381,14 +411,22 @@ class PrepareDataCleanupTest(unittest.TestCase):
                 json.dumps(evidence_manifest), encoding="utf-8"
             )
             (evidence / "cleanup_manifest.json").write_text("{}\n", encoding="utf-8")
-            final_archive, final_output = self._add_final_run_evidence(repo, evidence)
+            final_archive, final_output, r1_archive, _ = (
+                self._add_both_final_run_evidence(repo, evidence)
+            )
             _audit_compact_evidence(
-                repo, evidence, final_run_archive_path=final_archive
+                repo,
+                evidence,
+                final_run_archive_path=final_archive,
+                final_run_r1_archive_path=r1_archive,
             )
             final_output.write_text("tampered\n", encoding="utf-8")
             with self.assertRaises(CleanupError):
                 _audit_compact_evidence(
-                    repo, evidence, final_run_archive_path=final_archive
+                    repo,
+                    evidence,
+                    final_run_archive_path=final_archive,
+                    final_run_r1_archive_path=r1_archive,
                 )
             final_output.write_text('{"pass": true}\n', encoding="utf-8")
             (evidence / "final_runs" / "unexpected.txt").write_text(
@@ -396,7 +434,10 @@ class PrepareDataCleanupTest(unittest.TestCase):
             )
             with self.assertRaises(CleanupError):
                 _audit_compact_evidence(
-                    repo, evidence, final_run_archive_path=final_archive
+                    repo,
+                    evidence,
+                    final_run_archive_path=final_archive,
+                    final_run_r1_archive_path=r1_archive,
                 )
 
 

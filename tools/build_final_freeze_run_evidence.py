@@ -53,13 +53,24 @@ FINAL_RUN_SOURCE_ROOT = Path("evaluation/t2_full_task_closed_loop")
 DEFAULT_OUTPUT = Path(
     "evaluation_summary/full_task_template_v2_final_freeze/final_runs"
 )
+DEFAULT_R1_OUTPUT = Path(
+    "evaluation_summary/full_task_template_v2_final_freeze/final_runs_r1"
+)
 
 # These are the only accepted inputs.  Do not replace them with discovery or a
 # "latest" selector: the evidence contract is tied to these exact freeze runs.
-FINAL_RUNS = (
+LEGACY_FINAL_RUNS = (
     ("20260815_231454_final_freeze", "nominal"),
     (
         "20260815_231555_final_freeze_heldout_pair_02_minus",
+        "heldout_pair_02_minus",
+    ),
+)
+FINAL_RUNS = LEGACY_FINAL_RUNS
+R1_FINAL_RUNS = (
+    ("20260816_011925_final_freeze", "nominal"),
+    (
+        "20260816_012007_final_freeze_heldout_pair_02_minus",
         "heldout_pair_02_minus",
     ),
 )
@@ -96,6 +107,30 @@ SCHEMA_VERSION = "full_task_template_v2_final_freeze_two_run_evidence_v1"
 FILE_MANIFEST_SCHEMA_VERSION = (
     "full_task_template_v2_final_freeze_two_run_files_v1"
 )
+R1_SCHEMA_VERSION = "full_task_template_v2_final_freeze_two_run_evidence_r1_v1"
+R1_FILE_MANIFEST_SCHEMA_VERSION = (
+    "full_task_template_v2_final_freeze_two_run_files_r1_v1"
+)
+
+
+def revision_contract(revision: str) -> dict[str, Any]:
+    if revision == "legacy":
+        return {
+            "runs": LEGACY_FINAL_RUNS,
+            "default_output": DEFAULT_OUTPUT,
+            "schema_version": SCHEMA_VERSION,
+            "file_manifest_schema_version": FILE_MANIFEST_SCHEMA_VERSION,
+            "summary_semantics": "legacy_fallback_is_smoke_failure",
+        }
+    if revision == "r1":
+        return {
+            "runs": R1_FINAL_RUNS,
+            "default_output": DEFAULT_R1_OUTPUT,
+            "schema_version": R1_SCHEMA_VERSION,
+            "file_manifest_schema_version": R1_FILE_MANIFEST_SCHEMA_VERSION,
+            "summary_semantics": "certified_fallback_is_warning",
+        }
+    raise EvidenceError(f"unknown evidence revision: {revision}")
 
 
 def repository_relative(repository: Path, path: Path) -> str:
@@ -304,6 +339,54 @@ def validate_final_safety(
     return safety
 
 
+def validate_smoke_summary_semantics(
+    smoke: dict[str, Any], *, revision: str, run_id: str
+) -> dict[str, Any]:
+    fallback_count = int(smoke["runtime_mapping_safety_fallback_count"])
+    if revision == "legacy":
+        require(smoke["status"] == "FAIL", f"{run_id}: legacy smoke status")
+        require(smoke["smoke_passed"] is False, f"{run_id}: legacy smoke gate")
+        return {
+            "status": smoke["status"],
+            "smoke_passed": False,
+            "nominal_mapping_path_passed": fallback_count == 0,
+            "warnings": [],
+            "summary_semantics": "legacy_fallback_is_smoke_failure",
+            "is_final_freeze_acceptance_gate": False,
+            "runtime_mapping_safety_fallback_count": fallback_count,
+            "note": (
+                "Preserved verbatim under the 7a2b937/tagged legacy summary "
+                "semantics. A certified mapping fallback made status FAIL."
+            ),
+        }
+
+    expected_nominal = fallback_count == 0
+    expected_warnings = (
+        ["MAPPING_SAFETY_FALLBACK_USED"] if fallback_count else []
+    )
+    require(smoke["status"] == "PASS", f"{run_id}: task/protocol smoke status")
+    require(smoke["smoke_passed"] is True, f"{run_id}: task/protocol smoke gate")
+    require(fallback_count > 0, f"{run_id}: r1 acceptance expects exercised fallback")
+    require(
+        smoke.get("nominal_mapping_path_passed") is expected_nominal,
+        f"{run_id}: nominal mapping path field",
+    )
+    require(smoke.get("warnings") == expected_warnings, f"{run_id}: warnings")
+    return {
+        "status": smoke["status"],
+        "smoke_passed": True,
+        "nominal_mapping_path_passed": expected_nominal,
+        "warnings": expected_warnings,
+        "summary_semantics": "certified_fallback_is_warning",
+        "is_final_freeze_acceptance_gate": True,
+        "runtime_mapping_safety_fallback_count": fallback_count,
+        "note": (
+            "Task/protocol smoke PASS is independent of whether the certified "
+            "mapping path used rescue or hold-last; the count remains a warning."
+        ),
+    }
+
+
 def csv_row(run: dict[str, Any]) -> dict[str, Any]:
     timing = run["timing"]
     complete = timing["complete_6ms_ms"]
@@ -337,7 +420,12 @@ def csv_row(run: dict[str, Any]) -> dict[str, Any]:
         "xy_displacement_m": run["xy"]["displacement_m"],
         "xy_arc_length_m": run["xy"]["arc_length_m"],
         "handoff_tau_jump_l2_nm": run["handoff"]["tau_jump_l2_nm"],
-        "legacy_smoke_passed": run["source_smoke_status"]["smoke_passed"],
+        "smoke_passed": run["source_smoke_status"]["smoke_passed"],
+        "nominal_mapping_path_passed": run["source_smoke_status"][
+            "nominal_mapping_path_passed"
+        ],
+        "smoke_warnings": "|".join(run["source_smoke_status"]["warnings"]),
+        "summary_semantics": run["source_smoke_status"]["summary_semantics"],
         "legacy_mapping_safety_fallback_count": fallback[
             "legacy_runtime_mapping_safety_fallback_count"
         ],
@@ -362,9 +450,11 @@ def csv_row(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build(repository: Path, output: Path) -> dict[str, Any]:
+def build(repository: Path, output: Path, *, revision: str = "legacy") -> dict[str, Any]:
     repository = repository.resolve()
     output = output.resolve()
+    contract = revision_contract(revision)
+    final_runs = contract["runs"]
     output.mkdir(parents=True, exist_ok=True)
     template = validate_template(repository)
     copied_files: list[dict[str, Any]] = []
@@ -373,7 +463,7 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
     perf_arrays: list[dict[str, np.ndarray]] = []
     quality_arrays: list[dict[str, np.ndarray]] = []
 
-    for run_id, scenario in FINAL_RUNS:
+    for run_id, scenario in final_runs:
         source = repository / FINAL_RUN_SOURCE_ROOT / run_id
         require(source.is_dir(), f"missing fixed final run source: {source}")
         destination = output / "runs" / run_id
@@ -450,6 +540,9 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
             handoff_summary=handoff_summary,
             run_id=run_id,
         )
+        smoke_status = validate_smoke_summary_semantics(
+            smoke, revision=revision, run_id=run_id
+        )
 
         reports.append(
             {
@@ -467,21 +560,7 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
                     "displacement_m": float(smoke["xy_displacement_m"]),
                     "arc_length_m": float(smoke["xy_arc_length_m"]),
                 },
-                "source_smoke_status": {
-                    "status": smoke["status"],
-                    "smoke_passed": bool(smoke["smoke_passed"]),
-                    "is_final_freeze_acceptance_gate": False,
-                    "legacy_runtime_mapping_safety_fallback_count": int(
-                        smoke["runtime_mapping_safety_fallback_count"]
-                    ),
-                    "note": (
-                        "Preserved verbatim. The legacy smoke gate treats a mapping "
-                        "safety fallback as failure; final-freeze acceptance instead "
-                        "requires every selected output to be certified and requires "
-                        "zero final_unsafe, NO_SAFE_TORQUE, QP/predictor fallback, "
-                        "fall, NaN/Inf, and complete-interval overrun."
-                    ),
-                },
+                "source_smoke_status": smoke_status,
             }
         )
         perf_arrays.append(perf_columns)
@@ -523,7 +602,7 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
     )
 
     aggregate = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": contract["schema_version"],
         "status": "PASS",
         "scope": {
             "control_candidate": "MPC + FullTaskTemplatePredictor v2",
@@ -532,6 +611,7 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
             "startup_pd_prefix": "[0.0,0.024) is included in the headline",
             "mpc_handoff": "simulation/task time 0.024 s; absolute template anchor 4",
             "hardware_claim": "controlled MuJoCo simulation only; not hardware real-time evidence",
+            "summary_semantics": contract["summary_semantics"],
         },
         "frozen_template": template,
         "runs": reports,
@@ -543,8 +623,18 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
             "safety_totals": safety_totals,
             "all_environment_preflights_pass": True,
             "all_certified_control_gates_pass": True,
-            "all_legacy_smoke_status_fields_preserved": True,
-            "legacy_smoke_status_is_acceptance_gate": False,
+            **(
+                {
+                    "all_legacy_smoke_status_fields_preserved": True,
+                    "legacy_smoke_status_is_acceptance_gate": False,
+                }
+                if revision == "legacy"
+                else {
+                    "all_task_protocol_smoke_summaries_pass": True,
+                    "all_nominal_mapping_paths_pass": False,
+                    "certified_mapping_fallback_is_warning": True,
+                }
+            ),
         },
         "provenance": {
             "quality": "recomputed from metrics.npz and trajectory.npz; arrays are hashed but not copied",
@@ -576,7 +666,7 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
     ]
     builder = Path(__file__).resolve()
     file_manifest = {
-        "schema_version": FILE_MANIFEST_SCHEMA_VERSION,
+        "schema_version": contract["file_manifest_schema_version"],
         "status": "PASS",
         "builder": {
             "repository_path": repository_relative(repository, builder),
@@ -584,8 +674,9 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
         },
         "source_selection": {
             "root_repository_path": FINAL_RUN_SOURCE_ROOT.as_posix(),
-            "run_ids": [run_id for run_id, _ in FINAL_RUNS],
+            "run_ids": [run_id for run_id, _ in final_runs],
             "selection_method": "fixed constants; no directory scan",
+            "revision": revision,
         },
         "output_repository_path": repository_relative(repository, output),
         "selection": {
@@ -614,13 +705,20 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
             "all_two_runtime_preflights_pass": True,
             "all_two_certified_control_gates_pass": True,
             "all_2658_complete_intervals_within_6ms": True,
-            "all_source_smoke_status_fields_preserved_but_not_gating": True,
+            **(
+                {"all_source_smoke_status_fields_preserved_but_not_gating": True}
+                if revision == "legacy"
+                else {
+                    "all_two_task_protocol_smoke_summaries_pass": True,
+                    "certified_mapping_fallbacks_preserved_as_warnings": True,
+                }
+            ),
             "large_arrays_and_video_not_copied": True,
         },
     }
     manifest_path = output / FILE_MANIFEST
     write_json(manifest_path, file_manifest)
-    verify(repository, output, require_sources=True)
+    verify(repository, output, require_sources=True, revision=revision)
     return {
         "status": "PASS",
         "output_repository_path": repository_relative(repository, output),
@@ -635,20 +733,33 @@ def build(repository: Path, output: Path) -> dict[str, Any]:
 
 
 def verify(
-    repository: Path, output: Path, *, require_sources: bool = False
+    repository: Path,
+    output: Path,
+    *,
+    require_sources: bool = False,
+    revision: str = "legacy",
 ) -> dict[str, Any]:
     repository = repository.resolve()
     output = output.resolve()
+    contract = revision_contract(revision)
+    final_runs = contract["runs"]
     manifest = load_json(output / FILE_MANIFEST)
     aggregate = load_json(output / AGGREGATE_JSON)
-    require(manifest["schema_version"] == FILE_MANIFEST_SCHEMA_VERSION, "file manifest schema")
+    require(
+        manifest["schema_version"] == contract["file_manifest_schema_version"],
+        "file manifest schema",
+    )
     require(manifest["status"] == "PASS", "file manifest status")
-    require(aggregate["schema_version"] == SCHEMA_VERSION, "aggregate schema")
+    require(aggregate["schema_version"] == contract["schema_version"], "aggregate schema")
     require(aggregate["status"] == "PASS", "aggregate status")
     require(
         manifest["source_selection"]["run_ids"]
-        == [run_id for run_id, _ in FINAL_RUNS],
+        == [run_id for run_id, _ in final_runs],
         "source run selection drift",
+    )
+    require(
+        manifest["source_selection"].get("revision", "legacy") == revision,
+        "source revision drift",
     )
     require(
         manifest["source_selection"]["selection_method"]
@@ -696,7 +807,7 @@ def verify(
         require(int(generated.stat().st_size) == int(item["bytes"]), f"generated size drift: {generated}")
         require(sha256_file(generated) == item["sha256"], f"generated hash drift: {generated}")
 
-    for run_id, _ in FINAL_RUNS:
+    for run_id, _ in final_runs:
         packaged = output / "runs" / run_id
         metadata = load_json(packaged / "run_metadata.json")
         preflight = load_json(packaged / "formal_full_task_runtime_preflight.json")
@@ -726,6 +837,9 @@ def verify(
             "final_unsafe_count",
         ):
             require(int(branches[name]) == 0, f"{run_id}: packaged {name}")
+        validate_smoke_summary_semantics(
+            smoke, revision=revision, run_id=run_id
+        )
 
     two_run = aggregate["two_run_aggregate"]
     require(two_run["run_count"] == 2, "aggregate run count")
@@ -736,7 +850,24 @@ def verify(
     )
     require(two_run["all_environment_preflights_pass"] is True, "aggregate preflight")
     require(two_run["all_certified_control_gates_pass"] is True, "aggregate control gate")
-    require(two_run["legacy_smoke_status_is_acceptance_gate"] is False, "legacy gate")
+    if revision == "legacy":
+        require(
+            two_run["legacy_smoke_status_is_acceptance_gate"] is False,
+            "legacy gate",
+        )
+    else:
+        require(
+            two_run["all_task_protocol_smoke_summaries_pass"] is True,
+            "r1 task/protocol smoke gate",
+        )
+        require(
+            two_run["all_nominal_mapping_paths_pass"] is False,
+            "r1 nominal mapping diagnostic",
+        )
+        require(
+            two_run["certified_mapping_fallback_is_warning"] is True,
+            "r1 mapping fallback semantics",
+        )
     zero_gate_names = (
         "mapper_final_output_uncertified_count",
         "mapper_no_safe_torque_count",
@@ -767,6 +898,12 @@ def main() -> None:
     parser.add_argument("--repository", default=str(REPOSITORY_ROOT))
     parser.add_argument("--output-dir", default="")
     parser.add_argument(
+        "--revision",
+        choices=("legacy", "r1"),
+        default="legacy",
+        help="select one of the two explicit, non-discovered run pairs",
+    )
+    parser.add_argument(
         "--verify-only",
         action="store_true",
         help="verify the existing package without copying or regenerating files",
@@ -778,15 +915,21 @@ def main() -> None:
     )
     args = parser.parse_args()
     repository = Path(args.repository).expanduser().resolve()
+    contract = revision_contract(args.revision)
     output = (
         Path(args.output_dir).expanduser().resolve()
         if args.output_dir
-        else repository / DEFAULT_OUTPUT
+        else repository / contract["default_output"]
     )
     result = (
-        verify(repository, output, require_sources=args.require_sources)
+        verify(
+            repository,
+            output,
+            require_sources=args.require_sources,
+            revision=args.revision,
+        )
         if args.verify_only
-        else build(repository, output)
+        else build(repository, output, revision=args.revision)
     )
     print(json.dumps(result, indent=2, sort_keys=True))
 

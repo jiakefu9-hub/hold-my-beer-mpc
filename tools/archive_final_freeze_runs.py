@@ -42,15 +42,33 @@ SOURCE_RELATIVE_PATHS = (
         "20260815_231555_final_freeze_heldout_pair_02_minus"
     ),
 )
+R1_SOURCE_RELATIVE_PATHS = (
+    "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+    (
+        "evaluation/t2_full_task_closed_loop/"
+        "20260816_012007_final_freeze_heldout_pair_02_minus"
+    ),
+)
 ARCHIVE_PATH = Path(
     "/home/fjk/g1_ws/disturbance-lab-archives/20260815_pre_cleanup/"
     "final_freeze_full_runs.tar.zst"
+)
+R1_ARCHIVE_PATH = Path(
+    "/home/fjk/g1_ws/disturbance-lab-archives/20260815_pre_cleanup/"
+    "final_freeze_full_runs_r1.tar.zst"
 )
 MANIFEST_PATH = (
     REPO_ROOT
     / "evaluation_summary"
     / "full_task_template_v2_final_freeze"
     / "final_runs"
+    / "final_freeze_archive_manifest.json"
+)
+R1_MANIFEST_PATH = (
+    REPO_ROOT
+    / "evaluation_summary"
+    / "full_task_template_v2_final_freeze"
+    / "final_runs_r1"
     / "final_freeze_archive_manifest.json"
 )
 SCHEMA_VERSION = "disturbance-lab-final-freeze-run-archive-v1"
@@ -70,7 +88,16 @@ class ArchiveContract:
     manifest_path: Path
 
 
-def production_contract() -> ArchiveContract:
+def production_contract(revision: str = "legacy") -> ArchiveContract:
+    if revision == "r1":
+        return ArchiveContract(
+            repo_root=REPO_ROOT,
+            source_relative_paths=R1_SOURCE_RELATIVE_PATHS,
+            archive_path=R1_ARCHIVE_PATH,
+            manifest_path=R1_MANIFEST_PATH,
+        )
+    if revision != "legacy":
+        raise FinalFreezeArchiveError(f"unknown archive revision: {revision}")
     return ArchiveContract(
         repo_root=REPO_ROOT,
         source_relative_paths=SOURCE_RELATIVE_PATHS,
@@ -434,8 +461,10 @@ def _replace_json(path: Path, payload: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
-def _assert_production_contract(contract: ArchiveContract) -> None:
-    expected = production_contract()
+def _assert_production_contract(
+    contract: ArchiveContract, revision: str = "legacy"
+) -> None:
+    expected = production_contract(revision)
     if contract.source_relative_paths != expected.source_relative_paths:
         raise FinalFreezeArchiveError("production source list is not exact")
     if contract.repo_root.resolve(strict=True) != expected.repo_root.resolve(strict=True):
@@ -452,9 +481,10 @@ def create_archive(
     enforce_production_contract: bool = True,
     tar_executable: str | None = None,
     zstd_executable: str | None = None,
+    revision: str = "legacy",
 ) -> dict[str, Any]:
     if enforce_production_contract:
-        _assert_production_contract(contract)
+        _assert_production_contract(contract, revision)
     inventory = inventory_sources(contract)
     tar_program = tar_executable or _resolve_executable("tar")
     zstd_program = zstd_executable or _resolve_executable(
@@ -562,9 +592,10 @@ def verify_manifest_archive(
     enforce_production_contract: bool = True,
     tar_executable: str | None = None,
     zstd_executable: str | None = None,
+    revision: str = "legacy",
 ) -> dict[str, Any]:
     if enforce_production_contract:
-        _assert_production_contract(contract)
+        _assert_production_contract(contract, revision)
     manifest = _load_manifest(contract)
     recorded = manifest["archive_verification"]
     result = verify_archive_against_inventory(
@@ -586,11 +617,12 @@ def delete_archived_sources(
     enforce_production_contract: bool = True,
     tar_executable: str | None = None,
     zstd_executable: str | None = None,
+    revision: str = "legacy",
 ) -> dict[str, Any]:
     if confirmation_one != CONFIRMATION_ONE or confirmation_two != CONFIRMATION_TWO:
         raise FinalFreezeArchiveError("both exact deletion confirmations are required")
     if enforce_production_contract:
-        _assert_production_contract(contract)
+        _assert_production_contract(contract, revision)
     manifest = _load_manifest(contract)
     if manifest.get("status") != "VERIFIED_SOURCE_RETAINED":
         raise FinalFreezeArchiveError("manifest does not authorize source deletion")
@@ -604,6 +636,7 @@ def delete_archived_sources(
         enforce_production_contract=enforce_production_contract,
         tar_executable=tar_executable,
         zstd_executable=zstd_executable,
+        revision=revision,
     )
     current_inventory = inventory_sources(contract)
     _assert_same_inventory(manifest["inventory"], current_inventory)
@@ -634,6 +667,12 @@ def delete_archived_sources(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--revision",
+        choices=("legacy", "r1"),
+        default="legacy",
+        help="select one explicit fixed run pair; no directory discovery",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("create", help="create and fully verify the fixed archive")
     subparsers.add_parser("verify", help="reverify the archive without changing data")
@@ -647,17 +686,20 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = _build_parser().parse_args(argv)
-    contract = production_contract()
+    contract = production_contract(arguments.revision)
     try:
         if arguments.command == "create":
-            result = create_archive(contract)
+            result = create_archive(contract, revision=arguments.revision)
         elif arguments.command == "verify":
-            result = verify_manifest_archive(contract)
+            result = verify_manifest_archive(
+                contract, revision=arguments.revision
+            )
         else:
             result = delete_archived_sources(
                 contract,
                 confirmation_one=arguments.confirm,
                 confirmation_two=arguments.confirm_again,
+                revision=arguments.revision,
             )
     except FinalFreezeArchiveError as exc:
         print(f"FAIL_CLOSED: {exc}", file=sys.stderr)

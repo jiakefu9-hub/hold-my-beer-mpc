@@ -1,0 +1,789 @@
+{
+  "frozen_template": {
+    "anchor_count": 1334,
+    "heading_frame_version": "full_task_continuous_heading_v2",
+    "horizon": 9,
+    "manifest_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+    "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+    "protocol_version": "full_task_direct_step_v1",
+    "schema_version": "full_task_template_v2",
+    "template_repository_path": "disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+    "template_sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4"
+  },
+  "provenance": {
+    "copied_file_contract": "13-item JSON/CSV whitelist and per-run representative plots",
+    "quality": "recomputed from metrics.npz and trajectory.npz; arrays are hashed but not copied",
+    "timing": "recomputed from all 1329 perf_intervals.csv rows per run"
+  },
+  "runs": [
+    {
+      "control_quality": {
+        "ddq_tracking_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 15.792882235980663,
+          "mean": 1.3241650819969668,
+          "p95": 3.445723470857969,
+          "p99": 8.799240593889566,
+          "rms": 2.0092838825125563
+        },
+        "position_error_norm_m": {
+          "count": 4000,
+          "max": 0.027715762371252197,
+          "mean": 0.01250649795800815,
+          "p95": 0.02459307557931569,
+          "p99": 0.027346900260515245,
+          "rms": 0.013735420341185463
+        },
+        "predictor_fallback": {
+          "headline_count": 0,
+          "headline_update_count": 1330
+        },
+        "predictor_interval_acc_error_norm_m_s2": {
+          "count": 1330,
+          "max": 5.151551072813397,
+          "mean": 0.41308751645069297,
+          "p95": 1.5505480755664591,
+          "p99": 3.9305202680820015,
+          "rms": 0.7877521186656179
+        },
+        "predictor_interval_alpha_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 37.026086409855445,
+          "mean": 2.9547886468957234,
+          "p95": 9.190009823849648,
+          "p99": 17.48474223829906,
+          "rms": 4.717713066401541
+        },
+        "predictor_interval_omega_error_norm_rad_s": {
+          "count": 1330,
+          "max": 0.20092146171815722,
+          "mean": 0.0173061872681935,
+          "p95": 0.0450710762268096,
+          "p99": 0.08197728334183693,
+          "rms": 0.025389023351577167
+        },
+        "predictor_orientation_geodesic_error_rad": {
+          "count": 1330,
+          "max": 0.007642912492341019,
+          "mean": 0.0018416436112011823,
+          "p95": 0.004957594989984015,
+          "p99": 0.006975659465956129,
+          "rms": 0.0022924419457075527
+        },
+        "qp": {
+          "fallback_count": 0,
+          "feasible_fallback_count": 0,
+          "success_count": 1330,
+          "update_count": 1330
+        },
+        "right_ee_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 70.42581952334596,
+          "mean": 4.23594107031085,
+          "p95": 15.700819945363378,
+          "p99": 28.965897487331908,
+          "rms": 7.045140289052242
+        },
+        "right_ee_linear_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 15.761053758587177,
+          "mean": 2.176057756275697,
+          "p95": 5.926690546345557,
+          "p99": 10.823602788151662,
+          "rms": 2.9415089284031826
+        },
+        "sample_counts": {
+          "ddq_tracking": 1330,
+          "interval_prediction": 1330,
+          "metrics_headline": 4000,
+          "orientation_prediction": 1330,
+          "trajectory_headline": 4000
+        },
+        "tilt_angle_rad": {
+          "count": 4000,
+          "max": 0.007573684156195679,
+          "mean": 0.002175200660621608,
+          "p95": 0.005713166414536852,
+          "p99": 0.007238219237733482,
+          "rms": 0.0026174037696090435
+        },
+        "torso_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 10.591180477650585,
+          "mean": 1.903990098298918,
+          "p95": 4.693288835965967,
+          "p99": 9.308459603108009,
+          "rms": 2.473740797690904
+        },
+        "torso_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 47.497413856817204,
+          "mean": 6.874337006476376,
+          "p95": 22.747410079827567,
+          "p99": 34.52347096939802,
+          "rms": 9.862905601566462
+        }
+      },
+      "formal_environment": {
+        "dynamic_arming_enabled": false,
+        "gc_disabled_during_control": true,
+        "launcher": "disturbance_lab_run_sh",
+        "mpc_handoff_anchor_index": 4,
+        "parent_cpu_affinity": [
+          7
+        ],
+        "passed": true,
+        "requested_control_cpu": 7,
+        "right_arm_runtime_mode": "process",
+        "startup_pd_duration_s": 0.024,
+        "thread_environment": {
+          "BLIS_NUM_THREADS": 1,
+          "MKL_NUM_THREADS": 1,
+          "NUMEXPR_NUM_THREADS": 1,
+          "OMP_NUM_THREADS": 1,
+          "OPENBLAS_NUM_THREADS": 1,
+          "VECLIB_MAXIMUM_THREADS": 1
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "worker_cpu_affinity": [
+          7
+        ]
+      },
+      "handoff": {
+        "first_lower_policy_update_simulation_time_s": 0.020000000000000004,
+        "first_lower_policy_update_task_time_s": 0.020000000000000004,
+        "mpc_handoff_simulation_time_s": 0.024000000000000007,
+        "mpc_handoff_task_time_s": 0.024000000000000007,
+        "previous_tau_available": true,
+        "previous_tau_matches_last_executed_pd": true,
+        "startup_pd_prefix_included_in_headline": true,
+        "tau_jump_l2_nm": 6.619200331835519,
+        "tau_jump_max_abs_nm": 4.548473965588034,
+        "template_absolute_task_time_s": 0.024,
+        "template_anchor_index": 4
+      },
+      "headline": "[0.0,8.0)",
+      "protocol_and_raw_contract": {
+        "direct_step_effective": true,
+        "heading_enabled": true,
+        "headline_anchor_count": 1334,
+        "last_horizon_node_s": 8.052,
+        "last_raw_time_s": 8.05799999999936,
+        "raw_sample_count": 4030,
+        "strict_pre_step": true,
+        "tail_complete": true
+      },
+      "run_id": "20260816_011925_final_freeze",
+      "safety": {
+        "certified_control_gate_pass": true,
+        "certified_fallbacks": {
+          "final_output_uncertified_count": 0,
+          "hold_last_succeeded_count": 0,
+          "legacy_runtime_mapping_safety_fallback_count": 3,
+          "one_rescue_pass_count": 0,
+          "rescue_succeeded_before_hold_count": 2,
+          "rescue_used_count": 2,
+          "safe_hold_used_count": 0,
+          "safety_line_search_used_count": 0,
+          "second_pass_accepted_count": 135,
+          "second_pass_triggered_count": 137,
+          "two_rescue_pass_count": 2
+        },
+        "fallen": false,
+        "mapper_execution_call_count": 2679,
+        "mapper_final_output_uncertified_count": 0,
+        "mapper_final_unsafe_count": 0,
+        "mapper_hold_last_succeeded_count": 0,
+        "mapper_no_safe_torque_count": 0,
+        "mapper_rescue_used_count": 2,
+        "mapper_safe_hold_used_count": 0,
+        "mapper_safety_line_search_used_count": 0,
+        "nan_inf_count": 0,
+        "predictor_fallback_count": 0,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "qp_update_count": 1330,
+        "runtime_executor_nonzero_flag_count": 0
+      },
+      "scenario": "nominal",
+      "source_run_repository_path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+      "source_smoke_status": {
+        "is_final_freeze_acceptance_gate": true,
+        "nominal_mapping_path_passed": false,
+        "note": "Task/protocol smoke PASS is independent of whether the certified mapping path used rescue or hold-last; the count remains a warning.",
+        "runtime_mapping_safety_fallback_count": 3,
+        "smoke_passed": true,
+        "status": "PASS",
+        "summary_semantics": "certified_fallback_is_warning",
+        "warnings": [
+          "MAPPING_SAFETY_FALLBACK_USED"
+        ]
+      },
+      "timing": {
+        "budget_ms": 6.0,
+        "complete_6ms_ms": {
+          "count": 1329,
+          "max": 4.3402950032032095,
+          "mean": 3.3023697578454563,
+          "overrun_count": 0,
+          "overrun_fraction": 0.0,
+          "p95": 3.4644620012841187,
+          "p99": 3.630513084644918,
+          "rms": 3.304430718674161
+        },
+        "components_ms": {
+          "all_ddq_to_torque_calls": {
+            "count": 1329,
+            "max": 1.5853360018809326,
+            "mean": 0.9949469218373774,
+            "p95": 1.1037032047170214,
+            "p99": 1.2351700809085742,
+            "rms": 0.9975500955249984
+          },
+          "cpp_executor_bridge": {
+            "count": 1329,
+            "max": 0.071208,
+            "mean": 0.03627284875846501,
+            "p95": 0.042858,
+            "p99": 0.05328976000000004,
+            "rms": 0.03648888092285454
+          },
+          "ddq_call_1": {
+            "count": 1329,
+            "max": 0.7992169994395226,
+            "mean": 0.49895140043558117,
+            "p95": 0.5730336022679693,
+            "p99": 0.6469739193562418,
+            "rms": 0.5010680711295673
+          },
+          "ddq_call_2": {
+            "count": 1329,
+            "max": 0.8016549982130527,
+            "mean": 0.4959955214017962,
+            "p95": 0.5662712021148764,
+            "p99": 0.6361242407001555,
+            "rms": 0.4977445514134599
+          },
+          "mpc_policy_update": {
+            "count": 1329,
+            "max": 2.1634220029227436,
+            "mean": 1.8793269962694217,
+            "p95": 1.948856603121385,
+            "p99": 2.010205395054072,
+            "rms": 1.8799572734669976
+          },
+          "other_right_arm_path": {
+            "count": 1329,
+            "max": 0.5451029937915578,
+            "mean": 0.391822990980192,
+            "p95": 0.41431600010893266,
+            "p99": 0.42717835977295937,
+            "rms": 0.3920573520818139
+          }
+        },
+        "definition": "complete 6 ms right-arm intervals in [0,8)",
+        "first_interval_start_simulation_time_s": 0.024,
+        "last_interval_end_simulation_time_s": 7.998,
+        "max_abs_composition_error_ms": 0.0,
+        "max_abs_ddq_sum_error_ms": 0.0,
+        "predictor_time_ms": {
+          "count": 1329,
+          "max": 0.4380930040497333,
+          "mean": 0.3743539344773581,
+          "p50": 0.37922100455034524,
+          "p95": 0.3974134015152231,
+          "p99": 0.41089336009463295,
+          "source": "perf_summary.json: total.real_hardware_control.mpc_breakdown.disturbance_prediction_time"
+        }
+      },
+      "xy": {
+        "arc_length_m": 3.348566238023936,
+        "displacement_m": 3.222744384939758
+      }
+    },
+    {
+      "control_quality": {
+        "ddq_tracking_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 16.531866814869062,
+          "mean": 1.324924261957043,
+          "p95": 3.726295030672857,
+          "p99": 8.260043752192407,
+          "rms": 2.038862231504514
+        },
+        "position_error_norm_m": {
+          "count": 4000,
+          "max": 0.02442577494577801,
+          "mean": 0.013007977287787223,
+          "p95": 0.021625722646637296,
+          "p99": 0.024122503664449242,
+          "rms": 0.01367970296679454
+        },
+        "predictor_fallback": {
+          "headline_count": 0,
+          "headline_update_count": 1330
+        },
+        "predictor_interval_acc_error_norm_m_s2": {
+          "count": 1330,
+          "max": 5.731530263553336,
+          "mean": 0.4245655870931835,
+          "p95": 1.6767444902557982,
+          "p99": 4.24158925354193,
+          "rms": 0.8216080693964698
+        },
+        "predictor_interval_alpha_error_norm_rad_s2": {
+          "count": 1330,
+          "max": 38.903245515720286,
+          "mean": 3.00914760903529,
+          "p95": 9.492811765576898,
+          "p99": 17.838601808514706,
+          "rms": 4.813462457260724
+        },
+        "predictor_interval_omega_error_norm_rad_s": {
+          "count": 1330,
+          "max": 0.18627959432086552,
+          "mean": 0.017869814303893915,
+          "p95": 0.047767961860118266,
+          "p99": 0.08237531866916098,
+          "rms": 0.025331231248815117
+        },
+        "predictor_orientation_geodesic_error_rad": {
+          "count": 1330,
+          "max": 0.0044998699515867305,
+          "mean": 0.002099564229287247,
+          "p95": 0.003609429992852901,
+          "p99": 0.004186875266188125,
+          "rms": 0.0022666810708613086
+        },
+        "qp": {
+          "fallback_count": 0,
+          "feasible_fallback_count": 0,
+          "success_count": 1330,
+          "update_count": 1330
+        },
+        "right_ee_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 61.28812034358065,
+          "mean": 4.198840896363992,
+          "p95": 15.815827943203212,
+          "p99": 29.59669902504647,
+          "rms": 7.048757099975255
+        },
+        "right_ee_linear_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 15.948769808373413,
+          "mean": 2.1828526620519644,
+          "p95": 5.951593698620427,
+          "p99": 10.856866459804737,
+          "rms": 2.9605531850680005
+        },
+        "sample_counts": {
+          "ddq_tracking": 1330,
+          "interval_prediction": 1330,
+          "metrics_headline": 4000,
+          "orientation_prediction": 1330,
+          "trajectory_headline": 4000
+        },
+        "tilt_angle_rad": {
+          "count": 4000,
+          "max": 0.006995778994550064,
+          "mean": 0.0023364916036191577,
+          "p95": 0.0043931493825279215,
+          "p99": 0.005646797327820065,
+          "rms": 0.002573218408181173
+        },
+        "torso_acceleration_norm_m_s2": {
+          "count": 4000,
+          "max": 10.72003562952487,
+          "mean": 1.904254087189372,
+          "p95": 4.703545136370873,
+          "p99": 9.269676253117785,
+          "rms": 2.471313298597545
+        },
+        "torso_angular_acceleration_norm_rad_s2": {
+          "count": 4000,
+          "max": 48.32035513582182,
+          "mean": 6.85053265149449,
+          "p95": 22.33930024817331,
+          "p99": 35.038367355911845,
+          "rms": 9.875012024540991
+        }
+      },
+      "formal_environment": {
+        "dynamic_arming_enabled": false,
+        "gc_disabled_during_control": true,
+        "launcher": "disturbance_lab_run_sh",
+        "mpc_handoff_anchor_index": 4,
+        "parent_cpu_affinity": [
+          7
+        ],
+        "passed": true,
+        "requested_control_cpu": 7,
+        "right_arm_runtime_mode": "process",
+        "startup_pd_duration_s": 0.024,
+        "thread_environment": {
+          "BLIS_NUM_THREADS": 1,
+          "MKL_NUM_THREADS": 1,
+          "NUMEXPR_NUM_THREADS": 1,
+          "OMP_NUM_THREADS": 1,
+          "OPENBLAS_NUM_THREADS": 1,
+          "VECLIB_MAXIMUM_THREADS": 1
+        },
+        "torch_num_interop_threads": 1,
+        "torch_num_threads": 1,
+        "worker_cpu_affinity": [
+          7
+        ]
+      },
+      "handoff": {
+        "first_lower_policy_update_simulation_time_s": 0.020000000000000004,
+        "first_lower_policy_update_task_time_s": 0.020000000000000004,
+        "mpc_handoff_simulation_time_s": 0.024000000000000007,
+        "mpc_handoff_task_time_s": 0.024000000000000007,
+        "previous_tau_available": true,
+        "previous_tau_matches_last_executed_pd": true,
+        "startup_pd_prefix_included_in_headline": true,
+        "tau_jump_l2_nm": 5.74416049284359,
+        "tau_jump_max_abs_nm": 3.866085709186183,
+        "template_absolute_task_time_s": 0.024,
+        "template_anchor_index": 4
+      },
+      "headline": "[0.0,8.0)",
+      "protocol_and_raw_contract": {
+        "direct_step_effective": true,
+        "heading_enabled": true,
+        "headline_anchor_count": 1334,
+        "last_horizon_node_s": 8.052,
+        "last_raw_time_s": 8.05799999999936,
+        "raw_sample_count": 4030,
+        "strict_pre_step": true,
+        "tail_complete": true
+      },
+      "run_id": "20260816_012007_final_freeze_heldout_pair_02_minus",
+      "safety": {
+        "certified_control_gate_pass": true,
+        "certified_fallbacks": {
+          "final_output_uncertified_count": 0,
+          "hold_last_succeeded_count": 1,
+          "legacy_runtime_mapping_safety_fallback_count": 5,
+          "one_rescue_pass_count": 1,
+          "rescue_succeeded_before_hold_count": 2,
+          "rescue_used_count": 3,
+          "safe_hold_used_count": 0,
+          "safety_line_search_used_count": 0,
+          "second_pass_accepted_count": 135,
+          "second_pass_triggered_count": 138,
+          "two_rescue_pass_count": 2
+        },
+        "fallen": false,
+        "mapper_execution_call_count": 2679,
+        "mapper_final_output_uncertified_count": 0,
+        "mapper_final_unsafe_count": 0,
+        "mapper_hold_last_succeeded_count": 1,
+        "mapper_no_safe_torque_count": 0,
+        "mapper_rescue_used_count": 3,
+        "mapper_safe_hold_used_count": 0,
+        "mapper_safety_line_search_used_count": 0,
+        "nan_inf_count": 0,
+        "predictor_fallback_count": 0,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "qp_update_count": 1330,
+        "runtime_executor_nonzero_flag_count": 0
+      },
+      "scenario": "heldout_pair_02_minus",
+      "source_run_repository_path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus",
+      "source_smoke_status": {
+        "is_final_freeze_acceptance_gate": true,
+        "nominal_mapping_path_passed": false,
+        "note": "Task/protocol smoke PASS is independent of whether the certified mapping path used rescue or hold-last; the count remains a warning.",
+        "runtime_mapping_safety_fallback_count": 5,
+        "smoke_passed": true,
+        "status": "PASS",
+        "summary_semantics": "certified_fallback_is_warning",
+        "warnings": [
+          "MAPPING_SAFETY_FALLBACK_USED"
+        ]
+      },
+      "timing": {
+        "budget_ms": 6.0,
+        "complete_6ms_ms": {
+          "count": 1329,
+          "max": 4.228574005537666,
+          "mean": 3.299515692994692,
+          "overrun_count": 0,
+          "overrun_fraction": 0.0,
+          "p95": 3.4565650028525847,
+          "p99": 3.5320128849707544,
+          "rms": 3.300926262522511
+        },
+        "components_ms": {
+          "all_ddq_to_torque_calls": {
+            "count": 1329,
+            "max": 1.662781993218232,
+            "mean": 0.9922353559211923,
+            "p95": 1.0951651973300611,
+            "p99": 1.1660583995399065,
+            "rms": 0.9940502824898582
+          },
+          "cpp_executor_bridge": {
+            "count": 1329,
+            "max": 0.06212100000000001,
+            "mean": 0.03660765161775772,
+            "p95": 0.0421222,
+            "p99": 0.04710144,
+            "rms": 0.03674696821006193
+          },
+          "ddq_call_1": {
+            "count": 1329,
+            "max": 0.9908309948514216,
+            "mean": 0.498100344582937,
+            "p95": 0.5648682024911976,
+            "p99": 0.6235871263197624,
+            "rms": 0.49985508073540486
+          },
+          "ddq_call_2": {
+            "count": 1329,
+            "max": 0.744054006645456,
+            "mean": 0.4941350113382553,
+            "p95": 0.5547294043935834,
+            "p99": 0.6123122002463788,
+            "rms": 0.49538199559121204
+          },
+          "mpc_policy_update": {
+            "count": 1329,
+            "max": 2.118580996466335,
+            "mean": 1.8774547576961673,
+            "p95": 1.9463687989627942,
+            "p99": 1.98237356467871,
+            "rms": 1.8780153402797424
+          },
+          "other_right_arm_path": {
+            "count": 1329,
+            "max": 0.45740001465479285,
+            "mean": 0.3932179277595747,
+            "p95": 0.41714219789737533,
+            "p99": 0.4288564326573503,
+            "rms": 0.39338433327479244
+          }
+        },
+        "definition": "complete 6 ms right-arm intervals in [0,8)",
+        "first_interval_start_simulation_time_s": 0.024,
+        "last_interval_end_simulation_time_s": 7.998,
+        "max_abs_composition_error_ms": 0.0,
+        "max_abs_ddq_sum_error_ms": 0.0,
+        "predictor_time_ms": {
+          "count": 1329,
+          "max": 0.4136529969400726,
+          "mean": 0.3736799474022659,
+          "p50": 0.37934900319669396,
+          "p95": 0.39669760008109733,
+          "p99": 0.4051871600677259,
+          "source": "perf_summary.json: total.real_hardware_control.mpc_breakdown.disturbance_prediction_time"
+        }
+      },
+      "xy": {
+        "arc_length_m": 3.3403456414252046,
+        "displacement_m": 3.2121141125986563
+      }
+    }
+  ],
+  "schema_version": "full_task_template_v2_final_freeze_two_run_evidence_r1_v1",
+  "scope": {
+    "control_candidate": "MPC + FullTaskTemplatePredictor v2",
+    "hardware_claim": "controlled MuJoCo simulation only; not hardware real-time evidence",
+    "headline": "[0.0,8.0)",
+    "mpc_handoff": "simulation/task time 0.024 s; absolute template anchor 4",
+    "source_selection": "two explicit run directories; no latest-run scan",
+    "startup_pd_prefix": "[0.0,0.024) is included in the headline",
+    "summary_semantics": "certified_fallback_is_warning"
+  },
+  "status": "PASS",
+  "two_run_aggregate": {
+    "all_certified_control_gates_pass": true,
+    "all_environment_preflights_pass": true,
+    "all_nominal_mapping_paths_pass": false,
+    "all_task_protocol_smoke_summaries_pass": true,
+    "certified_mapping_fallback_is_warning": true,
+    "complete_interval_count": 2658,
+    "control_quality": {
+      "ddq_tracking_error_norm_rad_s2": {
+        "count": 2660,
+        "max": 16.531866814869062,
+        "mean": 1.3245446719770049,
+        "p95": 3.6440476669153976,
+        "p99": 8.623200916098218,
+        "rms": 2.024127085879281
+      },
+      "position_error_norm_m": {
+        "count": 8000,
+        "max": 0.027715762371252197,
+        "mean": 0.012757237622897688,
+        "p95": 0.023555157477653108,
+        "p99": 0.02660598166766122,
+        "rms": 0.013707589963388509
+      },
+      "predictor_interval_acc_error_norm_m_s2": {
+        "count": 2660,
+        "max": 5.731530263553336,
+        "mean": 0.4188265517719382,
+        "p95": 1.6475829657524497,
+        "p99": 4.023882375037048,
+        "rms": 0.804858130405466
+      },
+      "predictor_interval_alpha_error_norm_rad_s2": {
+        "count": 2660,
+        "max": 38.903245515720286,
+        "mean": 2.981968127965507,
+        "p95": 9.434405881884961,
+        "p99": 17.753607661851944,
+        "rms": 4.765828228354137
+      },
+      "predictor_interval_omega_error_norm_rad_s": {
+        "count": 2660,
+        "max": 0.20092146171815722,
+        "mean": 0.01758800078604371,
+        "p95": 0.047436295346464506,
+        "p99": 0.08306223887462309,
+        "rms": 0.025360143762682797
+      },
+      "predictor_orientation_geodesic_error_rad": {
+        "count": 2660,
+        "max": 0.007642912492341019,
+        "mean": 0.001970603920244215,
+        "p95": 0.003951742008566966,
+        "p99": 0.006280919805560106,
+        "rms": 0.0022795978978144807
+      },
+      "right_ee_angular_acceleration_norm_rad_s2": {
+        "count": 8000,
+        "max": 70.42581952334596,
+        "mean": 4.21739098333742,
+        "p95": 15.795968378481763,
+        "p99": 29.140063623228176,
+        "rms": 7.046948926552493
+      },
+      "right_ee_linear_acceleration_norm_m_s2": {
+        "count": 8000,
+        "max": 15.948769808373413,
+        "mean": 2.1794552091638306,
+        "p95": 5.938585727834315,
+        "p99": 10.829884968001172,
+        "rms": 2.95104641928011
+      },
+      "tilt_angle_rad": {
+        "count": 8000,
+        "max": 0.007573684156195679,
+        "mean": 0.002255846132120383,
+        "p95": 0.0048575155661253,
+        "p99": 0.006630388435203569,
+        "rms": 0.002595405119568627
+      },
+      "torso_acceleration_norm_m_s2": {
+        "count": 8000,
+        "max": 10.72003562952487,
+        "mean": 1.904122092744145,
+        "p95": 4.703545136370871,
+        "p99": 9.30816336352358,
+        "rms": 2.472527346055601
+      },
+      "torso_angular_acceleration_norm_rad_s2": {
+        "count": 8000,
+        "max": 48.32035513582182,
+        "mean": 6.8624348289854336,
+        "p95": 22.453057678786465,
+        "p99": 34.72466713812986,
+        "rms": 9.868960669448438
+      }
+    },
+    "run_count": 2,
+    "safety_totals": {
+      "mapper_execution_call_count": 5358,
+      "mapper_final_output_uncertified_count": 0,
+      "mapper_final_unsafe_count": 0,
+      "mapper_hold_last_succeeded_count": 1,
+      "mapper_no_safe_torque_count": 0,
+      "mapper_rescue_used_count": 5,
+      "mapper_safe_hold_used_count": 0,
+      "mapper_safety_line_search_used_count": 0,
+      "nan_inf_count": 0,
+      "predictor_fallback_count": 0,
+      "qp_failure_count": 0,
+      "qp_fallback_count": 0
+    },
+    "timing": {
+      "complete_6ms_ms": {
+        "budget_ms": 6.0,
+        "count": 2658,
+        "max": 4.3402950032032095,
+        "mean": 3.300942725420074,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0,
+        "p95": 3.4614309970493196,
+        "p99": 3.5786061994440375,
+        "rms": 3.3026789554184846
+      },
+      "components_ms": {
+        "all_ddq_to_torque_calls": {
+          "count": 2658,
+          "max": 1.662781993218232,
+          "mean": 0.9935911388792849,
+          "p95": 1.09939895082789,
+          "p99": 1.1890663194208173,
+          "rms": 0.9958017265500448
+        },
+        "cpp_executor_bridge": {
+          "count": 2658,
+          "max": 0.071208,
+          "mean": 0.03644025018811137,
+          "p95": 0.04242210000000001,
+          "p99": 0.04987689,
+          "rms": 0.0366181519443128
+        },
+        "ddq_call_1": {
+          "count": 2658,
+          "max": 0.9908309948514216,
+          "mean": 0.49852587250925906,
+          "p95": 0.5704829010937829,
+          "p99": 0.6370336684631183,
+          "rms": 0.5004619434295194
+        },
+        "ddq_call_2": {
+          "count": 2658,
+          "max": 0.8016549982130527,
+          "mean": 0.4950652663700258,
+          "p95": 0.5588459971477278,
+          "p99": 0.6261553991498658,
+          "rms": 0.4965646785755699
+        },
+        "mpc_policy_update": {
+          "count": 2658,
+          "max": 2.1634220029227436,
+          "mean": 1.8783908769827946,
+          "p95": 1.9470788512990111,
+          "p99": 1.9936623880494153,
+          "rms": 1.878986557746955
+        },
+        "other_right_arm_path": {
+          "count": 2658,
+          "max": 0.5451029937915578,
+          "mean": 0.3925204593698833,
+          "p95": 0.41604539931914214,
+          "p99": 0.42822919070111826,
+          "rms": 0.3927214031520668
+        }
+      },
+      "predictor_time_ms": {
+        "count": 2658,
+        "max": 0.4380930040497333,
+        "per_run_p95_max": 0.3974134015152231,
+        "per_run_p95_min": 0.39669760008109733,
+        "per_run_p99_max": 0.41089336009463295,
+        "per_run_p99_min": 0.4051871600677259,
+        "source": "weighted per-run perf_summary values; pooled raw predictor samples were not persisted",
+        "weighted_mean": 0.37401694093981197
+      }
+    }
+  }
+}

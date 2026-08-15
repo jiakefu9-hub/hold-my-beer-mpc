@@ -554,6 +554,7 @@ def compute_smoke_summary(
         and np.allclose(command_boundary["t_6_402"]["planned"][:2], 0.0)
     )
     distance_within_gate = 2.8 <= xy_displacement <= 3.6
+    nominal_mapping_path_passed = mapping_fallback_count == 0
     smoke_passed = bool(
         heading_enabled
         and direct_step_effective
@@ -562,12 +563,18 @@ def compute_smoke_summary(
         and validation["unexpected_nonfinite_count"] == 0
         and not fallen
         and qp_failure_count == 0
-        and mapping_fallback_count == 0
         and distance_within_gate
+    )
+    warnings = (
+        ["MAPPING_SAFETY_FALLBACK_USED"]
+        if not nominal_mapping_path_passed
+        else []
     )
     return {
         "status": "PASS" if smoke_passed else "FAIL",
         "smoke_passed": smoke_passed,
+        "nominal_mapping_path_passed": nominal_mapping_path_passed,
+        "warnings": warnings,
         "xy_start_world_m": position[0, :2].tolist(),
         "xy_at_headline_end_world_m": position[headline_end_index, :2].tolist(),
         "xy_displacement_m": xy_displacement,

@@ -1,0 +1,570 @@
+{
+  "total": {
+    "label": "perf total",
+    "steps": 3999,
+    "arm_updates": 1329,
+    "computed_torque_updates": 2658,
+    "budget_ms": 2.0,
+    "arm_budget_ms": 6.0,
+    "arm_avg_ms": 1.8793269962694217,
+    "arm_max_ms": 2.1634220029227436,
+    "arm_overruns": 0,
+    "arm_total_avg_ms": 2.378278396705003,
+    "arm_total_max_ms": 2.961386999231763,
+    "arm_total_overruns": 0,
+    "computed_torque_avg_ms": 0.49747346091868866,
+    "computed_torque_max_ms": 0.8016549982130527,
+    "computed_torque_overruns": 0,
+    "mj_step_avg_ms": 0.12281232772110424,
+    "mj_step_max_ms": 0.30631299887318164,
+    "other_avg_ms": 0.8486234256952582,
+    "other_max_ms": 31.52427799795987,
+    "loop_avg_ms": 1.9266520667856888,
+    "loop_max_ms": 31.666932001826353,
+    "loop_overruns": 1404,
+    "real_hardware_control": {
+      "units": "milliseconds except execution_calls_per_interval",
+      "definitions": {
+        "right_arm_interval": "sum from right-arm state preprocessing through final torque write across every 2 ms step in one upper-level control interval",
+        "mpc_policy_update": "one update including disturbance prediction, helper construction, ArmMPCPolicy and diagnostics",
+        "ddq_to_torque_call": "one inverse-dynamics plus local forward-dynamics validation call",
+        "interval_mean_composition": "exact mean decomposition of the complete right-arm interval; all_ddq_to_torque_calls includes every execution call and cpp_executor_bridge is the complete Python/C ABI bridge"
+      },
+      "right_arm_interval": {
+        "count": 1329,
+        "mean": 3.3023697578454563,
+        "p50": 3.290779008239042,
+        "p95": 3.4644620012841187,
+        "p99": 3.630513084644918,
+        "max": 4.3402950032032095,
+        "budget_ms": 6.0,
+        "overrun_count": 0,
+        "overrun_fraction": 0.0
+      },
+      "right_arm_step": {
+        "count": 3999,
+        "mean": 1.1003035234239378,
+        "p50": 0.590401999943424,
+        "p95": 2.5524461023451295,
+        "p99": 2.6401519651699346,
+        "max": 4.545372998109087
+      },
+      "mpc_policy_update": {
+        "count": 1329,
+        "mean": 1.8793269962694217,
+        "p50": 1.8793620038195513,
+        "p95": 1.948856603121385,
+        "p99": 2.010205395054072,
+        "max": 2.1634220029227436
+      },
+      "ddq_to_torque_call": {
+        "count": 2658,
+        "mean": 0.4974734609186887,
+        "p50": 0.4920959981973283,
+        "p95": 0.5702293983631535,
+        "p99": 0.6422121493960726,
+        "max": 0.8016549982130527
+      },
+      "execution_calls_per_interval": {
+        "count": 1329,
+        "mean": 2.0,
+        "p50": 2.0,
+        "p95": 2.0,
+        "p99": 2.0,
+        "max": 2.0
+      },
+      "interval_mean_composition": {
+        "mpc_policy_update": 1.8793269962694217,
+        "all_ddq_to_torque_calls": 0.9949469218373774,
+        "cpp_executor_bridge": 0.036272848758465016,
+        "other_right_arm_path": 0.39182299098019213,
+        "total": 3.3023697578454563
+      },
+      "mpc_breakdown": {
+        "disturbance_prediction_time": {
+          "count": 1329,
+          "mean": 0.3743539344773581,
+          "p50": 0.37922100455034524,
+          "p95": 0.3974134015152231,
+          "p99": 0.41089336009463295,
+          "max": 0.4380930040497333
+        },
+        "helper_construction_time": {
+          "count": 1329,
+          "mean": 0.016297981218067668,
+          "p50": 0.016210004105232656,
+          "p95": 0.019824797345791012,
+          "p99": 0.02220059832325206,
+          "max": 0.02743200457189232
+        },
+        "controller_compute_action_time": {
+          "count": 1329,
+          "mean": 1.4571570894339116,
+          "p50": 1.4560159979737364,
+          "p95": 1.5085264007211663,
+          "p99": 1.5770144760608673,
+          "max": 1.6651440018904395
+        },
+        "diagnostics_time": {
+          "count": 1329,
+          "mean": 0.025845508544812323,
+          "p50": 0.025681998522486538,
+          "p95": 0.02830400044331327,
+          "p99": 0.03116824256721885,
+          "max": 0.036028002796228975
+        },
+        "rollout_time": {
+          "count": 1329,
+          "mean": 0.032423643342396585,
+          "p50": 0.03237200144212693,
+          "p95": 0.0338196026859805,
+          "p99": 0.03526467917254196,
+          "max": 0.04129100125283003
+        },
+        "terms_time": {
+          "count": 1329,
+          "mean": 0.43723278502907226,
+          "p50": 0.43705700227292255,
+          "p95": 0.45496340026147664,
+          "p99": 0.4692134843207896,
+          "max": 0.5070710030850023
+        },
+        "cost_time": {
+          "count": 1329,
+          "mean": 0.4552981970270085,
+          "p50": 0.45529199996963143,
+          "p95": 0.4661259983549826,
+          "p99": 0.47365024016471585,
+          "max": 0.49765499716158956
+        },
+        "constraints_time": {
+          "count": 1329,
+          "mean": 0.05526003847652002,
+          "p50": 0.05417300417320803,
+          "p95": 0.056854996364563704,
+          "p99": 0.062286678003147244,
+          "max": 0.17128700710600242
+        },
+        "assembly_time": {
+          "count": 1329,
+          "mean": 0.9810338524512546,
+          "p50": 0.9803110006032512,
+          "p95": 1.0083456014399417,
+          "p99": 1.0699502789066173,
+          "max": 1.1042609985452145
+        },
+        "solver_wall_time": {
+          "count": 1329,
+          "mean": 0.31919345062947324,
+          "p50": 0.31842099997447804,
+          "p95": 0.3413509970414452,
+          "p99": 0.364877000101842,
+          "max": 0.43392700172262266
+        },
+        "postprocess_time": {
+          "count": 1329,
+          "mean": 0.12615786170737783,
+          "p50": 0.12554599379654974,
+          "p95": 0.13216380175435916,
+          "p99": 0.13633375812787563,
+          "max": 0.15707499551353976
+        },
+        "policy_core_time": {
+          "count": 1329,
+          "mean": 1.4269244905967304,
+          "p50": 1.4257130023906939,
+          "p95": 1.477011598763056,
+          "p99": 1.5474283552612178,
+          "max": 1.6289619961753488
+        },
+        "outside_policy_core_time": {
+          "count": 1329,
+          "mean": 0.4524025056726913,
+          "p50": 0.4561750029097311,
+          "p95": 0.48041879636002705,
+          "p99": 0.5001026394893416,
+          "max": 0.5470780015457422
+        },
+        "policy_update_time": {
+          "count": 1329,
+          "mean": 1.8793269962694217,
+          "p50": 1.8793620038195513,
+          "p95": 1.948856603121385,
+          "p99": 2.010205395054072,
+          "max": 2.1634220029227436
+        },
+        "solve_time": {
+          "count": 1329,
+          "mean": 0.09824658765989466,
+          "p50": 0.097928,
+          "p95": 0.09959339999999998,
+          "p99": 0.1014754,
+          "max": 0.18596
+        }
+      },
+      "ddq_to_torque_breakdown": {
+        "total_time": {
+          "count": 2658,
+          "mean": 0.4974734609186887,
+          "p50": 0.4920959981973283,
+          "p95": 0.5702293983631535,
+          "p99": 0.6422121493960726,
+          "max": 0.8016549982130527
+        },
+        "inverse_time": {
+          "count": 2658,
+          "mean": 0.050929410442620913,
+          "p50": 0.05028000233176164,
+          "p95": 0.058158148397447734,
+          "p99": 0.06397632084681161,
+          "max": 0.09017299571534618
+        },
+        "inverse_backend_time": {
+          "count": 2658,
+          "mean": 0.050929410442620913,
+          "p50": 0.05028000233176164,
+          "p95": 0.058158148397447734,
+          "p99": 0.06397632084681161,
+          "max": 0.09017299571534618
+        },
+        "inverse_core_time": {
+          "count": 2658,
+          "mean": 0.006124658013544019,
+          "p50": 0.005854,
+          "p95": 0.008615000000000001,
+          "p99": 0.010644449999999998,
+          "max": 0.016296
+        },
+        "inverse_rnea_time": {
+          "count": 2658,
+          "mean": 0.005726539127163281,
+          "p50": 0.005464500000000001,
+          "p95": 0.008128350000000001,
+          "p99": 0.010029579999999984,
+          "max": 0.015279000000000001
+        },
+        "inverse_backend_call_time": {
+          "count": 2658,
+          "mean": 0.006124658013544019,
+          "p50": 0.005854,
+          "p95": 0.008615000000000001,
+          "p99": 0.010644449999999998,
+          "max": 0.016296
+        },
+        "inverse_diagnostic_time": {
+          "count": 2658,
+          "mean": 0.0448047524290769,
+          "p50": 0.044287000491749495,
+          "p95": 0.050202155762235634,
+          "p99": 0.05513536023499909,
+          "max": 0.07561299571534619
+        },
+        "inverse_shadow_time": {
+          "count": 2658,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0
+        },
+        "mapping_time": {
+          "count": 2658,
+          "mean": 0.19770239653875094,
+          "p50": 0.193772,
+          "p95": 0.25703780000000004,
+          "p99": 0.31070432,
+          "max": 0.40455700000000006
+        },
+        "mapping_core_time": {
+          "count": 2658,
+          "mean": 0.19770239653875094,
+          "p50": 0.193772,
+          "p95": 0.25703780000000004,
+          "p99": 0.31070432,
+          "max": 0.40455700000000006
+        },
+        "mapping_bridge_time": {
+          "count": 2658,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0
+        },
+        "baseline_time": {
+          "count": 2658,
+          "mean": 0.13801662641083523,
+          "p50": 0.13623000000000002,
+          "p95": 0.17894215000000002,
+          "p99": 0.20788431999999993,
+          "max": 0.29188400000000003
+        },
+        "first_pass_time": {
+          "count": 2658,
+          "mean": 0.05552166666666667,
+          "p50": 0.05418800000000001,
+          "p95": 0.06807840000000001,
+          "p99": 0.07874423999999998,
+          "max": 0.09667800000000001
+        },
+        "second_pass_time": {
+          "count": 2658,
+          "mean": 0.002643255079006772,
+          "p50": 0.0,
+          "p95": 0.040848100000000026,
+          "p99": 0.05751416999999985,
+          "max": 0.07883300000000001
+        },
+        "rescue_time": {
+          "count": 2658,
+          "mean": 8.758126410835216e-05,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.12259100000000002
+        },
+        "hold_last_time": {
+          "count": 2658,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0
+        }
+      },
+      "ddq_call_path": {
+        "first_pass_only": {
+          "count": 2521,
+          "mean": 0.49350170533500004,
+          "p50": 0.4895730016869493,
+          "p95": 0.5556830001296476,
+          "p99": 0.6163259982713499,
+          "max": 0.8016549982130527
+        },
+        "second_pass_without_rescue": {
+          "count": 135,
+          "mean": 0.5688203404942114,
+          "p50": 0.5638989969156682,
+          "p95": 0.64057909839903,
+          "p99": 0.6508885802759323,
+          "max": 0.6848619959782809
+        },
+        "safety_rescue": {
+          "count": 2,
+          "mean": 0.6879570028104354,
+          "p50": 0.6879570028104354,
+          "p95": 0.6935208020877326,
+          "p99": 0.6940153620234923,
+          "max": 0.6941390020074323
+        }
+      },
+      "ddq_mapping_native": {
+        "backend_counts": {
+          "cpp_process_mujoco": 2658
+        },
+        "full_forward_calls": {
+          "count": 2658,
+          "mean": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0,
+          "max": 1.0
+        },
+        "forward_skip_calls": {
+          "count": 2658,
+          "mean": 7.512791572610985,
+          "p50": 7.0,
+          "p95": 14.0,
+          "p99": 16.0,
+          "max": 34.0
+        },
+        "validated_pass_count": {
+          "count": 2658,
+          "mean": 1.0530474040632054,
+          "p50": 1.0,
+          "p95": 2.0,
+          "p99": 2.0,
+          "max": 4.0
+        }
+      },
+      "cpp_executor": {
+        "wall_time": {
+          "count": 1329,
+          "mean": 0.03627284875846501,
+          "p50": 0.035495000000000006,
+          "p95": 0.042858,
+          "p99": 0.05328976000000004,
+          "max": 0.071208
+        },
+        "core_time": {
+          "count": 1329,
+          "mean": 0.00022507674943566595,
+          "p50": 0.000241,
+          "p95": 0.00038600000000000006,
+          "p99": 0.0004760800000000004,
+          "max": 0.00064
+        },
+        "mode_counts": {
+          "process_cached_executor": 1329
+        }
+      },
+      "independent_cpp_process": {
+        "roundtrip_time": {
+          "count": 3987,
+          "mean": 0.17882805618259345,
+          "p50": 0.22595300000000001,
+          "p95": 0.29990069999999996,
+          "p99": 0.36094961999999986,
+          "max": 0.451716
+        },
+        "worker_time": {
+          "count": 3987,
+          "mean": 0.13852857536995236,
+          "p50": 0.184513,
+          "p95": 0.2539221,
+          "p99": 0.31251933999999976,
+          "max": 0.41230700000000003
+        },
+        "queue_time": {
+          "count": 3987,
+          "mean": 0.02342466290443943,
+          "p50": 0.023376,
+          "p95": 0.0284935,
+          "p99": 0.036671779999999994,
+          "max": 0.049854
+        },
+        "ipc_and_copy_time": {
+          "count": 3987,
+          "mean": 0.040299480812641085,
+          "p50": 0.04070199999999999,
+          "p95": 0.048719300000000014,
+          "p99": 0.05862589999999996,
+          "max": 0.07904500000000003
+        },
+        "executor_core_time": {
+          "count": 3987,
+          "mean": 0.00024158640581891148,
+          "p50": 0.000248,
+          "p95": 0.00041000000000000005,
+          "p99": 0.0005171399999999999,
+          "max": 0.004548
+        },
+        "mapping_update_count": 2658,
+        "cached_executor_only_count": 1329
+      }
+    },
+    "timing_scope": {
+      "measurement_window": {
+        "start_time_s": 0.0,
+        "end_time_s": 7.998,
+        "complete_interval_count": 1329,
+        "partial_intervals_excluded": true
+      },
+      "runtime_environment": {
+        "measurement_scope": "complete_intervals_fully_inside_evaluation",
+        "gc_disabled_during_control_loop": true,
+        "cpu_affinity": [
+          7
+        ],
+        "physical_core_cpus": [
+          6,
+          7
+        ],
+        "evaluation_irq_monitoring_enabled": false,
+        "cpu_frequency_at_start": {
+          "7": {
+            "scaling_driver": "intel_pstate",
+            "scaling_governor": "powersave",
+            "energy_performance_preference": "balance_performance",
+            "scaling_min_freq_khz": "400000",
+            "scaling_max_freq_khz": "4500000",
+            "scaling_cur_freq_khz_at_start": "400000"
+          }
+        },
+        "scheduler": {
+          "policy": 0,
+          "policy_name": "SCHED_OTHER",
+          "priority": 0,
+          "nice": 0,
+          "right_arm_worker_inherits_parent_policy_and_affinity": true,
+          "kernel_rt_runtime_us": "950000",
+          "kernel_rt_period_us": "1000000",
+          "rr_timeslice_ms": "100",
+          "right_arm_worker": {
+            "pid": 190,
+            "policy": 0,
+            "policy_name": "SCHED_OTHER",
+            "priority": 0,
+            "nice": 0,
+            "cpu_affinity": [
+              7
+            ]
+          }
+        },
+        "thread_environment": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1",
+          "VECLIB_MAXIMUM_THREADS": "1",
+          "BLIS_NUM_THREADS": "1"
+        },
+        "torch_num_threads": 1,
+        "torch_num_interop_threads": 1,
+        "warmup_cycles_before_measurement": 0,
+        "requested_measurement_start_time_s": 0.0,
+        "requested_measurement_end_time_s": 8.0,
+        "aligned_measurement_end_time_s": 7.998,
+        "complete_interval_count_expected": 1333,
+        "formal_full_task_preflight": {
+          "protocol_version": "full_task_cpu7_single_thread_v1",
+          "launcher": "disturbance_lab_run_sh",
+          "requested_control_cpu": "7",
+          "parent_cpu_affinity": [
+            7
+          ],
+          "worker_cpu_affinity": [
+            7
+          ],
+          "thread_environment": {
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "NUMEXPR_NUM_THREADS": "1",
+            "VECLIB_MAXIMUM_THREADS": "1",
+            "BLIS_NUM_THREADS": "1"
+          },
+          "torch_num_threads": 1,
+          "torch_num_interop_threads": 1,
+          "gc_disabled_during_control": true,
+          "dynamic_arming_enabled": false,
+          "startup_pd_duration_s": 0.024,
+          "mpc_handoff_anchor_index": 4,
+          "passed": true
+        }
+      },
+      "included": [
+        "torso/right-arm state preprocessing",
+        "disturbance prediction and helper construction",
+        "MPC assembly, OSQP and postprocess",
+        "joint-space PD",
+        "all DDQ-to-torque executions inside each arm-control interval"
+      ],
+      "excluded_simulation_only": [
+        "MuJoCo mj_step physics propagation",
+        "evaluation logging and plotting",
+        "viewer/video rendering",
+        "real-time sleep"
+      ],
+      "not_measurable_in_simulation": [
+        "hardware sensor/fieldbus latency",
+        "motor-driver communication and low-level firmware",
+        "real-time OS scheduling jitter on the target computer"
+      ],
+      "independent_process_note": "sim_process roundtrip includes shared-memory copy, pipe notification, C++ worker computation and response copy",
+      "legacy_arm_total_note": "arm_total_* is retained only for old-file compatibility and contains the policy plus the DDQ-to-torque call on the same physics step; use real_hardware_control.right_arm_interval for the complete arm-control interval"
+    }
+  },
+  "warn_interval": 500,
+  "window_count": 8
+}

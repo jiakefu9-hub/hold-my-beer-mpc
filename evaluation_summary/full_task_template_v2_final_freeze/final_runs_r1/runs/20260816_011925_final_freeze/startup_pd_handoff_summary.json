@@ -1,0 +1,129 @@
+{
+  "protocol_version": "full_task_fixed_startup_pd_24ms_handoff_v2",
+  "runtime_mode": "process",
+  "startup_pd_duration_s": 0.024,
+  "task_and_simulation_time_share_zero_origin": true,
+  "first_lower_policy_update_simulation_time_s": 0.020000000000000004,
+  "first_lower_policy_update_task_time_s": 0.020000000000000004,
+  "handoff": {
+    "simulation_time_s": 0.024000000000000007,
+    "task_time_s": 0.024000000000000007,
+    "template_absolute_task_time_s": 0.024,
+    "template_anchor_index": 4,
+    "gait_phase_cycles": 0.03000000000000001,
+    "left_foot_contact_count": 2,
+    "right_foot_contact_count": 4,
+    "raw_torso_acceleration_norm_m_s2": 7.346273401864479,
+    "base_vertical_velocity_m_s": -0.21454711466141682,
+    "last_fixed_pd_tau_nm": [
+      1.5158112550758662,
+      0.03483295160077236,
+      0.03212750281240111,
+      0.7205672028244525,
+      -0.0042284942831307595
+    ],
+    "previous_executed_tau_input_nm": [
+      1.5158112550758662,
+      0.03483295160077236,
+      0.03212750281240111,
+      0.7205672028244525,
+      -0.0042284942831307595
+    ],
+    "first_mpc_tau_nm": [
+      -3.0326627105121675,
+      -1.5557259331420679,
+      -0.9916059374319042,
+      -3.7006512917680188,
+      0.006584363986926994
+    ],
+    "tau_jump_nm": [
+      -4.548473965588034,
+      -1.5905588847428402,
+      -1.0237334402443052,
+      -4.4212184945924715,
+      0.010812858270057754
+    ],
+    "tau_jump_l2_nm": 6.619200331835519,
+    "tau_jump_max_abs_nm": 4.548473965588034,
+    "previous_tau_available": true,
+    "mapping": {
+      "desired_right_arm_ddq": [
+        -1.606298565864563,
+        -7.1319708824157715,
+        6.208813667297363,
+        -0.8158535957336426,
+        -8.0
+      ],
+      "qacc_baseline": [
+        -6.840414142293387,
+        -11.620833892827891,
+        19.279585855718594,
+        2.411487710398498,
+        -14.155289858186691
+      ],
+      "first_pass_qacc_validated": [
+        -2.5761889687693778,
+        -7.048544321317127,
+        6.385523246987511,
+        1.0717928464066147,
+        -7.78137893943123
+      ],
+      "second_pass_qacc_validated": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "final_qacc_validated": [
+        -2.5761889687693778,
+        -7.048544321317127,
+        6.385523246987511,
+        1.0717928464066147,
+        -7.78137893943123
+      ],
+      "second_pass_triggered": false,
+      "safety_fallback_used": false,
+      "safety_fallback_attempts": 0,
+      "hold_last_safe_available": false,
+      "hold_last_safe_used": false,
+      "hold_last_safe_satisfied": false,
+      "safe_hold_used": false,
+      "safety_line_search_used": false,
+      "safety_line_search_attempts": 0,
+      "safety_line_search_time_s": 0.0,
+      "final_output_certified": true,
+      "no_safe_torque": false
+    }
+  },
+  "prefix": {
+    "included_in_headline": true,
+    "mpc_output_count": 0,
+    "fixed_pd_sample_count": 12,
+    "predictor_anchor_count_before_handoff": 4
+  },
+  "whole_trace": {
+    "sample_count": 4030,
+    "last_simulation_time_s": 8.05799999999936,
+    "last_task_time_s": 8.05799999999936,
+    "predictor_fallback_count": 0,
+    "final_unsafe_count": 0,
+    "no_safe_torque_count": 0,
+    "safe_hold_count": 0,
+    "safety_line_search_count": 0,
+    "safety_line_search_attempts": 0,
+    "safety_line_search_extra_time_ms": 0.0
+  },
+  "dry_preflight": {
+    "performed": true,
+    "phase": "fixed_startup_pd",
+    "before_task_clock_reset_and_command_publish": false,
+    "during_fixed_startup_pd": true,
+    "simulation_time_s": 0.0,
+    "mujoco_time_advanced": false,
+    "real_ctrl_modified": false,
+    "roundtrip_elapsed_ms": 0.555295,
+    "worker_elapsed_ms": 0.46865,
+    "final_output_certified": true
+  }
+}

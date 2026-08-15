@@ -55,6 +55,17 @@ FINAL_RUN_SOURCE_PATHS = (
         "20260815_231555_final_freeze_heldout_pair_02_minus"
     ),
 )
+DEFAULT_FINAL_RUN_R1_ARCHIVE = Path(
+    "/home/fjk/g1_ws/disturbance-lab-archives/20260815_pre_cleanup/"
+    "final_freeze_full_runs_r1.tar.zst"
+)
+FINAL_RUN_R1_SOURCE_PATHS = (
+    "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+    (
+        "evaluation/t2_full_task_closed_loop/"
+        "20260816_012007_final_freeze_heldout_pair_02_minus"
+    ),
+)
 DELETE_CONFIRMATION = "DELETE_VERIFIED_ARCHIVED_SOURCES"
 SCHEMA_VERSION = "disturbance-lab-data-cleanup-v1"
 CHECKPOINT_BRANCH = "archive/pre-cleanup-full-task-v2-20260815"
@@ -1024,6 +1035,8 @@ def _audit_additional_final_run_evidence(
     final_runs_root: Path,
     *,
     expected_archive_path: Path,
+    expected_file_manifest_schema: str,
+    expected_source_paths: Sequence[str],
 ) -> dict[str, Any]:
     """Strictly audit the separately-built two-run freeze evidence package."""
 
@@ -1035,10 +1048,7 @@ def _audit_additional_final_run_evidence(
             raise CleanupError(f"final-run manifest is missing or unsafe: {path}")
 
     file_manifest = json.loads(file_manifest_path.read_text(encoding="utf-8"))
-    if (
-        file_manifest.get("schema_version")
-        != "full_task_template_v2_final_freeze_two_run_files_v1"
-    ):
+    if file_manifest.get("schema_version") != expected_file_manifest_schema:
         raise CleanupError("final-run file manifest schema mismatch")
     if file_manifest.get("status") != "PASS":
         raise CleanupError("final-run file manifest is not PASS")
@@ -1091,7 +1101,7 @@ def _audit_additional_final_run_evidence(
         raise CleanupError("final-run archive manifest schema mismatch")
     if archive_manifest.get("status") != "VERIFIED_ARCHIVE_SOURCE_DELETED":
         raise CleanupError("final-run archive manifest status mismatch")
-    if archive_manifest.get("source_relative_paths") != list(FINAL_RUN_SOURCE_PATHS):
+    if archive_manifest.get("source_relative_paths") != list(expected_source_paths):
         raise CleanupError("final-run archive source list mismatch")
 
     archive_path = Path(archive_manifest.get("archive_absolute_path", ""))
@@ -1118,7 +1128,10 @@ def _audit_additional_final_run_evidence(
     if sha256_file(archive_path) != archive_verification.get("archive_sha256"):
         raise CleanupError("final-run archive checksum mismatch")
 
-    expected_realpaths = [str((repo_root / path).resolve(strict=False)) for path in FINAL_RUN_SOURCE_PATHS]
+    expected_realpaths = [
+        str((repo_root / path).resolve(strict=False))
+        for path in expected_source_paths
+    ]
     deletion = archive_manifest.get("deletion", {})
     if deletion.get("status") != "completed":
         raise CleanupError("final-run archive deletion is not completed")
@@ -1126,7 +1139,7 @@ def _audit_additional_final_run_evidence(
         raise CleanupError("final-run allowed delete realpaths mismatch")
     if deletion.get("deleted_realpaths") != expected_realpaths:
         raise CleanupError("final-run deleted realpaths mismatch")
-    for relative_path in FINAL_RUN_SOURCE_PATHS:
+    for relative_path in expected_source_paths:
         source = repo_root / relative_path
         if source.exists() or source.is_symlink():
             raise CleanupError(f"archived final-run source still exists: {source}")
@@ -1171,6 +1184,7 @@ def _audit_compact_evidence(
     evidence_root: Path,
     *,
     final_run_archive_path: Path = DEFAULT_FINAL_RUN_ARCHIVE,
+    final_run_r1_archive_path: Path = DEFAULT_FINAL_RUN_R1_ARCHIVE,
 ) -> dict[str, Any]:
     evidence_root = evidence_root.resolve(strict=True)
     evidence_manifest_path = evidence_root / "evidence_file_manifest.json"
@@ -1235,6 +1249,19 @@ def _audit_compact_evidence(
         repo_root,
         evidence_root / "final_runs",
         expected_archive_path=final_run_archive_path,
+        expected_file_manifest_schema=(
+            "full_task_template_v2_final_freeze_two_run_files_v1"
+        ),
+        expected_source_paths=FINAL_RUN_SOURCE_PATHS,
+    )
+    additional_final_run_evidence_r1 = _audit_additional_final_run_evidence(
+        repo_root,
+        evidence_root / "final_runs_r1",
+        expected_archive_path=final_run_r1_archive_path,
+        expected_file_manifest_schema=(
+            "full_task_template_v2_final_freeze_two_run_files_r1_v1"
+        ),
+        expected_source_paths=FINAL_RUN_R1_SOURCE_PATHS,
     )
 
     excluded = {
@@ -1250,7 +1277,10 @@ def _audit_compact_evidence(
     additional_paths = set(
         additional_final_run_evidence.pop("verified_repository_paths")
     )
-    expected_all = set(declared) | additional_paths
+    additional_r1_paths = set(
+        additional_final_run_evidence_r1.pop("verified_repository_paths")
+    )
+    expected_all = set(declared) | additional_paths | additional_r1_paths
     if actual_declared != expected_all:
         raise CleanupError(
             "compact evidence contains unmanifested or missing outputs: "
@@ -1274,6 +1304,7 @@ def _audit_compact_evidence(
         "builder_checksum_matches": True,
         "validation": validation,
         "additional_final_run_evidence": additional_final_run_evidence,
+        "additional_final_run_evidence_r1": additional_final_run_evidence_r1,
         "usage_excluding_cleanup_manifest": _tree_usage(
             evidence_root,
             excluded_files=(evidence_root / "cleanup_manifest.json",),

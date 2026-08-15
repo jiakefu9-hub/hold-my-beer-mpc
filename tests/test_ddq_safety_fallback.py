@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 import mujoco
 import numpy as np
@@ -268,6 +269,22 @@ class DdqSafetyFallbackTest(unittest.TestCase):
         self.assertLessEqual(
             int(process_result.mapper_output.safety_line_search_attempts), 4
         )
+
+    def test_main_sim_certification_guard_precedes_ctrl_write_and_physics(self):
+        source = (Path(__file__).resolve().parents[1] / "main_sim.py").read_text(
+            encoding="utf-8"
+        )
+        guard_start = source.index(
+            "if acceleration_controller and mpc_control_enabled and ("
+        )
+        ctrl_write = source.index("d.ctrl[12:23] = tau_arm_waist", guard_start)
+        physics_step = source.index("mujoco.mj_step(m, d)", ctrl_write)
+        guard = source[guard_start:ctrl_write]
+        self.assertIn("not bool(mapping_result.final_output_certified)", guard)
+        self.assertIn("bool(mapping_result.no_safe_torque)", guard)
+        self.assertIn("NO_SAFE_TORQUE", guard)
+        self.assertLess(guard_start, ctrl_write)
+        self.assertLess(ctrl_write, physics_step)
 
 
 if __name__ == "__main__":

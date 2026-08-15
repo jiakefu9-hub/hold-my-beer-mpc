@@ -1,0 +1,428 @@
+{
+  "allowed_delete_realpaths": [
+    "/home/fjk/g1_ws/disturbance-lab/evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+    "/home/fjk/g1_ws/disturbance-lab/evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus"
+  ],
+  "archive_absolute_path": "/home/fjk/g1_ws/disturbance-lab-archives/20260815_pre_cleanup/final_freeze_full_runs_r1.tar.zst",
+  "archive_verification": {
+    "archive_sha256": "eef4f92ea70b3085eb5e6fa2b84e46e9ef10515b97e7879290cbd4a4a076af2e",
+    "archive_size_bytes": 62134190,
+    "archived_file_size_sha256_exact": true,
+    "installed_path_retest_passed": true,
+    "listed_directory_count": 2,
+    "listed_file_count": 74,
+    "member_paths_exact": true,
+    "member_types_exact": true,
+    "status": "verified",
+    "tar_listing_passed": true,
+    "verified_at_utc": "2026-08-15T23:24:02.130188Z",
+    "zstd_test_passed": true
+  },
+  "created_at_utc": "2026-08-15T23:24:02.344145Z",
+  "deletion": {
+    "completed_at_utc": "2026-08-15T23:25:21.614322Z",
+    "confirmation_one": "DELETE_VERIFIED_FINAL_FREEZE_ARCHIVE",
+    "confirmation_two": "DELETE_ONLY_TWO_FIXED_FINAL_FREEZE_RUNS",
+    "deleted_directory_count": 2,
+    "deleted_file_bytes": 125050314,
+    "deleted_file_count": 74,
+    "deleted_realpaths": [
+      "/home/fjk/g1_ws/disturbance-lab/evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+      "/home/fjk/g1_ws/disturbance-lab/evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus"
+    ],
+    "status": "completed"
+  },
+  "inventory": {
+    "directories": [
+      "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+      "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus"
+    ],
+    "directory_count": 2,
+    "file_count": 74,
+    "files": [
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/base_disturbance_interval_template_prediction_vs_actual.png",
+        "sha256": "13fe34551876fbd1e2a1f4d68a93cdf79725d329ef20ac243b679917be2ec6dc",
+        "size_bytes": 415164
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/base_disturbance_node_template_tracking.png",
+        "sha256": "e35f5adf0039924663da8829c6ac046265e2dd6f13ecad3f66233ad2b05ef5e3",
+        "size_bytes": 405519
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/control_preview.csv",
+        "sha256": "d59930651cb529226ea28a199b2611a1997d4ad33621a182fd18e5c776a389cd",
+        "size_bytes": 17390273
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/ddq_tracking.png",
+        "sha256": "c2597495eb5cd2d1dbcd307f0dbe4dd57ac481030f9ab7ba87a319a796cc19b5",
+        "size_bytes": 2104021
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/ddq_tracking_middle_gait_cycle.png",
+        "sha256": "107b85b79e3a5bf36bd9e56d000a408e89b5832f4e92e5abc5b1ae3912d44a02",
+        "size_bytes": 1117582
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/formal_full_task_runtime_preflight.json",
+        "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+        "size_bytes": 641
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_event_grid.png",
+        "sha256": "4b533f213cd78ad03ead7a92fe2d665e000f50e49763ac438ca72503685a6c1b",
+        "size_bytes": 39620
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_manifest.json",
+        "sha256": "7a438cdf39d6829554ef46af3e1f51cd3391054cd9b6242e055b1106f426662d",
+        "size_bytes": 30238
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_nominal_raw.npz",
+        "sha256": "ab85ad2fd8039b512c49e520114654fae8cb170d61d1ab4579298b63001c4d93",
+        "size_bytes": 5877577
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_planned_runtime_commands.png",
+        "sha256": "f3e9e05d059d59e08c3ffa70eb2b2de1a182a968db81b2ec29e61fa8b3f18760",
+        "size_bytes": 70024
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_smoke_summary.json",
+        "sha256": "1c4e054ced76d19a0e8a16193487c5fa43f89bf89a59542679b0057c8976b382",
+        "size_bytes": 2544
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_tail_coverage.png",
+        "sha256": "93b565a9f3edf7d126355ecf854ea3623ca0fbf7d42ab0a5b1c1eda6adda9856",
+        "size_bytes": 50005
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_torso_rpy.png",
+        "sha256": "9601e04c531fb8bf03f88c8923b6566f89ed064be43533daf2feb99ed1e21d50",
+        "size_bytes": 187768
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/full_task_xy_trajectory.png",
+        "sha256": "e4a01d2ccc29bd22f26dcab4fd8ed251f2bf5aafa9882b82c54483579a687bd3",
+        "size_bytes": 35101
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/heading_control.png",
+        "sha256": "9343b4838f4c1d7bb598df9a72e19846a4e2075024364bff96d5337dd6507e70",
+        "size_bytes": 199694
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/heading_control_diagnostics.json",
+        "sha256": "8e934d7c6860eff2316b145b9ae9f287458e3a7eec30070d70c130d1220febde",
+        "size_bytes": 446
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/metrics.npz",
+        "sha256": "2c9ca17a8855ed9f83bc86dc5c6c43b67d2e438b34e797f18cdcdeff8991cec5",
+        "size_bytes": 731728
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/metrics.png",
+        "sha256": "0f0adeec0417a66c28c72bdec4a48d1add3f0134b21a9225439dd6910837dff1",
+        "size_bytes": 1068244
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/metrics_preview.csv",
+        "sha256": "89ba516d5c3b2fe2bd975a67cca4f6016420b9441f08bf50aac3b126d1e3f45a",
+        "size_bytes": 2167668
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/mpc_command_delay.csv",
+        "sha256": "dc2a4e1c83a5c6de274c867c9ac532ad4c3c5d7817ab8a4ee82def6fe9f9401d",
+        "size_bytes": 61929
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/mpc_command_delay_summary.json",
+        "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+        "size_bytes": 464
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/mpc_diagnostics.json",
+        "sha256": "db93f6ec6006637f1def5328ef3d29618f7eba803fb9d2ac7d8c3b25cfdbd07d",
+        "size_bytes": 25912
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/mpc_diagnostics_preview.csv",
+        "sha256": "0d22639b3e0b02e11097f8155ec4aaff8b31c2ea2a0f3bfb931f005708e366ab",
+        "size_bytes": 1046435
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/mpc_end_effector_task_prediction_vs_actual.png",
+        "sha256": "79ffbe3ddbd8d1cf96c6f9e07203e8f51d7b5f9f9a5a42283807eb3dd7bec840",
+        "size_bytes": 831797
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/mpc_tracking_diagnostics.json",
+        "sha256": "0cefb49fcc6ab57db8c629db69e1f29c06cabcc39c1662cbc213ad7c1b4f73b4",
+        "size_bytes": 8194
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/mpc_tracking_preview.csv",
+        "sha256": "801299ea28ad0253f02a4d6067d88234bd8cdd948624e29b02c9f3ef5f7a2230",
+        "size_bytes": 55299
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/perf_intervals.csv",
+        "sha256": "2fa355750c159244bda2025f8acb08dbb4c22a1692c67af9c36bcbd725a4bd24",
+        "size_bytes": 401056
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/perf_summary.json",
+        "sha256": "0f1f47c9660feb25d24873e9dd36f829e4b11347c090364822465faea53d635f",
+        "size_bytes": 18077
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/perf_windows.csv",
+        "sha256": "bbaf95ea1ecab0eb403205011b1fe434bd7813c3df258abbf04f8bb19e48114b",
+        "size_bytes": 15077
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/right_arm_diagnostics.json",
+        "sha256": "d0fe4ef119b30b1c645253b65f22fb775780b760fd24e8b6e25d3f8141de3dd4",
+        "size_bytes": 16909
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/run_metadata.json",
+        "sha256": "e1117200ad08cbe38054d7440b7ae26eabee53d10b2662bcd20b263e0740c308",
+        "size_bytes": 12931
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/startup_pd_handoff_summary.json",
+        "sha256": "aa57e32d7a5da58095b716c21568fc4f9cc2c9015467ea2722ead1cddf01ce4d",
+        "size_bytes": 3753
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/startup_pd_handoff_trace.npz",
+        "sha256": "9c51ca8338f3c723993357ec4bca0e5327bac2c2736381e21893769e0143d396",
+        "size_bytes": 955296
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/startup_pd_handoff_transition.png",
+        "sha256": "7fab35b8587f7a0f39ff2e4ab64931c79c8692962940c853d76c78d7ec9afc89",
+        "size_bytes": 300661
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/summary.json",
+        "sha256": "ac6340bcbf2d8ef5d6f9f4ceee1676b3f76e182cc7456996af4145a132d80e44",
+        "size_bytes": 4054
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/trajectory.npz",
+        "sha256": "6a0a44f8ad5ca002d44e587a4e9f0e4f35016842eecefe6261070db27dcf57ae",
+        "size_bytes": 26600739
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze/yaw.png",
+        "sha256": "b6f769077653f3f3a7fe4ccb184222d5a5326204bdc0d60892384a676c5d8f80",
+        "size_bytes": 250502
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/base_disturbance_interval_template_prediction_vs_actual.png",
+        "sha256": "6614f22bd83d1c061ae4bd21fbe87e3599010318ebc92e67a992d73d91406eca",
+        "size_bytes": 417894
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/base_disturbance_node_template_tracking.png",
+        "sha256": "fd8a9c2e6898c33c91a7a8fd29316e5571ad666e02603a9a9a9600a24c3a4088",
+        "size_bytes": 415242
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/control_preview.csv",
+        "sha256": "ede67b71e78d450e81b27d47c4e38312fa5d488ac7cba27cd874c681ba230531",
+        "size_bytes": 17391969
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/ddq_tracking.png",
+        "sha256": "3ce26126ead3e105af6140e7117427cb3c06cd0f4fff1b22f5f38cf845604bfa",
+        "size_bytes": 2066744
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/ddq_tracking_middle_gait_cycle.png",
+        "sha256": "f7315cf6c791c4df1b43b81ce6e3bfb527cd381f6bc3432d64db11daa994790a",
+        "size_bytes": 1133427
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/formal_full_task_runtime_preflight.json",
+        "sha256": "81ac393096baad2f85eef1664d7175e96d040568802247becf4566082f18716c",
+        "size_bytes": 641
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_event_grid.png",
+        "sha256": "4b533f213cd78ad03ead7a92fe2d665e000f50e49763ac438ca72503685a6c1b",
+        "size_bytes": 39620
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_manifest.json",
+        "sha256": "646ec795a86f97fd6fe643502f60390fb0c3cdbd68f5553e62c97b499658acb3",
+        "size_bytes": 30994
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_nominal_raw.npz",
+        "sha256": "04262f26f9186220b169222b18f408f071d1a871d420c5cded8f462dcb4e3124",
+        "size_bytes": 5877967
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_planned_runtime_commands.png",
+        "sha256": "c6a17b2760a4809c98b89bcff818dd34ec23ff95528d5aa6c9b0df2e003075aa",
+        "size_bytes": 69670
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_smoke_summary.json",
+        "sha256": "90faf88db74dffd824e00347d97553190ccc16be68997b9c79a954ebf0f51329",
+        "size_bytes": 2549
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_tail_coverage.png",
+        "sha256": "93b565a9f3edf7d126355ecf854ea3623ca0fbf7d42ab0a5b1c1eda6adda9856",
+        "size_bytes": 50005
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_torso_rpy.png",
+        "sha256": "5ff6c12067f766a02afd43b97d273abcc6a29753d81c291a6c64f4be1cd73950",
+        "size_bytes": 187253
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/full_task_xy_trajectory.png",
+        "sha256": "85ba13e76861fdc3c1aacc2b80cdcfd0529711120df2faee0fe4b3afdab5817e",
+        "size_bytes": 35171
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/heading_control.png",
+        "sha256": "8544ba5f9635684cf72d686394e70b46fd3908e75ebac9d68a19c8c0f8916449",
+        "size_bytes": 199014
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/heading_control_diagnostics.json",
+        "sha256": "e280da7713e8b8384eafefaeef1902785fbe7e50a18efcead3dd4959c7a23ff3",
+        "size_bytes": 448
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/metrics.npz",
+        "sha256": "6ce30201d66cd76c1cf942cd0ef5d34bac27cd8ca2492c2c48a9baf6bd087fe7",
+        "size_bytes": 731728
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/metrics.png",
+        "sha256": "14da2c53a08a92f768aa05f06dc0e22edbbed25260afbf1331ab5fff03273042",
+        "size_bytes": 1107095
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/metrics_preview.csv",
+        "sha256": "e484537f4f00a37bb0cc272547a2714047f0e7040eebcb502d734b0a2fd05a17",
+        "size_bytes": 2168694
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/mpc_command_delay.csv",
+        "sha256": "dc2a4e1c83a5c6de274c867c9ac532ad4c3c5d7817ab8a4ee82def6fe9f9401d",
+        "size_bytes": 61929
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/mpc_command_delay_summary.json",
+        "sha256": "d67afc8bb72b56be2f6f78e7020317412e85e361551575ccbeb74a5be6c5788f",
+        "size_bytes": 464
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/mpc_diagnostics.json",
+        "sha256": "01828580a841a741f00a5a9222bf6c6a864520fc53f1aa6620aa52d92fdc9614",
+        "size_bytes": 25825
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/mpc_diagnostics_preview.csv",
+        "sha256": "ed73045f57ac668e0a568ad07588083aac1ae5f3d00276f68c01cdbb55715a7b",
+        "size_bytes": 1045429
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/mpc_end_effector_task_prediction_vs_actual.png",
+        "sha256": "bc0c2027f836dfff51f349248c29ba8bf23386088e543f26f6b8b6725e31377d",
+        "size_bytes": 841210
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/mpc_tracking_diagnostics.json",
+        "sha256": "259f86b2e95d9ef3429912b781993abf14a7ba2bd9d5f2ac73ab5d858c1be953",
+        "size_bytes": 8203
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/mpc_tracking_preview.csv",
+        "sha256": "884317890cbd37ba4a5fcd720bf4f9c6322abfae7fdd4b119e13588ea09adefb",
+        "size_bytes": 55318
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/perf_intervals.csv",
+        "sha256": "7b9b4490e94f36eaa0ec7a0d0985e94c2f8e03fb9c596767d77be2313cc1dc3e",
+        "size_bytes": 401250
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/perf_summary.json",
+        "sha256": "3fb18d254e2906eb3c5586ac36f4159a35b6c3abb6f3b2e74ecb3398c6454b9c",
+        "size_bytes": 18081
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/perf_windows.csv",
+        "sha256": "57ae3dae0cdda170c4821a80c99ca3a3996f48e06aa70b240b682ceaa12c97ef",
+        "size_bytes": 15071
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/right_arm_diagnostics.json",
+        "sha256": "800405a397df411b21a8cc45085cd06278126d07ebaa6c40f72cc4c263470170",
+        "size_bytes": 16974
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/run_metadata.json",
+        "sha256": "ccbd28304010a85415dbbde301c7d7f75d2da6e5334fe57a67bfc952c93b32c2",
+        "size_bytes": 13619
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/startup_pd_handoff_summary.json",
+        "sha256": "dd9e75016e2221cd3b0788a232f324e91fca3197c51523c4ca98483ebc282544",
+        "size_bytes": 3750
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/startup_pd_handoff_trace.npz",
+        "sha256": "3a8a40369304d9fe30f18b0ebe818a87866cc8268a137938b39e9b105490d2ab",
+        "size_bytes": 955127
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/startup_pd_handoff_transition.png",
+        "sha256": "f5d2ab2c3d7ef92968c268b14965361aa3e6ccedf5affbad9fb60550c6b534a0",
+        "size_bytes": 303672
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/summary.json",
+        "sha256": "c45efc7f305f76a65efe3da0e6f695bf8496d6a56755b5bb0faa392d9d9b5d41",
+        "size_bytes": 4065
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/trajectory.npz",
+        "sha256": "d234027587b93dd3b3705ad38561ed307b5b38f2bd261d3ef09350d76b0b977a",
+        "size_bytes": 26600739
+      },
+      {
+        "path": "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus/yaw.png",
+        "sha256": "f8028cde930caee7fed60591a53d672a90e1472f7e1b3d91da6ffc85bf4935bd",
+        "size_bytes": 250521
+      }
+    ],
+    "source_relative_paths": [
+      "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+      "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus"
+    ],
+    "total_file_bytes": 125050314
+  },
+  "manifest_absolute_path": "/home/fjk/g1_ws/disturbance-lab/evaluation_summary/full_task_template_v2_final_freeze/final_runs_r1/final_freeze_archive_manifest.json",
+  "repository_root": "/home/fjk/g1_ws/disturbance-lab",
+  "schema_version": "disturbance-lab-final-freeze-run-archive-v1",
+  "source_relative_paths": [
+    "evaluation/t2_full_task_closed_loop/20260816_011925_final_freeze",
+    "evaluation/t2_full_task_closed_loop/20260816_012007_final_freeze_heldout_pair_02_minus"
+  ],
+  "status": "VERIFIED_ARCHIVE_SOURCE_DELETED"
+}

@@ -11,10 +11,12 @@ from tools.build_final_freeze_evidence import (
 from tools.build_final_freeze_run_evidence import (
     AGGREGATE_JSON,
     DEFAULT_OUTPUT,
+    DEFAULT_R1_OUTPUT,
     FILE_MANIFEST,
     FINAL_RUNS,
     FINAL_RUN_EVIDENCE_FILES,
     FINAL_RUN_SOURCE_ROOT,
+    R1_FINAL_RUNS,
     REPOSITORY_ROOT,
     verify,
 )
@@ -26,6 +28,13 @@ class BuildFinalFreezeRunEvidenceTest(unittest.TestCase):
         cls.output = REPOSITORY_ROOT / DEFAULT_OUTPUT
         cls.aggregate = json.loads((cls.output / AGGREGATE_JSON).read_text())
         cls.manifest = json.loads((cls.output / FILE_MANIFEST).read_text())
+        cls.r1_output = REPOSITORY_ROOT / DEFAULT_R1_OUTPUT
+        cls.r1_aggregate = json.loads(
+            (cls.r1_output / AGGREGATE_JSON).read_text()
+        )
+        cls.r1_manifest = json.loads(
+            (cls.r1_output / FILE_MANIFEST).read_text()
+        )
 
     def test_source_selection_is_exact_and_not_latest_discovery(self):
         self.assertEqual(
@@ -43,6 +52,20 @@ class BuildFinalFreezeRunEvidenceTest(unittest.TestCase):
         self.assertEqual(len(FINAL_RUN_EVIDENCE_FILES), 13)
         self.assertEqual(
             self.manifest["source_selection"]["selection_method"],
+            "fixed constants; no directory scan",
+        )
+        self.assertEqual(
+            R1_FINAL_RUNS,
+            (
+                ("20260816_011925_final_freeze", "nominal"),
+                (
+                    "20260816_012007_final_freeze_heldout_pair_02_minus",
+                    "heldout_pair_02_minus",
+                ),
+            ),
+        )
+        self.assertEqual(
+            self.r1_manifest["source_selection"]["selection_method"],
             "fixed constants; no directory scan",
         )
 
@@ -115,6 +138,34 @@ class BuildFinalFreezeRunEvidenceTest(unittest.TestCase):
         bad_threads["thread_environment"]["OMP_NUM_THREADS"] = "2"
         with self.assertRaises(EvidenceError):
             validate_formal_environment(bad_threads, metadata, run_id)
+
+    def test_r1_smoke_summary_uses_certified_fallback_warning_semantics(self):
+        result = verify(
+            REPOSITORY_ROOT,
+            self.r1_output,
+            # The full sources are deliberately removed after their external
+            # archive is verified; the compact package must remain sufficient.
+            require_sources=False,
+            revision="r1",
+        )
+        self.assertEqual(result["status"], "PASS")
+        self.assertTrue(
+            self.r1_aggregate["two_run_aggregate"][
+                "all_task_protocol_smoke_summaries_pass"
+            ]
+        )
+        expected_fallbacks = {"nominal": 3, "heldout_pair_02_minus": 5}
+        for run in self.r1_aggregate["runs"]:
+            smoke = run["source_smoke_status"]
+            self.assertEqual(smoke["status"], "PASS")
+            self.assertTrue(smoke["smoke_passed"])
+            self.assertFalse(smoke["nominal_mapping_path_passed"])
+            self.assertEqual(smoke["warnings"], ["MAPPING_SAFETY_FALLBACK_USED"])
+            self.assertEqual(
+                smoke["runtime_mapping_safety_fallback_count"],
+                expected_fallbacks[run["scenario"]],
+            )
+            self.assertTrue(run["safety"]["certified_control_gate_pass"])
 
 
 if __name__ == "__main__":

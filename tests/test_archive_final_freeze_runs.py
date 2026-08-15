@@ -9,17 +9,31 @@ from pathlib import Path
 from tools.archive_final_freeze_runs import (
     CONFIRMATION_ONE,
     CONFIRMATION_TWO,
+    R1_ARCHIVE_PATH,
+    R1_MANIFEST_PATH,
+    R1_SOURCE_RELATIVE_PATHS,
     SOURCE_RELATIVE_PATHS,
     ArchiveContract,
     FinalFreezeArchiveError,
     create_archive,
     delete_archived_sources,
     inventory_sources,
+    production_contract,
     verify_manifest_archive,
 )
 
 
 class ArchiveFinalFreezeRunsTest(unittest.TestCase):
+    def test_r1_production_contract_is_explicit_and_separate(self):
+        legacy = production_contract("legacy")
+        r1 = production_contract("r1")
+        self.assertEqual(r1.source_relative_paths, R1_SOURCE_RELATIVE_PATHS)
+        self.assertEqual(r1.archive_path, R1_ARCHIVE_PATH)
+        self.assertEqual(r1.manifest_path, R1_MANIFEST_PATH)
+        self.assertNotEqual(r1.source_relative_paths, legacy.source_relative_paths)
+        self.assertNotEqual(r1.archive_path, legacy.archive_path)
+        self.assertNotEqual(r1.manifest_path, legacy.manifest_path)
+
     def setUp(self):
         self.tar = shutil.which("tar")
         self.zstd = shutil.which("zstd") or "/home/fjk/miniforge3/bin/zstd"

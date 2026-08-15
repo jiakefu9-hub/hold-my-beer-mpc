@@ -1,0 +1,396 @@
+{
+  "config_file": "g1.yaml",
+  "experiment_name": "left_fixed_right_mpc",
+  "policy_type": "ArmMPCPolicy",
+  "right_arm_joint_names": [
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint"
+  ],
+  "notes": "sparse constrained right-arm MPC with ddq input, absolute-task-time full-task disturbance feedforward, configurable world-frame end-effector angular-velocity cost, 2D gravity error, no end-effector position cost, and validated inverse/forward-dynamics torque execution",
+  "cmd_nominal": [
+    0.5,
+    0.0,
+    0.01269999984651804
+  ],
+  "simulation_dt": 0.002,
+  "gait_period": 0.8,
+  "warmup_cycles": 0,
+  "evaluation_cycles": 10,
+  "cooldown_cycles": 0,
+  "mpc_config": {
+    "horizon": 9,
+    "q_ee_acc": 0.01,
+    "q_ee_alpha": 0.0005,
+    "q_ee_omega": 8.0,
+    "q_gravity": [
+      30.0,
+      30.0
+    ],
+    "q_posture": [
+      4.0,
+      4.0,
+      1.5,
+      0.2,
+      0.2
+    ],
+    "q_vel": 0.08,
+    "r_ddq": 0.0025,
+    "terminal_scale": 2.0,
+    "reg": 1e-06,
+    "max_dq": 1.0,
+    "max_ddq": 8.0,
+    "joint_limits": [
+      [
+        -0.08726646259971647,
+        0.08726646259971647
+      ],
+      [
+        -0.08726646259971647,
+        0.05235987755982989
+      ],
+      [
+        -0.3490658503988659,
+        0.08726646259971647
+      ],
+      [
+        -0.6981317007977318,
+        0.6981317007977318
+      ],
+      [
+        -0.6981317007977318,
+        0.6981317007977318
+      ]
+    ],
+    "joint_limit_margin": [
+      0.017453292519943295,
+      0.017453292519943295,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "solver_max_iter": 400,
+    "solver_check_termination": 25,
+    "solver_rho": 0.1,
+    "solver_adaptive_rho": true,
+    "solver_scaled_termination": false,
+    "solver_eps_abs": 0.001,
+    "solver_eps_rel": 0.001,
+    "solver_polishing": false,
+    "failure_braking_gain": 4.0,
+    "failure_posture_gain": 4.0,
+    "failure_max_ddq_scale": 0.5,
+    "control_dt": 0.006,
+    "torso_acc_filter_alpha": 0.5,
+    "torso_alpha_filter_alpha": 0.5,
+    "torso_acc_limit": 30.0,
+    "torso_alpha_limit": 40.0,
+    "forward_dynamics_perturbation_nm": 0.1,
+    "forward_dynamics_regularization": 5.0,
+    "forward_dynamics_second_pass_error_threshold": 5.0,
+    "forward_dynamics_max_joint_error": 4.0,
+    "forward_dynamics_max_abs_qacc": 10.0,
+    "forward_dynamics_enable_second_pass": true,
+    "forward_dynamics_safety_rescue_passes": 2,
+    "forward_dynamics_hold_last_safe": true,
+    "forward_dynamics_candidate_evaluation": "mj_forwardSkip_mjSTAGE_VEL_skip_sensors",
+    "forward_dynamics_candidate_selection": "model_ranked_then_best_real_safe_candidate_among_at_least_two_validations",
+    "forward_dynamics_evaluations_per_pass": "5 torque perturbations plus 1-4 on-demand candidate validations",
+    "forward_dynamics_scratch_copy": "physical_state_warmstart_and_external_inputs_only_before_full_mj_forward",
+    "constraint_force_reconstruction": "mj_mulJacTVec_with_selected_constraint_rows",
+    "solver": "OSQP",
+    "base_prediction": "continuous_heading_to_world_absolute_task_template_v2",
+    "gravity_error": "signed_2d_xy",
+    "torso_relative_position_cost": false,
+    "ddq_execution_mode": "twice_per_interval",
+    "command_delay": {
+      "definition": "source-state time to command activation on 2 ms grid",
+      "requested_delay_ms": 0.0,
+      "quantized_delay_ms": 0.0,
+      "delay_ticks": 0,
+      "delayed_fields": [
+        "q_ref",
+        "dq_ref",
+        "ddq_des"
+      ],
+      "torque_recomputed_from_latest_activation_state": true
+    },
+    "disturbance_predictor": {
+      "enabled": true,
+      "predictor_type": "full_task_template",
+      "baseline_scope": "fixed direct-step task; stop time 6.4 s is known in advance",
+      "path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+      "sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+      "manifest_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+      "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+      "template_schema_version": "full_task_template_v2",
+      "protocol_version": "full_task_direct_step_v1",
+      "anchor_mode": "exact_absolute_task_time_6ms_no_interpolation",
+      "node0_policy": "always_current_measurement",
+      "future_source": "T1 template nodes 1..9 and all intervals",
+      "heading_definition": "full_task_continuous_heading_v2",
+      "heading_filter": "none",
+      "template_smoothing": "none",
+      "slow_bias_enabled": false,
+      "terminal_behavior": "measurement ZOH after [0,8.0) headline",
+      "template_validation": {
+        "anchor_count": 1334,
+        "horizon": 9,
+        "node0_online_policy": "always_replace_with_current_measurement",
+        "rotation_valid": true,
+        "smoothing": "none",
+        "template_schema_version": "full_task_template_v2",
+        "heading_frame_version": "full_task_continuous_heading_v2"
+      }
+    },
+    "disturbance_feedforward": {
+      "enabled": true,
+      "predictor_type": "full_task_template",
+      "baseline_scope": "fixed direct-step task; stop time 6.4 s is known in advance",
+      "path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+      "sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+      "manifest_path": "/home/fjk/g1_ws/disturbance-lab/disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+      "manifest_sha256": "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76",
+      "template_schema_version": "full_task_template_v2",
+      "protocol_version": "full_task_direct_step_v1",
+      "anchor_mode": "exact_absolute_task_time_6ms_no_interpolation",
+      "node0_policy": "always_current_measurement",
+      "future_source": "T1 template nodes 1..9 and all intervals",
+      "heading_definition": "full_task_continuous_heading_v2",
+      "heading_filter": "none",
+      "template_smoothing": "none",
+      "slow_bias_enabled": false,
+      "terminal_behavior": "measurement ZOH after [0,8.0) headline",
+      "template_validation": {
+        "anchor_count": 1334,
+        "horizon": 9,
+        "node0_online_policy": "always_replace_with_current_measurement",
+        "rotation_valid": true,
+        "smoothing": "none",
+        "template_schema_version": "full_task_template_v2",
+        "heading_frame_version": "full_task_continuous_heading_v2"
+      }
+    }
+  },
+  "robot_model_backends": {
+    "mpc_prediction_kinematics": "cpp_pinocchio",
+    "ddq_nominal_inverse_dynamics": "cpp_pinocchio",
+    "model_source": "matching_simulation_mjcf",
+    "mujoco_contact_validation_retained": true,
+    "pinocchio_friction_breakaway_steps": 5.0,
+    "nominal_inverse_dynamics_other_qacc": {
+      "mode": "measured",
+      "source": "latest_causal_mujoco_qacc_from_previous_physics_step",
+      "filter_alpha": 0.5,
+      "trend_window": 4,
+      "trend_lead_steps": 1.0,
+      "absolute_limit": 100.0,
+      "measured_blend": 0.75
+    },
+    "right_arm_executor": "cpp",
+    "right_arm_execution_runtime": "process",
+    "right_arm_execution_runtime_requested": "process",
+    "ddq_forward_dynamics_mapping": "cpp",
+    "right_arm_executor_output_semantics": "host_full_torque"
+  },
+  "heading_control": {
+    "enabled": true,
+    "reference_frame": "world",
+    "reference_source": "initial_torso_yaw",
+    "filter_cycles": 1.0,
+    "kp": 0.6,
+    "kd": 0.1,
+    "yaw_rate_feedforward": 0.01269999984651804,
+    "max_abs_yaw_rate": 0.25
+  },
+  "disturbance_command_schedule": {
+    "enabled": true,
+    "definition": "full_task_direct_step_v1",
+    "source": "disturbance_learning.full_task_protocol",
+    "legacy_ramp_schedule_used": false,
+    "nominal_command": [
+      0.5,
+      0.0,
+      0.01269999984651804
+    ],
+    "stop_time": 6.4,
+    "headline_interval": [
+      0.0,
+      8.0
+    ],
+    "record_end": 8.06,
+    "heading_control_enabled": true,
+    "planned_translation_after_stop": [
+      0.0,
+      0.0
+    ],
+    "planned_wz_after_stop": 0.01269999984651804,
+    "initial_lower_q_offset": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "initial_lower_dq": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "payload": {
+      "body": "right_bottle",
+      "added_mass_kg": 0.0,
+      "intentional_nominal_model_mismatch": false,
+      "treatment": "nominal",
+      "controller_model_includes_payload": false
+    },
+    "initial_manifest": null
+  },
+  "full_task_protocol": {
+    "protocol_name": "full_task_direct_step",
+    "protocol_version": "full_task_direct_step_v1",
+    "raw_schema_version": "full_task_raw_v1",
+    "physics_dt": 0.002,
+    "mpc_dt": 0.006,
+    "policy_dt": 0.02,
+    "gait_period": 0.8,
+    "stop_time": 6.4,
+    "headline_end": 8.0,
+    "record_end": 8.06,
+    "horizon": 9,
+    "headline_anchor_count": 1334,
+    "last_headline_anchor": 7.998,
+    "last_horizon_node": 8.052,
+    "pre_step_event_order": [
+      "boundary_command_and_policy_state_already_committed_from_previous_step",
+      "compute_leg_pd_from_latest_policy_target",
+      "sample_torso_and_joint_state_for_current_pre_step",
+      "run_predictor_and_mpc_when_current_time_is_a_6ms_anchor",
+      "run_ddq_to_torque_process_chain_and_write_actuator_ctrl",
+      "append_strict_pre_step_raw_sample_for_[t,t+2ms)",
+      "mujoco_mj_step_advances_[t,t+2ms)",
+      "legacy_post_step_evaluation_recording",
+      "increment_physics_counter",
+      "at_20ms_boundary_update_planned_command_heading_and_policy_for_next_step"
+    ]
+  },
+  "fixed_startup_pd_handoff": {
+    "enabled": true,
+    "dynamic_arming_enabled": false,
+    "duration_s": 0.024,
+    "handoff_anchor_index": 4,
+    "right_arm_startup_mode": "fixed_posture_pd",
+    "right_arm_startup_target_source": "config.arm_waist_target[6:11]",
+    "right_arm_startup_target_dq": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "task_template_gait_clock_origin": "simulation_time_zero",
+    "handoff_resets_any_clock": false,
+    "short_smoke_end_s": null
+  },
+  "runtime_timing_environment": {
+    "measurement_scope": "complete_intervals_fully_inside_evaluation",
+    "gc_disabled_during_control_loop": true,
+    "cpu_affinity": [
+      7
+    ],
+    "physical_core_cpus": [
+      6,
+      7
+    ],
+    "evaluation_irq_monitoring_enabled": false,
+    "cpu_frequency_at_start": {
+      "7": {
+        "scaling_driver": "intel_pstate",
+        "scaling_governor": "powersave",
+        "energy_performance_preference": "balance_performance",
+        "scaling_min_freq_khz": "400000",
+        "scaling_max_freq_khz": "4500000",
+        "scaling_cur_freq_khz_at_start": "400000"
+      }
+    },
+    "scheduler": {
+      "policy": 0,
+      "policy_name": "SCHED_OTHER",
+      "priority": 0,
+      "nice": 0,
+      "right_arm_worker_inherits_parent_policy_and_affinity": true,
+      "kernel_rt_runtime_us": "950000",
+      "kernel_rt_period_us": "1000000",
+      "rr_timeslice_ms": "100",
+      "right_arm_worker": {
+        "pid": 190,
+        "policy": 0,
+        "policy_name": "SCHED_OTHER",
+        "priority": 0,
+        "nice": 0,
+        "cpu_affinity": [
+          7
+        ]
+      }
+    },
+    "thread_environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "BLIS_NUM_THREADS": "1"
+    },
+    "torch_num_threads": 1,
+    "torch_num_interop_threads": 1,
+    "warmup_cycles_before_measurement": 0,
+    "requested_measurement_start_time_s": 0.0,
+    "requested_measurement_end_time_s": 8.0,
+    "aligned_measurement_end_time_s": 7.998,
+    "complete_interval_count_expected": 1333,
+    "formal_full_task_preflight": {
+      "protocol_version": "full_task_cpu7_single_thread_v1",
+      "launcher": "disturbance_lab_run_sh",
+      "requested_control_cpu": "7",
+      "parent_cpu_affinity": [
+        7
+      ],
+      "worker_cpu_affinity": [
+        7
+      ],
+      "thread_environment": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "VECLIB_MAXIMUM_THREADS": "1",
+        "BLIS_NUM_THREADS": "1"
+      },
+      "torch_num_threads": 1,
+      "torch_num_interop_threads": 1,
+      "gc_disabled_during_control": true,
+      "dynamic_arming_enabled": false,
+      "startup_pd_duration_s": 0.024,
+      "mpc_handoff_anchor_index": 4,
+      "passed": true
+    }
+  }
+}

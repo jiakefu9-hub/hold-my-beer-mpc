@@ -21,6 +21,7 @@ from disturbance_learning.full_task_protocol import (
 )
 from disturbance_learning.full_task_recording import (
     FullTaskRawRecorder,
+    compute_smoke_summary,
     save_full_task_smoke_artifacts,
     validate_full_task_raw,
 )
@@ -101,6 +102,11 @@ def _synthetic_complete_recorder() -> FullTaskRawRecorder:
 
 
 class FullTaskProtocolTest(unittest.TestCase):
+    def _synthetic_smoke_inputs(self):
+        raw = _synthetic_complete_recorder().to_arrays()
+        validation = validate_full_task_raw(raw, PROTOCOL, require_complete=True)
+        return raw, validation
+
     def test_direct_step_and_anchor_boundaries_are_exact(self) -> None:
         np.testing.assert_array_equal(
             direct_step_planned_command(0.0, NOMINAL).planned_command,
@@ -296,6 +302,39 @@ class FullTaskProtocolTest(unittest.TestCase):
             self.assertEqual(manifest["protocol"]["version"], "full_task_direct_step_v1")
             self.assertFalse(manifest["scope"]["final_full_task_template_generated"])
             self.assertEqual(len(result["plot_paths"]), 5)
+
+    def test_smoke_summary_passes_without_mapping_fallback(self) -> None:
+        raw, validation = self._synthetic_smoke_inputs()
+        summary = compute_smoke_summary(
+            raw, PROTOCOL, validation, heading_enabled=True
+        )
+        self.assertEqual(summary["status"], "PASS")
+        self.assertTrue(summary["smoke_passed"])
+        self.assertTrue(summary["nominal_mapping_path_passed"])
+        self.assertEqual(summary["warnings"], [])
+        self.assertEqual(summary["runtime_mapping_safety_fallback_count"], 0)
+
+    def test_certified_mapping_fallback_is_a_warning_not_smoke_failure(self) -> None:
+        raw, validation = self._synthetic_smoke_inputs()
+        raw["runtime_mapping_safety_fallback_used"][[12, 24]] = True
+        summary = compute_smoke_summary(
+            raw, PROTOCOL, validation, heading_enabled=True
+        )
+        self.assertEqual(summary["status"], "PASS")
+        self.assertTrue(summary["smoke_passed"])
+        self.assertFalse(summary["nominal_mapping_path_passed"])
+        self.assertEqual(summary["warnings"], ["MAPPING_SAFETY_FALLBACK_USED"])
+        self.assertEqual(summary["runtime_mapping_safety_fallback_count"], 2)
+
+    def test_real_task_condition_failure_still_fails_smoke(self) -> None:
+        raw, validation = self._synthetic_smoke_inputs()
+        validation["strict_pre_step"] = False
+        summary = compute_smoke_summary(
+            raw, PROTOCOL, validation, heading_enabled=True
+        )
+        self.assertEqual(summary["status"], "FAIL")
+        self.assertFalse(summary["smoke_passed"])
+
 
 
 if __name__ == "__main__":

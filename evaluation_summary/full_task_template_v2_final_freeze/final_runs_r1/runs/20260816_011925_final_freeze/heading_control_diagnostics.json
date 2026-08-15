@@ -1,0 +1,11 @@
+{
+  "heading_sample_count": 3990,
+  "heading_error_mean": 0.0005558897003020165,
+  "heading_error_rms": 0.011451143907212084,
+  "heading_error_max_abs": 0.029599291359276497,
+  "heading_filtered_drift_slope": 0.004136519696091989,
+  "heading_yaw_rate_command_mean": 0.013089954282724903,
+  "heading_yaw_rate_command_min": -0.006015035789459944,
+  "heading_yaw_rate_command_max": 0.03133765608072281,
+  "heading_command_saturation_fraction": 0.0
+}
