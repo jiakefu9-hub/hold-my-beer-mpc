@@ -32,7 +32,7 @@ from .cpp_executor import (
     _Config as _ExecutorConfig,
     _Output as _ExecutorOutput,
 )
-from .unitree_shm import (
+from .atomic_seqlock import (
     _ATOMIC_LOAD_8,
     _ATOMIC_STORE_8,
     _MEMORY_ORDER_ACQUIRE,

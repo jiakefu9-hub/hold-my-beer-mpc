@@ -25,7 +25,7 @@ from disturbance_predictor import (
 )
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import create_prediction_backend
-from sim_support import RIGHT_ARM_JOINT_NAMES, create_arm_controller
+from right_arm_control_setup import RIGHT_ARM_JOINT_NAMES, create_arm_controller
 
 from .unitree_shm import (
     ARM_SDK_JOINT_COUNT,

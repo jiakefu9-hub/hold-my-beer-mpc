@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import ctypes
-import ctypes.util
 from enum import IntEnum, IntFlag
 import math
 import mmap
@@ -16,6 +15,13 @@ import os
 from pathlib import Path
 import time
 from typing import Iterable
+
+from .atomic_seqlock import (
+    _ATOMIC_LOAD_8,
+    _ATOMIC_STORE_8,
+    _MEMORY_ORDER_ACQUIRE,
+    _MEMORY_ORDER_RELEASE,
+)
 
 
 PROTOCOL_MAGIC = 0x473141524D504331
@@ -259,21 +265,6 @@ def _validate_python_layout() -> None:
 _validate_python_layout()
 
 
-def _load_libatomic():
-    library_name = ctypes.util.find_library("atomic") or "libatomic.so.1"
-    library = ctypes.CDLL(library_name)
-    atomic_load = getattr(library, "__atomic_load_8")
-    atomic_load.argtypes = [ctypes.c_void_p, ctypes.c_int]
-    atomic_load.restype = ctypes.c_uint64
-    atomic_store = getattr(library, "__atomic_store_8")
-    atomic_store.argtypes = [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int]
-    atomic_store.restype = None
-    return library, atomic_load, atomic_store
-
-
-_LIBATOMIC, _ATOMIC_LOAD_8, _ATOMIC_STORE_8 = _load_libatomic()
-_MEMORY_ORDER_ACQUIRE = 2
-_MEMORY_ORDER_RELEASE = 3
 _UINT64_MASK = (1 << 64) - 1
 
 
