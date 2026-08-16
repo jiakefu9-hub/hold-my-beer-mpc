@@ -1,6 +1,6 @@
-# disturbance-lab
+# hold-my-beer-mpc
 
-`disturbance-lab` 研究 Unitree G1 行走时的躯干扰动预测与右臂 MPC 稳杯控制。
+`hold-my-beer-mpc` 研究 Unitree G1 行走时的躯干扰动预测与右臂 MPC 稳杯控制。
 当前冻结候选只有一条：**MPC + `FullTaskTemplatePredictor` v2**。模板按固定任务的
 绝对时间查询；神经扰动预测路线已经冻结并从当前源码移除。下肢行走仍使用仓库内
 的 Torch RL policy，这与已删除的 neural disturbance predictor 是两件不同的事。
@@ -42,7 +42,7 @@ preflight 会在第一个 `mj_step` 前检查 parent/worker 都只绑定 CPU 7�
 命令是：
 
 ```bash
-cd /home/fjk/g1_ws/disturbance-lab
+cd /path/to/hold-my-beer-mpc
 MPC_CONTROL_CPU=7 MPC_CONTROL_NUM_THREADS=1 ./run.sh \
   --full-task-smoke \
   --disturbance-predictor full_task_template \
