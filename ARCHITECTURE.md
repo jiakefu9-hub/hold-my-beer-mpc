@@ -81,8 +81,8 @@ Shared control core 是逻辑边界，目前并未为了目录形式而搬成一
 
 | 职责 | 当前实现 | 边界说明 |
 | --- | --- | --- |
-| 绝对任务时间、2/6/20 ms 网格、direct stop 和 continuous causal-H | [`disturbance_learning/full_task_protocol.py`](disturbance_learning/full_task_protocol.py) | task clock、anchor 索引和 H 更新由同一实现定义；平台不得复制近似时间逻辑。 |
-| 模板资产完整性 | [`disturbance_learning/full_task_template_asset.py`](disturbance_learning/full_task_template_asset.py) | 在线只加载显式路径，并验证 SHA256、schema、protocol、shape 和 SO(3)。 |
+| 绝对任务时间、2/6/20 ms 网格、direct stop 和 continuous causal-H | [`disturbance_template/full_task_protocol.py`](disturbance_template/full_task_protocol.py) | task clock、anchor 索引和 H 更新由同一实现定义；平台不得复制近似时间逻辑。 |
+| 模板资产完整性 | [`disturbance_template/full_task_template_asset.py`](disturbance_template/full_task_template_asset.py) | 在线只加载显式路径，并验证 SHA256、schema、protocol、shape 和 SO(3)。 |
 | 扰动 horizon 接口与 full-task 查询 | [`disturbance_predictor.py`](disturbance_predictor.py) | `FullTaskTemplatePredictor` 输出 10 个 nodes 和 9 个 intervals；正常 headline 查询不循环模板。 |
 | MPC 数学与 QP | [`arm_mpc.py`](arm_mpc.py) | 唯一的 `ArmMPCPolicy`；仿真和 shadow 不维护两份 MPC。 |
 | 控制器装配与右臂关节定义 | [`right_arm_control_setup.py`](right_arm_control_setup.py) | `create_arm_controller` 和 `RIGHT_ARM_JOINT_NAMES` 的小型共享模块；simulation 与 hardware shadow 直接复用同一实现。 |
@@ -92,9 +92,9 @@ Shared control core 是逻辑边界，目前并未为了目录形式而搬成一
 | 跨进程 seqlock 原子操作 | [`right_arm_runtime/atomic_seqlock.py`](right_arm_runtime/atomic_seqlock.py) | simulation IPC 与 Unitree shared-memory adapter 共享中立的 `libatomic` acquire/release 定义，不依赖彼此的私有协议实现。 |
 
 正式 predictor 资产是
-[`disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz`](disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz)，
+[`disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz)，
 manifest 位于同目录的
-[`full_task_template_manifest.json`](disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json)。
+[`full_task_template_manifest.json`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json)。
 它是固定绝对任务时间 baseline，提前知道 6.4 s 的停车时刻，不泛化到任意
 速度、方向或未知停车时刻。
 

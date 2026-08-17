@@ -23,7 +23,7 @@ import numpy as np
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 CONTROLLED_RUN_ROOT = Path("evaluation/fixed_startup_pd_cpu7_controlled")
 TEMPLATE_ROOT = Path(
-    "disturbance_learning/data/full_task_template_v2/20260815_162850"
+    "disturbance_template/data/full_task_template_v2/20260815_162850"
 )
 PARITY_SOURCE = Path(
     "evaluation/t2_full_task_template_online/"
@@ -37,7 +37,7 @@ EXPECTED_TEMPLATE_SHA256 = (
     "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4"
 )
 EXPECTED_TEMPLATE_MANIFEST_SHA256 = (
-    "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76"
+    "6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6"
 )
 THREAD_VARIABLES = (
     "OMP_NUM_THREADS",

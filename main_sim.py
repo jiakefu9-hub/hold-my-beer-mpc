@@ -30,20 +30,20 @@ from disturbance_predictor import (
     DisturbancePredictorObservation,
     create_disturbance_predictor,
 )
-from disturbance_learning.full_task_protocol import (
+from disturbance_template.full_task_protocol import (
     DEFAULT_FULL_TASK_PROTOCOL,
     FullTaskClock,
     PRE_STEP_EVENT_ORDER,
     direct_step_planned_command,
 )
-from disturbance_learning.full_task_recording import (
+from disturbance_template.full_task_recording import (
     FullTaskRawRecorder,
     save_full_task_smoke_artifacts,
 )
-from disturbance_learning.full_task_runtime_preflight import (
+from disturbance_template.full_task_runtime_preflight import (
     validate_formal_full_task_runtime,
 )
-from disturbance_learning.full_task_startup_pd import (
+from disturbance_template.full_task_startup_pd import (
     FORMAL_STARTUP_PD_DURATION_S,
     FixedStartupPdHandoff,
     StartupPdTraceRecorder,
@@ -726,7 +726,7 @@ if __name__ == "__main__":
         controller_meta["disturbance_command_schedule"] = {
             "enabled": True,
             "definition": protocol.protocol_version,
-            "source": "disturbance_learning.full_task_protocol",
+            "source": "disturbance_template.full_task_protocol",
             "legacy_ramp_schedule_used": False,
             "nominal_command": cmd_nominal.copy(),
             "stop_time": protocol.stop_time,

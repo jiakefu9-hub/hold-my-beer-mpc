@@ -6,11 +6,11 @@ from pathlib import Path
 
 import numpy as np
 
-from disturbance_learning.full_task_protocol import (
+from disturbance_template.full_task_protocol import (
     DEFAULT_FULL_TASK_PROTOCOL,
     is_valid_rotation_batch,
 )
-from disturbance_model_new_heading.heading_template_utils import rotation_z
+from disturbance_template.rotation_utils import rotation_z
 from disturbance_predictor import (
     DisturbancePredictorObservation,
     FullTaskPredictorError,
@@ -24,7 +24,7 @@ from kinematics_helper import DisturbanceInput
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = (
     ROOT
-    / "disturbance_learning/data/full_task_template_v2/20260815_162850"
+    / "disturbance_template/data/full_task_template_v2/20260815_162850"
 )
 TEMPLATE_PATH = ASSET_DIR / "full_task_template.npz"
 MANIFEST_PATH = ASSET_DIR / "full_task_template_manifest.json"
@@ -32,7 +32,7 @@ TEMPLATE_SHA256 = (
     "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4"
 )
 MANIFEST_SHA256 = (
-    "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76"
+    "6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6"
 )
 
 

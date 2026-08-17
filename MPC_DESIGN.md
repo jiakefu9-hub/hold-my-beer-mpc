@@ -229,7 +229,7 @@ $$
 正式资产固定为：
 
 ```text
-disturbance_learning/data/full_task_template_v2/20260815_162850/
+disturbance_template/data/full_task_template_v2/20260815_162850/
   full_task_template.npz
   full_task_template_manifest.json
 ```

@@ -9,13 +9,13 @@ import unittest
 
 import numpy as np
 
-from disturbance_learning.full_task_protocol import DEFAULT_FULL_TASK_PROTOCOL
-from disturbance_learning.full_task_runtime_preflight import (
+from disturbance_template.full_task_protocol import DEFAULT_FULL_TASK_PROTOCOL
+from disturbance_template.full_task_runtime_preflight import (
     FormalFullTaskEnvironmentError,
     THREAD_ENVIRONMENT_NAMES,
     validate_formal_full_task_runtime,
 )
-from disturbance_learning.full_task_startup_pd import (
+from disturbance_template.full_task_startup_pd import (
     FixedStartupPdHandoff,
     RIGHT_ARM_MODE_FIXED_POSTURE_PD,
     StartupPdTraceRecorder,

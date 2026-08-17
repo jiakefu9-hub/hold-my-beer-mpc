@@ -11,7 +11,7 @@ Git tracking state have all been checked again.
 
 Archive source roots and cleanup targets are deliberately enumerated below.
 There is no wildcard-driven deletion path, and the top-level ``evaluation``,
-``disturbance_learning/data``, and ``disturbance_learning/artifacts``
+``disturbance_template/data``, and ``disturbance_template/artifacts``
 directories can never be deleted by this program.
 """
 
@@ -73,11 +73,11 @@ CHECKPOINT_COMMIT = "70eb33b51656b958648ea013bc9bd45aa72dfa73"
 CHECKPOINT_TAG = "checkpoint/full-task-v2-24ms-20260815"
 
 CORE_ASSETS = (
-    "disturbance_learning/data/full_task_template_v2/20260815_162850/"
+    "disturbance_template/data/full_task_template_v2/20260815_162850/"
     "full_task_template.npz",
-    "disturbance_learning/data/full_task_template_v2/20260815_162850/"
+    "disturbance_template/data/full_task_template_v2/20260815_162850/"
     "full_task_template_manifest.json",
-    "disturbance_learning/data/full_task_template_v2/20260815_162850/episodes/"
+    "disturbance_template/data/full_task_template_v2/20260815_162850/episodes/"
     "heldout_pair_02_minus/episode_manifest.json",
 )
 
@@ -131,6 +131,8 @@ class ArchiveGroupSpec:
     reason: str
 
 
+# These member names intentionally retain the pre-cleanup/pre-rename paths.
+# They describe immutable external archives and are not active runtime paths.
 ARCHIVE_GROUP_SPECS = (
     ArchiveGroupSpec(
         group_id="neural_disturbance_inputs",
@@ -185,8 +187,8 @@ ARCHIVE_GROUP_SPECS = (
 
 ALLOWED_CLEANUP_ROOTS = (
     "evaluation",
-    "disturbance_learning/data",
-    "disturbance_learning/artifacts",
+    "disturbance_template/data",
+    "disturbance_template/artifacts",
 )
 
 

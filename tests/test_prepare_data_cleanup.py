@@ -26,8 +26,8 @@ class PrepareDataCleanupTest(unittest.TestCase):
     def _repo(self, root: Path) -> Path:
         for relative in (
             "evaluation",
-            "disturbance_learning/data",
-            "disturbance_learning/artifacts",
+            "disturbance_template/data",
+            "disturbance_template/artifacts",
         ):
             (root / relative).mkdir(parents=True, exist_ok=True)
         return root
@@ -146,10 +146,10 @@ class PrepareDataCleanupTest(unittest.TestCase):
             [
                 "./evaluation/run/\n",
                 "./evaluation/run/result.json\n",
-                "disturbance_learning/data/raw.npz\n",
+                "disturbance_template/data/raw.npz\n",
             ]
         )
-        self.assertEqual(files, ["evaluation/run/result.json", "disturbance_learning/data/raw.npz"])
+        self.assertEqual(files, ["evaluation/run/result.json", "disturbance_template/data/raw.npz"])
         self.assertEqual(directories, ["evaluation/run"])
         assert_exact_archive_members(files, list(reversed(files)))
         with self.assertRaises(CleanupError):

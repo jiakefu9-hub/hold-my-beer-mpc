@@ -26,10 +26,10 @@ task t=0:       立即发布正式前进命令，heading control 开启
 
 正式模板资产被显式固定，不扫描“最新”目录：
 
-- [`full_task_template.npz`](disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz)，SHA256
+- [`full_task_template.npz`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz)，SHA256
   `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4`；
-- [`full_task_template_manifest.json`](disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json)，SHA256
-  `7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76`。
+- [`full_task_template_manifest.json`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json)，SHA256
+  `6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6`。
 
 这个模板提前知道 6.4 s 的停车时刻。它是固定任务 baseline，不泛化到任意速度、
 方向或未知停车时刻。
@@ -142,7 +142,7 @@ flowchart LR
    和 heading controller 与 continuous-H 的边界。
 6. [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)：完整 6 ms 计时口径和 CPU 7 环境。
 7. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)：只读 shadow 的能力与禁止声明。
-8. [disturbance_learning/README.md](disturbance_learning/README.md)：v2 的离线来源、
+8. [disturbance_template/README.md](disturbance_template/README.md)：v2 的离线来源、
    schema、parity 和本地产物边界。
 9. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
    输出链。

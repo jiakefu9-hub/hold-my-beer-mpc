@@ -7,16 +7,16 @@ import unittest
 
 import numpy as np
 
-from disturbance_learning.full_task_fixed_pd_collector import collection_specs
-from disturbance_learning.full_task_protocol import (
+from disturbance_template.full_task_fixed_pd_collector import collection_specs
+from disturbance_template.full_task_protocol import (
     DEFAULT_FULL_TASK_PROTOCOL,
     FullTaskClock,
     FullTaskContinuousHeadingFrame,
     direct_step_planned_command,
     rotation_z,
 )
-from disturbance_learning.full_task_recording import FullTaskRawRecorder
-from disturbance_learning.full_task_template_builder import (
+from disturbance_template.full_task_recording import FullTaskRawRecorder
+from disturbance_template.full_task_template_builder import (
     build_full_task_template,
     causal_h_metrics,
     evaluate_heldout_template,

@@ -49,9 +49,9 @@ run.sh
 
 | 资产 | 仓库相对路径 | SHA256 |
 | --- | --- | --- |
-| full-task v2 NPZ | `disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template.npz` | `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4` |
-| template manifest | `disturbance_learning/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json` | `7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76` |
-| held-out 初态 manifest | `disturbance_learning/data/full_task_template_v2/20260815_162850/episodes/heldout_pair_02_minus/episode_manifest.json` | `a40cd4180e46e62aa2f489a8bce233350317f807a1395e8bf6d2007774f40aa5` |
+| full-task v2 NPZ | `disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz` | `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4` |
+| template manifest | `disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json` | `6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6` |
+| held-out 初态 manifest | `disturbance_template/data/full_task_template_v2/20260815_162850/episodes/heldout_pair_02_minus/episode_manifest.json` | `a40cd4180e46e62aa2f489a8bce233350317f807a1395e8bf6d2007774f40aa5` |
 
 运行时只加载上述显式路径；禁止扫描目录或选择“最新模板”。加载器验证
 template/manifest checksum、schema、protocol、shape、anchor 网格和 SO(3)

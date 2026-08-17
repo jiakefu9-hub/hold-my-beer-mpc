@@ -14,13 +14,13 @@ from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
 
 import numpy as np
-from disturbance_learning.full_task_protocol import (
+from disturbance_template.full_task_protocol import (
     DEFAULT_FULL_TASK_PROTOCOL,
     FullTaskCausalHeadingFrame,
     FullTaskContinuousHeadingFrame,
     is_valid_rotation_batch,
 )
-from disturbance_learning.full_task_template_asset import (
+from disturbance_template.full_task_template_asset import (
     TEMPLATE_SCHEMA_VERSION,
     TEMPLATE_SCHEMA_VERSION_V2,
     load_npz_arrays,
@@ -1112,7 +1112,7 @@ def create_disturbance_predictor(
     template_dir = str(
         config.get(
             "mpc_disturbance_template_dir",
-            "disturbance_model_new_heading/templates_heading_interval",
+            "phase_disturbance_template/templates_heading_interval",
         )
     )
     if not os.path.isabs(template_dir):

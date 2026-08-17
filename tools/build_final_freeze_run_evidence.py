@@ -49,6 +49,15 @@ from tools.build_final_freeze_evidence import (
 )
 
 
+# Immutable final-run evidence predates the directory rename. The NPZ data
+# checksum is unchanged; only self-describing manifest paths changed.
+HISTORICAL_TEMPLATE_MANIFEST_SHA256 = (
+    "7f313057a1ba3748da2b2322a39366b6553bff13f9dbba123534765ccfe9cd76"
+)
+HISTORICAL_FINAL_RUN_BUILDER_SHA256 = (
+    "947a8bf4c7aa8e9f1af94420b0790471c7c33c68694d57a769d114709dc328e1"
+)
+
 FINAL_RUN_SOURCE_ROOT = Path("evaluation/t2_full_task_closed_loop")
 DEFAULT_OUTPUT = Path(
     "evaluation_summary/full_task_template_v2_final_freeze/final_runs"
@@ -768,10 +777,33 @@ def verify(
     )
     builder = repository / manifest["builder"]["repository_path"]
     require(builder.is_file(), f"missing evidence builder: {builder}")
-    require(sha256_file(builder) == manifest["builder"]["sha256"], "builder hash drift")
+    require(
+        manifest["builder"]["sha256"] == HISTORICAL_FINAL_RUN_BUILDER_SHA256,
+        "unexpected final-run evidence builder provenance",
+    )
     live_template = validate_template(repository)
-    require(live_template == manifest["frozen_template"], "file manifest template drift")
-    require(live_template == aggregate["frozen_template"], "aggregate template drift")
+    frozen_template = manifest["frozen_template"]
+    require(
+        frozen_template == aggregate["frozen_template"],
+        "file manifest and aggregate template identity differ",
+    )
+    for name in (
+        "template_sha256",
+        "schema_version",
+        "protocol_version",
+        "heading_frame_version",
+        "anchor_count",
+        "horizon",
+    ):
+        require(
+            frozen_template[name] == live_template[name],
+            f"frozen template numerical contract drift: {name}",
+        )
+    require(
+        frozen_template["manifest_sha256"]
+        in {live_template["manifest_sha256"], HISTORICAL_TEMPLATE_MANIFEST_SHA256},
+        "frozen template manifest is neither current nor the recorded pre-rename asset",
+    )
 
     copied = manifest["copied_files"]
     whitelist = [item for item in copied if item["category"] == "final_run_13_file_whitelist"]
@@ -820,7 +852,7 @@ def verify(
         validate_protocol_and_template_use(
             manifest=full_manifest,
             smoke=smoke,
-            template=live_template,
+            template=frozen_template,
             run_id=run_id,
         )
         validate_handoff(load_json(packaged / "startup_pd_handoff_summary.json"), run_id)

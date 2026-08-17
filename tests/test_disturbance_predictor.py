@@ -33,7 +33,7 @@ CONTROL_DT = 0.006
 HORIZON = 9
 TEMPLATE_DIR = (
     REPO_ROOT
-    / "disturbance_model_new_heading"
+    / "phase_disturbance_template"
     / "templates_heading_interval"
 )
 
@@ -247,7 +247,7 @@ class DisturbancePredictorRegressionTest(unittest.TestCase):
             {
                 "disturbance_predictor": "template",
                 "mpc_disturbance_template_dir": (
-                    "disturbance_model_new_heading/templates_heading_interval"
+                    "phase_disturbance_template/templates_heading_interval"
                 ),
                 "mpc_disturbance_template": "raw",
                 "mpc_disturbance_slow_bias_enabled": True,

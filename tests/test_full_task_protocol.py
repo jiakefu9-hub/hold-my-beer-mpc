@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from disturbance_learning.full_task_protocol import (
+from disturbance_template.full_task_protocol import (
     DEFAULT_FULL_TASK_PROTOCOL,
     FullTaskCausalHeadingFrame,
     FullTaskContinuousHeadingFrame,
@@ -19,7 +19,7 @@ from disturbance_learning.full_task_protocol import (
     is_valid_rotation_batch,
     rotation_z,
 )
-from disturbance_learning.full_task_recording import (
+from disturbance_template.full_task_recording import (
     FullTaskRawRecorder,
     compute_smoke_summary,
     save_full_task_smoke_artifacts,
@@ -281,7 +281,7 @@ class FullTaskProtocolTest(unittest.TestCase):
                 xml_path=REPO_DIR / "resources/g1_description/scene.xml",
                 legacy_template_path=(
                     REPO_DIR
-                    / "disturbance_model_new_heading/templates_heading_interval/heading_disturbance_template.npz"
+                    / "phase_disturbance_template/templates_heading_interval/heading_disturbance_template.npz"
                 ),
                 predictor_metadata={"predictor_type": "template"},
                 control_chain={
