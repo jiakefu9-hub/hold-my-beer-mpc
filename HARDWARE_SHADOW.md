@@ -79,7 +79,7 @@ controller 必然 fail closed；这不是需要绕开的报错。
 command publisher 的 target：
 
 ```bash
-cd /home/fjk/g1_ws/disturbance-lab
+cd /home/fjk/g1_ws/hold-my-beer-mpc
 cmake -S cpp/unitree_arm_adapter \
   -B /tmp/hold-my-beer-mpc-unitree-arm-adapter-build \
   -DCMAKE_BUILD_TYPE=Release \
@@ -105,8 +105,8 @@ taskset -c 5 \
 在 terminal 2：
 
 ```bash
-cd /home/fjk/g1_ws/disturbance-lab
-MPLCONFIGDIR=/tmp/disturbance-lab-matplotlib \
+cd /home/fjk/g1_ws/hold-my-beer-mpc
+MPLCONFIGDIR=/tmp/hold-my-beer-mpc-matplotlib \
   /home/fjk/miniforge3/envs/g1_mpc/bin/python run_hardware_shadow.py \
   --inspect-state-only \
   --shared-memory /g1_arm_mpc_shadow \
@@ -134,7 +134,7 @@ norm、state age、IMU 和右臂 q/dq，不运行 MPC，也不能写 command slo
 只有契约字段已经核对并写入 YAML，且 PREEMPT_RT checker 通过后，才能运行：
 
 ```bash
-cd /home/fjk/g1_ws/disturbance-lab
+cd /home/fjk/g1_ws/hold-my-beer-mpc
 ./tools/realtime/run_hardware_shadow.sh YOUR_INTERFACE \
   --control-cpu 7 \
   --bridge-cpu 5 \

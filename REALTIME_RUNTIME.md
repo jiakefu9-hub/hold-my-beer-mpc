@@ -33,7 +33,7 @@ run.sh
 正式 nominal 命令为：
 
 ```bash
-cd /home/fjk/g1_ws/disturbance-lab
+cd /home/fjk/g1_ws/hold-my-beer-mpc
 MPC_CONTROL_CPU=7 MPC_CONTROL_NUM_THREADS=1 ./run.sh \
   --full-task-smoke \
   --disturbance-predictor full_task_template \

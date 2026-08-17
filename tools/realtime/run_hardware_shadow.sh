@@ -91,7 +91,7 @@ BUILD_DIR="${UNITREE_ARM_ADAPTER_BUILD_DIR:-/tmp/hold-my-beer-mpc-unitree-arm-ad
 STATE_BRIDGE="$BUILD_DIR/unitree_arm_state_bridge"
 SHARED_MEMORY="/g1_shadow_${GROUP}_$$"
 BRIDGE_LOG="/tmp/${GROUP}_state_bridge.log"
-MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/disturbance-lab-matplotlib}"
+MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/hold-my-beer-mpc-matplotlib}"
 
 if [[ ! -x "$G1_MPC_PYTHON" ]]; then
     echo "Set G1_MPC_PYTHON to the project environment." >&2
@@ -162,7 +162,7 @@ if [[ ! -e "/dev/shm/${SHARED_MEMORY#/}" ]]; then
     exit 2
 fi
 
-UNIT="disturbance-lab-shadow-${GROUP}"
+UNIT="hold-my-beer-mpc-shadow-${GROUP}"
 OUTPUT_DIR="evaluation/hardware_shadow/${GROUP}"
 export MPC_CONTROL_NUM_THREADS=1
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
