@@ -126,18 +126,13 @@ full_task_template_sha256: d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9
 full_task_template_manifest_sha256: 6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6
 full_task_template_schema_version: full_task_template_v2
 full_task_heading_frame_version: full_task_continuous_heading_v2
-# 旧phase配置只供只读hardware shadow兼容，不是正式仿真默认方案。
-# 未配置disturbance_predictor时，旧调用方仍可由该布尔项选择template/zoh。
-# H 系步态扰动前馈开启后，第一完整周期只用于计算 H，约 0.8 s 后生效。
-mpc_disturbance_feedforward_enabled: true
-# 2 ms 相位网格上的未来控制区间模板；u_k 与 interval[k] 配对。
-mpc_disturbance_template_dir: phase_disturbance_template/templates_heading_interval
-# raw、half_smoothed、fully_smoothed；本轮闭环对照选择 raw。
-mpc_disturbance_template: raw
-# 闭环 A/B 表明关闭后综合任务代价变差，因此保留长期模板修正量。
-mpc_disturbance_slow_bias_enabled: true
-# 快速周期量由模板负责，持续测量差通过该时间常数缓慢形成长期修正。
-mpc_disturbance_slow_bias_time_constant: 0.4
+# 以下是旧 phase-template / hardware-shadow 兼容参数；当前 Full-Task Template v2
+# 不读取它们，因此在正式配置中禁用。将来若专门运行旧 hardware shadow，才可显式取消注释。
+# mpc_disturbance_feedforward_enabled: true
+# mpc_disturbance_template_dir: phase_disturbance_template/templates_heading_interval
+# mpc_disturbance_template: raw
+# mpc_disturbance_slow_bias_enabled: true
+# mpc_disturbance_slow_bias_time_constant: 0.4
 # MPC 独立低延迟通道，不改变 LQR 继续使用的 ddq_torso_* 滤波参数。
 mpc_torso_acc_filter_alpha: 0.50
 mpc_torso_alpha_filter_alpha: 0.50
