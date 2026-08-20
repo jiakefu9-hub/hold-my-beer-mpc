@@ -116,8 +116,8 @@ mpc_osqp_polishing: false
 mpc_failure_braking_gain: 4.0
 mpc_failure_posture_gain: 4.0
 mpc_failure_max_ddq_scale: 0.5
-# 当前正式仿真只使用绝对任务时间full-task v2；运行命令仍显式指定该模式。
-# template仅作为hardware shadow的旧phase兼容项，zoh是最小安全对照。
+# 正式仿真只使用绝对任务时间 Full-Task Template v2。旧 template/zoh 实现
+# 仅保留给隔离的 legacy shadow/诊断入口；本配置不会选择它们。
 disturbance_predictor: full_task_template
 # 固定任务baseline显式绑定已验收资产，禁止扫描或选择latest。
 full_task_template_path: disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz
@@ -126,8 +126,9 @@ full_task_template_sha256: d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9
 full_task_template_manifest_sha256: 6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6
 full_task_template_schema_version: full_task_template_v2
 full_task_heading_frame_version: full_task_continuous_heading_v2
-# 以下是旧 phase-template / hardware-shadow 兼容参数；当前 Full-Task Template v2
-# 不读取它们，因此在正式配置中禁用。将来若专门运行旧 hardware shadow，才可显式取消注释。
+# 以下是旧 phase-template 的历史复现实验参数。Full-Task Template v2 不读取它们，
+# 因此正式配置中保持注释。若要复现旧 phase-template 的 raw 变体，才显式取消注释。
+# hardware shadow 当前会强制选择 legacy template；未提供这些 key 时使用代码默认值。
 # mpc_disturbance_feedforward_enabled: true
 # mpc_disturbance_template_dir: phase_disturbance_template/templates_heading_interval
 # mpc_disturbance_template: raw
@@ -194,13 +195,15 @@ mpc_execution_hold_last_safe: true
 # C++ 2 ms 右臂安全执行器
 # ==============================
 # LQR/MPC 默认把完整 qpos/qvel、整机参考 qacc、当前非右臂力矩、
-# q_ref/dq_ref/ddq_des 和时间戳交给独立 C++ external-step 进程；进程依次
-# 完成 RNEA、MuJoCo 候选验收和最终执行器，再把 final_tau 返回主仿真。
-# sync 保留为冻结回归基线，shadow 会同拍运行两条路径并要求逐项一致。
-# PID 没有 ddq_des，因此即使这里是 process，也自动继续使用同步 C++ PD。
+# q_ref/dq_ref/ddq_des 和时间戳交给独立 C++ external-step 进程；该进程
+# 串行执行整条右臂 ddq→力矩链：RNEA、MuJoCo 候选验收/mapper 和 final executor，
+# 再把 final_tau 返回主仿真。sync 保留为冻结回归基线，表示无独立进程的
+# 单进程串行执行；shadow 同拍运行单进程基线与独立进程两条整链并要求逐项一致。
+# PID 没有 ddq_des，因此即使这里是 process，也自动继续使用无独立进程的串行 C++ PD。
 right_arm_execution_runtime: process
-# cpp 在每个 2 ms 物理拍读取最新 q/dq，合成一次 PD，并负责参考/力矩
-# 限幅、命令/状态超时和 NaN 回退；python 仅用于回归对照。
+# 这里只指 final executor，不含前面的 RNEA 或 MuJoCo 候选验收。cpp 在每个
+# 2 ms 物理拍读取最新 q/dq，在输入前馈力矩 tau_ff 基础上合成一次 PD，并负责
+# 参考/力矩限幅、命令/状态超时和 NaN 回退；python 仅用于回归对照。
 right_arm_executor_backend: cpp
 # 仿真与“主机算完整力矩”真机模式使用 host_full_torque；此时发送给
 # 电机的 kp/kd 必须为 0。device_pd 模式则只发送纯前馈和 PD 参数。

@@ -2105,7 +2105,12 @@ if __name__ == "__main__":
                 predictor_metadata.get(
                     "path",
                     Path(repo_dir)
-                    / str(config["mpc_disturbance_template_dir"])
+                    / str(
+                        config.get(
+                            "mpc_disturbance_template_dir",
+                            "phase_disturbance_template/templates_heading_interval",
+                        )
+                    )
                     / "heading_disturbance_template.npz",
                 )
             )
