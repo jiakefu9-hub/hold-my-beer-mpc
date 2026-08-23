@@ -7,7 +7,8 @@ full-task predictor 实现；MuJoCo 与 Unitree 负责提供不同的平台状�
 当前正式结果是受控 MuJoCo 仿真结果。hardware shadow 仍是只读、
 hardware-unverified 的 legacy phase-template 兼容路径；它尚未接入
 full-task template v2、continuous-H 的正式任务时钟或 24 ms startup-PD
-handoff。
+handoff。真机两部分的统一接口与阶段门见
+[`HARDWARE_INTEGRATION_PLAN.md`](HARDWARE_INTEGRATION_PLAN.md)。
 
 ## 总体数据流
 
@@ -180,6 +181,20 @@ predictor；它没有最终 full-task v2 的 absolute task epoch、continuous-H
 任务绑定和 24 ms PD→MPC handoff。因此 shadow 结果只能验证状态合同、坐标
 转换、MPC 提案和只读进程边界，不能代表最终控制方案已经迁移到真机。
 
+## Hardware state 到 output 的统一边界
+
+后续真机工作固定为五个窄接口：`RawHardwareStateFrame` 只承载原始消息和 CRC/
+source-time 证据；`ValidatedHardwareObservation` 才能进入共享控制核心；
+`TaskClockEvent` 由真实 locomotion command producer 定义 full-task epoch；
+`HardwareControlProposal` 只表示 MPC 提案且没有输出授权；
+`CertifiedHardwareCommand + ExecutionReceipt` 只属于未来 hardware output adapter。
+
+当前 state-only bridge 是唯一批准的 ingress。future publisher 必须复用同一 paired
+`LowState + rt/secondary_imu` 语义；不得保留 output-capable `dds_main.cpp` 当前另取
+`LowState.imu_state` pelvis IMU 的第二套状态链。protocol v2 尚未逐样本携带
+LowState version/motorstate、两个 source timestamp 和 skew，这些是后续 v3 的明确
+缺口，本轮不为此改变 ABI。
+
 ## Future hardware output path
 
 [`cpp/unitree_arm_adapter/`](cpp/unitree_arm_adapter/) 保持独立于
@@ -200,6 +215,9 @@ MuJoCo 求解状态的 external-step 仿真协议。两者不应合并成一个 
   释放和硬件急停尚需吊架条件下的物理验证；
 - 仿真 mapper 的 MuJoCo forward-dynamics certification 不是实机安全证据，
   真机需要独立、fail-closed 的可执行力矩合同；
+- 真机安全合同不得默认继承 MuJoCo `max_abs_qacc=10 rad/s^2` 作为 hard-stop，
+  而应按硬件证据区分 hard-stop、soft guard 和 diagnostics；单拍轻微 qacc 超限
+  是否终止主动控制仍是 hardware-unverified 的设计问题；
 - 真机端到端时钟、DDS 延迟、最坏执行时间和 deadline 行为尚未测量。
 
 在这些条件全部关闭以前，future hardware output path 只能保留为适配器边界，
@@ -211,7 +229,8 @@ MuJoCo 求解状态的 external-step 仿真协议。两者不应合并成一个 
 | --- | --- | --- |
 | full-task v2、continuous-H、24 ms handoff、MPC/process 和认证力矩链 | 单元/回归、offline-online parity、受控 MuJoCo nominal/held-out 运行；轻量证据见 [`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/) | **simulation-validated**，仅限冻结任务、模型、配置和运行环境。 |
 | `RightArmSimProcess` 与 `cpp/right_arm_sim_runtime` | Python/C++ ABI、seqlock、request/state 对齐、错误中毒和锁步 external-step 测试 | **simulation runtime validated**；不是 DDS 或硬件执行证据。 |
-| hardware state bridge、共享内存和 shadow runner | C++/Python layout、dry-run、fail-closed contract 与只读输出隔离测试 | **code/test validated, hardware-unverified**；不支持最终 full-task v2 + 24 ms。 |
+| hardware state bridge、共享内存和 shadow runner | C++/Python layout、dry-run、fail-closed contract 与只读输出隔离测试 | **code/test validated, hardware-unverified**；H1 无有效样本，状态为 PARTIAL；不支持最终 full-task v2 + 24 ms。 |
+| state trace replay 与 future-output fake sink | synthetic fixtures 下的 schema/monotonic/binding/expiry/replay/watchdog/PD-semantics 测试；无 DDS writer | **offline code/test validated only**；不能修改 verification flags，也不是硬件安全认证。 |
 | `unitree_arm_adapter` 主动输出、安全释放和 2 ms 周期 | C++ 单测与无 DDS dry-run | **hardware-unverified**；未获得主动真机闭环许可。 |
 | CPU 绑定下的完整 6 ms MuJoCo timing | 受控仿真 metadata 和 interval 证据 | 只说明该主机上的 MuJoCo 控制循环；**不是真机硬实时证明**。 |
 | experimental MPC-result age | `heldout_pair_02_minus` 2 ms 在 44 ms 因最低真实 candidate `10.293 rad/s^2` 超过 MuJoCo 门限 10 而 fail closed | **simulation sensitivity only / PARTIAL 后冻结**；不是硬件 qacc hard-stop 依据。 |

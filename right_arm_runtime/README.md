@@ -130,3 +130,17 @@ cpp/unitree_arm_adapter/build_and_test.sh
 测试检查 C++/Python layout、seqlock、错误 magic/version/layout、默认输出关闭
 及两种 PD 语义；它使用 dry-run，不访问 DDS，也不证明真机行为。完整硬件边界
 见 [HARDWARE_SHADOW.md](../HARDWARE_SHADOW.md)。
+
+
+## Hardware offline preparation
+
+`hardware_state_replay.py` 审计 state-only JSONL evidence，但永远不会修改 hardware
+verification flags；`hardware_output_contract.py` 定义 source-state binding、expiry、
+13-slot active mask、互斥 PD/torque 语义和纯内存 `FakeHardwareCommandSink`。后者没有
+Unitree SDK/DDS/shared-memory writer 依赖，receipt 始终声明没有 DDS/hardware write。
+其 `CertifiedHardwareCommand` 只通过 offline transport contract，并固定
+`hardware_safety_certified=false`、`hardware_output_authorized=false`。
+
+详见 [HARDWARE_OFFLINE_PREPARATION.md](../HARDWARE_OFFLINE_PREPARATION.md)。H1
+仍为 PARTIAL；真实 model/index/IMU、arm-weight ownership、release/watchdog 和安全
+阈值必须留到现场验证。

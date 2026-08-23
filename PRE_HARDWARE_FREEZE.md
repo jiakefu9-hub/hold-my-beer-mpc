@@ -236,7 +236,11 @@ predictor 路线已冻结并从当前正式源码移除；下肢 TorchScript wal
 1. 为硬件适配器实现并验证 full-task v2 task epoch、continuous-H 和 24 ms
    PD→MPC handoff；不能沿用 legacy phase shadow 后直接发力矩。
 2. 提供经验证的 floating-base pose/twist、接触和外力接口，明确估计延迟。
-3. 定义不依赖 MuJoCo forward dynamics 的真机 fail-closed 力矩合同。
+3. 定义不依赖 MuJoCo forward dynamics 的真机安全合同。不得默认把仿真的
+   `max_abs_qacc=10 rad/s^2` 直接继承为真机 hard-stop；应分别定义：必须立即禁止
+   输出的 hard-stop、允许受控降级/恢复的 soft guard，以及只记录趋势的 diagnostics。
+   是否因单拍轻微 qacc 超限终止主动控制，必须结合真实 `q/dq`、位置余量、力矩与
+   torque-rate、温度、接触/状态估计可信度和超限持续性，经吊架与分级试验确定。
 4. 验证 13-DOF arm SDK 索引、左右臂/腰固定参考和 ownership transition。
 5. 在吊架、急停和独立监督下分级验证 watchdog、超时释放、温度与通信故障。
 6. 在目标计算机实测 DDS、驱动、总线和完整控制区间的 worst-case deadline。

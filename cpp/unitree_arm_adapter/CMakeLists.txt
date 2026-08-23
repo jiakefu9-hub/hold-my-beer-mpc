@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(UNITREE_ARM_ADAPTER_BUILD_DDS "构建Unitree SDK2 DDS适配器" OFF)
+option(UNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE
+    "构建只订阅状态、没有命令publisher的Unitree bridge" OFF)
 set(UNITREE_SDK2_DIR "/home/fjk/g1_ws/unitree_sdk2" CACHE PATH
     "Unitree SDK2源码目录")
 
@@ -25,18 +27,24 @@ target_link_libraries(unitree_arm_adapter_dry_run PRIVATE unitree_arm_adapter_co
 target_compile_options(unitree_arm_adapter_dry_run PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
-if(UNITREE_ARM_ADAPTER_BUILD_DDS)
+if(UNITREE_ARM_ADAPTER_BUILD_DDS OR UNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE)
     if(NOT EXISTS "${UNITREE_SDK2_DIR}/CMakeLists.txt")
         message(FATAL_ERROR "UNITREE_SDK2_DIR无效: ${UNITREE_SDK2_DIR}")
     endif()
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     add_subdirectory("${UNITREE_SDK2_DIR}"
         "${CMAKE_CURRENT_BINARY_DIR}/unitree_sdk2" EXCLUDE_FROM_ALL)
+endif()
+
+if(UNITREE_ARM_ADAPTER_BUILD_DDS)
     add_executable(unitree_arm_adapter_dds src/dds_main.cpp)
     target_link_libraries(unitree_arm_adapter_dds PRIVATE
         unitree_arm_adapter_core unitree_sdk2)
     target_compile_options(unitree_arm_adapter_dds PRIVATE
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+endif()
+
+if(UNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE)
     # Shadow integration uses a separate state-only executable.  It does not
     # include LowCmd or instantiate any publisher, so no CLI flag can enable
     # actuation in this process.

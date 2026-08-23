@@ -1,9 +1,11 @@
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -13,6 +15,7 @@
 
 #include <unitree/idl/hg/IMUState_.hpp>
 #include <unitree/idl/hg/LowState_.hpp>
+#include <unitree/dds_wrapper/common/crc.h>
 #include <unitree/robot/channel/channel_factory.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
 
@@ -35,6 +38,7 @@ struct Options {
     std::string shared_memory_name{"/g1_arm_mpc_shadow"};
     std::uint64_t duration_s{0};
     std::uint64_t max_source_skew_us{5000};
+    std::string summary_json;
     bool unlink_on_exit{false};
 };
 
@@ -53,6 +57,7 @@ void PrintUsage(const char* executable) {
         << "  --shm-name NAME   POSIX shared-memory name\n"
         << "  --duration-s N    0 means run until SIGINT/SIGTERM\n\n"
         << "  --max-source-skew-us N  LowState/torso-IMU pairing limit\n"
+        << "  --summary-json PATH  write receive/CRC/pairing counters\n"
         << "  --unlink-on-exit  remove this bridge's shm name on exit\n\n"
         << "This binary contains no LowCmd type and creates no publisher.\n";
 }
@@ -76,6 +81,8 @@ Options ParseOptions(int argc, char** argv) {
             options.max_source_skew_us = ParseUnsigned(
                 require_value("--max-source-skew-us"),
                 "--max-source-skew-us");
+        } else if (argument == "--summary-json") {
+            options.summary_json = require_value("--summary-json");
         } else if (argument == "--unlink-on-exit") {
             options.unlink_on_exit = true;
         } else if (argument == "--help" || argument == "-h") {
@@ -95,6 +102,19 @@ Options ParseOptions(int argc, char** argv) {
         throw std::invalid_argument("--max-source-skew-us must be positive");
     }
     return options;
+}
+
+bool LowStateCrcValid(
+    const unitree_hg::msg::dds_::LowState_& message) {
+    static_assert(
+        sizeof(unitree_hg::msg::dds_::LowState_) % sizeof(std::uint32_t) == 0U,
+        "LowState wire object must contain complete uint32 words");
+    auto copy = message;
+    const auto word_count = static_cast<std::uint32_t>(
+        sizeof(copy) / sizeof(std::uint32_t) - 1U);
+    const auto computed = crc32_core(
+        reinterpret_cast<std::uint32_t*>(&copy), word_count);
+    return message.crc() == computed;
 }
 
 ua::RobotStatePayload ConvertState(
@@ -148,13 +168,19 @@ public:
         if (raw_message == nullptr) {
             return;
         }
+        ++low_state_received_count_;
+        const auto message = *static_cast<const
+            unitree_hg::msg::dds_::LowState_*>(raw_message);
+        if (!LowStateCrcValid(message)) {
+            ++low_state_crc_rejected_count_;
+            return;
+        }
         ua::RobotStatePayload state;
         std::lock_guard<std::mutex> lock(mutex_);
-        low_state_ = *static_cast<const
-            unitree_hg::msg::dds_::LowState_*>(raw_message);
+        low_state_ = message;
         low_state_timestamp_ns_ = ua::MonotonicNowNs();
         ++low_state_sequence_;
-        ++low_state_count_;
+        ++low_state_valid_count_;
         if (TryBuildStateLocked(state)) {
             ua::WriteSeqlock(layout_->state, state);
         }
@@ -176,8 +202,14 @@ public:
         }
     }
 
-    [[nodiscard]] std::uint64_t low_state_count() const {
-        return low_state_count_.load(std::memory_order_relaxed);
+    [[nodiscard]] std::uint64_t low_state_received_count() const {
+        return low_state_received_count_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t low_state_valid_count() const {
+        return low_state_valid_count_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t low_state_crc_rejected_count() const {
+        return low_state_crc_rejected_count_.load(std::memory_order_relaxed);
     }
     [[nodiscard]] std::uint64_t torso_imu_count() const {
         return torso_imu_count_.load(std::memory_order_relaxed);
@@ -190,6 +222,18 @@ public:
     }
     [[nodiscard]] std::uint64_t max_accepted_skew_ns() const {
         return max_accepted_skew_ns_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::array<std::uint32_t, 2> last_version() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return low_state_.version();
+    }
+    [[nodiscard]] std::uint8_t last_mode_pr() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return low_state_.mode_pr();
+    }
+    [[nodiscard]] std::uint8_t last_mode_machine() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return low_state_.mode_machine();
     }
 
 private:
@@ -235,12 +279,60 @@ private:
     std::uint64_t torso_imu_sequence_{0};
     std::uint64_t published_low_state_sequence_{0};
     std::uint64_t published_torso_imu_sequence_{0};
-    std::atomic<std::uint64_t> low_state_count_{0};
+    std::atomic<std::uint64_t> low_state_received_count_{0};
+    std::atomic<std::uint64_t> low_state_valid_count_{0};
+    std::atomic<std::uint64_t> low_state_crc_rejected_count_{0};
     std::atomic<std::uint64_t> torso_imu_count_{0};
     std::atomic<std::uint64_t> paired_state_count_{0};
     std::atomic<std::uint64_t> rejected_skew_count_{0};
     std::atomic<std::uint64_t> max_accepted_skew_ns_{0};
 };
+
+void WriteSummaryJson(
+    const std::string& path,
+    const Options& options,
+    const PairedStateWriter& writer) {
+    if (path.empty()) {
+        return;
+    }
+    std::ofstream stream(path, std::ios::out | std::ios::trunc);
+    if (!stream) {
+        throw std::runtime_error("cannot open bridge summary: " + path);
+    }
+    const auto version = writer.last_version();
+    stream
+        << "{\n"
+        << "  \"schema\": \"unitree_state_bridge_summary_v1\",\n"
+        << "  \"network_interface\": \"" << options.network_interface
+        << "\",\n"
+        << "  \"lowstate_topic\": \"" << kLowStateTopic << "\",\n"
+        << "  \"torso_imu_topic\": \"" << kTorsoImuTopic << "\",\n"
+        << "  \"output_capability\": \"absent\",\n"
+        << "  \"lowstate_received_count\": "
+        << writer.low_state_received_count() << ",\n"
+        << "  \"lowstate_crc_valid_count\": "
+        << writer.low_state_valid_count() << ",\n"
+        << "  \"lowstate_crc_rejected_count\": "
+        << writer.low_state_crc_rejected_count() << ",\n"
+        << "  \"torso_imu_received_count\": "
+        << writer.torso_imu_count() << ",\n"
+        << "  \"paired_state_count\": "
+        << writer.paired_state_count() << ",\n"
+        << "  \"rejected_source_skew_count\": "
+        << writer.rejected_skew_count() << ",\n"
+        << "  \"max_accepted_source_skew_us\": "
+        << writer.max_accepted_skew_ns() / 1000U << ",\n"
+        << "  \"last_lowstate_version\": [" << version[0] << ", "
+        << version[1] << "],\n"
+        << "  \"last_mode_pr\": "
+        << static_cast<unsigned int>(writer.last_mode_pr()) << ",\n"
+        << "  \"last_mode_machine\": "
+        << static_cast<unsigned int>(writer.last_mode_machine()) << "\n"
+        << "}\n";
+    if (!stream) {
+        throw std::runtime_error("failed to write bridge summary: " + path);
+    }
+}
 
 }  // namespace
 
@@ -287,12 +379,15 @@ int main(int argc, char** argv) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         std::cout
-            << "lowstate samples=" << writer.low_state_count()
+            << "lowstate received=" << writer.low_state_received_count()
+            << " crc valid=" << writer.low_state_valid_count()
+            << " crc rejected=" << writer.low_state_crc_rejected_count()
             << " torso imu samples=" << writer.torso_imu_count()
             << " paired states=" << writer.paired_state_count()
             << " rejected skew=" << writer.rejected_skew_count()
             << " max accepted skew us="
             << writer.max_accepted_skew_ns() / 1000U << "\n";
+        WriteSummaryJson(options.summary_json, options, writer);
         if (options.unlink_on_exit) {
             region = ua::SharedMemoryRegion{};
             ua::SharedMemoryRegion::Unlink(options.shared_memory_name);

@@ -94,6 +94,23 @@ class HardwareContractTest(unittest.TestCase):
         self.assertIn('kLowStateTopic = "rt/lowstate"', source)
         self.assertIn('kTorsoImuTopic = "rt/secondary_imu"', source)
         self.assertIn("max_source_skew_us{5000}", source)
+        self.assertIn("LowStateCrcValid", source)
+        self.assertIn("low_state_crc_rejected_count_", source)
+        self.assertIn("crc32_core", source)
+
+        cmake = (
+            REPO_ROOT / "cpp/unitree_arm_adapter/CMakeLists.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("UNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE", cmake)
+        launcher = (
+            REPO_ROOT
+            / "tools/realtime/run_hardware_state_inspection.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("-DUNITREE_ARM_ADAPTER_BUILD_DDS=OFF", launcher)
+        self.assertIn(
+            "-DUNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE=ON", launcher
+        )
+        self.assertNotIn("--enable-output", launcher)
 
     def test_repository_config_is_deliberately_not_armed(self):
         payload = load_hardware_shadow_config(

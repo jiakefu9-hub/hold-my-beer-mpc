@@ -140,10 +140,14 @@ flowchart LR
 - 仿真正式链：`run.sh -> main_sim.py -> RightArmSimProcess -> C++ simulation
   runtime -> mapper-certified feedforward + latest-state executor PD/guards -> final_tau
   -> d.ctrl -> mj_step`。mapper 只在 0/4 ms 更新拍重做 forward-dynamics 认证。
-- hardware shadow 当前只读、`command_publish_count=0`，仍是 legacy phase-template
-  兼容路径；它尚未接入 full-task v2 的任务时钟、continuous-H 和 24 ms handoff。
+- hardware shadow 当前只读、`command_publish_count=0`。第一次真实 G1 session 的
+  正式入口仅是 state-only inspection：CRC-valid `LowState` 与 secondary torso IMU
+  进入只读 trace，不运行 predictor/MPC；完整 shadow 仍是 legacy phase-template
+  兼容路径，尚未接入 full-task v2 的任务时钟、continuous-H 和 24 ms handoff。
 - `cpp/unitree_arm_adapter` 是未来真机适配边界，但主动真机闭环仍为
   **hardware-unverified**。
+- 未来真机安全合同不得默认把 MuJoCo 的 `max_abs_qacc=10 rad/s^2` 原样继承为
+  hard-stop；应基于真实硬件证据分别定义 hard-stop、soft guard 和 diagnostics。
 
 完整依赖和验证边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
@@ -158,11 +162,14 @@ flowchart LR
 5. [HEADING_CONTROL.md](HEADING_CONTROL.md)：direct-step planned/runtime command、20 ms 命令更新
    和 heading controller 与 continuous-H 的边界。
 6. [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)：完整 6 ms 计时口径和 CPU 7 环境。
-7. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)：只读 shadow 的能力与禁止声明。
-8. [disturbance_template/README.md](disturbance_template/README.md)：v2 的离线来源、
+7. [HARDWARE_INTEGRATION_PLAN.md](HARDWARE_INTEGRATION_PLAN.md)：Unitree 官方
+   契约核对、state/proposal/command/receipt 接口和 H0-H3/O0-O4 阶段门。
+8. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)、[HARDWARE_OFFLINE_PREPARATION.md](HARDWARE_OFFLINE_PREPARATION.md)：第一次只读 session 的入口、证据和
+   禁止声明。
+9. [disturbance_template/README.md](disturbance_template/README.md)：v2 的离线来源、
    schema、parity 和本地产物边界。
-9. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
-   输出链。
+10. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
+    输出链。
 
 [CHALLENGE.md](CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。
 

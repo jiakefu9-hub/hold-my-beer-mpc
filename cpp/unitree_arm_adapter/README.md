@@ -14,7 +14,7 @@ DDS，而是使用独立的 `cpp/right_arm_sim_runtime`。
 ## 文件职责
 
 - **核心**：`protocol.hpp`、`seqlock.hpp`、`safety.cpp` 和 `periodic_loop.cpp`，分别定义跨进程协议、无锁一致快照、唯一发布前安全入口，以及基于 `CLOCK_MONOTONIC` 和绝对时间的 2 ms 周期。
-- **半核心**：`shared_memory.cpp` 和 `dds_main.cpp`，负责 POSIX 共享内存以及 Unitree SDK2 的 `rt/lowstate`/`rt/arm_sdk` 适配。`state_bridge_main.cpp` 是独立的只读硬件 shadow 入口，只订阅 LowState，编译单元中没有命令消息或 publisher。
+- **半核心**：`shared_memory.cpp` 和 `dds_main.cpp`，负责 POSIX 共享内存以及 Unitree SDK2 的 `rt/lowstate`/`rt/arm_sdk` 适配。`state_bridge_main.cpp` 是独立的只读硬件入口，只订阅 LowState 与 secondary torso IMU，先验证 LowState CRC，编译单元中没有命令消息或 publisher。
 - **非核心**：`dry_run_main.cpp`、`core_test.cpp` 和 `build_and_test.sh`，只用于布局检查、故障注入、计时和构建验证。
 
 ## 控制链和双重 PD 约束
@@ -84,6 +84,15 @@ Python 端必须逐字段复现版本、大小、偏移和 64 字节对齐；版
 状态估计、inverse dynamics、torque contract 和 fail-closed 接口；本任务没有
 增加这些能力。
 
+### 真机 qacc 门限不是 MuJoCo 常量的复制
+
+未来主动输出不得默认把 MuJoCo 的 `max_abs_qacc=10 rad/s^2` 直接设为真机
+hard-stop。仿真值来自当前模型和 forward-dynamics 验收，不是 Unitree 硬件物理
+极限。硬件合同必须分别定义 hard-stop、soft guard 和 diagnostics，并联合检查
+`q/dq`、位置余量、torque/torque-rate、温度、通信/watchdog、接触与状态估计可信度。
+单拍轻微 qacc 超限是否应立即终止主动控制，需要厂商限制和吊架分级试验支持；
+本 adapter 当前没有实现或验证这项策略，也没有因此获得输出许可。
+
 ## 构建与验证
 
 不依赖 Unitree SDK 的核心构建和测试：
@@ -93,13 +102,18 @@ chmod +x cpp/unitree_arm_adapter/build_and_test.sh
 cpp/unitree_arm_adapter/build_and_test.sh
 ```
 
-可选构建 DDS 适配器：
+只构建 state-only bridge（第一次真实 session 的批准方式）：
 
 ```bash
-UNITREE_ARM_BUILD_DDS=ON \
+UNITREE_ARM_BUILD_DDS=OFF \
+UNITREE_ARM_BUILD_STATE_BRIDGE=ON \
+UNITREE_ARM_ADAPTER_BUILD_DIR=/tmp/hold-my-beer-mpc-unitree-state-only-build \
 UNITREE_SDK2_DIR=/home/fjk/g1_ws/unitree_sdk2 \
 cpp/unitree_arm_adapter/build_and_test.sh
 ```
+
+output-capable DDS 只允许为离线设计审查单独构建，不能与第一次 state-only session
+共用 build directory，也不属于本轮批准的运行路径。
 
 纯本地 2 ms 干运行（永远不访问 DDS）：
 
@@ -136,7 +150,7 @@ DDS 只读干运行（订阅状态，但不发布命令）：
 输出的参数：
 
 ```bash
-/tmp/hold-my-beer-mpc-unitree-arm-adapter-build/unitree_arm_state_bridge \
+/tmp/hold-my-beer-mpc-unitree-state-only-build/unitree_arm_state_bridge \
   enp3s0 --shm-name /g1_arm_mpc_shadow --unlink-on-exit
 ```
 
@@ -160,4 +174,5 @@ DDS 只读干运行（订阅状态，但不发布命令）：
 - `unitree_arm_adapter_dds --enable-output`：未来输出路径，当前未获授权、未完成
   full-task v2 + 24 ms 集成、未经过真机验收。
 
-完整说明见 [HARDWARE_SHADOW.md](../../HARDWARE_SHADOW.md)。
+完整说明见 [HARDWARE_SHADOW.md](../../HARDWARE_SHADOW.md)，统一接口和分阶段
+output 设计见 [HARDWARE_INTEGRATION_PLAN.md](../../HARDWARE_INTEGRATION_PLAN.md)。

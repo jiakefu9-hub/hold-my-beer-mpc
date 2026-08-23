@@ -87,7 +87,7 @@ RUN_GROUP="$(id -gn)"
 RUN_HOME="$HOME"
 G1_MPC_PYTHON="${G1_MPC_PYTHON:-/home/${RUN_USER}/miniforge3/envs/g1_mpc/bin/python}"
 UNITREE_SDK2_DIR="${UNITREE_SDK2_DIR:-/home/${RUN_USER}/g1_ws/unitree_sdk2}"
-BUILD_DIR="${UNITREE_ARM_ADAPTER_BUILD_DIR:-/tmp/hold-my-beer-mpc-unitree-arm-adapter-build}"
+BUILD_DIR="${UNITREE_ARM_ADAPTER_BUILD_DIR:-/tmp/hold-my-beer-mpc-unitree-state-only-build}"
 STATE_BRIDGE="$BUILD_DIR/unitree_arm_state_bridge"
 SHARED_MEMORY="/g1_shadow_${GROUP}_$$"
 BRIDGE_LOG="/tmp/${GROUP}_state_bridge.log"
@@ -123,10 +123,15 @@ fi
 # it does not build or launch the output-capable DDS executable.
 cmake -S "$REPO_DIR/cpp/unitree_arm_adapter" -B "$BUILD_DIR" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DUNITREE_ARM_ADAPTER_BUILD_DDS=ON \
+    -DUNITREE_ARM_ADAPTER_BUILD_DDS=OFF \
+    -DUNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE=ON \
     -DUNITREE_SDK2_DIR="$UNITREE_SDK2_DIR"
 cmake --build "$BUILD_DIR" --parallel \
     --target unitree_arm_state_bridge
+if [[ -e "$BUILD_DIR/unitree_arm_adapter_dds" ]]; then
+    echo "state-only build directory contains output-capable binary" >&2
+    exit 2
+fi
 
 bridge_pid=""
 cleanup() {
