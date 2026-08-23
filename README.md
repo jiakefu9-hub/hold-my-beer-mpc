@@ -129,10 +129,22 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认
 - **Simulation** 是当前正式路径：Python 拥有 MuJoCo，独立 C++ worker 执行右臂
   RNEA、mapper 和 executor；
 - **Shadow** 只读真实状态，当前 H1 为 PARTIAL；共享 full-task core 已通过
-  synthetic/replay H3-offline proposal 测试，但现场 launcher 仍受 gate 限制，且
-  fake sink 的 DDS write/hardware output 始终为0；
-- **Future / Hardware output** 尚未集成或授权，真机安全合同也不会直接照搬 MuJoCo
-  的 `max_abs_qacc=10 rad/s²`。
+  synthetic/replay H3-offline proposal 测试，现场 launcher 仍受 gate 限制；
+- **Publisher-absent HIL** 用 protocol-v3 把 offline-certified command 送到 C++
+  supervisor 和 recording command sink，只记录 would-write/receipt，DDS write 和
+  hardware output 始终为 0；
+- **Future / Hardware output** 尚未授权。Stage 2 已移除/禁止构建真实
+  command publisher target；真机安全合同也不会直接照搬 MuJoCo 的
+  `max_abs_qacc=10 rad/s²`。
+
+Hardware IPC 现为 protocol-v3：3328 B 的 POSIX shared memory 包含 command、
+paired-state 和完整 receipt 三个 seqlock slot。state bridge 启动时绑定显式非零
+session nonce。HIL 在 2 ms 边界复核 session/source/task/policy、expiry、
+deadline、13-slot mask 和状态机；一个 6 ms proposal 只能在相对 `0/2/4 ms`
+的三拍内保持，且必须在有界 cache 精确命中它绑定的 source state。
+production policy 默认未验证、未授权，因而不可 arming。详见
+[ARCHITECTURE.md](ARCHITECTURE.md) 和
+[HARDWARE_OFFLINE_PREPARATION.md](HARDWARE_OFFLINE_PREPARATION.md)。
 
 唯一的进程、IPC、数据流和平台替换地图见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 若入口、进程/worker、IPC、模块边界或 Simulation/Shadow/Hardware 路径变化，

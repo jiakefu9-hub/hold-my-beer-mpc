@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "unitree_arm_adapter/periodic_loop.hpp"
+#include "unitree_arm_adapter/receipt.hpp"
 #include "unitree_arm_adapter/safety.hpp"
 #include "unitree_arm_adapter/seqlock.hpp"
 #include "unitree_arm_adapter/shared_memory.hpp"
@@ -131,17 +132,38 @@ void WriteSyntheticInput(
     std::uint64_t sample_id) {
     ua::RobotStatePayload state;
     state.monotonic_timestamp_ns = now_ns;
+    state.validated_timestamp_ns = now_ns;
+    state.ingress_session_nonce = 1U;
+    state.low_state_timestamp_ns = now_ns;
+    state.torso_imu_timestamp_ns = now_ns;
+    state.source_skew_ns = 0U;
     state.sample_id = sample_id;
     state.robot_tick = static_cast<std::uint32_t>(sample_id);
+    state.ingress_flags = ua::kStateLowStateCrcValid |
+                          ua::kStatePairedIngressValidated |
+                          ua::kStateTorsoImuPresent |
+                          ua::kStateSyntheticFixture;
     state.imu_quaternion_wxyz[0] = 1.0;
     ua::WriteSeqlock(layout.state, state);
 
     ua::ArmCommandPayload command;
     command.monotonic_timestamp_ns = now_ns;
+    command.producer_sequence = sample_id - 1U;
     command.command_id = sample_id;
+    command.source_sample_id = sample_id;
+    command.source_timestamp_ns = now_ns;
+    command.task_time_ns = (sample_id - 1U) * 6'000'000ULL;
+    command.full_task_anchor = sample_id - 1U;
+    command.expires_timestamp_ns = now_ns + 30'000'000ULL;
+    command.session_nonce = 1U;
+    command.task_epoch_id = 1U;
+    command.safety_policy_id = 1U;
     command.mode = static_cast<std::uint32_t>(
         ua::CommandMode::kRobotPdPlusFeedforward);
-    command.flags = ua::kCommandRequestOutput;
+    command.flags = ua::kCommandRequestOutput |
+                    ua::kCommandRequestActive;
+    command.active_mask = (1U << ua::kArmSdkJointCount) - 1U;
+    command.safety_policy_sha256.fill(0xa5U);
     command.arm_weight = 0.2;
     command.kp.fill(20.0);
     command.kd.fill(1.0);
@@ -381,38 +403,36 @@ int main(int argc, char** argv) {
 
             const std::uint64_t deadline_ns =
                 tick.scheduled_time_ns + period_ns;
-            ua::AdapterStatusPayload status;
-            status.monotonic_timestamp_ns = ua::MonotonicNowNs();
-            status.loop_count = loop;
-            status.command_id = command_valid ? command.command_id : 0U;
-            status.command_age_ns = plan.command_age_ns;
-            status.state_age_ns = plan.state_age_ns;
-            status.wake_lateness_ns = tick.wake_lateness_ns;
-            // mode保留实际安全判定；未设置OutputEnabled即表示仅干运行。
-            status.mode = static_cast<std::uint32_t>(plan.mode);
-            if (command_valid) {
-                status.flags |= ua::kStatusCommandSnapshotValid;
-            }
-            if (state_valid) {
-                status.flags |= ua::kStatusStateSnapshotValid;
-            }
-            if (plan.clamped) {
-                status.flags |= ua::kStatusCommandClamped;
-            }
-            if (deadline_healthy) {
-                status.flags |= ua::kStatusDeadlineHealthy;
-            }
-
             // status中的本拍耗时是写入前下界；正式benchmark以写入后的
             // finish_ns为准，因此work_time完整包含一次status seqlock写。
             const std::uint64_t before_status_ns = ua::MonotonicNowNs();
             const bool provisional_miss = before_status_ns > deadline_ns;
-            status.execution_time_ns = before_status_ns - tick.start_time_ns;
-            status.deadline_miss_count =
+            ua::ReceiptContext receipt_context;
+            receipt_context.receipt_timestamp_ns = before_status_ns;
+            receipt_context.loop_count = loop;
+            receipt_context.receipt_id = loop;
+            receipt_context.wake_lateness_ns = tick.wake_lateness_ns;
+            receipt_context.execution_time_ns =
+                before_status_ns - tick.start_time_ns;
+            receipt_context.deadline_miss_count =
                 deadline_misses + (provisional_miss ? 1U : 0U);
-            status.command_stale_count = stale_commands;
-            status.state_stale_count = stale_states;
-            status.overtemperature_count = overtemperature;
+            receipt_context.command_stale_count = stale_commands;
+            receipt_context.state_stale_count = stale_states;
+            receipt_context.overtemperature_count = overtemperature;
+            receipt_context.command_snapshot_valid = command_valid;
+            receipt_context.state_snapshot_valid = state_valid;
+            receipt_context.deadline_healthy = deadline_healthy;
+            receipt_context.pre_sink_check_timestamp_ns = before_status_ns;
+            receipt_context.pre_sink_deadline_ns = deadline_ns;
+            receipt_context.pre_sink_deadline_healthy = !provisional_miss;
+            receipt_context.pre_sink_expiry_healthy = command_valid &&
+                command.expires_timestamp_ns != 0U &&
+                before_status_ns <= command.expires_timestamp_ns;
+            const ua::AdapterStatusPayload status = ua::BuildAdapterReceipt(
+                command_valid ? &command : nullptr,
+                state_valid ? &state : nullptr,
+                plan,
+                receipt_context);
             ua::WriteSeqlock(layout.status, status);
 
             const std::uint64_t finish_ns = ua::MonotonicNowNs();

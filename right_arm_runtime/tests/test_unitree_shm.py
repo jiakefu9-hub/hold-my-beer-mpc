@@ -1,4 +1,4 @@
-"""Python/C++ Unitree 共享内存 protocol v2 一致性测试。"""
+"""Python/C++ Unitree 共享内存 protocol v3 一致性测试。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,12 @@ import subprocess
 import time
 import unittest
 
+from right_arm_runtime.hardware_output_contract import (
+    FutureCommandMode,
+    HardwareControlProposal,
+    ValidatedStateIdentity,
+    certify_for_offline_fake_sink,
+)
 from right_arm_runtime import unitree_shm as protocol
 
 
@@ -34,12 +40,12 @@ def _parse_layout(text: str) -> dict[str, int]:
 
 
 class LayoutTest(unittest.TestCase):
-    def test_python_layout_matches_protocol_v2_constants(self):
+    def test_python_layout_matches_protocol_v3_constants(self):
         self.assertEqual(
             protocol.python_layout_report(), protocol._EXPECTED_LAYOUT
         )
 
-    def test_all_payload_offsets_match_protocol_v2(self):
+    def test_all_payload_offsets_match_protocol_v3(self):
         payloads = {
             "command": protocol._ArmCommandPayload,
             "state": protocol._RobotStatePayload,
@@ -94,6 +100,42 @@ class DryRunInteropTest(unittest.TestCase):
 
     def _create_empty_layout(self):
         self._run("--reset-shm", "--iterations", "1")
+
+    @staticmethod
+    def _certified_command(*, command_id: int, now_ns: int):
+        zeros = (0.0,) * protocol.ARM_SDK_JOINT_COUNT
+        active = tuple(5 <= index <= 9 for index in range(13))
+        state = ValidatedStateIdentity(
+            session_nonce="protocol-v3-test-session",
+            sample_id=17,
+            source_timestamp_ns=now_ns - 1_000_000,
+            validated_timestamp_ns=now_ns - 500_000,
+            arm_sdk_q=zeros,
+        )
+        proposal = HardwareControlProposal(
+            session_nonce=state.session_nonce,
+            proposal_id=command_id,
+            source_sample_id=state.sample_id,
+            source_timestamp_ns=state.source_timestamp_ns,
+            task_epoch_id="protocol-v3-test-epoch",
+            task_time_ns=24_000_000,
+            full_task_anchor=4,
+            generated_timestamp_ns=now_ns - 250_000,
+            expires_timestamp_ns=now_ns + 1_000_000_000,
+            mode=FutureCommandMode.DIRECT_TORQUE,
+            arm_weight=0.1,
+            active_mask=active,
+            q_ref=zeros,
+            dq_ref=zeros,
+            ddq_des=zeros,
+            kp=zeros,
+            kd=zeros,
+            tau=zeros,
+            diagnostics={},
+        )
+        return certify_for_offline_fake_sink(
+            proposal, state, now_ns=now_ns
+        )
 
     def _set_header(self, field_name: str, value: int):
         descriptor = os.open(self.path, os.O_RDWR)
@@ -164,12 +206,24 @@ class DryRunInteropTest(unittest.TestCase):
             self.assertEqual(tuple(payload.kp), tuple(kp))
             self.assertEqual(tuple(payload.tau), tuple(tau_ff))
 
-            client.write_direct_torque(
-                arm_weight=0.2,
-                tau_cmd=tau_ff,
-                command_id=102,
-                request_output=True,
+            with self.assertRaises(PermissionError):
+                client.write_direct_torque(
+                    arm_weight=0.2,
+                    tau_cmd=tau_ff,
+                    command_id=102,
+                    request_output=True,
+                )
+            certified = self._certified_command(
+                command_id=102, now_ns=time.monotonic_ns()
             )
+            envelope = protocol.CertifiedHilCommandEnvelope(
+                command=certified,
+                producer_sequence=4,
+                safety_policy_id="offline-policy-v3",
+                safety_policy_sha256="a5" * 32,
+                requested_lifecycle=protocol.RequestedLifecycle.ACTIVE,
+            )
+            bound_receipt = client.write_certified_hil_command(envelope)
             direct = client._read_slot(
                 client._require_layout().command,
                 protocol._ArmCommandPayload,
@@ -177,11 +231,41 @@ class DryRunInteropTest(unittest.TestCase):
             )
             self.assertEqual(direct.mode, protocol.CommandMode.DIRECT_TORQUE)
             self.assertEqual(
-                direct.flags, protocol.CommandFlags.REQUEST_OUTPUT
+                direct.flags, protocol.CommandFlags.REQUEST_ACTIVE
+            )
+            self.assertEqual(direct.command_id, certified.command_id)
+            self.assertEqual(direct.producer_sequence, 4)
+            self.assertEqual(
+                direct.session_nonce,
+                protocol.stable_identity_u64(certified.session_nonce),
+            )
+            self.assertEqual(direct.full_task_anchor, 4)
+            self.assertEqual(direct.task_time_ns, 24_000_000)
+            self.assertEqual(
+                direct.active_mask, bound_receipt.active_mask_bits
+            )
+            self.assertEqual(
+                bytes(direct.safety_policy_sha256), bytes.fromhex("a5" * 32)
             )
             self.assertEqual(tuple(direct.kp), tuple(zeros))
             self.assertEqual(tuple(direct.kd), tuple(zeros))
-            self.assertEqual(tuple(direct.tau), tuple(tau_ff))
+            self.assertEqual(tuple(direct.tau), tuple(zeros))
+            self._run("--iterations", "1", "--period-us", "500")
+            adapter_receipt = client.read_receipt()
+            self.assertEqual(adapter_receipt.command_id, certified.command_id)
+            self.assertEqual(adapter_receipt.producer_sequence, 4)
+            self.assertEqual(adapter_receipt.full_task_anchor, 4)
+            self.assertEqual(
+                adapter_receipt.safety_policy_sha256, "a5" * 32
+            )
+            self.assertTrue(
+                adapter_receipt.flags
+                & protocol.AdapterStatusFlags.RECEIPT_IDENTITY_VALID
+            )
+            self.assertFalse(
+                adapter_receipt.flags
+                & protocol.AdapterStatusFlags.DDS_WRITE_PERFORMED
+            )
 
     def test_read_only_client_cannot_write_command_slot(self):
         self._create_empty_layout()
@@ -213,6 +297,19 @@ class DryRunInteropTest(unittest.TestCase):
             self.assertEqual(state.sample_id, 4)
             self.assertEqual(state.robot_tick, 4)
             self.assertEqual(
+                state.validated_timestamp_ns,
+                state.monotonic_timestamp_ns,
+            )
+            self.assertEqual(state.ingress_session_nonce, 1)
+            self.assertTrue(
+                state.ingress_flags
+                & protocol.StateIngressFlags.PAIRED_INGRESS_VALIDATED
+            )
+            self.assertTrue(
+                state.ingress_flags
+                & protocol.StateIngressFlags.SYNTHETIC_FIXTURE
+            )
+            self.assertEqual(
                 state.imu_quaternion_wxyz, (1.0, 0.0, 0.0, 0.0)
             )
             self.assertEqual(status.loop_count, 4)
@@ -234,6 +331,20 @@ class DryRunInteropTest(unittest.TestCase):
                 observed.flags
                 & protocol.AdapterStatusFlags.COMMAND_SNAPSHOT_VALID
             )
+            self.assertFalse(
+                observed.flags
+                & protocol.AdapterStatusFlags.RECEIPT_IDENTITY_VALID
+            )
+
+    def test_stable_string_identity_mapping_is_not_python_hash(self):
+        self.assertEqual(
+            protocol.stable_identity_u64("session"),
+            4556219972908291088,
+        )
+        self.assertNotEqual(
+            protocol.stable_identity_u64("session"),
+            protocol.stable_identity_u64("session-2"),
+        )
 
 
 if __name__ == "__main__":

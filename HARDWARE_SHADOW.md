@@ -28,13 +28,14 @@ H0-H3/O0-O4 阶段门见
    `tau_ff=0`、`request_output=false`、`publish_performed=false` 和
    `ready_for_output=false`。
 
-output-capable 的 `unitree_arm_adapter_dds` 是未来硬件输出适配器，不属于 shadow
-调用链。本阶段不要运行 `unitree_arm_adapter_dds --enable-output`。
+Stage 2 已移除 `unitree_arm_adapter_dds` 源入口和 target；CMake 遇到
+`UNITREE_ARM_ADAPTER_BUILD_DDS=ON` 会 fail closed。当前仓库没有可通过 CLI 打开的
+Unitree command publisher。
 
 ```text
 rt/lowstate + rt/secondary_imu
     -> C++ state-only bridge（DDS receive，无 publisher）
-    -> protocol-v2 state slot
+    -> protocol-v3 paired-state slot（显式 ingress session nonce）
     -> read-only Python state source
        |-> H0/H1: strict raw inspection + JSONL evidence（本轮在这里停止）
        `-> H2/H3 after contract verification:
@@ -66,6 +67,11 @@ tick、时间戳和 20 ms freshness。未列入白名单的 `mode_pr` 或
 `rt/secondary_imu` 取得 torso IMU。这只是软件选题依据，不是目标机器人契约
 已经确认。state-only bridge 只在两个话题都有新样本且主机到达时间偏差不超过
 5 ms 时发布配对状态；配对时间取较早到达时刻，让 freshness 覆盖两个来源。
+launcher 每次生成非零 uint64 session nonce，bridge 把它与 LowState/torso IMU 各自的
+host timestamp、pair skew、validated timestamp 和 ingress flags 一起写入 protocol-v3。
+同一个 nonce 也显式传给 Python inspector/shadow；下游必须核对 nonce、三项 required
+flags、两源时间关系和不超过 5 ms 的 skew，不能为旧的或跨 session state 补写新
+identity。
 
 之后的转换严格采用 `configs/g1_hardware_shadow.yaml`：quaternion 顺序 wxyz、
 含义 W-from-IMU，gyro/specific force 表达在 IMU frame，并应用明确的
@@ -78,7 +84,7 @@ controller 必然 fail closed；这不是需要绕开的报错。
 ## 构建 state-only bridge
 
 当前 checkout 默认从 `/home/fjk/g1_ws/unitree_sdk2` 找 SDK2。state bridge 有独立
-CMake 开关；构建时必须显式关闭 output-capable DDS：
+CMake 开关；`BUILD_DDS=OFF` 是必须的能力隔离检查，而不是一个可切换的运行模式：
 
 ```bash
 cd /home/fjk/g1_ws/hold-my-beer-mpc
@@ -92,7 +98,7 @@ cmake --build /tmp/hold-my-beer-mpc-unitree-state-only-build \
   --parallel --target unitree_arm_state_bridge
 ```
 
-该 build directory 中若出现 `unitree_arm_adapter_dds`，inspection launcher 会拒绝
+该 build directory 中若出现任何历史 `unitree_arm_adapter_dds`，inspection launcher 会拒绝
 运行。它还检查 unresolved libraries、command topic 字符串和
 `ChannelPublisher` 符号。
 
@@ -202,3 +208,16 @@ hardware-unverified。
 尤其是“单拍轻微 qacc 超限是否立即终止主动控制”必须作为独立硬件安全问题评估；
 在取得厂商限制、传感器质量、执行器/传动动态及重复吊架实验之前，既不能默认沿用
 `10 rad/s^2` hard-stop，也不能据此放宽当前 MuJoCo 门限。
+
+## 与 publisher-absent HIL 的边界
+
+[`unitree_arm_adapter_hil`](cpp/unitree_arm_adapter/src/hil_main.cpp) 是另一个无 Unitree SDK/
+publisher 的 C++ 进程，用 protocol-v3 command/state/receipt 验证未来 final-sink 合同。
+它复用 paired-state 数据语义，但不是真实 G1 shadow launcher：当前通过的
+只是 synthetic/offline fixture、C++ supervisor、精确 source-state cache、6 ms
+proposal 的 `0/2/4 ms` hold、recording command sink 和 receipt parity。每拍的
+`device_command_transport_present=false`、`hardware_output_performed=false`。
+
+production supervisor policy 的 site limits、ownership、startup-PD、active/release behavior
+和 output authorization 均默认未验证，因而不可 arming。这一离线边界不会改变
+H1=PARTIAL，也不会修改任何依赖真机的 verification flag。

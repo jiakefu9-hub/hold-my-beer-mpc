@@ -37,7 +37,8 @@ struct CommandPlan {
 
 [[nodiscard]] SafetyConfig MakeDefaultSafetyConfig();
 
-// 【核心代码】所有DDS发布前都必须经过这一唯一入口。
+// Legacy dry-run formatter retained for state/ABI regression tests. Future
+// hardware output must use HardwareCommandSupervisor instead of this helper.
 [[nodiscard]] CommandPlan BuildCommandPlan(
     const SafetyConfig& config,
     const ArmCommandPayload* command,

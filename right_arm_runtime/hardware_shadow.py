@@ -43,6 +43,7 @@ from .unitree_shm import (
     ARM_SDK_JOINT_COUNT,
     CommandMode,
     RobotStateSnapshot,
+    StateIngressFlags,
 )
 
 
@@ -89,6 +90,12 @@ ARM_SDK_MOTOR_INDICES = (
     13,
     14,
 )
+PROTOCOL_V3_REQUIRED_INGRESS_FLAGS = int(
+    StateIngressFlags.LOW_STATE_CRC_VALID
+    | StateIngressFlags.PAIRED_INGRESS_VALIDATED
+    | StateIngressFlags.TORSO_IMU_PRESENT
+)
+PROTOCOL_V3_MAX_SOURCE_SKEW_NS = 5_000_000
 
 
 class HardwareContractError(RuntimeError):
@@ -97,6 +104,50 @@ class HardwareContractError(RuntimeError):
 
 class HardwareStateError(RuntimeError):
     """A state snapshot is stale, inconsistent, or outside declared bounds."""
+
+
+def validate_protocol_v3_ingress(
+    state: RobotStateSnapshot,
+    *,
+    expected_session_nonce: int,
+    now_ns: int,
+    future_tolerance_ns: int,
+) -> None:
+    """Fail closed on unpaired, replayed-session, or forged state provenance."""
+
+    expected_nonce = int(expected_session_nonce)
+    if expected_nonce <= 0:
+        raise HardwareContractError(
+            "expected protocol-v3 ingress session nonce must be nonzero"
+        )
+    if int(state.ingress_session_nonce) != expected_nonce:
+        raise HardwareStateError("protocol-v3 ingress session nonce mismatch")
+    flags = int(state.ingress_flags)
+    if (flags & PROTOCOL_V3_REQUIRED_INGRESS_FLAGS) != (
+        PROTOCOL_V3_REQUIRED_INGRESS_FLAGS
+    ):
+        raise HardwareStateError("protocol-v3 ingress validation flags missing")
+    if flags & int(StateIngressFlags.SYNTHETIC_FIXTURE):
+        raise HardwareStateError(
+            "synthetic protocol-v3 ingress is forbidden in hardware shadow"
+        )
+    low_state_ns = int(state.low_state_timestamp_ns)
+    torso_imu_ns = int(state.torso_imu_timestamp_ns)
+    source_ns = int(state.monotonic_timestamp_ns)
+    validated_ns = int(state.validated_timestamp_ns)
+    source_skew_ns = int(state.source_skew_ns)
+    if min(low_state_ns, torso_imu_ns, source_ns, validated_ns) <= 0:
+        raise HardwareStateError("protocol-v3 ingress timestamps must be positive")
+    expected_source_ns = min(low_state_ns, torso_imu_ns)
+    expected_skew_ns = abs(low_state_ns - torso_imu_ns)
+    if source_ns != expected_source_ns or source_skew_ns != expected_skew_ns:
+        raise HardwareStateError("protocol-v3 ingress timestamp/skew mismatch")
+    if source_skew_ns > PROTOCOL_V3_MAX_SOURCE_SKEW_NS:
+        raise HardwareStateError("protocol-v3 paired source skew exceeds 5 ms")
+    if validated_ns < max(low_state_ns, torso_imu_ns):
+        raise HardwareStateError("protocol-v3 validation predates source samples")
+    if validated_ns > int(now_ns) + int(future_tolerance_ns):
+        raise HardwareStateError("protocol-v3 validation timestamp is in the future")
 
 
 class HardwareStateSource(Protocol):
@@ -350,9 +401,22 @@ class HardwareObservation:
 class G1HardwareStateAdapter:
     """Convert one verified Unitree LowState snapshot to controller state."""
 
-    def __init__(self, model: mujoco.MjModel, contract: HardwareFrameContract):
+    def __init__(
+        self,
+        model: mujoco.MjModel,
+        contract: HardwareFrameContract,
+        *,
+        expected_ingress_session_nonce: int,
+    ):
         self.model = model
         self.contract = contract
+        self.expected_ingress_session_nonce = int(
+            expected_ingress_session_nonce
+        )
+        if self.expected_ingress_session_nonce <= 0:
+            raise HardwareContractError(
+                "expected protocol-v3 ingress session nonce must be nonzero"
+            )
         self._mapping = self._resolve_model_mapping()
         self._scratch = mujoco.MjData(model)
         self._imu_site_id = mujoco.mj_name2id(
@@ -440,6 +504,12 @@ class G1HardwareStateAdapter:
         self, state: RobotStateSnapshot, *, now_ns: Optional[int] = None
     ) -> HardwareObservation:
         now = time.monotonic_ns() if now_ns is None else int(now_ns)
+        validate_protocol_v3_ingress(
+            state,
+            expected_session_nonce=self.expected_ingress_session_nonce,
+            now_ns=now,
+            future_tolerance_ns=self.contract.future_tolerance_ns,
+        )
         timestamp = int(state.monotonic_timestamp_ns)
         sample_id = int(state.sample_id)
         robot_tick = int(state.robot_tick)
@@ -579,16 +649,16 @@ class G1HardwareStateAdapter:
             monotonic_timestamp_ns=timestamp,
             sample_id=sample_id,
             state_age_ns=age,
-            validated_timestamp_ns=now,
+            validated_timestamp_ns=int(state.validated_timestamp_ns),
             capabilities=ControlStateCapabilities(
                 right_arm_joint_state=True,
                 torso_rotation=True,
                 torso_angular_velocity=True,
                 torso_linear_acceleration=True,
                 torso_angular_acceleration=derivative_ready,
-                # Protocol-v2 LowState does not provide these state families.
-                # Keep them explicitly unknown instead of presenting nominal
-                # MJCF/zero-filled values as measurements.
+                # The paired LowState/torso-IMU ingress does not provide these
+                # state families. Keep them explicitly unknown instead of
+                # presenting nominal MJCF/zero-filled values as measurements.
                 floating_base_translation=False,
                 floating_base_velocity=False,
                 foot_contacts=False,
@@ -726,6 +796,7 @@ class HardwareShadowController:
         repo_dir: str | Path,
         controller_config: dict,
         contract: HardwareFrameContract,
+        expected_ingress_session_nonce: int,
         predictor_name: Optional[str] = None,
     ):
         self.repo_dir = Path(repo_dir).resolve()
@@ -739,7 +810,11 @@ class HardwareShadowController:
         if not xml_path.is_absolute():
             xml_path = self.repo_dir / xml_path
         self.model = mujoco.MjModel.from_xml_path(str(xml_path))
-        self.state_adapter = G1HardwareStateAdapter(self.model, contract)
+        self.state_adapter = G1HardwareStateAdapter(
+            self.model,
+            contract,
+            expected_ingress_session_nonce=expected_ingress_session_nonce,
+        )
         self._right_joint_ids = np.asarray(
             [
                 mujoco.mj_name2id(
@@ -1053,7 +1128,7 @@ class HardwareShadowController:
             source_sample_id=observation.sample_id,
             source_timestamp_ns=observation.monotonic_timestamp_ns,
             validated_timestamp_ns=observation.validated_timestamp_ns,
-            state_source="unitree_lowstate_secondary_imu_paired_protocol_v2",
+            state_source="unitree_lowstate_secondary_imu_paired_protocol_v3",
             state_valid=True,
             capabilities=observation.capabilities,
             current_q=observation.right_arm_q,

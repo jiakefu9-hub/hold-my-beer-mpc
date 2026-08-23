@@ -38,6 +38,7 @@ from right_arm_runtime.hardware_shadow import (
     HardwareStateError,
     HardwareStateSource,
     load_hardware_shadow_config,
+    validate_protocol_v3_ingress,
 )
 from right_arm_runtime.unitree_shm import UnitreeArmSharedMemoryClient
 
@@ -113,6 +114,12 @@ def _inspection_record(state, *, read_monotonic_ns: int) -> dict:
     return {
         "read_monotonic_ns": int(read_monotonic_ns),
         "source_monotonic_timestamp_ns": timestamp_ns,
+        "validated_timestamp_ns": int(state.validated_timestamp_ns),
+        "ingress_session_nonce": int(state.ingress_session_nonce),
+        "low_state_timestamp_ns": int(state.low_state_timestamp_ns),
+        "torso_imu_timestamp_ns": int(state.torso_imu_timestamp_ns),
+        "source_skew_ns": int(state.source_skew_ns),
+        "ingress_flags": int(state.ingress_flags),
         "state_age_ms": (int(read_monotonic_ns) - timestamp_ns) * 1e-6,
         "sample_id": int(state.sample_id),
         "robot_tick": int(state.robot_tick),
@@ -130,6 +137,7 @@ def _inspect_only(
     controller_config: dict,
     sample_count: int,
     timeout_s: float,
+    expected_ingress_session_nonce: int,
 ) -> tuple[dict, list[dict]]:
     contract = HardwareFrameContract.from_mapping(
         hardware_config["hardware_shadow"], require_verified=False
@@ -138,7 +146,11 @@ def _inspect_only(
     if not xml_path.is_absolute():
         xml_path = REPO_DIR / xml_path
     model = mujoco.MjModel.from_xml_path(str(xml_path))
-    adapter = G1HardwareStateAdapter(model, contract)
+    adapter = G1HardwareStateAdapter(
+        model,
+        contract,
+        expected_ingress_session_nonce=expected_ingress_session_nonce,
+    )
     deadline = time.monotonic() + timeout_s
     records: list[dict] = []
     previous_sample_id = 0
@@ -154,6 +166,12 @@ def _inspect_only(
         if previous_sample_id and sample_id < previous_sample_id:
             raise HardwareStateError("inspection sample_id regressed")
         read_ns = time.monotonic_ns()
+        validate_protocol_v3_ingress(
+            state,
+            expected_session_nonce=expected_ingress_session_nonce,
+            now_ns=read_ns,
+            future_tolerance_ns=contract.future_tolerance_ns,
+        )
         timestamp_ns = int(state.monotonic_timestamp_ns)
         if timestamp_ns <= 0:
             raise HardwareStateError("inspection timestamp must be positive")
@@ -216,6 +234,15 @@ def _inspect_only(
         "schema": "unitree_hardware_state_inspection_v1",
         "mode": "unitree_lowstate_inspection_only",
         "output_capability": "absent",
+        "protocol_version": 3,
+        "expected_ingress_session_nonce": int(
+            expected_ingress_session_nonce
+        ),
+        "observed_ingress_session_nonces": sorted(
+            {item["ingress_session_nonce"] for item in records}
+        ),
+        "required_ingress_flags_present": True,
+        "source_skew_ns_max": max(item["source_skew_ns"] for item in records),
         "controller_executed": False,
         "predictor_executed": False,
         "command_publish_count": 0,
@@ -360,6 +387,9 @@ def main() -> None:
     )
     parser.add_argument("--shared-memory", default=None)
     parser.add_argument(
+        "--expected-ingress-session-nonce", type=int, default=0
+    )
+    parser.add_argument(
         "--predictor", choices=("template",), default="template"
     )
     parser.add_argument("--duration-s", type=float, default=10.0)
@@ -400,6 +430,10 @@ def main() -> None:
         )
         print("HARDWARE_SHADOW_DISCOVERY_CONFIG: PASS")
         return
+    if args.expected_ingress_session_nonce <= 0:
+        raise HardwareContractError(
+            "--expected-ingress-session-nonce must be nonzero"
+        )
 
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -416,6 +450,9 @@ def main() -> None:
                 controller_config=controller_config,
                 sample_count=args.inspect_samples,
                 timeout_s=args.duration_s,
+                expected_ingress_session_nonce=(
+                    args.expected_ingress_session_nonce
+                ),
             )
         else:
             contract = HardwareFrameContract.from_mapping(
@@ -430,6 +467,9 @@ def main() -> None:
                 repo_dir=REPO_DIR,
                 controller_config=controller_config,
                 contract=contract,
+                expected_ingress_session_nonce=(
+                    args.expected_ingress_session_nonce
+                ),
                 predictor_name=args.predictor,
             ) as controller:
                 while not stop_requested and time.monotonic() < deadline:

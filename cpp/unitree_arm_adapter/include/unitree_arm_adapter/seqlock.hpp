@@ -34,9 +34,10 @@ void WriteSeqlock(SeqlockSlot<Payload>& slot, const Payload& payload) noexcept {
 }
 
 template <typename Payload>
-bool ReadSeqlock(
+bool ReadSeqlockWithSequence(
     const SeqlockSlot<Payload>& slot,
     Payload& output,
+    std::uint64_t& published_sequence,
     std::uint32_t max_attempts = 100U) noexcept {
     static_assert(std::is_trivially_copyable_v<Payload>);
     for (std::uint32_t attempt = 0; attempt < max_attempts; ++attempt) {
@@ -48,10 +49,21 @@ bool ReadSeqlock(
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
         const std::uint64_t after = AtomicLoadAcquire(&slot.sequence);
         if (before == after && (after & 1U) == 0U) {
+            published_sequence = after;
             return true;
         }
     }
     return false;
+}
+
+template <typename Payload>
+bool ReadSeqlock(
+    const SeqlockSlot<Payload>& slot,
+    Payload& output,
+    std::uint32_t max_attempts = 100U) noexcept {
+    std::uint64_t ignored_sequence = 0U;
+    return ReadSeqlockWithSequence(
+        slot, output, ignored_sequence, max_attempts);
 }
 
 }  // namespace unitree_arm_adapter

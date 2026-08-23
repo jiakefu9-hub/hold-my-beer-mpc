@@ -7,6 +7,8 @@
 #include <unistd.h>
 
 #include "unitree_arm_adapter/safety.hpp"
+#include "unitree_arm_adapter/protocol_supervisor_adapter.hpp"
+#include "unitree_arm_adapter/receipt.hpp"
 #include "unitree_arm_adapter/seqlock.hpp"
 #include "unitree_arm_adapter/shared_memory.hpp"
 
@@ -31,7 +33,15 @@ constexpr double kPi = 3.14159265358979323846;
 ua::RobotStatePayload ValidState() {
     ua::RobotStatePayload state;
     state.monotonic_timestamp_ns = kNow - 1'000'000ULL;
+    state.validated_timestamp_ns = kNow - 900'000ULL;
+    state.ingress_session_nonce = 17U;
+    state.low_state_timestamp_ns = kNow - 1'000'000ULL;
+    state.torso_imu_timestamp_ns = kNow - 950'000ULL;
+    state.source_skew_ns = 50'000ULL;
     state.sample_id = 7;
+    state.ingress_flags = ua::kStateLowStateCrcValid |
+                          ua::kStatePairedIngressValidated |
+                          ua::kStateTorsoImuPresent;
     state.imu_quaternion_wxyz[0] = 1.0;
     for (std::size_t index = 0; index < ua::kMotorCount; ++index) {
         state.q[index] = 0.01 * static_cast<double>(index);
@@ -42,9 +52,21 @@ ua::RobotStatePayload ValidState() {
 ua::ArmCommandPayload ValidCommand(ua::CommandMode mode) {
     ua::ArmCommandPayload command;
     command.monotonic_timestamp_ns = kNow - 2'000'000ULL;
+    command.producer_sequence = 0;
     command.command_id = 11;
+    command.source_sample_id = 7;
+    command.source_timestamp_ns = kNow - 1'000'000ULL;
+    command.task_epoch_id = 23;
+    command.task_time_ns = 0;
+    command.full_task_anchor = 0;
+    command.expires_timestamp_ns = kNow + 4'000'000ULL;
+    command.session_nonce = 17;
+    command.safety_policy_id = 29;
+    command.safety_policy_sha256.fill(0xa5U);
     command.mode = static_cast<std::uint32_t>(mode);
-    command.flags = ua::kCommandRequestOutput;
+    command.flags = ua::kCommandRequestOutput |
+                    ua::kCommandRequestArmingPd;
+    command.active_mask = (1U << ua::kArmSdkJointCount) - 1U;
     command.arm_weight = 0.5;
     command.kp.fill(20.0);
     command.kd.fill(1.0);
@@ -57,9 +79,16 @@ void TestSeqlock() {
     auto command = ValidCommand(ua::CommandMode::kRobotPdPlusFeedforward);
     ua::WriteSeqlock(slot, command);
     ua::ArmCommandPayload read;
-    CHECK(ua::ReadSeqlock(slot, read));
+    std::uint64_t published_sequence = 0U;
+    CHECK(ua::ReadSeqlockWithSequence(slot, read, published_sequence));
+    CHECK(published_sequence == 2U);
     CHECK(read.command_id == command.command_id);
     CHECK(read.tau[4] == 3.0);
+    command.command_id = 12U;
+    ua::WriteSeqlock(slot, command);
+    CHECK(ua::ReadSeqlockWithSequence(slot, read, published_sequence));
+    CHECK(published_sequence == 4U);
+    CHECK(read.command_id == 12U);
 
     __atomic_store_n(&slot.sequence, 3ULL, __ATOMIC_RELEASE);
     CHECK(!ua::ReadSeqlock(slot, read, 3));
@@ -192,6 +221,70 @@ void TestSharedMemory() {
     ua::SharedMemoryRegion::Unlink(name);
 }
 
+void TestProtocolV3ConversionAndReceipt() {
+    const auto state = ValidState();
+    const auto command = ValidCommand(ua::CommandMode::kDirectTorque);
+    const auto supervisor_state = ua::ToSupervisorState(
+        state, ua::StateConversionContext{17U, true});
+    CHECK(supervisor_state.validated);
+    CHECK(supervisor_state.session_nonce == 17U);
+    CHECK(supervisor_state.validated_timestamp_ns ==
+          state.validated_timestamp_ns);
+    CHECK(supervisor_state.q[5] == state.q[22]);
+
+    const auto proposal = ua::ToSupervisorProposal(command);
+    CHECK(proposal.session_nonce == command.session_nonce);
+    CHECK(proposal.producer_sequence == command.producer_sequence);
+    CHECK(proposal.proposal_id == command.command_id);
+    CHECK(proposal.task_epoch_id == command.task_epoch_id);
+    CHECK(proposal.safety_policy_id == command.safety_policy_id);
+    CHECK(proposal.safety_policy_sha256 == command.safety_policy_sha256);
+    CHECK(proposal.active_mask[0]);
+    CHECK(proposal.active_mask[12]);
+    CHECK(proposal.requested_lifecycle ==
+          ua::hardware_supervisor::RequestedLifecycle::kArmingPd);
+
+    auto release = command;
+    release.flags = ua::kCommandRequestRelease;
+    release.active_mask = 0U;
+    const auto release_proposal = ua::ToSupervisorProposal(release);
+    CHECK(release_proposal.semantics ==
+          ua::hardware_supervisor::CommandSemantics::kRelease);
+
+    auto invalid_mask = command;
+    invalid_mask.active_mask |= 1U << ua::kArmSdkJointCount;
+    CHECK(ua::ToSupervisorProposal(invalid_mask).semantics ==
+          ua::hardware_supervisor::CommandSemantics::kInvalid);
+
+    const auto safety = ua::MakeDefaultSafetyConfig();
+    const auto plan = ua::BuildCommandPlan(
+        safety, &command, &state, kNow, true);
+    ua::ReceiptContext context;
+    context.receipt_timestamp_ns = kNow;
+    context.loop_count = 4;
+    context.receipt_id = 4;
+    context.command_snapshot_valid = true;
+    context.state_snapshot_valid = true;
+    context.deadline_healthy = true;
+    context.pre_sink_check_timestamp_ns = kNow;
+    context.pre_sink_deadline_ns = kNow + 1'000'000ULL;
+    context.pre_sink_deadline_healthy = true;
+    context.pre_sink_expiry_healthy = true;
+    context.sink_write_performed = true;
+    context.sink_write_timestamp_ns = kNow;
+    const auto receipt = ua::BuildAdapterReceipt(
+        &command, &state, plan, context);
+    CHECK(receipt.command_id == command.command_id);
+    CHECK(receipt.source_sample_id == command.source_sample_id);
+    CHECK(receipt.session_nonce == command.session_nonce);
+    CHECK(receipt.executed_active_mask == command.active_mask);
+    CHECK(receipt.selected_tau[4] == plan.tau[4]);
+    CHECK((receipt.flags & ua::kStatusSinkWritePerformed) != 0U);
+    CHECK((receipt.flags & ua::kStatusDdsWritePerformed) == 0U);
+    CHECK((receipt.flags & ua::kStatusPreSinkDeadlineHealthy) != 0U);
+    CHECK((receipt.flags & ua::kStatusPreSinkExpiryHealthy) != 0U);
+}
+
 }  // namespace
 
 int main() {
@@ -200,6 +293,7 @@ int main() {
         TestSafetyModes();
         TestLimits();
         TestSharedMemory();
+        TestProtocolV3ConversionAndReceipt();
     } catch (const std::exception& error) {
         std::cerr << "未捕获异常: " << error.what() << '\n';
         return 1;

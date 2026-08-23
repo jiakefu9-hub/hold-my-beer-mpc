@@ -88,40 +88,49 @@ flowchart LR
 [`right_arm_runtime/sim_process.py`](right_arm_runtime/sim_process.py)、
 [`cpp/right_arm_sim_runtime/`](cpp/right_arm_sim_runtime/)。
 
-## Shadow：真实状态进入仓库，但不输出命令
+## Shadow 与 publisher-absent HIL
 
 ```mermaid
 flowchart LR
   G1["目标真实 G1 DDS<br/>尚无有效现场样本<br/>rt/lowstate + rt/secondary_imu"]
-  Bridge["C++ 独立进程<br/>unitree_arm_state_bridge<br/>CRC + 两路状态配对"]
-  SHM["POSIX shared memory<br/>state slot"]
+  Bridge["C++ 独立进程<br/>unitree_arm_state_bridge<br/>CRC + 两路配对 + session nonce"]
+  SHM["protocol-v3 shared memory<br/>state slot"]
   Inspect["Python 独立进程<br/>inspect-state-only<br/>read-only / private mapping"]
   Evidence["JSONL + summary<br/>只读证据"]
-  FullShadow["Python 独立进程 · run_hardware_shadow.py<br/>HardwareShadowController<br/>legacy phase template + 共享 MPC"]
-  Proposal["内存 proposal<br/>publish count = 0"]
   Fixture["synthetic / replay state<br/>+ explicit TaskClockEvent"]
-  H3["H3-offline full-task core<br/>HardwareControlProposal"]
-  Fake["in-memory fake sink<br/>DDS write = 0"]
+  Core["共享 full-task core<br/>HardwareControlProposal"]
+  Cert["Python offline certification<br/>CertifiedHardwareCommand"]
+  Cmd["protocol-v3 command slot"]
+  Hil["C++ 2 ms HIL<br/>state cache + supervisor"]
+  Fake["recording command sink<br/>would-write only"]
+  Receipt["protocol-v3 receipt + JSONL<br/>DDS / hardware write = 0"]
 
   G1 --> Bridge --> SHM --> Inspect --> Evidence
-  SHM -. "H2 合同确认 + realtime preflight 后" .-> FullShadow -.-> Proposal
-  Fixture --> H3 --> Fake
+  Fixture --> Core --> Cert --> Cmd --> Hil --> Fake --> Receipt
+  SHM -. "现场契约通过后可作 HIL ingress" .-> Hil
 ```
 
 当前批准入口是
 [`tools/realtime/run_hardware_state_inspection.sh`](tools/realtime/run_hardware_state_inspection.sh)：
-C++ bridge 只有 subscriber，没有 `LowCmd` 或 command publisher；Python 以只读映射
-检查并记录状态。机器人目前不在现场，所以 H1 仍是 **PARTIAL**，不能把离线测试
-写成真实 G1 验证。
+C++ bridge 只有 subscriber，没有 `LowCmd`、command topic 或 publisher。launcher 每次
+生成非零 ingress session nonce，bridge 把它与 CRC-valid 的 LowState 和配对 torso
+IMU 一起写入 state slot；Python 只读检查也必须核对同一个 nonce、三项 ingress
+flags、两路时间与不超过 5 ms 的 skew。机器人目前不在现场，所以 H1
+仍是 **PARTIAL**，离线测试不是真实 G1 证据。
 
-正式现场 launcher 的 verification flags 会在连接 DDS 前 fail closed；它目前仍只
-开放 legacy phase-template 兼容模式。另有一条已经通过离线测试的 H3-offline 路径：
-synthetic/replay state 与显式 `TaskClockEvent` 进入共享 full-task core，覆盖
-continuous-H、24 ms anchor 4 handoff 和完整 `[0,8.06)` proposal replay。该路径只把
-`HardwareControlProposal` 交给内存 fake sink，`arm_weight=0`、publish/write count
-始终为 0；它不是真实 G1 shadow session，也不证明 hardware torque state 完整。
-两条 shadow 路径都不使用 Simulation 的 `RightArmSimProcess`、C++ simulation
-worker 或 MuJoCo mapper。
+Stage 2 另增了一条 **publisher-absent C++ HIL**，专用于把 Python 产生的
+offline-certified command 经 protocol-v3 送到最后一道 C++ 安全边界。HIL 的
+supervisor 复核 session/source/task/policy 绑定、过期、deadline、13-slot mask、
+double-PD、ownership 和状态机；通过时只写入独立 recording command sink
+和完整 receipt。该 binary 不链接 Unitree SDK，不含 `LowCmd`、
+`ChannelPublisher` 或 `rt/arm_sdk`，因此它的“would write”不是 DDS write。
+
+HIL 固定运行在 2 ms 周期，其他 `--period-us` 会 fail fast。它用 seqlock sequence
+区分“原 slot 未更改”与“重写/新命令”。每个新 6 ms
+proposal 只可在对应 2 ms sink 拍的 `0/2/4 ms` 三次使用；此后必须有下一个
+anchor。新 proposal 必须在有界 cache 中精确命中
+`(source_sample_id, source_timestamp_ns)`，不允许用“最新状态”冒充源状态；
+实际准备执行时另用当前 2 ms actuation state。
 
 入口与边界代码：[`tools/realtime/run_hardware_shadow.sh`](tools/realtime/run_hardware_shadow.sh)、
 [`run_hardware_shadow.py`](run_hardware_shadow.py)、
@@ -129,7 +138,7 @@ worker 或 MuJoCo mapper。
 [`right_arm_runtime/unitree_shm.py`](right_arm_runtime/unitree_shm.py)、
 [`cpp/unitree_arm_adapter/src/state_bridge_main.cpp`](cpp/unitree_arm_adapter/src/state_bridge_main.cpp)。
 
-## Future / Hardware：目标方向，当前未接通
+## Future / Hardware：仅保留边界，当前无 output target
 
 ```mermaid
 flowchart LR
@@ -138,23 +147,23 @@ flowchart LR
   StateSHM["state shared memory"]
   Clock["真实 locomotion producer<br/>TaskClockEvent"]
 
-  subgraph PyFuture["Python future hardware runtime · 未集成"]
+  subgraph PyFuture["Python future hardware runtime · 未授权"]
     Observe["ValidatedHardwareObservation<br/>mapping · frame · freshness"]
     Estimator["future full-state / contact estimator"]
     Core["共享控制核心<br/>full-task v2 + continuous-H<br/>运动学 + MPC"]
     Proposal["HardwareControlProposal"]
-    Cert["future hardware certification<br/>state binding · ownership · 13-slot command"]
+    Cert["future site certification<br/>现场 policy · ownership · 13-slot command"]
     Receipt["ExecutionReceipt<br/>仅代表 write / status 证据"]
 
     Observe -.-> Estimator -.-> Core
     Clock -.-> Core -.-> Proposal -.-> Cert
   end
 
-  CommandSHM["command / status shared memory"]
-  subgraph CppFuture["C++ Unitree output process · 未授权"]
-    Adapter["2 ms adapter<br/>pre-publish safety gate + DDS writer"]
-    DDS["rt/arm_sdk"]
-    Adapter -.-> DDS
+  CommandSHM["protocol-v3 command / receipt"]
+  subgraph CppFuture["C++ future output process · 尚不存在"]
+    Adapter["复用 Stage-2 supervisor / formatter<br/>+现场验证 policy"]
+    DDS["future Unitree command sink<br/>rt/arm_sdk"]
+    Adapter -. "site gate 后才能新增" .-> DDS
   end
   Robot["真实 G1"]
 
@@ -164,12 +173,16 @@ flowchart LR
   Adapter -. "status" .-> CommandSHM -.-> Receipt
 ```
 
-仓库已有离线 proposal/command/receipt 合同、fake sink，以及一个 output-capable
-C++ adapter 原型，但没有正式 launcher 把 full-task v2 proposal 接到真实 DDS
-输出。整张图是目标方向，虚线不能理解为已完成或已获授权的真机链路。未来 Python
-runtime 与 C++ 2 ms output process 通过 command/status shared memory 隔离；C++
-侧仍必须在 publish 前独立检查 freshness、deadline、温度、限幅和输出许可。
-`ExecutionReceipt` 只能证明 writer/status 路径，不能证明实体电机精确执行了力矩。
+仓库已有 protocol-v3、C++ supervisor/13-slot formatter、publisher-absent HIL
+和 receipt，但**没有真实 Unitree command publisher target 或 launcher**。原
+`dds_main.cpp` 已移除，`UNITREE_ARM_ADAPTER_BUILD_DDS=ON` 会在 CMake 阶段 fail
+closed。这保证 Stage 2 只验证“如果到达 sink 边界会写什么”，而不是在仓库中
+预留一个可被 CLI 误开的真机输出。
+
+未来真机输出应复用已测 C++ supervisor/formatter，另外加入经现场验证的
+policy/ownership 和独立 Unitree sink。当前 production policy 的验证/授权字段默认全为
+false，数值 limit 未经 site verification 时 supervisor 必然 unarmable。
+`ExecutionReceipt` 只能证明 command-sink 路径，不能证明实体电机执行了力矩。
 
 上真机时，边界应保持如下：
 
@@ -190,8 +203,9 @@ MuJoCo 的 `max_abs_qacc=10 rad/s²` 不能默认照搬成真机 hard-stop；真
 | --- | --- |
 | Simulation：full-task v2 + continuous-H + 24 ms handoff + process | **simulation-validated**；仅限冻结模型、任务和受控运行环境 |
 | H1 state inspection | 代码与离线合同已就绪；无真实 G1 样本，**PARTIAL** |
-| 完整只读 shadow | H3-offline full-task proposal replay 已通过，fake sink write/publish 均为0；真实 G1 launcher 仍受现场配置 gate 阻止且保持 legacy 兼容，**hardware-unverified** |
-| Future hardware output | 合同/测试/fake sink 和 C++ 原型；**未集成、未授权、hardware-unverified** |
+| 完整只读 shadow | H3-offline full-task proposal replay 已通过；真实 G1 launcher 仍受现场配置 gate 阻止且保持 legacy 兼容，**hardware-unverified** |
+| Publisher-absent HIL | protocol-v3、C++ supervisor、2/6 ms hold、fake command sink 和 receipt 已离线实现；DDS/hardware write 固定为 0 |
+| Future hardware output | 真实 publisher target 已移除/禁止构建；**未集成、未授权、hardware-unverified** |
 
 ## 架构与代码同步约定
 

@@ -1,6 +1,7 @@
 # G1 Hardware Shadow 与 Future Hardware Output 实施计划
 
-状态：**hardware shadow 只读实施中；hardware output 仅设计、未授权、未实机执行**。
+状态：**H1 仍为 PARTIAL；publisher-absent HIL 已离线实现；
+hardware output 未授权、无 publisher target、未实机执行**。
 
 本计划冻结 latency 实验之后的真机工程边界。当前实施终点是第一次真实 G1
 state-only inspection：真实 `LowState` 和 torso IMU 可以进入本仓库的只读状态入口，
@@ -22,11 +23,15 @@ Simulation adapter
 
 Hardware state adapter (read-only)
   rt/lowstate + rt/secondary_imu -> state-only bridge
-  -> protocol-v2 state slot -> read-only Python mapping / inspection
+  -> protocol-v3 paired-state slot -> read-only Python mapping / inspection
 
-Future hardware output adapter (disabled)
-  validated observation -> control proposal -> hardware-specific certification
-  -> ownership/watchdog gate -> Unitree publisher -> execution receipt
+Publisher-absent HIL (offline only)
+  control proposal -> offline certification -> protocol-v3 command
+  -> C++ supervisor -> recording command sink -> full receipt
+
+Future hardware output adapter (absent)
+  site-certified command -> same supervisor/formatter
+  -> future Unitree command sink (not implemented)
 ```
 
 `RightArmSimProcess`、MuJoCo DDQ-to-torque mapper 和 `d.ctrl` 属于 simulation
@@ -76,10 +81,13 @@ final control stack 已在真实状态上验证。
 35-slot `q/dq/ddq/tau_est/temperature/motorstate`、pelvis IMU、独立 torso IMU、
 两个本机接收时间、pair skew、CRC/freshness/reject reason、机器人/固件/映射 ID。
 
-当前 protocol v2 已携带 35-slot 运动量、温度、mode、tick 和配对后的 torso IMU；
-CRC 在 bridge 写 shared memory 之前验证。本轮不为未来字段仓促升级 ABI；
-LowState version、CRC 计数和 pair 统计先保存在 bridge summary。motorstate、两个来源
-各自时间和 source skew 的逐样本字段属于后续 protocol v3 明确任务。
+当前 protocol v3 已携带 35-slot 运动量、温度、mode、tick、配对后的
+torso IMU，以及 LowState/torso 两个来源的 host timestamp、pair skew、
+validated timestamp、ingress flags 和显式 session nonce。CRC 在 bridge 写 shared
+memory 之前验证；启动脚本每次生成非零 nonce 并交给 bridge，下游只能核对而
+不能改写该证据。ABI 总长 3328 B，由 command 768 B、state 1440 B 和
+receipt/status 928 B 三个 64-byte-aligned seqlock slot 组成；Python/C++ 使用字段
+offset 回归锁定，不是只对比总字节数。
 
 ### 3.2 `ValidatedHardwareObservation`
 
@@ -107,6 +115,13 @@ future output 的独立认证层才生成完整 13-slot `q/dq/kp/kd/tau`、comma
 active mask、arm-weight transition、expiry、hard-stop/soft-guard/diagnostic 结果。
 output adapter 必须回报实际写出的 command ID、绑定的 source state、mode、weight、
 clamp/guard/watchdog reason 和 DDS write time。shadow 不链接或实例化这一层。
+
+Stage 2 中 Python 唯一的正式全绑定 writer 是
+`write_certified_hil_command(CertifiedHilCommandEnvelope)`。它只接受真实
+`CertifiedHardwareCommand` 类型，且要求 scope 固定为
+`offline_transport_contract_only`、`hardware_safety_certified=false`、
+`hardware_output_authorized=false`。它始终清除 `REQUEST_OUTPUT`；普通 `write_*`
+API 传 `request_output=True` 会立即拒绝。这是 HIL transport 边界，不是真机认证。
 
 若使用 robot-side PD，则 `tau` 必须是纯 feedforward；若使用 direct torque，则
 robot-side `kp/kd` 必须为零。绝不能在两侧重复计算 PD。
@@ -236,12 +251,32 @@ future publisher 只能读取与 shadow 相同的 validated state ingress，不�
 binding、过期拒绝、watchdog、process crash、重启旧命令、mode/weight 状态机和
 receipt；输出 capability 默认不存在。
 
-当前已完成的 **O0/O1 offline preparation** 只包含平台无关 command contract 和纯
-内存 fake sink：它验证 session/source-state binding、expiry、13-slot active mask、
-inactive zero-action hold、robot-PD/direct-torque 互斥语义、replay/restart nonce 和
-watchdog。fake receipt 永远记录 DDS/hardware write 为 false；所谓
-`CertifiedHardwareCommand` 的 scope 固定为 `offline_transport_contract_only`，同时
-固定 `hardware_safety_certified=false`、`hardware_output_authorized=false`。
+当前已完成的 **O0/O1 offline preparation** 有两层：
+
+1. 平台无关 Python contract 和内存 fake sink，验证 source binding、expiry、
+   13-slot mask、inactive zero-action hold、double-PD、replay/restart nonce 和 watchdog；
+2. protocol-v3 + publisher-absent C++ HIL，在 2 ms final-sink 边界运行共享
+   `HardwareCommandSupervisor`。状态机为 disarmed、arming-PD、active、
+   soft-guard-releasing 和 latched-fault；production policy 的 site/ownership/startup/
+   active/release/output 验证项默认全为 false，因此不可 arming。只有
+   显式 test-fixture policy 能在无 publisher 的 HIL 中走到 would-write sink。
+
+2 ms dispatcher 用 command seqlock sequence 判定新 proposal 还是同一 slot 的合法
+hold。一个 6 ms proposal 只可在相对 `0/2/4 ms` 三拍使用；超出三拍、
+重写旧 ID 或错过下一 anchor 都 fail closed。有界 cache 用精确
+`(sample_id, source_timestamp_ns)` 查找生成 proposal 的历史 source state，最新
+2 ms state 只用于当前 actuation/hold 组装，不能替代 source identity。
+
+HIL 的 recording command sink 在真正 would-write 调用点再读一次时钟，重新检查
+deadline 和 expiry。receipt 完整回显 session/producer/command/source/task/policy、
+请求与实际 active mask/weight、guard/clamp、13-slot selected command 和 sink 结果。
+receipt 落盘与 command sink 是两个不同事实；被拒绝拍仍可写 JSONL，但
+`sink_write_performed=false`。无论是否 would-write，DDS/hardware write 始终为 false。
+
+HIL executable 只链接本地 core/recording sink，隔离测试会扫描源码和 binary，
+拒绝 `LowCmd`、`ChannelPublisher`、`rt/arm_sdk` 或 Unitree SDK 输出依赖。
+`dds_main.cpp` 和真实 command target 已从 Stage 2 移除；把
+`UNITREE_ARM_ADAPTER_BUILD_DDS=ON` 交给 CMake 会直接失败。
 
 arm-weight 的真实 ownership/transition、真实 publisher crash/release 以及硬件阈值
 仍是现场 gate；没有用自定阈值伪造这些验证。
@@ -266,7 +301,7 @@ full-task template v2 接到主动输出。模板提前知道停车时刻，仍�
 
 ## 7. 本轮明确未做
 
-- 未构建、启动或执行 `unitree_arm_adapter_dds`；
+- 仓库中已无 `unitree_arm_adapter_dds` target/launcher，开启 DDS build 会 fail closed；
 - 未创建 `rt/arm_sdk` 或 `rt/lowcmd` publisher；
 - 未调用 motion switcher 或改变机器人控制模式；
 - 未把 synthetic replay/fake sink 当作真实硬件证据；
@@ -275,4 +310,4 @@ full-task template v2 接到主动输出。模板提前知道停车时刻，仍�
 - 未接入 full-task v2 的真实 task epoch；
 - 未修改 MPC、template、continuous-H、mapper 或安全阈值；
 - 未重新开启 latency、L1-D 或 async/free-running；
-- 未启用任何 hardware output。
+- publisher-absent HIL 仅记录 would-write 和 receipt，未启用任何 hardware output。

@@ -88,6 +88,17 @@ SESSION_DIR="$REPO_DIR/evaluation/hardware_shadow/state_inspection/$GROUP"
 SHARED_MEMORY="/g1_state_inspection_${GROUP}_$$"
 BRIDGE_LOG="$SESSION_DIR/state_bridge.log"
 BRIDGE_SUMMARY="$SESSION_DIR/state_bridge_summary.json"
+SESSION_NONCE="${UNITREE_INGRESS_SESSION_NONCE:-}"
+
+if [[ -z "$SESSION_NONCE" ]]; then
+    while [[ -z "$SESSION_NONCE" || "$SESSION_NONCE" == "0" ]]; do
+        SESSION_NONCE="$(od -An -N8 -tu8 /dev/urandom | tr -d '[:space:]')"
+    done
+fi
+if [[ ! "$SESSION_NONCE" =~ ^[0-9]+$ || "$SESSION_NONCE" == "0" ]]; then
+    echo "UNITREE_INGRESS_SESSION_NONCE must be a nonzero uint64." >&2
+    exit 2
+fi
 
 if [[ ! -x "$G1_MPC_PYTHON" ]]; then
     echo "Set G1_MPC_PYTHON to the project environment." >&2
@@ -165,6 +176,7 @@ trap cleanup EXIT INT TERM
 
 taskset -c "$BRIDGE_CPU" "$STATE_BRIDGE" "$NETWORK_INTERFACE" \
     --shm-name "$SHARED_MEMORY" \
+    --session-nonce "$SESSION_NONCE" \
     --duration-s "$((DURATION_S + 10))" \
     --max-source-skew-us 5000 \
     --summary-json "$BRIDGE_SUMMARY" \
@@ -193,6 +205,7 @@ taskset -c "$INSPECT_CPU" "$G1_MPC_PYTHON" \
     --controller-config "$CONTROLLER_CONFIG" \
     --hardware-config "$HARDWARE_CONFIG" \
     --shared-memory "$SHARED_MEMORY" \
+    --expected-ingress-session-nonce "$SESSION_NONCE" \
     --inspect-state-only \
     --inspect-samples "$INSPECT_SAMPLES" \
     --duration-s "$DURATION_S" \

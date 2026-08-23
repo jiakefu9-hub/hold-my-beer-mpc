@@ -88,36 +88,46 @@ affinity 都严格为 `[7]`、六个数值库线程变量均为 1、Torch intra/
 24 ms 且 handoff anchor 为 4。详见
 [REALTIME_RUNTIME.md](../REALTIME_RUNTIME.md)。
 
-## Unitree protocol v2
+## Unitree protocol v3
 
-`unitree_shm.py` 是 `cpp/unitree_arm_adapter` 的 Python client。它可写 13 维
-Arm SDK command，读取 35 电机状态和 C++ 2 ms loop status；client 本身不创建
-DDS。hardware shadow 使用 `read_only=True` 打开 C++ state-only bridge 创建的
-对象，没有 command sink。
+`unitree_shm.py` 是 `cpp/unitree_arm_adapter` 的 Python client。它镜像一个锁定的
+protocol-v3 ABI，可读 35 电机 paired state 和完整 C++ receipt；client 本身
+不创建 DDS。hardware shadow 使用 `read_only=True` 打开 C++ state-only bridge
+创建的对象，没有 command sink。publisher-absent HIL 的离线 producer 则只能经
+下文的受限全绑定 writer 写 command slot。
 
-| 项目 | protocol v2 |
+| 项目 | protocol v3 |
 | --- | ---: |
 | magic | `0x473141524d504331` |
-| 总大小 | 2304 B |
-| command 槽偏移 / payload | 64 / 656 B |
-| state 槽偏移 / payload | 768 / 1392 B |
-| status 槽偏移 / payload | 2176 / 96 B |
+| 总大小 | 3328 B |
+| command 槽偏移 / payload | 64 / 768 B |
+| state 槽偏移 / payload | 896 / 1440 B |
+| receipt/status 槽偏移 / payload | 2368 / 928 B |
 
 Python 打开时检查 magic、version、总大小、字段偏移和 64-byte alignment。
 跨进程原子读写使用 `libatomic` acquire/release + seqlock。三个槽保持单写者：
-上层写 command、DDS callback 写 state、C++ 2 ms loop 写 status。
+上层写 command、paired state bridge 写 state、C++ 2 ms HIL 写 receipt。
 
-### 两种命令语义
+command 不再只是数值向量：它完整绑定 producer/command ID、session nonce、
+source sample/timestamp、task epoch/6 ms anchor、expiry、active mask 和 safety-policy
+ID/SHA256。state 保存 LowState/torso IMU 两源时间、pair skew、validated timestamp、
+ingress flags 和 state-bridge session nonce。receipt 回显完整 identity、observed state、
+deadline/expiry、guard、requested/executed mask 与 weight 和最终 selected 13-slot command。
+Python read-only inspector/shadow 与 C++ HIL 都必须核对 launcher 指定的同一 nonce、
+三项 required flags、两源时间关系和不超过 5 ms 的 skew。
 
-- `write_robot_pd_plus_feedforward(...)`：底层执行 q/dq PD；`tau_ff` 只能是纯
-  feedforward；
-- `write_direct_torque(...)`：`tau_cmd` 已包含反馈；C++ 将下发 kp/kd 强制置零，
+### 离线 writer 与两种命令语义
+
+- robot-PD + feedforward：底层执行 q/dq PD，`tau` 只能是纯 feedforward；
+- direct torque：`tau` 已包含反馈，C++ formatter 将 robot-side `kp/kd` 强制置零，
   避免 double PD。
 
-两种 Python API 的 `request_output` 默认都是 `False`。即使上层设为 `True`，
-output-capable C++ 进程还必须显式带 `--enable-output`；本地 dry-run 和
-`unitree_arm_state_bridge` 根本没有输出能力。当前项目没有授权任何真机输出
-命令。
+普通 `write_*` API 传 `request_output=True` 会直接抛出 `PermissionError`。唯一的正式
+全绑定写口 `write_certified_hil_command(CertifiedHilCommandEnvelope)` 只接受真实
+`CertifiedHardwareCommand`，要求 certification scope 为 offline-only，并要求
+`hardware_safety_certified` 和 `hardware_output_authorized` 都是 false。它仍然清除
+`REQUEST_OUTPUT`。跨进程字符串 identity 使用 UTF-8 SHA256 前 8 字节的大端
+uint64，禁止使用进程随机化的 Python `hash()`。
 
 ## 本地协议测试
 
@@ -127,19 +137,30 @@ cpp/unitree_arm_adapter/build_and_test.sh
   python -m unittest right_arm_runtime.tests.test_unitree_shm -v
 ```
 
-测试检查 C++/Python layout、seqlock、错误 magic/version/layout、默认输出关闭
-及两种 PD 语义；它使用 dry-run，不访问 DDS，也不证明真机行为。完整硬件边界
-见 [HARDWARE_SHADOW.md](../HARDWARE_SHADOW.md)。
+测试检查 C++/Python 全字段 layout、seqlock、错误 magic/version/layout、普通 writer
+的输出拒绝、formal HIL writer 的 offline-only 约束及两种 PD 语义。它们不
+访问 DDS，也不证明真机行为。
 
 
 ## Hardware offline preparation
 
 `hardware_state_replay.py` 审计 state-only JSONL evidence，但永远不会修改 hardware
 verification flags；`hardware_output_contract.py` 定义 source-state binding、expiry、
-13-slot active mask、互斥 PD/torque 语义和纯内存 `FakeHardwareCommandSink`。后者没有
-Unitree SDK/DDS/shared-memory writer 依赖，receipt 始终声明没有 DDS/hardware write。
-其 `CertifiedHardwareCommand` 只通过 offline transport contract，并固定
-`hardware_safety_certified=false`、`hardware_output_authorized=false`。
+13-slot active mask、互斥 PD/torque 语义和纯内存 fake sink。
+
+Stage 2 的 C++ `unitree_arm_adapter_hil` 固定在 2 ms final boundary 重做绑定、安全状态机、
+deadline/expiry 和 13-slot formatter；非 2000 us 的 `--period-us` 会 fail fast。它用
+有界 cache 精确找回 proposal 绑定的
+source state，并用当前 2 ms state 组装 actuation plan。每个 6 ms proposal 只在
+相对 `0/2/4 ms` 三拍合法；同一 seqlock slot 第四拍、重写旧 ID、source 丢失或
+新 anchor 不连续都 fail closed。recording command sink 在 would-write 调用点再用实际
+时钟检查 deadline/expiry。receipt logger 独立记录每拍：被拒绝 receipt 可以落盘，
+但 `sink_write_performed=false`。
+
+HIL binary 不链接 Unitree SDK，不包含 `LowCmd`、`ChannelPublisher` 或
+`rt/arm_sdk`。`dds_main.cpp`/output target 已移除，CMake 对
+`UNITREE_ARM_ADAPTER_BUILD_DDS=ON` 直接 fail closed。production supervisor policy 的现场
+验证和授权字段默认全为 false，因而不可 arming。
 
 详见 [HARDWARE_OFFLINE_PREPARATION.md](../HARDWARE_OFFLINE_PREPARATION.md)。H1
 仍为 PARTIAL；真实 model/index/IMU、arm-weight ownership、release/watchdog 和安全

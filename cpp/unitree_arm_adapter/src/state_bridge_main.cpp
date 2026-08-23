@@ -36,6 +36,7 @@ void HandleSignal(int) { stop_requested = 1; }
 struct Options {
     std::string network_interface;
     std::string shared_memory_name{"/g1_arm_mpc_shadow"};
+    std::uint64_t session_nonce{0};
     std::uint64_t duration_s{0};
     std::uint64_t max_source_skew_us{5000};
     std::string summary_json;
@@ -55,6 +56,7 @@ void PrintUsage(const char* executable) {
     std::cout
         << "Usage: " << executable << " NETWORK_INTERFACE [options]\n"
         << "  --shm-name NAME   POSIX shared-memory name\n"
+        << "  --session-nonce N  explicit nonzero ingress session identity\n"
         << "  --duration-s N    0 means run until SIGINT/SIGTERM\n\n"
         << "  --max-source-skew-us N  LowState/torso-IMU pairing limit\n"
         << "  --summary-json PATH  write receive/CRC/pairing counters\n"
@@ -74,6 +76,9 @@ Options ParseOptions(int argc, char** argv) {
         };
         if (argument == "--shm-name") {
             options.shared_memory_name = require_value("--shm-name");
+        } else if (argument == "--session-nonce") {
+            options.session_nonce = ParseUnsigned(
+                require_value("--session-nonce"), "--session-nonce");
         } else if (argument == "--duration-s") {
             options.duration_s = ParseUnsigned(
                 require_value("--duration-s"), "--duration-s");
@@ -101,6 +106,9 @@ Options ParseOptions(int argc, char** argv) {
     if (options.max_source_skew_us == 0U) {
         throw std::invalid_argument("--max-source-skew-us must be positive");
     }
+    if (options.session_nonce == 0U) {
+        throw std::invalid_argument("--session-nonce must be nonzero");
+    }
     return options;
 }
 
@@ -117,15 +125,31 @@ bool LowStateCrcValid(
     return message.crc() == computed;
 }
 
+std::uint64_t AbsoluteDifference(
+    std::uint64_t first, std::uint64_t second);
+
 ua::RobotStatePayload ConvertState(
     const unitree_hg::msg::dds_::LowState_& message,
     const unitree_hg::msg::dds_::IMUState_& torso_imu,
-    std::uint64_t oldest_source_timestamp_ns,
+    std::uint64_t low_state_timestamp_ns,
+    std::uint64_t torso_imu_timestamp_ns,
+    std::uint64_t validated_timestamp_ns,
+    std::uint64_t session_nonce,
     std::uint64_t sample_id) {
     ua::RobotStatePayload state;
-    state.monotonic_timestamp_ns = oldest_source_timestamp_ns;
+    state.monotonic_timestamp_ns = std::min(
+        low_state_timestamp_ns, torso_imu_timestamp_ns);
+    state.validated_timestamp_ns = validated_timestamp_ns;
+    state.ingress_session_nonce = session_nonce;
+    state.low_state_timestamp_ns = low_state_timestamp_ns;
+    state.torso_imu_timestamp_ns = torso_imu_timestamp_ns;
+    state.source_skew_ns = AbsoluteDifference(
+        low_state_timestamp_ns, torso_imu_timestamp_ns);
     state.sample_id = sample_id;
     state.robot_tick = message.tick();
+    state.ingress_flags = ua::kStateLowStateCrcValid |
+                          ua::kStatePairedIngressValidated |
+                          ua::kStateTorsoImuPresent;
     state.mode_pr = message.mode_pr();
     state.mode_machine = message.mode_machine();
     for (std::size_t index = 0; index < ua::kMotorCount; ++index) {
@@ -161,8 +185,11 @@ class PairedStateWriter {
 public:
     PairedStateWriter(
         ua::SharedMemoryLayout* layout,
-        std::uint64_t max_source_skew_ns)
-        : layout_(layout), max_source_skew_ns_(max_source_skew_ns) {}
+        std::uint64_t max_source_skew_ns,
+        std::uint64_t session_nonce)
+        : layout_(layout),
+          max_source_skew_ns_(max_source_skew_ns),
+          session_nonce_(session_nonce) {}
 
     void OnLowState(const void* raw_message) {
         if (raw_message == nullptr) {
@@ -255,7 +282,10 @@ private:
         state = ConvertState(
             low_state_,
             torso_imu_,
-            std::min(low_state_timestamp_ns_, torso_imu_timestamp_ns_),
+            low_state_timestamp_ns_,
+            torso_imu_timestamp_ns_,
+            ua::MonotonicNowNs(),
+            session_nonce_,
             sample_id);
         published_low_state_sequence_ = low_state_sequence_;
         published_torso_imu_sequence_ = torso_imu_sequence_;
@@ -270,6 +300,7 @@ private:
 
     ua::SharedMemoryLayout* layout_;
     std::uint64_t max_source_skew_ns_;
+    std::uint64_t session_nonce_;
     mutable std::mutex mutex_;
     unitree_hg::msg::dds_::LowState_ low_state_;
     unitree_hg::msg::dds_::IMUState_ torso_imu_;
@@ -308,6 +339,8 @@ void WriteSummaryJson(
         << "  \"lowstate_topic\": \"" << kLowStateTopic << "\",\n"
         << "  \"torso_imu_topic\": \"" << kTorsoImuTopic << "\",\n"
         << "  \"output_capability\": \"absent\",\n"
+        << "  \"ingress_session_nonce\": " << options.session_nonce
+        << ",\n"
         << "  \"lowstate_received_count\": "
         << writer.low_state_received_count() << ",\n"
         << "  \"lowstate_crc_valid_count\": "
@@ -345,7 +378,9 @@ int main(int argc, char** argv) {
             options.shared_memory_name, true);
         auto* layout = region.get();
         PairedStateWriter writer(
-            layout, options.max_source_skew_us * 1000U);
+            layout,
+            options.max_source_skew_us * 1000U,
+            options.session_nonce);
 
         unitree::robot::ChannelFactory::Instance()->Init(
             0, options.network_interface);

@@ -1420,7 +1420,7 @@ $ddq_{\mathrm{des}}$ 模型结果与上述回代结果的差主要反映 DDQ 执
 
 该报告同时给出完整区间、一次 MPC 更新和一次 DDQ 到力矩调用的 mean、p50、p95、p99、max，并用 `interval_mean_composition` 将完整区间平均值严格拆成 `mpc_policy_update + all_ddq_to_torque_calls + cpp_executor_bridge + other_right_arm_path`。`mpc_breakdown` 拆分工作轨迹、运动学项、代价、约束、OSQP wall time 和后处理；`ddq_to_torque_breakdown` 另外区分 C++ RNEA 核心、Python/C ABI 调用、仿真约束诊断、C++ MuJoCo 映射核心与桥接开销，并记录完整 `mj_forward`、`mj_forwardSkip` 和实际验收轮数。这样不会再把“MPC 更新加同一 physics step 的一次执行”误称为完整 6 ms 控制耗时。
 
-`mj_step` 物理推进、评估记录/绘图、viewer/video 和实时 sleep 不属于真机控制算法，单独统计但不进入上述区间；仿真无法测到的传感器/总线、电机驱动通信、固件和目标计算机实时调度延迟也明确列在 `timing_scope.not_measurable_in_simulation`。仿真 C++ mapper 内的 MuJoCo 接触验收同样不会原样出现在真机上；真机的 2 ms C++ 适配器已实现 LowState 读取、共享内存、限幅、超时、NaN、过热、deadline 保护和可选 `rt/arm_sdk` 发送，但完整 floating-base RNEA 仍需要经验证的 base pose/twist 与接触状态估计。
+`mj_step` 物理推进、评估记录/绘图、viewer/video 和实时 sleep 不属于真机控制算法，单独统计但不进入上述区间；仿真无法测到的传感器/总线、电机驱动通信、固件和目标计算机实时调度延迟也明确列在 `timing_scope.not_measurable_in_simulation`。仿真 C++ mapper 内的 MuJoCo 接触验收同样不会原样出现在真机上。当前 2 ms C++ 真机准备只包含 state-only LowState/torso-IMU ingress，以及不链接 Unitree SDK 的 publisher-absent HIL supervisor/formatter；仓库没有 `rt/arm_sdk` 命令 publisher。未来主动输出仍需现场验证的 base pose/twist、接触状态估计、安全 policy、ownership/watchdog 和独立授权。
 
 当前冻结证据是 CPU 7 上的 3 条 nominal 和 3 条
 `heldout_pair_02_minus` 回合。parent 与 C++ worker affinity 均为 `[7]`，六个数值库

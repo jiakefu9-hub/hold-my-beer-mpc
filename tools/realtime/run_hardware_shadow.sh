@@ -92,6 +92,17 @@ STATE_BRIDGE="$BUILD_DIR/unitree_arm_state_bridge"
 SHARED_MEMORY="/g1_shadow_${GROUP}_$$"
 BRIDGE_LOG="/tmp/${GROUP}_state_bridge.log"
 MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/hold-my-beer-mpc-matplotlib}"
+SESSION_NONCE="${UNITREE_INGRESS_SESSION_NONCE:-}"
+
+if [[ -z "$SESSION_NONCE" ]]; then
+    while [[ -z "$SESSION_NONCE" || "$SESSION_NONCE" == "0" ]]; do
+        SESSION_NONCE="$(od -An -N8 -tu8 /dev/urandom | tr -d '[:space:]')"
+    done
+fi
+if [[ ! "$SESSION_NONCE" =~ ^[0-9]+$ || "$SESSION_NONCE" == "0" ]]; then
+    echo "UNITREE_INGRESS_SESSION_NONCE must be a nonzero uint64." >&2
+    exit 2
+fi
 
 if [[ ! -x "$G1_MPC_PYTHON" ]]; then
     echo "Set G1_MPC_PYTHON to the project environment." >&2
@@ -146,6 +157,7 @@ trap cleanup EXIT INT TERM
 # reserved for the bounded RR/10 Python + synchronous C++ MPC path.
 taskset -c "$BRIDGE_CPU" "$STATE_BRIDGE" "$NETWORK_INTERFACE" \
     --shm-name "$SHARED_MEMORY" \
+    --session-nonce "$SESSION_NONCE" \
     --duration-s "$((DURATION_S + 15))" \
     --max-source-skew-us 5000 \
     --unlink-on-exit >"$BRIDGE_LOG" 2>&1 &
@@ -206,6 +218,7 @@ sudo systemd-run --wait --pipe --collect \
     --controller-config "$CONTROLLER_CONFIG" \
     --hardware-config "$HARDWARE_CONFIG" \
     --shared-memory "$SHARED_MEMORY" \
+    --expected-ingress-session-nonce "$SESSION_NONCE" \
     --predictor "$PREDICTOR" \
     --duration-s "$DURATION_S" \
     --output-dir "$OUTPUT_DIR"

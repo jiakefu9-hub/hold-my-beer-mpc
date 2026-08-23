@@ -33,12 +33,18 @@ from right_arm_runtime.hardware_output_contract import (
     ValidatedStateIdentity,
     certify_for_offline_fake_sink,
 )
-from right_arm_runtime.unitree_shm import RobotStateSnapshot
+from right_arm_runtime.unitree_shm import RobotStateSnapshot, StateIngressFlags
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL = DEFAULT_FULL_TASK_PROTOCOL
 NOMINAL_COMMAND = np.asarray([0.5, 0.0, 0.0127], dtype=np.float64)
+TEST_INGRESS_NONCE = 0x1234
+VALID_INGRESS_FLAGS = int(
+    StateIngressFlags.LOW_STATE_CRC_VALID
+    | StateIngressFlags.PAIRED_INGRESS_VALIDATED
+    | StateIngressFlags.TORSO_IMU_PRESENT
+)
 
 
 def _controller_config() -> dict:
@@ -77,6 +83,12 @@ def _state(
 ) -> RobotStateSnapshot:
     return RobotStateSnapshot(
         monotonic_timestamp_ns=timestamp_ns,
+        validated_timestamp_ns=timestamp_ns + 50_000,
+        ingress_session_nonce=TEST_INGRESS_NONCE,
+        low_state_timestamp_ns=timestamp_ns,
+        torso_imu_timestamp_ns=timestamp_ns + 10_000,
+        source_skew_ns=10_000,
+        ingress_flags=VALID_INGRESS_FLAGS,
         sample_id=sample_id,
         robot_tick=sample_id,
         mode_pr=0,
@@ -143,6 +155,12 @@ class HardwareContractTest(unittest.TestCase):
             REPO_ROOT / "cpp/unitree_arm_adapter/CMakeLists.txt"
         ).read_text(encoding="utf-8")
         self.assertIn("UNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE", cmake)
+        self.assertFalse(
+            (REPO_ROOT / "cpp/unitree_arm_adapter/src/dds_main.cpp").exists()
+        )
+        self.assertIn(
+            "本阶段不存在DDS命令publisher target", cmake
+        )
         launcher = (
             REPO_ROOT
             / "tools/realtime/run_hardware_state_inspection.sh"
@@ -152,6 +170,22 @@ class HardwareContractTest(unittest.TestCase):
             "-DUNITREE_ARM_ADAPTER_BUILD_STATE_BRIDGE=ON", launcher
         )
         self.assertNotIn("--enable-output", launcher)
+        self.assertIn("UNITREE_INGRESS_SESSION_NONCE", launcher)
+        self.assertIn('--session-nonce "$SESSION_NONCE"', launcher)
+        self.assertIn(
+            '--expected-ingress-session-nonce "$SESSION_NONCE"', launcher
+        )
+        shadow_launcher = (
+            REPO_ROOT / "tools/realtime/run_hardware_shadow.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("UNITREE_INGRESS_SESSION_NONCE", shadow_launcher)
+        self.assertIn(
+            '--session-nonce "$SESSION_NONCE"', shadow_launcher
+        )
+        self.assertIn(
+            '--expected-ingress-session-nonce "$SESSION_NONCE"',
+            shadow_launcher,
+        )
 
     def test_repository_config_is_deliberately_not_armed(self):
         payload = load_hardware_shadow_config(
@@ -178,7 +212,11 @@ class HardwareContractTest(unittest.TestCase):
 class HardwareStateAdapterTest(unittest.TestCase):
     def setUp(self):
         self.model = _model()
-        self.adapter = G1HardwareStateAdapter(self.model, _contract())
+        self.adapter = G1HardwareStateAdapter(
+            self.model,
+            _contract(),
+            expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+        )
         self.started_ns = time.monotonic_ns()
 
     def test_units_mapping_orientation_and_causal_alpha(self):
@@ -199,7 +237,7 @@ class HardwareStateAdapterTest(unittest.TestCase):
             now_ns=self.started_ns + 100_000,
         )
         self.assertFalse(first.derivative_ready)
-        self.assertEqual(first.validated_timestamp_ns, self.started_ns + 100_000)
+        self.assertEqual(first.validated_timestamp_ns, self.started_ns + 50_000)
         self.assertTrue(first.capabilities.right_arm_joint_state)
         self.assertTrue(first.capabilities.torso_rotation)
         self.assertFalse(first.capabilities.torso_angular_acceleration)
@@ -251,25 +289,40 @@ class HardwareStateAdapterTest(unittest.TestCase):
 
         future = _state(self.started_ns + 2_000_000, 1)
         with self.assertRaisesRegex(HardwareStateError, "future"):
-            G1HardwareStateAdapter(self.model, _contract()).convert(
+            G1HardwareStateAdapter(
+                self.model,
+                _contract(),
+                expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+            ).convert(
                 future, now_ns=self.started_ns
             )
 
         valid = _state(self.started_ns, 1)
-        duplicate_adapter = G1HardwareStateAdapter(self.model, _contract())
+        duplicate_adapter = G1HardwareStateAdapter(
+            self.model,
+            _contract(),
+            expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+        )
         duplicate_adapter.convert(valid, now_ns=self.started_ns + 100_000)
         with self.assertRaisesRegex(HardwareStateError, "sample_id"):
             duplicate_adapter.convert(
                 valid, now_ns=self.started_ns + 200_000
             )
 
-        tick_adapter = G1HardwareStateAdapter(self.model, _contract())
+        tick_adapter = G1HardwareStateAdapter(
+            self.model,
+            _contract(),
+            expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+        )
         tick_adapter.convert(valid, now_ns=self.started_ns + 100_000)
         with self.assertRaisesRegex(HardwareStateError, "robot tick"):
             tick_adapter.convert(
                 replace(
                     valid,
                     monotonic_timestamp_ns=self.started_ns + 2_000_000,
+                    low_state_timestamp_ns=self.started_ns + 2_000_000,
+                    torso_imu_timestamp_ns=self.started_ns + 2_010_000,
+                    validated_timestamp_ns=self.started_ns + 2_050_000,
                     sample_id=2,
                 ),
                 now_ns=self.started_ns + 2_100_000,
@@ -278,7 +331,11 @@ class HardwareStateAdapterTest(unittest.TestCase):
         bad_q = list(valid.q)
         bad_q[22] = float("nan")
         with self.assertRaisesRegex(HardwareStateError, "nonfinite"):
-            G1HardwareStateAdapter(self.model, _contract()).convert(
+            G1HardwareStateAdapter(
+                self.model,
+                _contract(),
+                expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+            ).convert(
                 replace(valid, q=tuple(bad_q)),
                 now_ns=self.started_ns + 100_000,
             )
@@ -286,16 +343,69 @@ class HardwareStateAdapterTest(unittest.TestCase):
         temperatures = list(valid.motor_temperature_c)
         temperatures[22] = (86, 25)
         with self.assertRaisesRegex(HardwareStateError, "temperature"):
-            G1HardwareStateAdapter(self.model, _contract()).convert(
+            G1HardwareStateAdapter(
+                self.model,
+                _contract(),
+                expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+            ).convert(
                 replace(valid, motor_temperature_c=tuple(temperatures)),
                 now_ns=self.started_ns + 100_000,
             )
+
+    def test_protocol_v3_ingress_provenance_fails_closed(self):
+        valid = _state(self.started_ns, 1)
+        cases = (
+            (
+                replace(valid, ingress_session_nonce=TEST_INGRESS_NONCE + 1),
+                "session nonce mismatch",
+            ),
+            (replace(valid, ingress_flags=0), "validation flags missing"),
+            (
+                replace(
+                    valid,
+                    ingress_flags=(
+                        VALID_INGRESS_FLAGS
+                        | int(StateIngressFlags.SYNTHETIC_FIXTURE)
+                    ),
+                ),
+                "synthetic",
+            ),
+            (replace(valid, source_skew_ns=11_000), "timestamp/skew"),
+            (
+                replace(
+                    valid,
+                    torso_imu_timestamp_ns=self.started_ns + 6_000_000,
+                    source_skew_ns=6_000_000,
+                    validated_timestamp_ns=self.started_ns + 6_100_000,
+                ),
+                "source skew exceeds",
+            ),
+            (
+                replace(valid, validated_timestamp_ns=self.started_ns),
+                "validation predates",
+            ),
+        )
+        for state, reason in cases:
+            with self.subTest(reason=reason):
+                adapter = G1HardwareStateAdapter(
+                    self.model,
+                    _contract(),
+                    expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+                )
+                with self.assertRaisesRegex(HardwareStateError, reason):
+                    adapter.convert(
+                        state, now_ns=self.started_ns + 7_000_000
+                    )
 
 
 class ShadowCommandTest(unittest.TestCase):
     def test_command_is_protocol_shaped_but_cannot_request_output(self):
         model = _model()
-        adapter = G1HardwareStateAdapter(model, _contract())
+        adapter = G1HardwareStateAdapter(
+            model,
+            _contract(),
+            expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+        )
         timestamp = time.monotonic_ns()
         q = tuple(0.001 * index for index in range(35))
         state = _state(timestamp, 1, q=q)
@@ -331,6 +441,7 @@ class CompleteShadowPathTest(unittest.TestCase):
                 repo_dir=REPO_ROOT,
                 controller_config=config,
                 contract=_contract(),
+                expected_ingress_session_nonce=TEST_INGRESS_NONCE,
                 predictor_name="hybrid_residual",
             )
 
@@ -344,6 +455,7 @@ class CompleteShadowPathTest(unittest.TestCase):
             repo_dir=REPO_ROOT,
             controller_config=config,
             contract=_contract(),
+            expected_ingress_session_nonce=TEST_INGRESS_NONCE,
             predictor_name="template",
         ) as controller:
             self.assertIsNone(
@@ -378,6 +490,7 @@ class FullTaskOfflineShadowPathTest(unittest.TestCase):
             repo_dir=REPO_ROOT,
             controller_config=config,
             contract=_contract(),
+            expected_ingress_session_nonce=TEST_INGRESS_NONCE,
             predictor_name="full_task_template",
         )
 

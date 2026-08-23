@@ -9,13 +9,13 @@ continuous-H、QP 组装、权重和 full-task task clock 不在这里复制。
 | `ddq_torque_mapper` | 仿真在线 | MuJoCo 局部 DDQ→力矩映射、候选验收与救援 |
 | `right_arm_executor` | 仿真在线，也是真机语义基准 | 2 ms PD、限幅、超时与 NaN 保护 |
 | `right_arm_sim_runtime` | MuJoCo worker | external-step IPC，组合 RNEA、mapper 和 executor，返回已认证 `final_tau` |
-| `unitree_arm_adapter` | 硬件适配器 | LowState/Arm SDK、2 ms 周期、共享内存与发布前安全闸 |
+| `unitree_arm_adapter` | 硬件适配器边界 | state-only LowState/torso-IMU bridge、2 ms publisher-absent HIL 与 future-output supervisor |
 
 `run.sh` 会增量构建正式仿真需要的共享库和
 `right_arm_sim_runtime` worker。完整数值回归由各子目录的
-`build_and_test.sh` 独立执行。真机适配器默认只构建 dry-run；启用 Unitree
-SDK2 编译需要显式设置 `UNITREE_ARM_BUILD_DDS=ON`，编译成功也不会自动发送
-命令。
+`build_and_test.sh` 独立执行。真机适配器可显式构建只有 subscriber 的 state bridge；
+publisher-absent HIL 不链接 Unitree SDK。真实命令 publisher target 已移除，
+`UNITREE_ARM_ADAPTER_BUILD_DDS=ON` 会在 CMake 配置阶段 fail closed。
 
 正式 simulation adapter 是
 `main_sim.py -> RightArmSimProcess -> right_arm_sim_runtime`；hardware shadow

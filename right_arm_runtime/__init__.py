@@ -9,9 +9,12 @@ from importlib import import_module
 
 __all__ = (
     "AdapterMode",
+    "AdapterExecutionReceipt",
     "AdapterStatusSnapshot",
+    "CertifiedHilCommandEnvelope",
     "CommandMode",
     "CommandWriteReceipt",
+    "ProtocolV3CommandIdentity",
     "CppDdqMapperResult",
     "CppDdqTorqueMapper",
     "CppNoSafeTorqueError",
@@ -23,6 +26,7 @@ __all__ = (
     "SimProcessShadowValidator",
     "SimRuntimeError",
     "UnitreeArmSharedMemoryClient",
+    "stable_identity_u64",
 )
 
 
@@ -37,11 +41,15 @@ _EXPORT_MODULE = {
     "SimProcessShadowValidator": ".sim_process",
     "SimRuntimeError": ".sim_process",
     "AdapterMode": ".unitree_shm",
+    "AdapterExecutionReceipt": ".unitree_shm",
     "AdapterStatusSnapshot": ".unitree_shm",
+    "CertifiedHilCommandEnvelope": ".unitree_shm",
     "CommandMode": ".unitree_shm",
     "CommandWriteReceipt": ".unitree_shm",
+    "ProtocolV3CommandIdentity": ".unitree_shm",
     "RobotStateSnapshot": ".unitree_shm",
     "UnitreeArmSharedMemoryClient": ".unitree_shm",
+    "stable_identity_u64": ".unitree_shm",
 }
 
 
