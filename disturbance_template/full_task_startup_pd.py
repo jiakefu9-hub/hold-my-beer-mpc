@@ -23,15 +23,14 @@ import numpy as np
 
 from disturbance_template.full_task_protocol import (
     DEFAULT_FULL_TASK_PROTOCOL,
+    FORMAL_STARTUP_PD_DURATION_S,
+    RIGHT_ARM_MODE_FIXED_POSTURE_PD,
+    RIGHT_ARM_MODE_MPC_PROCESS,
+    STARTUP_PD_PROTOCOL_VERSION,
+    FixedStartupPdHandoff,
     FullTaskProtocol,
+    StartupPdDecision,
 )
-
-
-STARTUP_PD_PROTOCOL_VERSION = "full_task_fixed_startup_pd_24ms_handoff_v2"
-FORMAL_STARTUP_PD_DURATION_S = 0.024
-RIGHT_ARM_MODE_FIXED_POSTURE_PD = 0
-RIGHT_ARM_MODE_MPC_PROCESS = 1
-
 
 def _json_value(value: Any) -> Any:
     if isinstance(value, dict):
@@ -45,74 +44,6 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
     return value
-
-
-@dataclass(frozen=True)
-class StartupPdDecision:
-    sample_index: int
-    task_time: float
-    mpc_anchor: bool
-    mpc_control_enabled: bool
-    first_mpc_anchor: bool
-    right_arm_mode: int
-
-
-@dataclass(frozen=True)
-class FixedStartupPdHandoff:
-    """Exact 2/6/20 ms startup handoff, shared by all runtime branches."""
-
-    duration_s: float
-    protocol: FullTaskProtocol = DEFAULT_FULL_TASK_PROTOCOL
-
-    def __post_init__(self) -> None:
-        duration = float(self.duration_s)
-        if not np.isclose(
-            duration, FORMAL_STARTUP_PD_DURATION_S, atol=1e-12, rtol=0.0
-        ):
-            raise ValueError("formal startup PD duration must be exactly 0.024 s")
-        self.protocol.anchor_index(duration)
-
-    @property
-    def takeover_sample_index(self) -> int:
-        return int(round(float(self.duration_s) / self.protocol.physics_dt))
-
-    @property
-    def takeover_anchor_index(self) -> int:
-        return self.protocol.anchor_index(float(self.duration_s))
-
-    def decision(self, sample_index: int) -> StartupPdDecision:
-        index = int(sample_index)
-        task_time = self.protocol.sample_time(index)
-        mpc_anchor = self.protocol.is_mpc_anchor_sample(index)
-        # Once the legal handoff anchor is reached, the process chain remains
-        # active on the two cached-execution physics steps between MPC solves.
-        control_enabled = bool(index >= self.takeover_sample_index)
-        first = bool(index == self.takeover_sample_index)
-        return StartupPdDecision(
-            sample_index=index,
-            task_time=task_time,
-            mpc_anchor=mpc_anchor,
-            mpc_control_enabled=control_enabled,
-            first_mpc_anchor=first,
-            right_arm_mode=(
-                RIGHT_ARM_MODE_MPC_PROCESS
-                if index >= self.takeover_sample_index
-                else RIGHT_ARM_MODE_FIXED_POSTURE_PD
-            ),
-        )
-
-    def validate_short_smoke_end(self, end_time: float) -> float:
-        value = float(end_time)
-        if not np.isfinite(value):
-            raise ValueError("short smoke end must be finite")
-        if value + 1e-12 < float(self.duration_s) + 0.2:
-            raise ValueError("short smoke must cover at least 0.2 s after handoff")
-        steps = value / self.protocol.physics_dt
-        if not np.isclose(steps, round(steps), atol=1e-10, rtol=0.0):
-            raise ValueError("short smoke end must be on the 2 ms grid")
-        if value > self.protocol.headline_end + 1e-12:
-            raise ValueError("short smoke end cannot exceed the headline")
-        return value
 
 
 @dataclass(frozen=True)

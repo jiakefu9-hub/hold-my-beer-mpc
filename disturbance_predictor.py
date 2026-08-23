@@ -27,7 +27,7 @@ from disturbance_template.full_task_template_asset import (
     sha256_file,
     validate_full_task_template,
 )
-from kinematics_helper import DisturbanceHorizon, DisturbanceInput
+from disturbance_types import DisturbanceHorizon, DisturbanceInput
 
 
 @dataclass(frozen=True)

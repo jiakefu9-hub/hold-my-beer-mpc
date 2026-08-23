@@ -13,6 +13,8 @@ from enum import Enum
 import math
 from typing import Iterable, Mapping
 
+from right_arm_runtime.control_contracts import TaskClockEvent
+
 
 ARM_SDK_JOINT_COUNT = 13
 
@@ -41,19 +43,6 @@ class ValidatedStateIdentity:
     source_timestamp_ns: int
     validated_timestamp_ns: int
     arm_sdk_q: tuple[float, ...]
-
-
-@dataclass(frozen=True)
-class TaskClockEvent:
-    """Authoritative locomotion event; it must not be inferred from LowState."""
-
-    session_nonce: str
-    task_epoch_id: str
-    task_time_ns: int
-    full_task_anchor: int
-    planned_command_vx_vy_wz: tuple[float, float, float]
-    runtime_command_vx_vy_wz: tuple[float, float, float]
-    heading_reference_rad: float
 
 
 @dataclass(frozen=True)

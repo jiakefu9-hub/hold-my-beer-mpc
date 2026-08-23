@@ -4,6 +4,8 @@ from typing import Any, Callable, Optional
 import mujoco
 import numpy as np
 
+from disturbance_types import DisturbanceHorizon, DisturbanceInput
+
 
 @dataclass
 class ControlObservation:
@@ -16,24 +18,6 @@ class ControlObservation:
     torso_rotmat: Optional[np.ndarray] = None
     phase: Optional[float] = None
     dt: Optional[float] = None
-
-
-@dataclass
-class DisturbanceInput:
-    acc_world: Optional[np.ndarray] = None
-    omega_world: Optional[np.ndarray] = None
-    alpha_world: Optional[np.ndarray] = None
-    # 当前 node 可以是实测姿态；full-task 未来 node/interval 由当前
-    # anchor 的 W_R_H 乘以 v2 H-frame template rotation 得到。
-    rot_world_body: Optional[np.ndarray] = None
-
-
-@dataclass(frozen=True)
-class DisturbanceHorizon:
-    """MPC 的节点扰动与控制区间扰动，两者时间语义不可混用。"""
-
-    nodes: tuple
-    intervals: tuple
 
 
 @dataclass

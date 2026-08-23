@@ -61,6 +61,14 @@ from right_arm_runtime import (
     SimProcessShadowValidator,
     SimRuntimeError,
 )
+from right_arm_runtime.control_contracts import (
+    ControlStateCapabilities,
+    TaskClockEvent,
+)
+from right_arm_runtime.full_task_control_core import (
+    FullTaskControlObservation,
+    FullTaskRightArmControlCore,
+)
 from right_arm_runtime.sim_mpc_latency import (
     FixedMpcResultDelayLine,
     MpcLatencyTraceRecorder,
@@ -748,6 +756,7 @@ if __name__ == "__main__":
         config, enabled=acceleration_controller, **filter_keys
     )
     disturbance_predictor = None
+    full_task_control_core = None
     if arm_controller == "mpc":
         disturbance_predictor = create_disturbance_predictor(
             config,
@@ -769,6 +778,17 @@ if __name__ == "__main__":
             raise ValueError(
                 "T2 protocol horizon 与冻结 MPC horizon 不一致："
                 f"{protocol.horizon} vs {arm_policy.horizon}。"
+            )
+        if full_task_smoke_active:
+            # 正式 simulation 和后续 hardware adapter 共用同一套
+            # predictor/H/MPC 6 ms anchor 状态机；MuJoCo helper 和力矩执行
+            # 仍留在 simulation adapter 中。
+            full_task_control_core = FullTaskRightArmControlCore(
+                predictor=disturbance_predictor,
+                arm_policy=arm_policy,
+                nominal_command=cmd_nominal,
+                protocol=protocol,
+                startup_handoff=startup_pd_handoff,
             )
     controller_meta["heading_control"] = {
         "enabled": heading_control_enabled,
@@ -1229,10 +1249,16 @@ if __name__ == "__main__":
     last_executed_right_arm_tau = None
     last_policy_update_task_time = np.nan
     if full_task_smoke_active:
+        full_task_session_nonce = f"mujoco:{Path(run_dir).name}"
+        full_task_epoch_label = f"t2_closed_loop_{Path(run_dir).name}"
         full_task_clock = FullTaskClock(protocol)
         full_task_clock.reset(
             float(d.time),
-            epoch_label=f"t2_closed_loop_{Path(run_dir).name}",
+            epoch_label=full_task_epoch_label,
+        )
+        full_task_control_core.reset(
+            session_nonce=full_task_session_nonce,
+            task_epoch_id=full_task_epoch_label,
         )
         initial_task_time = full_task_clock.observe(float(d.time))
         cmd_planned = direct_step_planned_command(
@@ -1424,7 +1450,168 @@ if __name__ == "__main__":
             # right_arm_obs 是上层右臂控制器看到的“当前观测”；其中包含右臂状态、torso 姿态与运动信息，以及右臂控制周期。
             right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
             current_predictor_diagnostics = None
-            if arm_policy_update_due:
+            if arm_policy_update_due and full_task_control_core is not None:
+                if mpc_source_enabled:
+                    perf_monitor.start_arm_control()
+
+                # 正式 full-task 的唯一 6 ms 时钟入口。事件来自已经 reset
+                # 的 FullTaskClock，而不是从 state sample 数或首次观测反推
+                # task epoch。source state 是当前 strict pre-step 状态。
+                task_time_now = full_task_clock.observe(float(d.time))
+                task_anchor = protocol.anchor_index(task_time_now)
+                task_time_ns = task_anchor * int(round(protocol.mpc_dt * 1e9))
+                expected_sample_index = task_anchor * protocol.mpc_stride
+                if expected_sample_index != counter:
+                    raise RuntimeError(
+                        "full-task TaskClockEvent 与当前 2 ms sample 不一致："
+                        f"anchor={task_anchor}, counter={counter}"
+                    )
+                heading_reference = float(heading_state.reference_world)
+                if not np.isfinite(heading_reference):
+                    # HeadingHoldController 按冻结语义仍在首个20 ms策略点
+                    # 初始化；这里只为显式事件提供当前实测yaw元数据，绝不
+                    # 提前更新controller或改变runtime command。
+                    heading_reference = quat_to_yaw_wxyz(
+                        d.xquat[scene_ids.torso_id].copy()
+                    )
+                task_event = TaskClockEvent(
+                    session_nonce=full_task_session_nonce,
+                    task_epoch_id=full_task_epoch_label,
+                    producer_sequence=task_anchor,
+                    event_monotonic_timestamp_ns=task_time_ns,
+                    source_sample_id=counter,
+                    task_time_ns=task_time_ns,
+                    full_task_anchor=task_anchor,
+                    planned_command_vx_vy_wz=tuple(
+                        float(value) for value in cmd_planned
+                    ),
+                    runtime_command_vx_vy_wz=tuple(
+                        float(value) for value in cmd_runtime
+                    ),
+                    heading_reference_rad=heading_reference,
+                )
+                control_observation = FullTaskControlObservation(
+                    session_nonce=full_task_session_nonce,
+                    source_sample_id=counter,
+                    source_timestamp_ns=int(round(float(d.time) * 1e9)),
+                    validated_timestamp_ns=int(round(float(d.time) * 1e9)),
+                    state_source="mujoco_strict_pre_step",
+                    state_valid=True,
+                    capabilities=ControlStateCapabilities(
+                        right_arm_joint_state=True,
+                        torso_rotation=True,
+                        torso_angular_velocity=True,
+                        torso_linear_acceleration=True,
+                        torso_angular_acceleration=True,
+                        floating_base_translation=True,
+                        floating_base_velocity=True,
+                        foot_contacts=True,
+                        external_forces=True,
+                    ),
+                    current_q=right_arm_q,
+                    current_dq=right_arm_dq,
+                    measured_disturbance=torso_disturbance,
+                )
+
+                def build_full_task_helpers(measurement, horizon):
+                    return right_arm_helper.build_helpers(
+                        d,
+                        disturbance=measurement,
+                        disturbance_prediction=horizon.nodes,
+                        interval_disturbance_prediction=horizon.intervals,
+                        include_kinematics_cache=False,
+                    )
+
+                control_intent = full_task_control_core.step(
+                    control_observation,
+                    task_event,
+                    build_full_task_helpers,
+                )
+                if bool(control_intent.mpc_output_enabled) != mpc_source_enabled:
+                    raise RuntimeError(
+                        "shared full-task core 与 fixed startup-PD handoff 状态不一致"
+                    )
+                disturbance_horizon = control_intent.disturbance_horizon
+                current_predictor_diagnostics = dict(
+                    control_intent.predictor_diagnostics
+                )
+                generated_target_right_arm_q = (
+                    control_intent.generated_q_ref.copy()
+                )
+                generated_target_right_arm_dq = (
+                    control_intent.generated_dq_ref.copy()
+                )
+                generated_desired_right_arm_ddq = (
+                    control_intent.generated_ddq_des.copy()
+                )
+                generated_raw_right_arm_ddq = (
+                    control_intent.generated_ddq_raw.copy()
+                )
+                right_ee_position_reference_torso = (
+                    control_intent.torso_relative_position_reference.copy()
+                )
+                controller_diagnostics = dict(
+                    control_intent.controller_diagnostics
+                )
+                controller_diagnostics.update(
+                    {
+                        "disturbance_prediction_time": (
+                            control_intent.timing.predictor_s
+                        ),
+                        "helper_construction_time": (
+                            control_intent.timing.helper_s
+                        ),
+                        "controller_compute_action_time": (
+                            control_intent.timing.mpc_s
+                        ),
+                        "diagnostics_time": (
+                            control_intent.timing.diagnostics_s
+                        ),
+                    }
+                )
+                if mpc_source_enabled:
+                    mpc_diagnostics = controller_diagnostics
+                    if mpc_command_delay_line is not None:
+                        generated_mpc_command_id = mpc_command_delay_line.publish(
+                            task_time_now,
+                            generated_target_right_arm_q,
+                            generated_target_right_arm_dq,
+                            generated_raw_right_arm_ddq,
+                            generated_desired_right_arm_ddq,
+                        )
+                if mpc_latency_trace_recorder is not None:
+                    packet_ready_wall_ns = time.perf_counter_ns()
+                    mpc_latency_trace_recorder.mark_packet_ready(
+                        source_anchor_index=task_anchor,
+                        wall_ns=packet_ready_wall_ns,
+                    )
+                    if (
+                        experimental_mpc_delay_line is not None
+                        and mpc_source_enabled
+                    ):
+                        generated_mpc_packet = experimental_mpc_delay_line.publish(
+                            source_time=task_time_now,
+                            source_sample_index=counter,
+                            source_anchor_index=task_anchor,
+                            q_ref=generated_target_right_arm_q,
+                            dq_ref=generated_target_right_arm_dq,
+                            ddq_raw=generated_raw_right_arm_ddq,
+                            ddq_des=generated_desired_right_arm_ddq,
+                            source_right_arm_q=right_arm_q,
+                            source_right_arm_dq=right_arm_dq,
+                            source_torso_acc=torso_state.lin_acc,
+                            source_torso_omega=torso_state.ang_vel,
+                            diagnostics=controller_diagnostics,
+                            packet_ready_wall_ns=packet_ready_wall_ns,
+                        )
+                        generated_mpc_command_id = (
+                            generated_mpc_packet.command_id
+                        )
+                if mpc_source_enabled:
+                    perf_monitor.finish_arm_control()
+                    perf_monitor.record_mpc_timing(controller_diagnostics)
+
+            elif arm_policy_update_due:
                 if mpc_source_enabled:
                     perf_monitor.start_arm_control()
                 disturbance_prediction_start = time.perf_counter()

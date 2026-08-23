@@ -23,9 +23,21 @@ from disturbance_predictor import (
     DisturbancePredictorObservation,
     create_disturbance_predictor,
 )
+from disturbance_template.full_task_protocol import (
+    DEFAULT_FULL_TASK_PROTOCOL,
+    FixedStartupPdHandoff,
+)
 from kinematics_helper import KinematicsHelper
 from robot_model_backend import create_prediction_backend
 from right_arm_control_setup import RIGHT_ARM_JOINT_NAMES, create_arm_controller
+
+from .control_contracts import ControlStateCapabilities, TaskClockEvent
+from .full_task_control_core import (
+    FullTaskControlIntent,
+    FullTaskControlObservation,
+    FullTaskRightArmControlCore,
+)
+from .hardware_output_contract import FutureCommandMode, HardwareControlProposal
 
 from .unitree_shm import (
     ARM_SDK_JOINT_COUNT,
@@ -319,6 +331,8 @@ class HardwareObservation:
     monotonic_timestamp_ns: int
     sample_id: int
     state_age_ns: int
+    validated_timestamp_ns: int
+    capabilities: ControlStateCapabilities
     qpos_mujoco: np.ndarray
     qvel_mujoco: np.ndarray
     right_arm_q: np.ndarray
@@ -565,6 +579,21 @@ class G1HardwareStateAdapter:
             monotonic_timestamp_ns=timestamp,
             sample_id=sample_id,
             state_age_ns=age,
+            validated_timestamp_ns=now,
+            capabilities=ControlStateCapabilities(
+                right_arm_joint_state=True,
+                torso_rotation=True,
+                torso_angular_velocity=True,
+                torso_linear_acceleration=True,
+                torso_angular_acceleration=derivative_ready,
+                # Protocol-v2 LowState does not provide these state families.
+                # Keep them explicitly unknown instead of presenting nominal
+                # MJCF/zero-filled values as measurements.
+                floating_base_translation=False,
+                floating_base_velocity=False,
+                foot_contacts=False,
+                external_forces=False,
+            ),
             qpos_mujoco=qpos,
             qvel_mujoco=qvel,
             right_arm_q=arrays["q"][list(RIGHT_ARM_MOTOR_INDICES)].copy(),
@@ -674,6 +703,20 @@ class ShadowCycleResult:
     diagnostics: dict
 
 
+@dataclass(frozen=True)
+class FullTaskShadowCycleResult:
+    """One final-controller H3-offline cycle with no output capability."""
+
+    source_sample_id: int
+    task_time_s: float
+    task_anchor: int
+    intent: FullTaskControlIntent
+    command: ShadowArmCommand
+    proposal: HardwareControlProposal
+    timing_s: dict
+    diagnostics: dict
+
+
 class HardwareShadowController:
     """Run predictor + MPC + command build with no output sink."""
 
@@ -738,12 +781,12 @@ class HardwareShadowController:
         requested_name = (
             "template" if predictor_name is None else str(predictor_name)
         ).strip().lower()
-        if requested_name != "template":
+        if requested_name not in {"template", "full_task_template"}:
             raise HardwareContractError(
-                "hardware shadow supports the legacy phase template only"
+                "hardware shadow predictor must be template or full_task_template"
             )
-        requested_config["disturbance_predictor"] = "template"
-        self.predictor_requested = "template"
+        requested_config["disturbance_predictor"] = requested_name
+        self.predictor_requested = requested_name
         self.predictor = create_disturbance_predictor(
             requested_config,
             repo_dir=str(self.repo_dir),
@@ -753,6 +796,23 @@ class HardwareShadowController:
             alpha_limit=float(self.config["ddq_torso_alpha_limit"]),
         )
         self.command_builder = ShadowCommandBuilder(self.config)
+        self._right_target = right_target.copy()
+        self._full_task_core = (
+            FullTaskRightArmControlCore(
+                predictor=self.predictor,
+                arm_policy=self.policy,
+                nominal_command=np.asarray(self.config["cmd_init"], dtype=np.float64),
+                protocol=DEFAULT_FULL_TASK_PROTOCOL,
+                startup_handoff=FixedStartupPdHandoff(
+                    0.024, DEFAULT_FULL_TASK_PROTOCOL
+                ),
+            )
+            if requested_name == "full_task_template"
+            else None
+        )
+        self._full_task_session_nonce: Optional[str] = None
+        self._full_task_epoch_id: Optional[str] = None
+        self._full_task_proposal_count = 0
         self._next_control_timestamp_ns: Optional[int] = None
         self._control_index = 0
         self._previous_mpc_success: Optional[bool] = None
@@ -773,6 +833,40 @@ class HardwareShadowController:
 
     def inspect_snapshot(self, *args, **kwargs) -> dict:
         return self.state_adapter.inspect_snapshot(*args, **kwargs)
+
+    def prime_full_task_state(
+        self,
+        raw_state: RobotStateSnapshot,
+        *,
+        now_ns: Optional[int] = None,
+    ) -> HardwareObservation:
+        """Consume pre-task history without starting or advancing task time."""
+
+        if self._full_task_core is None:
+            raise HardwareContractError(
+                "prime_full_task_state requires predictor=full_task_template"
+            )
+        if self._full_task_core.ready:
+            raise HardwareContractError(
+                "full-task state priming is forbidden after the task epoch starts"
+            )
+        return self.state_adapter.convert(raw_state, now_ns=now_ns)
+
+    def reset_full_task_epoch(
+        self, *, session_nonce: str, task_epoch_id: str
+    ) -> None:
+        """Start only the explicit controller epoch; never infer it from state."""
+
+        if self._full_task_core is None:
+            raise HardwareContractError(
+                "reset_full_task_epoch requires predictor=full_task_template"
+            )
+        self._full_task_core.reset(
+            session_nonce=session_nonce, task_epoch_id=task_epoch_id
+        )
+        self._full_task_session_nonce = str(session_nonce)
+        self._full_task_epoch_id = str(task_epoch_id)
+        self._full_task_proposal_count = 0
 
     def _filter_disturbance(
         self, acceleration: np.ndarray, alpha: np.ndarray
@@ -797,10 +891,29 @@ class HardwareShadowController:
         *,
         now_ns: Optional[int] = None,
         state_read_time_s: float = 0.0,
-    ) -> Optional[ShadowCycleResult]:
+        task_clock_event: Optional[TaskClockEvent] = None,
+    ) -> Optional[ShadowCycleResult | FullTaskShadowCycleResult]:
         started = time.perf_counter()
         observation = self.state_adapter.convert(raw_state, now_ns=now_ns)
         conversion_time = time.perf_counter() - started
+        if self._full_task_core is not None:
+            if task_clock_event is None:
+                raise HardwareContractError(
+                    "full_task_template requires an explicit TaskClockEvent"
+                )
+            if not observation.derivative_ready:
+                raise HardwareStateError(
+                    "full-task anchor state lacks causal angular acceleration; "
+                    "prime pre-task state before resetting the task epoch"
+                )
+            return self._process_full_task(
+                raw_state,
+                observation,
+                task_clock_event,
+                started=started,
+                state_read_time_s=state_read_time_s,
+                conversion_time=conversion_time,
+            )
         if not observation.derivative_ready:
             return None
         timestamp = observation.monotonic_timestamp_ns
@@ -909,6 +1022,156 @@ class HardwareShadowController:
             },
         )
 
+    def _process_full_task(
+        self,
+        raw_state: RobotStateSnapshot,
+        observation: HardwareObservation,
+        task_event: TaskClockEvent,
+        *,
+        started: float,
+        state_read_time_s: float,
+        conversion_time: float,
+    ) -> FullTaskShadowCycleResult:
+        """Run one explicit full-task anchor and build an offline proposal."""
+
+        if not self._full_task_core.ready:
+            raise HardwareContractError(
+                "reset_full_task_epoch must precede the first TaskClockEvent"
+            )
+        filtered_acc, filtered_alpha = self._filter_disturbance(
+            observation.torso_linear_acceleration_world,
+            observation.torso_angular_acceleration_world,
+        )
+        disturbance = self.helper.build_disturbance_input(
+            acc_world=filtered_acc,
+            omega_world=observation.torso_angular_velocity_world,
+            alpha_world=filtered_alpha,
+            rot_world_body=observation.torso_rotation_world,
+        )
+        control_observation = FullTaskControlObservation(
+            session_nonce=str(self._full_task_session_nonce),
+            source_sample_id=observation.sample_id,
+            source_timestamp_ns=observation.monotonic_timestamp_ns,
+            validated_timestamp_ns=observation.validated_timestamp_ns,
+            state_source="unitree_lowstate_secondary_imu_paired_protocol_v2",
+            state_valid=True,
+            capabilities=observation.capabilities,
+            current_q=observation.right_arm_q,
+            current_dq=observation.right_arm_dq,
+            measured_disturbance=disturbance,
+        )
+        model_state = SimpleNamespace(
+            qpos=observation.qpos_mujoco,
+            qvel=observation.qvel_mujoco,
+        )
+
+        def build_helpers(measurement, horizon):
+            return self.helper.build_helpers(
+                model_state,
+                disturbance=measurement,
+                disturbance_prediction=horizon.nodes,
+                interval_disturbance_prediction=horizon.intervals,
+                include_kinematics_cache=False,
+            )
+
+        intent = self._full_task_core.step(
+            control_observation, task_event, build_helpers
+        )
+        command_started = time.perf_counter()
+        if intent.mpc_output_enabled:
+            q_ref = intent.generated_q_ref
+            dq_ref = intent.generated_dq_ref
+            ddq_des = intent.generated_ddq_des
+        else:
+            q_ref = self._right_target
+            dq_ref = np.zeros(5, dtype=np.float64)
+            ddq_des = np.zeros(5, dtype=np.float64)
+        command = self.command_builder.build(
+            observation, q_ref, dq_ref, ddq_des, raw_state
+        )
+        active_mask = tuple(5 <= index < 10 for index in range(ARM_SDK_JOINT_COUNT))
+        kp = tuple(value if active else 0.0 for value, active in zip(command.kp, active_mask))
+        kd = tuple(value if active else 0.0 for value, active in zip(command.kd, active_mask))
+        generated_ns = max(
+            int(observation.validated_timestamp_ns),
+            int(task_event.event_monotonic_timestamp_ns),
+        )
+        self._full_task_proposal_count += 1
+        proposal = HardwareControlProposal(
+            session_nonce=intent.session_nonce,
+            proposal_id=self._full_task_proposal_count,
+            source_sample_id=intent.source_sample_id,
+            source_timestamp_ns=intent.source_timestamp_ns,
+            task_epoch_id=intent.task_epoch_id,
+            task_time_ns=intent.task_time_ns,
+            full_task_anchor=intent.full_task_anchor,
+            generated_timestamp_ns=generated_ns,
+            expires_timestamp_ns=generated_ns + int(round(self.control_dt * 1e9)),
+            mode=FutureCommandMode.ROBOT_PD_PLUS_FEEDFORWARD,
+            # H3-offline never asks firmware to take arm ownership.
+            arm_weight=0.0,
+            active_mask=active_mask,
+            q_ref=command.q_ref,
+            dq_ref=command.dq_ref,
+            ddq_des=command.ddq_des,
+            kp=kp,
+            kd=kd,
+            tau=command.tau_ff,
+            diagnostics={
+                "state_source": control_observation.state_source,
+                "mpc_output_enabled": bool(intent.mpc_output_enabled),
+                "hardware_torque_state_complete": bool(
+                    intent.hardware_torque_state_complete
+                ),
+                "torque_semantics": command.torque_semantics,
+                "mpc_success": bool(
+                    intent.controller_diagnostics.get("success", False)
+                ),
+                "predictor_fallback": bool(
+                    intent.predictor_diagnostics.get("fallback_used", False)
+                ),
+            },
+        )
+        command_time = time.perf_counter() - command_started
+        compute_time = time.perf_counter() - started
+        timing = {
+            "state_read": float(state_read_time_s),
+            "source_state_age": float(observation.state_age_ns * 1e-9),
+            "source_to_command_age": float(
+                observation.state_age_ns * 1e-9 + compute_time
+            ),
+            "state_conversion": float(conversion_time),
+            "predictor": float(intent.timing.predictor_s),
+            "helper": float(intent.timing.helper_s),
+            "mpc": float(intent.timing.mpc_s),
+            "command_build": float(command_time),
+            "complete_shadow_path": float(state_read_time_s) + compute_time,
+            "budget": self.control_dt,
+            "overrun": bool(float(state_read_time_s) + compute_time > self.control_dt),
+        }
+        self._timing_samples.append(timing)
+        self._previous_mpc_success = bool(
+            intent.controller_diagnostics.get("success", False)
+        )
+        return FullTaskShadowCycleResult(
+            source_sample_id=observation.sample_id,
+            task_time_s=intent.task_time_ns * 1e-9,
+            task_anchor=intent.full_task_anchor,
+            intent=intent,
+            command=command,
+            proposal=proposal,
+            timing_s=timing,
+            diagnostics={
+                "solver_status": intent.controller_diagnostics.get("solver_status"),
+                "fallback_used": bool(
+                    intent.controller_diagnostics.get("fallback_used", False)
+                ),
+                "predictor": dict(intent.predictor_diagnostics),
+                "write_count": 0,
+                "publish_count": 0,
+            },
+        )
+
     def summary(self) -> dict:
         samples = self._timing_samples
         values = np.asarray(
@@ -952,6 +1215,10 @@ class HardwareShadowController:
         return {
             "mode": "hardware_shadow_read_only",
             "output_capability": "absent",
+            "hardware_output_authorized": False,
+            "proposal_count": int(self._full_task_proposal_count),
+            "command_write_count": 0,
+            "publish_count": 0,
             "control_period_ms": self.control_dt * 1e3,
             "predictor_requested": self.predictor_requested,
             "timing": timing,
@@ -965,6 +1232,7 @@ __all__ = (
     "HardwareFrameContract",
     "HardwareObservation",
     "HardwareShadowController",
+    "FullTaskShadowCycleResult",
     "HardwareStateError",
     "HardwareStateSource",
     "ShadowArmCommand",

@@ -27,8 +27,11 @@ flowchart LR
   Core -. "proposal，尚未授权输出" .-> Hardware
 ```
 
-“共享控制核心”是逻辑边界，不代表一个单独进程。当前代码仍由各入口装配同一份
-predictor、运动学和 MPC；Simulation 与 Hardware 不应各维护一套 MPC。
+“共享控制核心”是逻辑边界，不代表一个单独进程。full-task predictor、continuous-H
+和 MPC 的逐 anchor 编排由
+[`FullTaskRightArmControlCore`](right_arm_runtime/full_task_control_core.py) 保留一份；
+Simulation 与 H3-offline shadow 只提供各自已验证的状态、权威 `TaskClockEvent` 和
+平台运动学 helper，不各维护一套近似时钟或 MPC。
 
 ## Simulation：当前正式运行结构
 
@@ -96,9 +99,13 @@ flowchart LR
   Evidence["JSONL + summary<br/>只读证据"]
   FullShadow["Python 独立进程 · run_hardware_shadow.py<br/>HardwareShadowController<br/>legacy phase template + 共享 MPC"]
   Proposal["内存 proposal<br/>publish count = 0"]
+  Fixture["synthetic / replay state<br/>+ explicit TaskClockEvent"]
+  H3["H3-offline full-task core<br/>HardwareControlProposal"]
+  Fake["in-memory fake sink<br/>DDS write = 0"]
 
   G1 --> Bridge --> SHM --> Inspect --> Evidence
   SHM -. "H2 合同确认 + realtime preflight 后" .-> FullShadow -.-> Proposal
+  Fixture --> H3 --> Fake
 ```
 
 当前批准入口是
@@ -107,11 +114,14 @@ C++ bridge 只有 subscriber，没有 `LowCmd` 或 command publisher；Python �
 检查并记录状态。机器人目前不在现场，所以 H1 仍是 **PARTIAL**，不能把离线测试
 写成真实 G1 验证。
 
-仓库也保留了完整只读 shadow 代码，但当前 verification flags 会在连接 DDS 前
-fail closed。即使现场 gate 通过，它目前也只是 legacy phase-template 兼容路径，
-不包含最终 full-task v2 的真实 task epoch、continuous-H 绑定和 24 ms handoff，
-并且只生成内存 proposal，绝不发布控制命令。完整 shadow 不使用 Simulation 的
-`RightArmSimProcess`、C++ simulation worker 或 MuJoCo mapper。
+正式现场 launcher 的 verification flags 会在连接 DDS 前 fail closed；它目前仍只
+开放 legacy phase-template 兼容模式。另有一条已经通过离线测试的 H3-offline 路径：
+synthetic/replay state 与显式 `TaskClockEvent` 进入共享 full-task core，覆盖
+continuous-H、24 ms anchor 4 handoff 和完整 `[0,8.06)` proposal replay。该路径只把
+`HardwareControlProposal` 交给内存 fake sink，`arm_weight=0`、publish/write count
+始终为 0；它不是真实 G1 shadow session，也不证明 hardware torque state 完整。
+两条 shadow 路径都不使用 Simulation 的 `RightArmSimProcess`、C++ simulation
+worker 或 MuJoCo mapper。
 
 入口与边界代码：[`tools/realtime/run_hardware_shadow.sh`](tools/realtime/run_hardware_shadow.sh)、
 [`run_hardware_shadow.py`](run_hardware_shadow.py)、
@@ -180,7 +190,7 @@ MuJoCo 的 `max_abs_qacc=10 rad/s²` 不能默认照搬成真机 hard-stop；真
 | --- | --- |
 | Simulation：full-task v2 + continuous-H + 24 ms handoff + process | **simulation-validated**；仅限冻结模型、任务和受控运行环境 |
 | H1 state inspection | 代码与离线合同已就绪；无真实 G1 样本，**PARTIAL** |
-| 完整只读 shadow | 已实现但被现场配置 gate 阻止；legacy only，`publish count = 0` |
+| 完整只读 shadow | H3-offline full-task proposal replay 已通过，fake sink write/publish 均为0；真实 G1 launcher 仍受现场配置 gate 阻止且保持 legacy 兼容，**hardware-unverified** |
 | Future hardware output | 合同/测试/fake sink 和 C++ 原型；**未集成、未授权、hardware-unverified** |
 
 ## 架构与代码同步约定

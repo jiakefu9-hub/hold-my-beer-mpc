@@ -128,7 +128,9 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认
 
 - **Simulation** 是当前正式路径：Python 拥有 MuJoCo，独立 C++ worker 执行右臂
   RNEA、mapper 和 executor；
-- **Shadow** 只读真实状态，当前 H1 为 PARTIAL，完整 shadow 仍受现场 gate 限制；
+- **Shadow** 只读真实状态，当前 H1 为 PARTIAL；共享 full-task core 已通过
+  synthetic/replay H3-offline proposal 测试，但现场 launcher 仍受 gate 限制，且
+  fake sink 的 DDS write/hardware output 始终为0；
 - **Future / Hardware output** 尚未集成或授权，真机安全合同也不会直接照搬 MuJoCo
   的 `max_abs_qacc=10 rad/s²`。
 
