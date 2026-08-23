@@ -238,6 +238,11 @@ r1 summary 把 task/protocol gate 与 nominal mapping path 分开：两条均为
   continuous-H 和 24 ms handoff；主动真机闭环是 hardware-unverified。
 - 神经扰动预测器已从当前源码移除，不再属于开发计划；清理前代码可从 archive
   checkpoint 恢复。下肢 RL policy 不受此清理影响。
+- 默认关闭的 MPC-result latency replay 保持模板的 source absolute task time；
+  activation 时不重查、不 reset、不从模板零点重播。`heldout_pair_02_minus` 的
+  2 ms 短 smoke 在 44 ms 因最低真实 candidate `max|qacc|=10.293 rad/s^2`
+  超过 MuJoCo 门限 10 而 fail closed。该实验已在 L1-C PARTIAL 后冻结，不进入
+  L1-D 或 async/free-running；这不改变 v2 模板数值或正式 zero-delay 基线。
 
 真机适配边界见 [ARCHITECTURE.md](ARCHITECTURE.md)，正式运行环境和完整计时口径见
 [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)。

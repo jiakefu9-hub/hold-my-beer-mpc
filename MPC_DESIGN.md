@@ -1432,6 +1432,14 @@ bridge $0.037\ \mathrm{ms}$ 和其他右臂路径 $0.402\ \mathrm{ms}$；predict
 mean 为 $0.403\ \mathrm{ms}$。这是当前主机 `SCHED_OTHER` 下的受控 MuJoCo
 证据，不是 PREEMPT_RT、DDS、驱动器或真机硬实时证明。
 
+默认关闭的 experimental MPC-result replay 把 source anchor 结果延后到后续 2 ms
+tick 激活，并在 activation state 上重新运行上述 mapper/认证。短 smoke 中 nominal
+0/2/4 ms 与 `heldout_pair_02_minus` 0 ms 通过；held-out 2 ms 在 source 42 ms、
+activation 44 ms 的最低真实 candidate 为
+$\max|\ddot q|=10.293\ \mathrm{rad/s^2}$，超过冻结的 MuJoCo 门限 10，因而
+`NO_SAFE_TORQUE` fail closed。结论仅是当前仿真链的边缘 result-age 敏感性；
+L1-D、完整任务和 async/free-running 已冻结不做，MPC数学与安全阈值均未改变。
+
 ### 11.6 冻结一致性与安全证据
 
 4 条 held-out raw episode 的 offline-online replay 均为 PASS：查询索引严格为

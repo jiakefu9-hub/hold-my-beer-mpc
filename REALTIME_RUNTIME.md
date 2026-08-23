@@ -113,6 +113,25 @@ predictor/QP fallback、final unsafe、`NO_SAFE_TORQUE`、未认证输出、跌�
 `0.002617404/0.002573218 rad`，position RMS 为
 `0.013735420/0.013679703 m`，XY displacement 为 `3.222744/3.212114 m`。
 
+## Experimental MPC-result age：PARTIAL 后冻结
+
+正式计时仍采用上述 zero-result-age external-step/lockstep 基线：墙钟计算耗时不
+推动 MuJoCo 物理。默认关闭的实验调度器则在 source 6 ms anchor 生成 MPC 结果包，
+按 2 ms 网格延后激活，并在 activation state 上运行现有 mapper/认证。它只模拟
+MPC result/reference availability age，不覆盖传感器、估计器、DDS、驱动和固件延迟，
+也没有把 simulator 改成 asynchronous/free-running。
+
+L1 短 smoke 的 nominal 0/2/4 ms 与 `heldout_pair_02_minus` 0 ms 均通过。
+`heldout_pair_02_minus` 2 ms 在 source time 42 ms、activation/task/simulation time
+44 ms 失败：最低经当前 MuJoCo forward dynamics 真实验收的 candidate 为
+`max|qacc|=10.293 rad/s^2`，超过冻结的 `10 rad/s^2` 门限，故
+`NO_SAFE_TORQUE` 在写 `d.ctrl` 和 `mj_step` 前终止运行。该结果说明当前仿真控制/
+安全链存在边缘延迟敏感性；它不证明门限应放宽，也不定义真机 hard-stop。
+
+本实验已冻结为 L1-C PARTIAL：不进入 L1-D，不运行 held-out 4 ms、完整 `[0,8)`
+latency 对比或 async/free-running。完整合同和逐拍证据路径见
+[EXPERIMENTAL_MPC_LATENCY_PLAN.md](EXPERIMENTAL_MPC_LATENCY_PLAN.md)。
+
 ## 可选 PREEMPT_RT 目标环境
 
 面向未来硬件 shadow，可先运行只读 checker：

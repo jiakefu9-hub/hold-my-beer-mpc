@@ -214,6 +214,7 @@ MuJoCo 求解状态的 external-step 仿真协议。两者不应合并成一个 
 | hardware state bridge、共享内存和 shadow runner | C++/Python layout、dry-run、fail-closed contract 与只读输出隔离测试 | **code/test validated, hardware-unverified**；不支持最终 full-task v2 + 24 ms。 |
 | `unitree_arm_adapter` 主动输出、安全释放和 2 ms 周期 | C++ 单测与无 DDS dry-run | **hardware-unverified**；未获得主动真机闭环许可。 |
 | CPU 绑定下的完整 6 ms MuJoCo timing | 受控仿真 metadata 和 interval 证据 | 只说明该主机上的 MuJoCo 控制循环；**不是真机硬实时证明**。 |
+| experimental MPC-result age | `heldout_pair_02_minus` 2 ms 在 44 ms 因最低真实 candidate `10.293 rad/s^2` 超过 MuJoCo 门限 10 而 fail closed | **simulation sensitivity only / PARTIAL 后冻结**；不是硬件 qacc hard-stop 依据。 |
 
 因此，当前架构结论是“共享一个控制核心，保留两个窄平台适配器”，而不是
 “仿真代码已经可以直接发往机器人”。

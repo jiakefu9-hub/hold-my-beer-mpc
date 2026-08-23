@@ -63,6 +63,12 @@ worker 只在 `final_output_certified=1`、`NO_SAFE_TORQUE=0` 且最终力矩有
 执行合同。中间 2 ms 拍没有重做 forward-dynamics 验收，这也不是实体电机、
 接触或机器人固件已经认证的证据。
 
+默认关闭的 `sim_mpc_latency.py` 仅属于 MuJoCo adapter：它延后 MPC result packet
+的激活，并在 activation state 上调用同一 mapper，不改变 process ABI 的
+fail-closed 语义。`heldout_pair_02_minus` 2 ms 短 smoke 在 44 ms 因最低真实
+candidate `10.293 rad/s^2` 超过门限 10 返回 `NO_SAFE_TORQUE`。该实验已在
+L1-C PARTIAL 后冻结，不进入 L1-D 或 async/free-running。
+
 正常使用采用上下文管理器：
 
 ```python

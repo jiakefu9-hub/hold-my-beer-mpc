@@ -111,6 +111,19 @@ feedforward，再用当前 `q/dq` 重算 PD 并执行限幅、超时与 NaN guar
 MuJoCo forward-dynamics certification 是仿真执行证据，不是实机物理验收。真机
 不能直接复用 MuJoCo 接触求解状态来声称力矩安全。
 
+### 4.1 Experimental latency 停止门
+
+默认关闭的 MPC-result latency replay 在不改控制器或安全阈值的前提下完成了短
+smoke。nominal 0/2/4 ms 与 `heldout_pair_02_minus` 0 ms 通过；held-out 2 ms
+在 task/simulation time 44 ms fail closed。该拍 42 ms source packet 在 44 ms
+activation state 上重新验收后，最低真实 candidate 的 `max|qacc|` 为
+`10.293 rad/s^2`，高于当前 MuJoCo `10 rad/s^2` 门限，因而返回
+`NO_SAFE_TORQUE`，没有写入未认证力矩或推进该拍物理。
+
+结论限定为：`heldout_pair_02_minus` 对 2 ms MPC-result age 存在边缘敏感性。
+实验在 L1-C 收束为 PARTIAL；L1-D、held-out 4 ms、完整任务 latency 比较和
+async/free-running 均未执行，也不属于当前 freeze 的待办。
+
 ## 5. 受控 CPU7 证据
 
 轻量、可提交的证据包位于
@@ -189,6 +202,7 @@ fallback、final unsafe、`NO_SAFE_TORQUE`、未认证输出、跌倒和 NaN/Inf
 | 24 ms PD→MPC handoff、previous torque 连续性 | simulation-validated |
 | MPC + process + RNEA + MuJoCo mapper + certified executor | simulation-validated |
 | CPU7 上完整 6 ms 时间 | 当前主机受控 MuJoCo 证据；不是硬实时证明 |
+| experimental MPC-result age | 短 smoke：nominal 0/2/4 ms 与 held-out 0 ms 通过；held-out 2 ms 因最低真实 candidate `10.293 > 10 rad/s^2` fail closed；L1-C PARTIAL 后冻结 |
 | hardware state bridge / shared-memory layout / read-only shadow | code/test validated，hardware-unverified |
 | hardware shadow 的最终 full-task v2 + 24 ms 时钟 | 未实现 |
 | 真实 floating-base/contact state estimation | hardware-unverified |

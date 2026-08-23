@@ -138,7 +138,81 @@ struct Candidate {
   Vector5 tau = Vector5::Zero();
   bool predicted_safe = false;
   double predicted_error_norm = 0.0;
+  double predicted_max_abs_qacc = 0.0;
+  int diagnostic_index = -1;
 };
+
+struct CandidateDiagnostic {
+  const char* pass = "?";
+  double scale = 0.0;
+  double predicted_max_abs_qacc = 0.0;
+  double validated_max_abs_qacc = std::numeric_limits<double>::quiet_NaN();
+};
+
+struct CandidateTrace {
+  static constexpr std::size_t kCapacity =
+      4U * DDQ_TORQUE_MAPPER_MAX_VALIDATION_SCALES;
+  std::array<CandidateDiagnostic, kCapacity> entries{};
+  std::size_t count = 0;
+
+  int append(const char* pass,
+             const double scale,
+             const double predicted_max_abs_qacc) {
+    if (count >= entries.size()) {
+      return -1;
+    }
+    entries[count] = {pass, scale, predicted_max_abs_qacc,
+                      std::numeric_limits<double>::quiet_NaN()};
+    return static_cast<int>(count++);
+  }
+
+  void mark_validated(const int index, const double max_abs_qacc) {
+    if (index >= 0 && static_cast<std::size_t>(index) < count) {
+      entries[static_cast<std::size_t>(index)].validated_max_abs_qacc =
+          max_abs_qacc;
+    }
+  }
+};
+
+std::string no_safe_torque_diagnostic(const CandidateTrace& trace,
+                                      const double baseline_max_abs_qacc,
+                                      const double final_max_abs_qacc,
+                                      const double hold_last_max_abs_qacc,
+                                      const double safe_hold_max_abs_qacc) {
+  double minimum = std::numeric_limits<double>::infinity();
+  const CandidateDiagnostic* minimum_entry = nullptr;
+  for (std::size_t index = 0; index < trace.count; ++index) {
+    const CandidateDiagnostic& entry = trace.entries[index];
+    if (entry.predicted_max_abs_qacc < minimum) {
+      minimum = entry.predicted_max_abs_qacc;
+      minimum_entry = &entry;
+    }
+  }
+  std::string result = "NO_SAFE_TORQUE|CT1";
+  char token[80]{};
+  std::snprintf(token, sizeof(token), ";B=%.6g;BEST=%.6g;HL=%.6g;SH=%.6g",
+                baseline_max_abs_qacc, final_max_abs_qacc,
+                hold_last_max_abs_qacc, safe_hold_max_abs_qacc);
+  result += token;
+  if (minimum_entry != nullptr) {
+    std::snprintf(token, sizeof(token), ";MIN=%s@%.6g:%.6g",
+                  minimum_entry->pass, minimum_entry->scale, minimum);
+    result += token;
+  }
+  for (std::size_t index = 0; index < trace.count; ++index) {
+    const CandidateDiagnostic& entry = trace.entries[index];
+    if (std::isfinite(entry.validated_max_abs_qacc)) {
+      std::snprintf(token, sizeof(token), ";%s@%.6g=%.6g/%.6g",
+                    entry.pass, entry.scale, entry.predicted_max_abs_qacc,
+                    entry.validated_max_abs_qacc);
+    } else {
+      std::snprintf(token, sizeof(token), ";%s@%.6g=%.6g/NA",
+                    entry.pass, entry.scale, entry.predicted_max_abs_qacc);
+    }
+    result += token;
+  }
+  return result;
+}
 
 }  // namespace
 
@@ -308,7 +382,9 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
                                 const std::vector<double>& base_warmstart,
                                 const DdqTorqueMapperParams& params,
                                 int& forward_skip_calls,
-                                int& validated_pass_count) {
+                                int& validated_pass_count,
+                                CandidateTrace* candidate_trace,
+                                const char* diagnostic_pass) {
   ++validated_pass_count;
   PassResult result;
   result.qacc_validated_full = base_warmstart;
@@ -378,6 +454,11 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
         max_abs(predicted_error) <= params.max_joint_error &&
         max_abs(predicted_qacc) <= params.max_abs_qacc;
     candidate.predicted_error_norm = predicted_error.norm();
+    candidate.predicted_max_abs_qacc = max_abs(predicted_qacc);
+    if (candidate_trace != nullptr) {
+      candidate.diagnostic_index = candidate_trace->append(
+          diagnostic_pass, candidate.scale, candidate.predicted_max_abs_qacc);
+    }
   }
   const auto candidate_less = [](const Candidate& left, const Candidate& right) {
     if (left.predicted_safe != right.predicted_safe) {
@@ -416,6 +497,10 @@ PassResult solve_validated_pass(DdqTorqueMapperHandle& handle,
     mj_forwardSkip(model, data, mjSTAGE_VEL, 1);
     ++forward_skip_calls;
     const Vector5 candidate_qacc = read_right_arm_qacc(handle);
+    if (candidate_trace != nullptr) {
+      candidate_trace->mark_validated(
+          candidate.diagnostic_index, max_abs(candidate_qacc));
+    }
     const Vector5 candidate_error = candidate_qacc - desired_qacc;
     const double candidate_error_norm = candidate_error.norm();
     const bool total_error_improved = candidate_error_norm < base_error_norm;
@@ -641,6 +726,7 @@ int32_t ddq_torque_mapper_compute(
 
     int forward_skip_calls = 0;
     int validated_pass_count = 0;
+    CandidateTrace candidate_trace;
     const auto first_pass_start = Clock::now();
     const PassResult first_pass =
         solve_validated_pass(*handle,
@@ -650,7 +736,9 @@ int32_t ddq_torque_mapper_compute(
                              baseline_warmstart,
                              *params,
                              forward_skip_calls,
-                             validated_pass_count);
+                             validated_pass_count,
+                             &candidate_trace,
+                             "F");
     output->first_pass_elapsed_ns = elapsed_ns(first_pass_start);
 
     const double first_pass_residual_norm =
@@ -670,7 +758,9 @@ int32_t ddq_torque_mapper_compute(
                                          first_pass.qacc_validated_full,
                                          *params,
                                          forward_skip_calls,
-                                         validated_pass_count);
+                                         validated_pass_count,
+                                         &candidate_trace,
+                                         "S");
       output->second_pass_elapsed_ns = elapsed_ns(second_pass_start);
       has_second_pass = true;
     }
@@ -697,6 +787,7 @@ int32_t ddq_torque_mapper_compute(
       const auto rescue_start = Clock::now();
       for (int pass = 0; pass < params->max_safety_rescue_passes; ++pass) {
         ++safety_fallback_attempts;
+        const char* rescue_label = pass == 0 ? "R1" : "R2";
         const PassResult rescue_pass =
             solve_validated_pass(*handle,
                                  desired_qacc,
@@ -705,7 +796,9 @@ int32_t ddq_torque_mapper_compute(
                                  final_pass.qacc_validated_full,
                                  *params,
                                  forward_skip_calls,
-                                 validated_pass_count);
+                                 validated_pass_count,
+                                 &candidate_trace,
+                                 rescue_label);
         if (!rescue_pass.improved) {
           break;
         }
@@ -776,9 +869,15 @@ int32_t ddq_torque_mapper_compute(
         output->safety_line_search_elapsed_ns =
             elapsed_ns(final_safety_start);
         output->total_elapsed_ns = elapsed_ns(total_start);
-        set_error(error_message, error_message_capacity,
-                  "NO_SAFE_TORQUE: clipped PD safe-hold failed current-state "
-                  "forward-dynamics certification");
+        set_error(
+            error_message, error_message_capacity,
+            no_safe_torque_diagnostic(
+                candidate_trace, max_abs(qacc_baseline),
+                max_abs(final_pass.qacc_validated),
+                hold_last_safe_available
+                    ? max_abs(hold_last_safe_qacc)
+                    : std::numeric_limits<double>::quiet_NaN(),
+                max_abs(safe_hold_qacc)));
         return DDQ_TORQUE_MAPPER_NO_SAFE_TORQUE;
       }
 

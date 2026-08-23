@@ -250,6 +250,7 @@ def mapping_safety_snapshot(mapping_result: Any | None) -> dict[str, Any]:
 class StartupPdTraceRecorder:
     handoff: FixedStartupPdHandoff
     runtime_mode: str
+    allow_delayed_actuation: bool = False
     _rows: list[dict[str, Any]] = field(default_factory=list)
 
     def append(self, **row: Any) -> None:
@@ -262,19 +263,30 @@ class StartupPdTraceRecorder:
             raise ValueError("startup trace simulation time left the 2 ms task grid")
         if not np.isclose(task_time, expected, atol=1e-10, rtol=0.0):
             raise ValueError("startup trace task time must equal simulation time")
-        if bool(row["mpc_control_enabled"]) != decision.mpc_control_enabled:
-            raise ValueError("startup trace control mode disagrees with handoff contract")
+        actual_mpc_enabled = bool(row["mpc_control_enabled"])
+        if not self.allow_delayed_actuation:
+            if actual_mpc_enabled != decision.mpc_control_enabled:
+                raise ValueError("startup trace control mode disagrees with handoff contract")
+        else:
+            if index < self.handoff.takeover_sample_index and actual_mpc_enabled:
+                raise ValueError("delayed MPC actuation occurred before the source handoff")
+            if self._rows and bool(self._rows[-1]["mpc_control_enabled"]) and not actual_mpc_enabled:
+                raise ValueError("delayed MPC actuation reverted to fixed PD")
         if bool(row["mpc_anchor"]) != decision.mpc_anchor:
             raise ValueError("startup trace MPC anchor disagrees with handoff contract")
         actual_tau = np.asarray(row["actual_right_arm_tau"], dtype=np.float64)
         pd_tau = np.asarray(row["fixed_posture_pd_tau"], dtype=np.float64)
         if actual_tau.shape != (5,) or pd_tau.shape != (5,):
             raise ValueError("startup trace right-arm torques must have shape (5,)")
-        if decision.right_arm_mode == RIGHT_ARM_MODE_FIXED_POSTURE_PD:
+        if not actual_mpc_enabled:
             if not np.allclose(actual_tau, pd_tau, atol=1e-12, rtol=0.0):
                 raise ValueError("startup prefix did not execute fixed-posture PD")
         stored = dict(row)
-        stored["right_arm_mode"] = decision.right_arm_mode
+        stored["right_arm_mode"] = (
+            RIGHT_ARM_MODE_MPC_PROCESS
+            if actual_mpc_enabled
+            else RIGHT_ARM_MODE_FIXED_POSTURE_PD
+        )
         stored["actual_right_arm_tau"] = actual_tau.copy()
         stored["fixed_posture_pd_tau"] = pd_tau.copy()
         self._rows.append(stored)
@@ -346,7 +358,13 @@ class StartupPdTraceRecorder:
             "task_and_simulation_time_share_zero_origin": True,
             "first_lower_policy_update_simulation_time_s": first_policy_time,
             "first_lower_policy_update_task_time_s": first_policy_time,
+            "logical_source_handoff": {
+                "simulation_time_s": float(self.handoff.duration_s),
+                "task_time_s": float(self.handoff.duration_s),
+                "template_anchor_index": self.handoff.takeover_anchor_index,
+            },
             "handoff": {
+                "kind": "physical_mpc_actuation_handoff",
                 "simulation_time_s": float(arrays["simulation_time"][handoff_row]),
                 "task_time_s": float(arrays["task_time"][handoff_row]),
                 "template_absolute_task_time_s": float(

@@ -68,6 +68,12 @@ worker 只在 mapper 返回 `final_output_certified=1` 且
 一次 dry preflight；24 ms handoff 时，上一物理拍真实执行的 PD torque 被显式
 送入第一次 MPC mapping。
 
+experimental MPC-result age 的排队/激活由 Python MuJoCo adapter 管理，worker
+仍是 blocking external-step runtime；它不会变成 free-running simulator。激活拍
+仍提交最新 state 给本 worker 重新执行 mapper/认证。held-out 2 ms 在 44 ms 的
+最低真实 candidate 为 `10.293 rad/s^2`，因 MuJoCo 门限 10 fail closed；L1-C
+在此冻结，未进入 L1-D。
+
 关闭时写带 `kRequestShutdown` 的请求；worker发布同request id的shutdown
 响应后退出。EOF也会让worker退出。
 

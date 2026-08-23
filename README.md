@@ -104,6 +104,23 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认
 旧 tag `full-task-template-v2-final-freeze-20260816` 下 `final_runs/` 的原始 summary
 保持未改，仍使用“fallback 即 FAIL”的 legacy 汇总语义，仅作历史证据。
 
+### Experimental MPC-result latency 收尾
+
+正式 MuJoCo 基线仍是 zero-result-age 的 external-step/lockstep 路径。默认关闭的
+实验模式只把 source anchor 生成的 MPC 结果包延后到后续 2 ms physics tick 激活，
+并在 activation state 上重新执行现有 mapper/认证；它不是 asynchronous/free-running
+仿真，也不是完整 sensor-to-actuation latency 模型。
+
+短 smoke 中 nominal 的 0/2/4 ms 和 `heldout_pair_02_minus` 的 0 ms 均通过；
+`heldout_pair_02_minus` 的 2 ms 运行在 task/simulation time 44 ms fail closed。
+该拍 source packet 来自 42 ms，所有候选均在 44 ms 的真实 MuJoCo 状态上重新验收，
+最低真实 candidate 的 `max|qacc|` 为 `10.293 rad/s^2`，仍高于当前仿真门限
+`10 rad/s^2`，因此返回 `NO_SAFE_TORQUE`，未写 `d.ctrl`、未执行该拍 `mj_step`。
+这记录为当前冻结控制链对 2 ms MPC-result age 的边缘敏感性，而不是实现错误或
+真机安全门结论。实验已在该停止门收束：不进入 L1-D，不继续 4 ms held-out、
+完整任务或 async/free-running。设计、结果和证据路径见
+[EXPERIMENTAL_MPC_LATENCY_PLAN.md](EXPERIMENTAL_MPC_LATENCY_PLAN.md)。
+
 ## 架构边界
 
 项目只维护一份正式 full-task predictor 和一份 MPC；另保留的 legacy

@@ -59,6 +59,14 @@ from right_arm_runtime import (
     CppRightArmExecutor,
     RightArmSimProcess,
     SimProcessShadowValidator,
+    SimRuntimeError,
+)
+from right_arm_runtime.sim_mpc_latency import (
+    FixedMpcResultDelayLine,
+    MpcLatencyTraceRecorder,
+    parse_mapper_candidate_trace,
+    save_fail_closed_process_trace,
+    validate_experimental_latency_cli,
 )
 from sim_support import (
     ArmCommandDelayLine,
@@ -126,6 +134,23 @@ if __name__ == "__main__":
         help="覆盖 MPC 命令从状态采样到 2 ms 执行拍激活的仿真延迟",
     )
     parser.add_argument(
+        "--experimental-mpc-latency-mode",
+        choices=("off", "fixed"),
+        default="off",
+        help="实验性MPC结果激活模式；L1仅实现off/fixed，默认不改变正式路径。",
+    )
+    parser.add_argument(
+        "--experimental-mpc-latency-ms",
+        type=float,
+        default=None,
+        help="fixed模式的结果激活延迟；L1只允许0、2、4 ms。",
+    )
+    parser.add_argument(
+        "--capture-mpc-latency-trace",
+        default=None,
+        help="额外保存一份显式路径的版本化MPC latency trace JSON。",
+    )
+    parser.add_argument(
         "--right-arm-runtime-mode",
         choices=("sync", "process", "shadow"),
         default=None,
@@ -166,6 +191,21 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     full_task_smoke_active = bool(args.full_task_smoke)
+    validate_experimental_latency_cli(
+        mode=args.experimental_mpc_latency_mode,
+        delay_ms=args.experimental_mpc_latency_ms,
+        capture_path=args.capture_mpc_latency_trace,
+        full_task=full_task_smoke_active,
+        predictor=args.disturbance_predictor,
+        runtime_mode=args.right_arm_runtime_mode,
+    )
+    experimental_mpc_latency_active = bool(
+        args.experimental_mpc_latency_mode == "fixed"
+    )
+    capture_mpc_latency_active = bool(
+        experimental_mpc_latency_active
+        or args.capture_mpc_latency_trace is not None
+    )
     if full_task_smoke_active and (
         args.smoke_test
         or args.mpc_command_delay_ms not in (None, 0.0)
@@ -481,7 +521,9 @@ if __name__ == "__main__":
         for character in str(args.evaluation_group).strip().lower().replace(" ", "_")
         if character.isalnum() or character in {"_", "-"}
     ) or (
-        "t2_full_task_closed_loop"
+        "experimental_mpc_latency"
+        if capture_mpc_latency_active
+        else "t2_full_task_closed_loop"
         if full_task_smoke_active
         else experiment_name
     )
@@ -611,7 +653,16 @@ if __name__ == "__main__":
             initial_dq=target_right_arm_dq,
             initial_ddq=desired_right_arm_ddq,
         )
-        if arm_controller == "mpc"
+        if arm_controller == "mpc" and not experimental_mpc_latency_active
+        else None
+    )
+    experimental_mpc_delay_line = (
+        FixedMpcResultDelayLine(
+            step_dt=simulation_dt,
+            requested_delay_s=float(args.experimental_mpc_latency_ms) * 1e-3,
+            mpc_dt=arm_control_dt,
+        )
+        if arm_controller == "mpc" and experimental_mpc_latency_active
         else None
     )
     active_command_source_time = 0.0
@@ -642,6 +693,13 @@ if __name__ == "__main__":
         )
         controller_meta["mpc_config"]["command_delay"] = (
             mpc_command_delay_line.metadata()
+            if mpc_command_delay_line is not None
+            else {"formal_legacy_delay_line_used": False}
+        )
+        controller_meta["mpc_config"]["experimental_result_latency"] = (
+            experimental_mpc_delay_line.metadata()
+            if experimental_mpc_delay_line is not None
+            else {"mode": "off"}
         )
     controller_meta["robot_model_backends"] = {
         "mpc_prediction_kinematics": (
@@ -757,6 +815,14 @@ if __name__ == "__main__":
             "last_horizon_node": protocol.last_horizon_node_time,
             "pre_step_event_order": PRE_STEP_EVENT_ORDER,
         }
+        controller_meta["experimental_mpc_result_latency"] = (
+            experimental_mpc_delay_line.metadata()
+            if experimental_mpc_delay_line is not None
+            else {
+                "mode": "off",
+                "capture_trace": bool(capture_mpc_latency_active),
+            }
+        )
         controller_meta["fixed_startup_pd_handoff"] = {
             "enabled": True,
             "dynamic_arming_enabled": False,
@@ -1141,6 +1207,23 @@ if __name__ == "__main__":
     full_task_clock = None
     full_task_recorder = None
     startup_pd_trace_recorder = None
+    mpc_latency_trace_recorder = (
+        MpcLatencyTraceRecorder(
+            metadata={
+                "mode": args.experimental_mpc_latency_mode,
+                "fixed_delay_ms": args.experimental_mpc_latency_ms,
+                "protocol_name": protocol.protocol_name,
+                "protocol_version": protocol.protocol_version,
+                "physics_dt_s": simulation_dt,
+                "mpc_dt_s": arm_control_dt,
+                "startup_source_handoff_s": FORMAL_STARTUP_PD_DURATION_S,
+                "template": predictor_metadata,
+                "fresh_state_mapper_and_executor": True,
+            }
+        )
+        if capture_mpc_latency_active
+        else None
+    )
     startup_foot_contact_ids = None
     startup_pd_artifacts = None
     last_executed_right_arm_tau = None
@@ -1171,6 +1254,7 @@ if __name__ == "__main__":
             startup_pd_trace_recorder = StartupPdTraceRecorder(
                 handoff=startup_pd_handoff,
                 runtime_mode=right_arm_execution_runtime,
+                allow_delayed_actuation=experimental_mpc_latency_active,
             )
             startup_foot_contact_ids = resolve_foot_contact_ids(m)
     else:
@@ -1258,18 +1342,43 @@ if __name__ == "__main__":
             #      映射反求使右臂实际加速度接近 ddq_des 的最终力矩。
 
             arm_policy_update_due = counter % arm_control_decimation == 0
+            source_sample_wall_ns = (
+                time.perf_counter_ns()
+                if mpc_latency_trace_recorder is not None
+                and arm_policy_update_due
+                else None
+            )
+            right_arm_path_start_wall_ns = (
+                time.perf_counter_ns()
+                if mpc_latency_trace_recorder is not None
+                else None
+            )
+            command_activation = None
+            generated_mpc_command_id = None
             startup_pd_decision = (
                 startup_pd_handoff.decision(counter)
                 if startup_pd_handoff is not None
                 else None
             )
-            mpc_control_enabled = bool(
+            mpc_source_enabled = bool(
                 startup_pd_decision is None
                 or startup_pd_decision.mpc_control_enabled
             )
-            mpc_policy_update_due = bool(
-                arm_policy_update_due and mpc_control_enabled
+            mpc_control_enabled = bool(
+                mpc_source_enabled
+                if experimental_mpc_delay_line is None
+                else experimental_mpc_delay_line.active_packet is not None
             )
+            mpc_policy_update_due = bool(
+                arm_policy_update_due and mpc_source_enabled
+            )
+            if mpc_latency_trace_recorder is not None and arm_policy_update_due:
+                mpc_latency_trace_recorder.begin_source(
+                    source_sample_index=counter,
+                    source_anchor_index=counter // arm_control_decimation,
+                    source_time=counter * simulation_dt,
+                    source_sample_wall_ns=source_sample_wall_ns,
+                )
             # 启动PD段仍在每个6ms锚点推进template/H和预热MPC缓存，
             # 但完整控制区间只从24ms正式接管锚点开始统计。
             if mpc_policy_update_due:
@@ -1316,7 +1425,7 @@ if __name__ == "__main__":
             right_arm_obs = build_right_arm_observation(right_arm_q, right_arm_dq, torso_state, arm_control_dt)
             current_predictor_diagnostics = None
             if arm_policy_update_due:
-                if mpc_control_enabled:
+                if mpc_source_enabled:
                     perf_monitor.start_arm_control()
                 disturbance_prediction_start = time.perf_counter()
                 disturbance_horizon = None
@@ -1406,19 +1515,22 @@ if __name__ == "__main__":
                         # 作为一个命令包发布，不能只延迟其中某一项。
                         # 固定PD启动段允许求解器/preflight预热，但生成结果不
                         # 发布进命令延迟线；因此它不可能成为右臂控制输出。
-                        if mpc_control_enabled:
-                            mpc_command_delay_line.publish(
-                                counter * simulation_dt,
-                                generated_target_right_arm_q,
-                                generated_target_right_arm_dq,
-                                generated_raw_right_arm_ddq,
-                                generated_desired_right_arm_ddq,
-                            )
+                        if mpc_source_enabled:
                             mpc_diagnostics = controller_diagnostics
                             if current_predictor_diagnostics is not None:
                                 mpc_diagnostics[
                                     "disturbance_predictor_diagnostics"
                                 ] = current_predictor_diagnostics
+                            if mpc_command_delay_line is not None:
+                                generated_mpc_command_id = (
+                                    mpc_command_delay_line.publish(
+                                        counter * simulation_dt,
+                                        generated_target_right_arm_q,
+                                        generated_target_right_arm_dq,
+                                        generated_raw_right_arm_ddq,
+                                        generated_desired_right_arm_ddq,
+                                    )
+                                )
                     diagnostics_time = time.perf_counter() - diagnostics_start
                     if arm_controller == "mpc":
                         # 【非核心诊断】把上层控制拍拆开计时，确认优化真正作用于
@@ -1437,12 +1549,44 @@ if __name__ == "__main__":
                                 "diagnostics_time": diagnostics_time,
                             }
                         )
+                        if mpc_latency_trace_recorder is not None:
+                            packet_ready_wall_ns = time.perf_counter_ns()
+                            mpc_latency_trace_recorder.mark_packet_ready(
+                                source_anchor_index=(
+                                    counter // arm_control_decimation
+                                ),
+                                wall_ns=packet_ready_wall_ns,
+                            )
+                        if (
+                            experimental_mpc_delay_line is not None
+                            and mpc_source_enabled
+                        ):
+                            generated_mpc_packet = experimental_mpc_delay_line.publish(
+                                source_time=counter * simulation_dt,
+                                source_sample_index=counter,
+                                source_anchor_index=(
+                                    counter // arm_control_decimation
+                                ),
+                                q_ref=generated_target_right_arm_q,
+                                dq_ref=generated_target_right_arm_dq,
+                                ddq_raw=generated_raw_right_arm_ddq,
+                                ddq_des=generated_desired_right_arm_ddq,
+                                source_right_arm_q=right_arm_q,
+                                source_right_arm_dq=right_arm_dq,
+                                source_torso_acc=torso_state.lin_acc,
+                                source_torso_omega=torso_state.ang_vel,
+                                diagnostics=controller_diagnostics,
+                                packet_ready_wall_ns=packet_ready_wall_ns,
+                            )
+                            generated_mpc_command_id = (
+                                generated_mpc_packet.command_id
+                            )
                 else:
                     # PID 路径只输出右臂参考轨迹，不单独生成期望加速度
                     target_right_arm_q, target_right_arm_dq = arm_policy.compute_action(right_arm_obs, right_arm_helpers)
-                if mpc_control_enabled:
+                if mpc_source_enabled:
                     perf_monitor.finish_arm_control()
-                if arm_controller == "mpc" and mpc_control_enabled:
+                if arm_controller == "mpc" and mpc_source_enabled:
                     perf_monitor.record_mpc_timing(controller_diagnostics)
 
             if mpc_command_delay_line is not None:
@@ -1455,6 +1599,22 @@ if __name__ == "__main__":
                 raw_right_arm_ddq = active_packet.ddq_raw
                 desired_right_arm_ddq = active_packet.ddq_des
                 active_command_source_time = active_packet.source_time
+                if command_activation.activated:
+                    last_mpc_command_activation_counter = counter
+            elif experimental_mpc_delay_line is not None:
+                command_activation = experimental_mpc_delay_line.activate_ready(
+                    now=counter * simulation_dt,
+                    sample_index=counter,
+                )
+                active_packet = command_activation.packet
+                mpc_control_enabled = active_packet is not None
+                if active_packet is not None:
+                    target_right_arm_q = active_packet.q_ref
+                    target_right_arm_dq = active_packet.dq_ref
+                    raw_right_arm_ddq = active_packet.ddq_raw
+                    desired_right_arm_ddq = active_packet.ddq_des
+                    active_command_source_time = active_packet.source_time
+                    mpc_diagnostics = active_packet.diagnostics
                 if command_activation.activated:
                     last_mpc_command_activation_counter = counter
 
@@ -1514,36 +1674,48 @@ if __name__ == "__main__":
                 # 7) 验收后残差仍大于阈值时，在已接受力矩处重算 G_tau，并做一次同样受验收的二次修正
                 execution_update_due = True
                 if arm_controller == "mpc":
-                    delayed_grid_active = (
-                        mpc_command_delay_line.quantized_delay > 0.0
-                    )
-                    if delayed_grid_active:
-                        # 命令可能在原 6 ms 区间的 2 ms 相位到达。到达
-                        # 当拍必须立刻重算，第二次验收相对该激活拍后移 4 ms。
-                        activated_now = bool(
-                            command_activation is not None
-                            and command_activation.activated
-                        )
-                        steps_since_activation = (
-                            None
-                            if last_mpc_command_activation_counter is None
-                            else counter - last_mpc_command_activation_counter
-                        )
-                        if mpc_ddq_execution_mode == "policy_update":
-                            execution_update_due = activated_now
-                        elif mpc_ddq_execution_mode == "twice_per_interval":
-                            execution_update_due = activated_now or (
-                                steps_since_activation
-                                == arm_control_decimation - 1
-                            )
-                    elif mpc_ddq_execution_mode == "policy_update":
-                        execution_update_due = arm_policy_update_due
-                    elif mpc_ddq_execution_mode == "twice_per_interval":
-                        interval_phase = counter % arm_control_decimation
+                    if experimental_mpc_delay_line is not None:
                         execution_update_due = (
-                            interval_phase == 0
-                            or interval_phase == arm_control_decimation - 1
+                            experimental_mpc_delay_line.mapping_update_due(
+                                sample_index=counter,
+                                activated=bool(
+                                    command_activation is not None
+                                    and command_activation.activated
+                                ),
+                                mode=mpc_ddq_execution_mode,
+                            )
                         )
+                    else:
+                        delayed_grid_active = (
+                            mpc_command_delay_line.quantized_delay > 0.0
+                        )
+                        if delayed_grid_active:
+                            # 命令可能在原 6 ms 区间的 2 ms 相位到达。到达
+                            # 当拍必须立刻重算，第二次验收相对该激活拍后移 4 ms。
+                            activated_now = bool(
+                                command_activation is not None
+                                and command_activation.activated
+                            )
+                            steps_since_activation = (
+                                None
+                                if last_mpc_command_activation_counter is None
+                                else counter - last_mpc_command_activation_counter
+                            )
+                            if mpc_ddq_execution_mode == "policy_update":
+                                execution_update_due = activated_now
+                            elif mpc_ddq_execution_mode == "twice_per_interval":
+                                execution_update_due = activated_now or (
+                                    steps_since_activation
+                                    == arm_control_decimation - 1
+                                )
+                        elif mpc_ddq_execution_mode == "policy_update":
+                            execution_update_due = arm_policy_update_due
+                        elif mpc_ddq_execution_mode == "twice_per_interval":
+                            interval_phase = counter % arm_control_decimation
+                            execution_update_due = (
+                                interval_phase == 0
+                                or interval_phase == arm_control_decimation - 1
+                            )
                 if cached_right_arm_tau_ff is None:
                     execution_update_due = True
 
@@ -1635,6 +1807,8 @@ if __name__ == "__main__":
                     process_command_id = (
                         int(active_packet.command_id) + 1
                         if mpc_command_delay_line is not None
+                        else int(active_packet.command_id)
+                        if experimental_mpc_delay_line is not None
                         else active_acceleration_command_id
                     )
                     process_source_state_id = (
@@ -1646,38 +1820,261 @@ if __name__ == "__main__":
                         and execution_update_due
                     ):
                         perf_monitor.start_computed_torque_control()
-                    process_result = right_arm_sim_process.execute(
-                        simulation_time=d.time,
-                        command_timestamp=process_command_timestamp,
-                        command_id=process_command_id,
-                        command_source_state_id=process_source_state_id,
-                        execution_state_id=counter + 1,
-                        mapping_update_due=execution_update_due,
-                        mujoco_timestep=m.opt.timestep,
-                        friction_breakaway_steps=(
-                            ddq_pinocchio_friction_breakaway_steps
-                        ),
-                        qpos=d.qpos,
-                        qvel=d.qvel,
-                        reference_qacc=rnea_reference_qacc,
-                        fixed_ctrl=fixed_ctrl_for_mapping,
-                        qacc_warmstart=d.qacc_warmstart,
-                        qfrc_applied=d.qfrc_applied,
-                        xfrc_applied=d.xfrc_applied,
-                        right_arm_q=right_arm_q,
-                        right_arm_dq=right_arm_dq,
-                        q_ref=target_right_arm_q,
-                        dq_ref=target_right_arm_dq,
-                        ddq_des=desired_right_arm_ddq,
-                        tau_passive=d.qfrc_passive[
-                            right_arm_id_index_scratch.qvel_indices
-                        ],
-                        friction_loss=m.dof_frictionloss[
-                            right_arm_id_index_scratch.qvel_indices
-                        ],
-                        tau_pd=right_arm_tau_pd,
-                        previous_executed_tau=previous_executed_tau,
-                    )
+                    try:
+                        process_result = right_arm_sim_process.execute(
+                            simulation_time=d.time,
+                            command_timestamp=process_command_timestamp,
+                            command_id=process_command_id,
+                            command_source_state_id=process_source_state_id,
+                            execution_state_id=counter + 1,
+                            mapping_update_due=execution_update_due,
+                            mujoco_timestep=m.opt.timestep,
+                            friction_breakaway_steps=(
+                                ddq_pinocchio_friction_breakaway_steps
+                            ),
+                            qpos=d.qpos,
+                            qvel=d.qvel,
+                            reference_qacc=rnea_reference_qacc,
+                            fixed_ctrl=fixed_ctrl_for_mapping,
+                            qacc_warmstart=d.qacc_warmstart,
+                            qfrc_applied=d.qfrc_applied,
+                            xfrc_applied=d.xfrc_applied,
+                            right_arm_q=right_arm_q,
+                            right_arm_dq=right_arm_dq,
+                            q_ref=target_right_arm_q,
+                            dq_ref=target_right_arm_dq,
+                            ddq_des=desired_right_arm_ddq,
+                            tau_passive=d.qfrc_passive[
+                                right_arm_id_index_scratch.qvel_indices
+                            ],
+                            friction_loss=m.dof_frictionloss[
+                                right_arm_id_index_scratch.qvel_indices
+                            ],
+                            tau_pd=right_arm_tau_pd,
+                            previous_executed_tau=previous_executed_tau,
+                        )
+                    except SimRuntimeError as process_error:
+                        # The worker has already failed closed.  Save the exact
+                        # pre-step request, then re-raise before right-arm d.ctrl
+                        # or mj_step can be reached.
+                        if (
+                            mpc_latency_trace_recorder is not None
+                            and experimental_mpc_delay_line is not None
+                            and active_packet is not None
+                        ):
+                            active_failure_packet = active_packet
+                            fixed_posture_pd_tau = pd_control(
+                                right_arm_target,
+                                right_arm_q,
+                                arm_waist_kps[6:11],
+                                np.zeros(5, dtype=np.float64),
+                                right_arm_dq,
+                                arm_waist_kds[6:11],
+                            )
+                            failure_event = {
+                                "error_type": type(process_error).__name__,
+                                "error": str(process_error),
+                                "status": (
+                                    "NO_SAFE_TORQUE"
+                                    if "NO_SAFE_TORQUE" in str(process_error)
+                                    else "PROCESS_ERROR"
+                                ),
+                                "sample_index": int(counter),
+                                "simulation_time_s": float(d.time),
+                                "task_time_s": float(
+                                    counter * simulation_dt
+                                ),
+                                "source_anchor_tick": bool(
+                                    arm_policy_update_due
+                                ),
+                                "mpc_result_generated": bool(
+                                    mpc_policy_update_due
+                                ),
+                                "generated_command_id": (
+                                    None
+                                    if generated_mpc_command_id is None
+                                    else int(generated_mpc_command_id)
+                                ),
+                                "mpc_result_activated": bool(
+                                    command_activation is not None
+                                    and command_activation.activated
+                                ),
+                                "active_command_id": int(
+                                    active_failure_packet.command_id
+                                ),
+                                "active_source_anchor_index": int(
+                                    active_failure_packet.source_anchor_index
+                                ),
+                                "active_source_time_s": float(
+                                    active_failure_packet.source_time
+                                ),
+                                "active_ready_time_s": float(
+                                    active_failure_packet.ready_time
+                                ),
+                                "active_command_age_ms": float(
+                                    d.time
+                                    - active_failure_packet.source_time
+                                ) * 1e3,
+                                "source_to_activation_q_l2": float(
+                                    np.linalg.norm(
+                                        right_arm_q
+                                        - active_failure_packet.source_right_arm_q
+                                    )
+                                ),
+                                "source_to_activation_dq_l2": float(
+                                    np.linalg.norm(
+                                        right_arm_dq
+                                        - active_failure_packet.source_right_arm_dq
+                                    )
+                                ),
+                                "source_to_activation_torso_acc_l2": float(
+                                    np.linalg.norm(
+                                        torso_state.lin_acc
+                                        - active_failure_packet.source_torso_acc
+                                    )
+                                ),
+                                "source_to_activation_torso_omega_l2": float(
+                                    np.linalg.norm(
+                                        torso_state.ang_vel
+                                        - active_failure_packet.source_torso_omega
+                                    )
+                                ),
+                                "process_command_id": int(
+                                    process_command_id
+                                ),
+                                "process_source_state_id": int(
+                                    process_source_state_id
+                                ),
+                                "process_execution_state_id": int(
+                                    counter + 1
+                                ),
+                                "mapping_update_due": bool(
+                                    execution_update_due
+                                ),
+                                "previous_executed_tau_available": (
+                                    previous_executed_tau is not None
+                                ),
+                                "previous_matches_last_executed": bool(
+                                    previous_executed_tau is not None
+                                    and last_executed_right_arm_tau is not None
+                                    and np.array_equal(
+                                        previous_executed_tau,
+                                        last_executed_right_arm_tau,
+                                    )
+                                ),
+                                "mapper_candidate_trace": (
+                                    parse_mapper_candidate_trace(
+                                        str(process_error)
+                                    )
+                                ),
+                                "right_arm_q_rad": right_arm_q.copy(),
+                                "right_arm_dq_rad_s": right_arm_dq.copy(),
+                                "active_q_ref_rad": target_right_arm_q.copy(),
+                                "active_dq_ref_rad_s": target_right_arm_dq.copy(),
+                                "desired_ddq_rad_s2": (
+                                    desired_right_arm_ddq.copy()
+                                ),
+                                "mapper_safe_hold_tau_nm": (
+                                    right_arm_tau_pd.copy()
+                                ),
+                                "previous_executed_tau_nm": (
+                                    None
+                                    if previous_executed_tau is None
+                                    else previous_executed_tau.copy()
+                                ),
+                                "last_executed_right_arm_tau_nm": (
+                                    None
+                                    if last_executed_right_arm_tau is None
+                                    else last_executed_right_arm_tau.copy()
+                                ),
+                            }
+                            failure_arrays = {
+                                "qpos": d.qpos,
+                                "qvel": d.qvel,
+                                "reference_qacc": rnea_reference_qacc,
+                                "fixed_ctrl": fixed_ctrl_for_mapping,
+                                "qacc_warmstart": d.qacc_warmstart,
+                                "qfrc_applied": d.qfrc_applied,
+                                "xfrc_applied": d.xfrc_applied,
+                                "right_arm_q": right_arm_q,
+                                "right_arm_dq": right_arm_dq,
+                                "q_ref": target_right_arm_q,
+                                "dq_ref": target_right_arm_dq,
+                                "ddq_raw": raw_right_arm_ddq,
+                                "ddq_des": desired_right_arm_ddq,
+                                "tau_passive": d.qfrc_passive[
+                                    right_arm_id_index_scratch.qvel_indices
+                                ],
+                                "friction_loss": m.dof_frictionloss[
+                                    right_arm_id_index_scratch.qvel_indices
+                                ],
+                                "mapper_safe_hold_tau": np.clip(
+                                    right_arm_tau_pd,
+                                    right_arm_id_index_scratch.torque_limits[:, 0],
+                                    right_arm_id_index_scratch.torque_limits[:, 1],
+                                ),
+                                "fixed_posture_pd_tau": fixed_posture_pd_tau,
+                                "previous_executed_tau": (
+                                    np.empty(0, dtype=np.float64)
+                                    if previous_executed_tau is None
+                                    else previous_executed_tau
+                                ),
+                                "last_executed_right_arm_tau": (
+                                    np.empty(0, dtype=np.float64)
+                                    if last_executed_right_arm_tau is None
+                                    else last_executed_right_arm_tau
+                                ),
+                                "pre_failure_d_ctrl": d.ctrl,
+                                "right_arm_torque_limits": (
+                                    right_arm_id_index_scratch.torque_limits
+                                ),
+                                "source_right_arm_q": (
+                                    active_failure_packet.source_right_arm_q
+                                ),
+                                "source_right_arm_dq": (
+                                    active_failure_packet.source_right_arm_dq
+                                ),
+                                "source_torso_acc": (
+                                    active_failure_packet.source_torso_acc
+                                ),
+                                "source_torso_omega": (
+                                    active_failure_packet.source_torso_omega
+                                ),
+                                "current_torso_acc": torso_state.lin_acc,
+                                "current_torso_omega": torso_state.ang_vel,
+                            }
+                            failure_paths = save_fail_closed_process_trace(
+                                mpc_latency_trace_recorder,
+                                Path(run_dir),
+                                event=failure_event,
+                                arrays=failure_arrays,
+                                model=m,
+                                data=d,
+                                right_arm_qvel_indices=(
+                                    right_arm_id_index_scratch.qvel_indices
+                                ),
+                                right_arm_ctrl_indices=(
+                                    right_arm_id_index_scratch.ctrl_indices
+                                ),
+                                torque_limits=(
+                                    right_arm_id_index_scratch.torque_limits
+                                ),
+                                max_abs_qacc=(
+                                    controller_setup.execution_max_abs_qacc
+                                ),
+                                explicit_path=(
+                                    None
+                                    if args.capture_mpc_latency_trace is None
+                                    else Path(args.capture_mpc_latency_trace)
+                                ),
+                            )
+                            print(
+                                "[experimental-latency] fail-closed trace="
+                                f"{failure_paths['json']} | state="
+                                f"{failure_paths['failure_state']}",
+                                flush=True,
+                            )
+                        raise
                     perf_monitor.record_sim_process_timing(
                         roundtrip_elapsed_time=(
                             process_result.roundtrip_elapsed_time
@@ -1805,6 +2202,116 @@ if __name__ == "__main__":
                 raise RuntimeError(
                     "NO_SAFE_TORQUE: 拒绝把未认证右臂力矩写入 d.ctrl。"
                 )
+            if mpc_latency_trace_recorder is not None:
+                active_trace_packet = (
+                    active_packet if mpc_control_enabled else None
+                )
+                active_source_anchor = (
+                    None
+                    if active_trace_packet is None
+                    else int(round(active_command_source_time / arm_control_dt))
+                )
+                if (
+                    active_source_anchor is not None
+                    and mapping_result is not None
+                    and bool(mapping_result.final_output_certified)
+                    and not bool(mapping_result.no_safe_torque)
+                ):
+                    mpc_latency_trace_recorder.mark_first_certified(
+                        source_anchor_index=active_source_anchor,
+                        wall_ns=time.perf_counter_ns(),
+                    )
+                source_q_delta = None
+                source_dq_delta = None
+                source_torso_acc_delta = None
+                source_torso_omega_delta = None
+                if (
+                    active_trace_packet is not None
+                    and experimental_mpc_delay_line is not None
+                ):
+                    source_q_delta = float(
+                        np.linalg.norm(
+                            right_arm_q - active_trace_packet.source_right_arm_q
+                        )
+                    )
+                    source_dq_delta = float(
+                        np.linalg.norm(
+                            right_arm_dq - active_trace_packet.source_right_arm_dq
+                        )
+                    )
+                    source_torso_acc_delta = float(
+                        np.linalg.norm(
+                            torso_state.lin_acc - active_trace_packet.source_torso_acc
+                        )
+                    )
+                    source_torso_omega_delta = float(
+                        np.linalg.norm(
+                            torso_state.ang_vel - active_trace_packet.source_torso_omega
+                        )
+                    )
+                mpc_latency_trace_recorder.record_execution(
+                    sample_index=counter,
+                    simulation_time_s=float(d.time),
+                    source_anchor_tick=bool(arm_policy_update_due),
+                    mpc_result_generated=bool(mpc_policy_update_due),
+                    generated_command_id=generated_mpc_command_id,
+                    mpc_packet_active=bool(mpc_control_enabled),
+                    mpc_result_activated=bool(
+                        command_activation is not None
+                        and command_activation.activated
+                    ),
+                    active_command_id=(
+                        None
+                        if active_trace_packet is None
+                        else int(active_trace_packet.command_id)
+                    ),
+                    active_source_anchor_index=active_source_anchor,
+                    active_source_time_s=(
+                        None
+                        if active_trace_packet is None
+                        else float(active_command_source_time)
+                    ),
+                    activation_effective_delay_ms=(
+                        None
+                        if command_activation is None
+                        or not command_activation.activated
+                        else float(command_activation.effective_delay) * 1e3
+                    ),
+                    applied_command_id=(
+                        None
+                        if active_trace_packet is None
+                        else int(active_trace_packet.command_id)
+                    ),
+                    right_arm_q_rad=right_arm_q.copy(),
+                    right_arm_dq_rad_s=right_arm_dq.copy(),
+                    active_q_ref_rad=target_right_arm_q.copy(),
+                    active_dq_ref_rad_s=target_right_arm_dq.copy(),
+                    desired_ddq_rad_s2=desired_right_arm_ddq.copy(),
+                    mapper_safe_hold_tau_nm=right_arm_tau_pd.copy(),
+                    applied_right_arm_tau_nm=tau_arm_waist[6:11].copy(),
+                    previous_executed_tau_available=(
+                        previous_executed_tau is not None
+                    ),
+                    previous_executed_tau_nm=(
+                        None
+                        if previous_executed_tau is None
+                        else previous_executed_tau.copy()
+                    ),
+                    mapping_update_due=bool(
+                        mpc_control_enabled and execution_update_due
+                    ),
+                    final_output_certified=bool(
+                        mapping_result is not None
+                        and mapping_result.final_output_certified
+                    ),
+                    source_to_activation_q_l2=source_q_delta,
+                    source_to_activation_dq_l2=source_dq_delta,
+                    source_to_activation_torso_acc_l2=source_torso_acc_delta,
+                    source_to_activation_torso_omega_l2=source_torso_omega_delta,
+                    right_arm_path_service_ms=(
+                        time.perf_counter_ns() - right_arm_path_start_wall_ns
+                    ) * 1e-6,
+                )
             # 最终把完整的上肢力矩（腰 + 左臂 + 右臂）写进 d.ctrl[12:23]
             d.ctrl[12:23] = tau_arm_waist
             perf_monitor.finish_right_arm_path()
@@ -1827,6 +2334,11 @@ if __name__ == "__main__":
                     m, d, startup_foot_contact_ids
                 )
                 mapping_snapshot = mapping_safety_snapshot(mapping_result)
+                startup_predictor_diagnostics = current_predictor_diagnostics
+                if experimental_mpc_latency_active and mpc_control_enabled:
+                    startup_predictor_diagnostics = mpc_diagnostics.get(
+                        "disturbance_predictor_diagnostics"
+                    )
                 fixed_posture_pd_tau = (
                     right_arm_tau_pd.copy()
                     if not mpc_control_enabled
@@ -1846,20 +2358,20 @@ if __name__ == "__main__":
                     mpc_anchor=arm_policy_update_due,
                     mpc_control_enabled=mpc_control_enabled,
                     policy_update_applied=policy_update_applied,
-                    predictor_updated=current_predictor_diagnostics is not None,
+                    predictor_updated=startup_predictor_diagnostics is not None,
                     predictor_task_time=(
-                        float(current_predictor_diagnostics["task_time"])
-                        if current_predictor_diagnostics is not None
+                        float(startup_predictor_diagnostics["task_time"])
+                        if startup_predictor_diagnostics is not None
                         else np.nan
                     ),
                     predictor_template_anchor_index=(
-                        int(current_predictor_diagnostics["template_anchor_index"])
-                        if current_predictor_diagnostics is not None
+                        int(startup_predictor_diagnostics["template_anchor_index"])
+                        if startup_predictor_diagnostics is not None
                         else -1
                     ),
                     predictor_fallback_used=(
-                        bool(current_predictor_diagnostics["fallback_used"])
-                        if current_predictor_diagnostics is not None
+                        bool(startup_predictor_diagnostics["fallback_used"])
+                        if startup_predictor_diagnostics is not None
                         else False
                     ),
                     gait_phase_cycles=(task_time_now % gait_period) / gait_period,
@@ -2176,6 +2688,16 @@ if __name__ == "__main__":
         mpc_command_delay_line.save_report(
             run_dir, eval_start_time, eval_end_time
         )
+    if mpc_latency_trace_recorder is not None:
+        latency_paths = mpc_latency_trace_recorder.save(
+            Path(run_dir),
+            explicit_path=(
+                None
+                if args.capture_mpc_latency_trace is None
+                else Path(args.capture_mpc_latency_trace)
+            ),
+        )
+        print(f"[experimental-latency] trace={latency_paths['json']}")
     if process_shadow_validator is not None:
         shadow_path = process_shadow_validator.save(run_dir)
         print(
