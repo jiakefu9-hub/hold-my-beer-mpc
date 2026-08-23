@@ -121,35 +121,20 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认
 完整任务或 async/free-running。设计、结果和证据路径见
 [EXPERIMENTAL_MPC_LATENCY_PLAN.md](EXPERIMENTAL_MPC_LATENCY_PLAN.md)。
 
-## 架构边界
+## 运行时架构
 
-项目只维护一份正式 full-task predictor 和一份 MPC；另保留的 legacy
-phase/ZOH 只服务 shadow 兼容和最小接口回归：
+项目只维护一份正式 full-task predictor 和一份 MPC，不为 Simulation 与 Hardware
+重复控制算法：
 
-```mermaid
-flowchart LR
-  Core[Shared control core<br/>task clock + continuous-H + template + MPC]
-  Sim[MuJoCo adapter<br/>state + process + d.ctrl + mj_step]
-  Shadow[Hardware shadow adapter<br/>read-only state + legacy phase compatibility]
-  Future[Future hardware output<br/>hardware-unverified]
-  Core --> Sim
-  Core --> Shadow
-  Core -. required integration .-> Future
-```
+- **Simulation** 是当前正式路径：Python 拥有 MuJoCo，独立 C++ worker 执行右臂
+  RNEA、mapper 和 executor；
+- **Shadow** 只读真实状态，当前 H1 为 PARTIAL，完整 shadow 仍受现场 gate 限制；
+- **Future / Hardware output** 尚未集成或授权，真机安全合同也不会直接照搬 MuJoCo
+  的 `max_abs_qacc=10 rad/s²`。
 
-- 仿真正式链：`run.sh -> main_sim.py -> RightArmSimProcess -> C++ simulation
-  runtime -> mapper-certified feedforward + latest-state executor PD/guards -> final_tau
-  -> d.ctrl -> mj_step`。mapper 只在 0/4 ms 更新拍重做 forward-dynamics 认证。
-- hardware shadow 当前只读、`command_publish_count=0`。第一次真实 G1 session 的
-  正式入口仅是 state-only inspection：CRC-valid `LowState` 与 secondary torso IMU
-  进入只读 trace，不运行 predictor/MPC；完整 shadow 仍是 legacy phase-template
-  兼容路径，尚未接入 full-task v2 的任务时钟、continuous-H 和 24 ms handoff。
-- `cpp/unitree_arm_adapter` 是未来真机适配边界，但主动真机闭环仍为
-  **hardware-unverified**。
-- 未来真机安全合同不得默认把 MuJoCo 的 `max_abs_qacc=10 rad/s^2` 原样继承为
-  hard-stop；应基于真实硬件证据分别定义 hard-stop、soft guard 和 diagnostics。
-
-完整依赖和验证边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+唯一的进程、IPC、数据流和平台替换地图见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+若入口、进程/worker、IPC、模块边界或 Simulation/Shadow/Hardware 路径变化，
+代码与该架构图必须在同一次变更中更新。
 
 ## 推荐阅读顺序
 

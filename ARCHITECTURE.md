@@ -1,239 +1,208 @@
-# 控制核心与平台适配器边界
+# 运行时架构：从 MuJoCo 到真实 G1
 
-本文描述当前冻结方案的工程边界。最终仿真方案只有一份右臂 MPC 和一份
-full-task predictor 实现；MuJoCo 与 Unitree 负责提供不同的平台状态和输出
-接口，不各自复制控制算法。
+这是一张“运行时地图”，用于在几分钟内看懂程序实际怎样启动、哪些模块属于
+独立进程，以及上真机时哪些部分会替换。算法、协议和安全门的详细设计不在这里
+重复，见文末链接。
 
-当前正式结果是受控 MuJoCo 仿真结果。hardware shadow 仍是只读、
-hardware-unverified 的 legacy phase-template 兼容路径；它尚未接入
-full-task template v2、continuous-H 的正式任务时钟或 24 ms startup-PD
-handoff。真机两部分的统一接口与阶段门见
-[`HARDWARE_INTEGRATION_PLAN.md`](HARDWARE_INTEGRATION_PLAN.md)。
+当前状态只有三句话：
 
-## 总体数据流
+- **Simulation** 是当前正式、已验证的控制路径；
+- **Shadow** 只允许读取真实 G1 状态，当前仍缺真实机器人证据；
+- **Future / Hardware output** 只有接口和离线准备，未授权、未启用。
+
+图中实线表示当前已有的调用或数据路径，虚线表示现场 gate 之后或未来才允许接通
+的路径。
+
+## 一分钟总览
 
 ```mermaid
 flowchart LR
-  subgraph Core[Shared control core]
-    Protocol[Full-task protocol / task clock / continuous-H]
-    Asset[Versioned template loader + checksum/schema validation]
-    Predictor[FullTaskTemplatePredictor]
-    Kin[KinematicsHelper + prediction backend]
-    MPC[ArmMPCPolicy]
-    Contract[RNEA and certified-output contracts]
+  Sim["Simulation<br/>MuJoCo 正式路径"]
+  Core["共享控制核心<br/>full-task v2 · continuous-H<br/>运动学 · ArmMPCPolicy"]
+  Shadow["Shadow<br/>真实状态只读路径"]
+  Hardware["Future / Hardware output<br/>未启用"]
 
-    Protocol --> Predictor
-    Asset --> Predictor
-    Predictor -->|10 nodes / 9 intervals| MPC
-    Kin --> MPC
-    MPC -->|q_ref, dq_ref, ddq_des| Contract
-  end
-
-  subgraph Sim[MuJoCo simulation adapter]
-    Run[run.sh]
-    Main[main_sim.py]
-    Startup[0-24 ms fixed right-arm PD]
-    SimIPC[RightArmSimProcess]
-    Worker[cpp/right_arm_sim_runtime]
-    SimNative[C++ RNEA -> MuJoCo DDQ mapper -> C++ executor]
-    Physics[d.ctrl -> mj_step, 2 ms physics]
-
-    Run --> Main
-    Main --> Startup
-    Main --> Protocol
-    MPC --> SimIPC
-    Startup --> Physics
-    SimIPC --> Worker --> SimNative
-    SimNative -->|certified feedforward + guarded final_tau| Physics
-  end
-
-  subgraph Shadow[Read-only hardware shadow adapter]
-    ShadowRun[tools/realtime/run_hardware_shadow.sh]
-    Bridge[unitree_arm_state_bridge]
-    SHM[POSIX shared-memory state slot]
-    ShadowPy[run_hardware_shadow.py]
-    Legacy[hardware_shadow.py + legacy phase template]
-    Proposal[output-disabled command proposal]
-
-    ShadowRun --> Bridge --> SHM --> ShadowPy --> Legacy
-    Legacy --> MPC
-    MPC --> Proposal
-  end
-
-  subgraph Future[Future hardware output path - not connected or validated]
-    Estimator[Validated full-state/contact estimator]
-    HwClock[Full-task v2 clock + continuous-H + 24 ms handoff adapter]
-    Command[Verified 13-DOF command and ownership transition]
-    Unitree[cpp/unitree_arm_adapter safety gate + DDS output]
-    Robot[Physical G1]
-
-    Estimator -.-> Kin
-    HwClock -.-> Predictor
-    Contract -.-> Command -.-> Unitree -.-> Robot
-  end
+  Sim <--> Core
+  Shadow -. "完整 shadow 仍需现场 gate" .-> Core
+  Core -. "proposal，尚未授权输出" .-> Hardware
 ```
 
-虚线表示尚未完成的真机主动输出路径，不是当前可执行的控制链。
+“共享控制核心”是逻辑边界，不代表一个单独进程。当前代码仍由各入口装配同一份
+predictor、运动学和 MPC；Simulation 与 Hardware 不应各维护一套 MPC。
 
-## Shared control core
+## Simulation：当前正式运行结构
 
-Shared control core 是逻辑边界，目前并未为了目录形式而搬成一个大型新包。
-下列代码由平台适配器复用，算法只能保留一份：
+```mermaid
+flowchart LR
+  Run["run.sh<br/>环境检查 · 构建 · taskset"]
 
-| 职责 | 当前实现 | 边界说明 |
-| --- | --- | --- |
-| 绝对任务时间、2/6/20 ms 网格、direct stop 和 continuous causal-H | [`disturbance_template/full_task_protocol.py`](disturbance_template/full_task_protocol.py) | task clock、anchor 索引和 H 更新由同一实现定义；平台不得复制近似时间逻辑。 |
-| 模板资产完整性 | [`disturbance_template/full_task_template_asset.py`](disturbance_template/full_task_template_asset.py) | 在线只加载显式路径，并验证 SHA256、schema、protocol、shape 和 SO(3)。 |
-| 扰动 horizon 接口与 full-task 查询 | [`disturbance_predictor.py`](disturbance_predictor.py) | `FullTaskTemplatePredictor` 输出 10 个 nodes 和 9 个 intervals；正常 headline 查询不循环模板。 |
-| MPC 数学与 QP | [`arm_mpc.py`](arm_mpc.py) | 唯一的 `ArmMPCPolicy`；仿真和 shadow 不维护两份 MPC。 |
-| 控制器装配与右臂关节定义 | [`right_arm_control_setup.py`](right_arm_control_setup.py) | `create_arm_controller` 和 `RIGHT_ARM_JOINT_NAMES` 的小型共享模块；simulation 与 hardware shadow 直接复用同一实现。 |
-| 运动学、坐标变换与 `DisturbanceHorizon` | [`kinematics_helper.py`](kinematics_helper.py) | 将实测状态、节点/区间扰动和预测后端装配为 MPC 输入。 |
-| 模型后端抽象与 RNEA C ABI | [`robot_model_backend/`](robot_model_backend/), [`cpp/right_arm_rnea/`](cpp/right_arm_rnea/) | 接口属于共享边界；当前完整 RNEA 执行只在仿真链集成，真机仍缺经验证的 floating-base 状态。 |
-| 最终输出的 PD、限幅、超时和非有限值合同 | [`right_arm_runtime/cpp_executor.py`](right_arm_runtime/cpp_executor.py), [`cpp/right_arm_executor/`](cpp/right_arm_executor/) | 安全语义可复用；具体的 MuJoCo 候选验收不是硬件物理验收。 |
-| 跨进程 seqlock 原子操作 | [`right_arm_runtime/atomic_seqlock.py`](right_arm_runtime/atomic_seqlock.py) | simulation IPC 与 Unitree shared-memory adapter 共享中立的 `libatomic` acquire/release 定义，不依赖彼此的私有协议实现。 |
+  subgraph CPU7["逻辑 CPU 7（正式受控运行）"]
+    subgraph Py["Python 主进程 · main_sim.py"]
+      Physics["权威 MuJoCo 世界<br/>d.ctrl · mj_step · 2 ms"]
+      Legs["TorchScript 下肢策略<br/>20 ms"]
+      Predict["task clock · continuous-H<br/>full-task template predictor"]
+      MPC["运动学 + ArmMPCPolicy / OSQP<br/>6 ms"]
+      Client["RightArmSimProcess client"]
 
-正式 predictor 资产是
-[`disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz)，
-manifest 位于同目录的
-[`full_task_template_manifest.json`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json)。
-它是固定绝对任务时间 baseline，提前知道 6.4 s 的停车时刻，不泛化到任意
-速度、方向或未知停车时刻。
+      Legs -->|"腿部控制"| Physics
+      Physics -->|"torso state"| Predict
+      Physics -->|"right-arm q / dq"| MPC
+      Physics -->|"完整仿真状态"| Client
+      Predict --> MPC --> Client
+    end
 
-平台间两个原有的小型反向依赖已经拆除：`create_arm_controller` 和
-`RIGHT_ARM_JOINT_NAMES` 由 [`right_arm_control_setup.py`](right_arm_control_setup.py)
-集中提供，[`sim_support.py`](sim_support.py) 只为既有仿真调用者重导出它们；
-hardware shadow 不再导入 `sim_support.py`。同样，simulation process 和
-Unitree shared-memory adapter 都直接导入中立的
-[`right_arm_runtime/atomic_seqlock.py`](right_arm_runtime/atomic_seqlock.py)，
-simulation IPC 不再依赖 `unitree_shm.py` 的私有实现。两个 adapter 仍保留各自
-独立的 payload 和生命周期。
+    subgraph Worker["C++ 子进程 · right_arm_sim_runtime_worker"]
+      RNEA["Pinocchio RNEA<br/>0 / 4 ms 更新"]
+      Mapper["MuJoCo scratch mapper<br/>0 / 4 ms 候选验收"]
+      Executor["Executor<br/>24 ms 接管后每 2 ms<br/>使用最新 q / dq"]
+      RNEA --> Mapper -->|"validated / cached feedforward"| Executor
+    end
+  end
 
-## 正式 MuJoCo 仿真适配器
-
-正式入口调用链为：
-
-```text
-run.sh
-  -> main_sim.py
-  -> RightArmSimProcess
-  -> cpp/right_arm_sim_runtime/right_arm_sim_runtime_worker
-  -> C++ Pinocchio RNEA
-  -> C++ MuJoCo DDQ-to-torque candidate validation
-  -> C++ right-arm executor
-  -> certified feedforward + latest-state executor PD/guards -> final_tau
-  -> MuJoCo d.ctrl
-  -> mj_step
+  Run --> Py
+  Client -->|"request：refs + 当前状态<br/>shared memory + pipe"| RNEA
+  Executor -->|"response：guarded final_tau[5]<br/>shared memory + pipe"| Client
+  Client -->|"写右臂 d.ctrl"| Physics
 ```
 
-对应入口是 [`run.sh`](run.sh)、[`main_sim.py`](main_sim.py)、
-[`right_arm_runtime/sim_process.py`](right_arm_runtime/sim_process.py) 和
+这里有两个独立 OS 进程：Python 主进程和它启动的 C++ worker。Python 经
+`taskset` 固定到 CPU 7，worker 继承同一 affinity。Python 拥有唯一的仿真时间和
+物理世界，必须等 worker 返回通过当前执行链 guard 的 `final_tau`，写入 `d.ctrl`
+后才调用 `mj_step()`。因此当前正式 MuJoCo 是 blocking lockstep，不是并行流水线
+或 free-running simulator。
+
+还要注意：
+
+- MPC QP 在 Python 主进程；C++ worker 在 0/4 ms 更新 RNEA 与 MuJoCo 候选验收，
+  接管后 executor 每 2 ms 用已验收/缓存的 feedforward 和最新 `q/dq` 运行；
+- worker 内的 MuJoCo 是验收用 scratch model，不推进权威机器人状态；
+- task/template/H 从 `t=0` 推进；右臂在 `[0, 24 ms)` 使用固定姿态 PD，24 ms 的
+  anchor 4 才交给 MPC；
+- `RightArmSimProcess`、MuJoCo mapper、`d.ctrl` 和 `mj_step()` 都属于
+  **simulation adapter**，不是可直接搬到真机的控制核心。
+
+入口与边界代码：[`run.sh`](run.sh)、[`main_sim.py`](main_sim.py)、
+[`right_arm_runtime/sim_process.py`](right_arm_runtime/sim_process.py)、
 [`cpp/right_arm_sim_runtime/`](cpp/right_arm_sim_runtime/)。
-[`cpp/build_runtime.sh`](cpp/build_runtime.sh) 构建该链使用的 RNEA、executor、
-DDQ mapper 和 simulation worker。
 
-仿真适配器负责：
+## Shadow：真实状态进入仓库，但不输出命令
 
-- 加载 MuJoCo 模型、下肢 RL walking policy 和 heading controller；
-- 从 `task t=0` 发布正式前进命令，并持续推进 full-task clock、continuous-H
-  和模板查询；
-- 在 `[0, 0.024 s)` 对右臂执行配置中的固定姿态 PD；下肢第一份新策略动作
-  仍在 20 ms 产生；
-- 在 `task time = simulation time = 0.024 s` 的 6 ms anchor 4 将右臂交给
-  MPC，不重置或重播 task/template/gait clock，并传递上一物理拍真实执行的
-  PD 力矩；
-- 在 6.4 s 直接把 planned `vx/vy` 置零，保持 heading control，全程 headline
-  为 `[0, 8.0 s)`；
-- 把完整 MuJoCo 状态通过 external-step IPC 交给 C++ worker。0/4 ms mapper
-  更新拍认证 feedforward；中间 2 ms 拍复用该 feedforward，但用当前
-  `q/dq` 重算 PD 并做限幅/超时/NaN guard。只有同一 session/request/state 的
-  有限 `final_tau` 才写入 `d.ctrl`，随后推进 2 ms `mj_step`。
+```mermaid
+flowchart LR
+  G1["目标真实 G1 DDS<br/>尚无有效现场样本<br/>rt/lowstate + rt/secondary_imu"]
+  Bridge["C++ 独立进程<br/>unitree_arm_state_bridge<br/>CRC + 两路状态配对"]
+  SHM["POSIX shared memory<br/>state slot"]
+  Inspect["Python 独立进程<br/>inspect-state-only<br/>read-only / private mapping"]
+  Evidence["JSONL + summary<br/>只读证据"]
+  FullShadow["Python 独立进程 · run_hardware_shadow.py<br/>HardwareShadowController<br/>legacy phase template + 共享 MPC"]
+  Proposal["内存 proposal<br/>publish count = 0"]
 
-MuJoCo DDQ-to-torque mapper 需要 `qacc_warmstart`、约束力和外力等仿真求解器
-状态，见 [`cpp/ddq_torque_mapper/`](cpp/ddq_torque_mapper/)。因此
-`RightArmSimProcess` 和 mapper 都是 simulation adapter，不得直接搬到真机
-路径并声称完成物理验收。
-
-## 只读 hardware shadow 适配器
-
-当前 shadow 调用链为：
-
-```text
-tools/realtime/run_hardware_shadow.sh
-  -> cpp/unitree_arm_adapter/unitree_arm_state_bridge
-  -> POSIX shared-memory state slot
-  -> run_hardware_shadow.py (read-only private mapping)
-  -> right_arm_runtime.hardware_shadow.HardwareShadowController
-  -> legacy phase template + shared ArmMPCPolicy
-  -> in-memory command proposal only (publish count = 0)
+  G1 --> Bridge --> SHM --> Inspect --> Evidence
+  SHM -. "H2 合同确认 + realtime preflight 后" .-> FullShadow -.-> Proposal
 ```
 
-入口和边界代码分别是
-[`tools/realtime/run_hardware_shadow.sh`](tools/realtime/run_hardware_shadow.sh)、
+当前批准入口是
+[`tools/realtime/run_hardware_state_inspection.sh`](tools/realtime/run_hardware_state_inspection.sh)：
+C++ bridge 只有 subscriber，没有 `LowCmd` 或 command publisher；Python 以只读映射
+检查并记录状态。机器人目前不在现场，所以 H1 仍是 **PARTIAL**，不能把离线测试
+写成真实 G1 验证。
+
+仓库也保留了完整只读 shadow 代码，但当前 verification flags 会在连接 DDS 前
+fail closed。即使现场 gate 通过，它目前也只是 legacy phase-template 兼容路径，
+不包含最终 full-task v2 的真实 task epoch、continuous-H 绑定和 24 ms handoff，
+并且只生成内存 proposal，绝不发布控制命令。完整 shadow 不使用 Simulation 的
+`RightArmSimProcess`、C++ simulation worker 或 MuJoCo mapper。
+
+入口与边界代码：[`tools/realtime/run_hardware_shadow.sh`](tools/realtime/run_hardware_shadow.sh)、
 [`run_hardware_shadow.py`](run_hardware_shadow.py)、
 [`right_arm_runtime/hardware_shadow.py`](right_arm_runtime/hardware_shadow.py)、
-[`right_arm_runtime/unitree_shm.py`](right_arm_runtime/unitree_shm.py) 与
+[`right_arm_runtime/unitree_shm.py`](right_arm_runtime/unitree_shm.py)、
 [`cpp/unitree_arm_adapter/src/state_bridge_main.cpp`](cpp/unitree_arm_adapter/src/state_bridge_main.cpp)。
 
-这个 launcher 只构建并启动 state-only bridge；bridge 的编译单元没有 command
-publisher，Python 以只读 private mapping 打开共享内存，summary 固定记录
-`command_publish_count = 0`。`hardware_shadow.py` 只接受 legacy `template`
-predictor；它没有最终 full-task v2 的 absolute task epoch、continuous-H
-任务绑定和 24 ms PD→MPC handoff。因此 shadow 结果只能验证状态合同、坐标
-转换、MPC 提案和只读进程边界，不能代表最终控制方案已经迁移到真机。
+## Future / Hardware：目标方向，当前未接通
 
-## Hardware state 到 output 的统一边界
+```mermaid
+flowchart LR
+  G1State["G1 DDS state"]
+  Ingress["C++ state ingress process<br/>CRC + paired state"]
+  StateSHM["state shared memory"]
+  Clock["真实 locomotion producer<br/>TaskClockEvent"]
 
-后续真机工作固定为五个窄接口：`RawHardwareStateFrame` 只承载原始消息和 CRC/
-source-time 证据；`ValidatedHardwareObservation` 才能进入共享控制核心；
-`TaskClockEvent` 由真实 locomotion command producer 定义 full-task epoch；
-`HardwareControlProposal` 只表示 MPC 提案且没有输出授权；
-`CertifiedHardwareCommand + ExecutionReceipt` 只属于未来 hardware output adapter。
+  subgraph PyFuture["Python future hardware runtime · 未集成"]
+    Observe["ValidatedHardwareObservation<br/>mapping · frame · freshness"]
+    Estimator["future full-state / contact estimator"]
+    Core["共享控制核心<br/>full-task v2 + continuous-H<br/>运动学 + MPC"]
+    Proposal["HardwareControlProposal"]
+    Cert["future hardware certification<br/>state binding · ownership · 13-slot command"]
+    Receipt["ExecutionReceipt<br/>仅代表 write / status 证据"]
 
-当前 state-only bridge 是唯一批准的 ingress。future publisher 必须复用同一 paired
-`LowState + rt/secondary_imu` 语义；不得保留 output-capable `dds_main.cpp` 当前另取
-`LowState.imu_state` pelvis IMU 的第二套状态链。protocol v2 尚未逐样本携带
-LowState version/motorstate、两个 source timestamp 和 skew，这些是后续 v3 的明确
-缺口，本轮不为此改变 ABI。
+    Observe -.-> Estimator -.-> Core
+    Clock -.-> Core -.-> Proposal -.-> Cert
+  end
 
-## Future hardware output path
+  CommandSHM["command / status shared memory"]
+  subgraph CppFuture["C++ Unitree output process · 未授权"]
+    Adapter["2 ms adapter<br/>pre-publish safety gate + DDS writer"]
+    DDS["rt/arm_sdk"]
+    Adapter -.-> DDS
+  end
+  Robot["真实 G1"]
 
-[`cpp/unitree_arm_adapter/`](cpp/unitree_arm_adapter/) 保持独立于
-[`cpp/right_arm_sim_runtime/`](cpp/right_arm_sim_runtime/) 的平台边界。前者定义
-Unitree LowState/arm SDK、共享内存、2 ms 周期和发布前安全闸；后者定义包含
-MuJoCo 求解状态的 external-step 仿真协议。两者不应合并成一个 payload，也
-不应把 sim IPC 建立在 Unitree 私有业务语义上。
+  G1State -.-> Ingress -.-> StateSHM -.-> Observe
+  Cert -. "command" .-> CommandSHM -.-> Adapter
+  DDS -.-> Robot
+  Adapter -. "status" .-> CommandSHM -.-> Receipt
+```
 
-仓库包含 output-capable 的 `unitree_arm_adapter_dds`，但它不是当前正式入口。
-即使可执行文件要求 `--enable-output` 和逐拍 output request 的双重许可，也仍
-不代表以下缺口已经关闭：
+仓库已有离线 proposal/command/receipt 合同、fake sink，以及一个 output-capable
+C++ adapter 原型，但没有正式 launcher 把 full-task v2 proposal 接到真实 DDS
+输出。整张图是目标方向，虚线不能理解为已完成或已获授权的真机链路。未来 Python
+runtime 与 C++ 2 ms output process 通过 command/status shared memory 隔离；C++
+侧仍必须在 publish 前独立检查 freshness、deadline、温度、限幅和输出许可。
+`ExecutionReceipt` 只能证明 writer/status 路径，不能证明实体电机精确执行了力矩。
 
-- 最终 full-task v2 的 task epoch、continuous-H、24 ms startup-PD 及
-  `previous_executed_tau` 连续性尚未接入硬件适配器；
-- LowState 不直接提供当前 RNEA 所需的完整 floating-base pose/twist、接触和
-  外力，仍需经验证的状态/接触估计接口；
-- 13 维 arm SDK 索引、左臂/腰参考、arm-weight ownership transition、超时
-  释放和硬件急停尚需吊架条件下的物理验证；
-- 仿真 mapper 的 MuJoCo forward-dynamics certification 不是实机安全证据，
-  真机需要独立、fail-closed 的可执行力矩合同；
-- 真机安全合同不得默认继承 MuJoCo `max_abs_qacc=10 rad/s^2` 作为 hard-stop，
-  而应按硬件证据区分 hard-stop、soft guard 和 diagnostics；单拍轻微 qacc 超限
-  是否终止主动控制仍是 hardware-unverified 的设计问题；
-- 真机端到端时钟、DDS 延迟、最坏执行时间和 deadline 行为尚未测量。
+上真机时，边界应保持如下：
 
-在这些条件全部关闭以前，future hardware output path 只能保留为适配器边界，
-不得从只读 shadow 自动升级为主动控制。
+| 继续保留的一份共享控制核心 | 由 Hardware adapter 替换或新增 |
+| --- | --- |
+| full-task protocol、绝对 task time、continuous-H | MuJoCo state、`d.ctrl`、`mj_step()` |
+| full-task template v2 与 predictor | `RightArmSimProcess`、simulation C++ worker |
+| 运动学/模型后端接口、`ArmMPCPolicy` | MuJoCo DDQ-to-torque mapper 与仿真认证 |
+| 右臂关节定义、`HardwareControlProposal` 接口 | G1 motor index/sign、状态/接触估计、真实 task epoch |
+| 控制意图和 fail-closed 原则 | 13-slot command、hardware torque 合同、ownership、watchdog、急停和 receipt |
 
-## 验证状态
+MuJoCo 的 `max_abs_qacc=10 rad/s²` 不能默认照搬成真机 hard-stop；真机必须根据硬件
+证据分别定义 hard-stop、soft guard 和 diagnostics。
 
-| 对象 | 当前证据 | 结论 |
-| --- | --- | --- |
-| full-task v2、continuous-H、24 ms handoff、MPC/process 和认证力矩链 | 单元/回归、offline-online parity、受控 MuJoCo nominal/held-out 运行；轻量证据见 [`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/) | **simulation-validated**，仅限冻结任务、模型、配置和运行环境。 |
-| `RightArmSimProcess` 与 `cpp/right_arm_sim_runtime` | Python/C++ ABI、seqlock、request/state 对齐、错误中毒和锁步 external-step 测试 | **simulation runtime validated**；不是 DDS 或硬件执行证据。 |
-| hardware state bridge、共享内存和 shadow runner | C++/Python layout、dry-run、fail-closed contract 与只读输出隔离测试 | **code/test validated, hardware-unverified**；H1 无有效样本，状态为 PARTIAL；不支持最终 full-task v2 + 24 ms。 |
-| state trace replay 与 future-output fake sink | synthetic fixtures 下的 schema/monotonic/binding/expiry/replay/watchdog/PD-semantics 测试；无 DDS writer | **offline code/test validated only**；不能修改 verification flags，也不是硬件安全认证。 |
-| `unitree_arm_adapter` 主动输出、安全释放和 2 ms 周期 | C++ 单测与无 DDS dry-run | **hardware-unverified**；未获得主动真机闭环许可。 |
-| CPU 绑定下的完整 6 ms MuJoCo timing | 受控仿真 metadata 和 interval 证据 | 只说明该主机上的 MuJoCo 控制循环；**不是真机硬实时证明**。 |
-| experimental MPC-result age | `heldout_pair_02_minus` 2 ms 在 44 ms 因最低真实 candidate `10.293 rad/s^2` 超过 MuJoCo 门限 10 而 fail closed | **simulation sensitivity only / PARTIAL 后冻结**；不是硬件 qacc hard-stop 依据。 |
+## 当前验证边界
 
-因此，当前架构结论是“共享一个控制核心，保留两个窄平台适配器”，而不是
-“仿真代码已经可以直接发往机器人”。
+| 路径 | 当前状态 |
+| --- | --- |
+| Simulation：full-task v2 + continuous-H + 24 ms handoff + process | **simulation-validated**；仅限冻结模型、任务和受控运行环境 |
+| H1 state inspection | 代码与离线合同已就绪；无真实 G1 样本，**PARTIAL** |
+| 完整只读 shadow | 已实现但被现场配置 gate 阻止；legacy only，`publish count = 0` |
+| Future hardware output | 合同/测试/fake sink 和 C++ 原型；**未集成、未授权、hardware-unverified** |
+
+## 架构与代码同步约定
+
+`ARCHITECTURE.md` 是本仓库的运行时架构基准。以下任一变化都必须在**同一次代码
+变更**中同步更新这里的图和状态说明：
+
+- 启动入口、独立进程/worker 数量或 CPU/生命周期关系；
+- IPC、状态来源、控制命令方向或谁拥有权威时间/物理状态；
+- shared control core 与 Simulation/Shadow/Hardware adapter 的边界；
+- 某条路径从 disabled、read-only 或 site-gated 变为可执行。
+
+反过来，文档中的目标架构只有在对应代码、测试和验证 gate 落地后，才能从虚线
+改成实线。评审运行结构相关改动时，至少同时核对实际 launcher、进程创建代码、
+IPC 协议和输出许可；仅修改图或仅修改代码都视为未完成。
+
+## 详细设计从哪里继续读
+
+- 固定任务、模板与 H：[`FULL_TASK_TEMPLATE.md`](FULL_TASK_TEMPLATE.md)
+- MPC 数学：[`MPC_DESIGN.md`](MPC_DESIGN.md)
+- Simulation process 与计时：[`REALTIME_RUNTIME.md`](REALTIME_RUNTIME.md)、
+  [`right_arm_runtime/README.md`](right_arm_runtime/README.md)
+- Shadow 操作边界：[`HARDWARE_SHADOW.md`](HARDWARE_SHADOW.md)
+- 真机接口和阶段 gate：[`HARDWARE_INTEGRATION_PLAN.md`](HARDWARE_INTEGRATION_PLAN.md)
+- 离线准备和现场待验项：[`HARDWARE_OFFLINE_PREPARATION.md`](HARDWARE_OFFLINE_PREPARATION.md)
