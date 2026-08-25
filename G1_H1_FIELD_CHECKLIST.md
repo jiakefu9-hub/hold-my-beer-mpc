@@ -1,164 +1,98 @@
-# Unitree G1 H1 现场速查表
+# Unitree G1 第一次实机接触与 H1 现场速查表
 
-范围：**只收状态；不运行 MPC；不切模式；不取得 arm ownership；不发布命令。**
-完整解释和故障树见 [G1_H1_FIELD_RUNBOOK.md](G1_H1_FIELD_RUNBOOK.md)。
+范围：**只认识实机并读取状态。H1 采集期间不切模式；结束时只执行带教人员按本机版本确认的阻尼/关机流程。**
+详细解释见 [G1_H1_FIELD_RUNBOOK.md](G1_H1_FIELD_RUNBOOK.md)。
 
-## 任何一项不满足就 NO-GO
+## 固定边界与 NO-GO
 
-- [ ] 两人到场：一人持遥控/看机器人，一人操作电脑；STOP 口令已约定。
-- [ ] 已按目标固件/遥控器实际说明确认阻尼、独立急停（若有）与关机操作；知道阻尼会
-  让机器人下落，不把它当成硬件 E-stop。
-- [ ] 实物/订单确认为支持二次开发的 G1 EDU/EDU+；普通 G1 直接 NO-GO。
-- [ ] 已记录 DOF、Arm、revision、序列号、固件和 App Machine Type；与 23-DOF Rev
-  1.0/Arm5 不一致时不把 capture 判为本项目契约通过。
-- [ ] G1 无损伤/异物/报警，原装电池与遥控器有电；合格吊架脚轮锁止、两肩吊点牢固、
-  双脚完全离地，四肢不缠绕，周围至少 2 m 净空。
-- [ ] 一台开发机直连一台 G1；无其他开发机、控制例程、teleop 或 domain-0 仿真。
-- [ ] 不进入 debug/develop mode，不关闭 factory locomotion/sport service。
-- [ ] 只运行 `run_hardware_state_inspection.sh`；不运行 `run_hardware_shadow.sh` 或任何
-  Unitree motion/arm/low-level 示例。
+- [ ] 熟悉本机的带教/安全负责人在场；至少两人分工，STOP 口令已演练。
+- [ ] 铭牌、订单或供货方确认实机属于官方支持二次开发的 G1 EDU/具体教育配置；其他后缀不自行推断。
+- [ ] 合格保护架、吊具、吊点和锁止方法均已由带教人员根据实机确认。
+- [ ] 遥控器型号、电量、拟用流程和异常处置已确认；实时连接在机器人上电后再验证。
+- [ ] 机器人、电池、遥控器、线缆和保护架无损伤、异味、液体、异物或松动。
+- [ ] 场地室内、干燥、平整、高摩擦；按本项目保守要求至少 2 m 净空。
+- [ ] H1 不站立、不行走、不摆臂、不运行控制例程、MPC、H2/H3 或任何输出。
 
-## 1. 主机预检
+任一项不满足：**不上电**。上电前 STOP 后须重新检查全部 gate；上电后 STOP 默认结束本次 session，不现场重新上电。
 
-```bash
-cd /home/fjk/g1_ws/hold-my-beer-mpc
-git status --short --branch
-git rev-parse HEAD
-git -C /home/fjk/g1_ws/unitree_sdk2 rev-parse HEAD
+## 阶段 0：到场后先不碰机器人
 
-PYTHONPYCACHEPREFIX=/tmp/hold-my-beer-mpc-pycache \
-  /home/fjk/miniforge3/envs/g1_mpc/bin/python \
-  run_hardware_shadow.py \
-  --controller-config configs/g1.yaml \
-  --hardware-config configs/g1_hardware_shadow.yaml \
-  --check-config-discovery
+- [ ] 未经带教允许，不搬、不扶起、不拖拽机器人。
+- [ ] 不插电池、不接线、不按按钮、不手动摆关节。
+- [ ] 不把手伸入关节间隙或机器人下方；先清理地面并规划撤离通道和线缆路径。
 
-taskset -pc $$
-taskset -c 5 true
-taskset -c 7 true
-pgrep -af 'unitree|ros2|cyclonedds|teleop|lowcmd|arm_sdk|mujoco' || true
-env | rg '^(G1_MPC_PYTHON|UNITREE_SDK2_DIR|UNITREE_STATE_BRIDGE_BUILD_DIR|UNITREE_INGRESS_SESSION_NONCE|CYCLONEDDS_URI)=' || true
-```
+## 阶段 1：断电认识、带教指认和无电演练
 
-- [ ] discovery config 输出 `PASS`。
-- [ ] SDK2 为已审计的 `fa925bf...`，runtime/config 没有未复核修改。
-- [ ] CPU 5/7 可用；否则记下两个 allowed CPU，稍后显式传参。
-- [ ] 已人工确认没有其他可能发布机器人命令的进程。
+- [ ] 指认并记录铭牌、SKU/配置、序列号、DOF、手型/腰部；不知道就留空。
+- [ ] 带教指认可扶/搬运位置、禁止抓握区、夹点、下落区和所需搬运协作。
+- [ ] 带教指认保护架、实际吊点、吊具、脚轮/锁止和首次连接方法。
+- [ ] 带教指认电池仓、锁止机构、电源键、方向和正常装拆力度。
+- [ ] 带教说明遥控器配对/连接验证、阻尼、急停（若有）、掉线和正常关机流程。
+- [ ] 带教说明上电后怎样查看固件/运控版本、实际开机状态和开发接口。
+- [ ] 绕机检查外壳、关节、可见线缆、风扇口、电池、遥控器和吊具；有疑点即停止。
+- [ ] 无电演练：喊 STOP → 人员撤离 → 电脑模拟 Ctrl-C → 安全负责人复述本机处置。
+- [ ] 全员复述：谁看机器人、谁看电脑；上电后的 STOP 结束本次 session。
 
-## 2. 专用网络
+## 阶段 2：在断电状态下完成支撑
 
-插 G1 专用线前后对照：
+- [ ] 带教人员决定人数和搬运动作；本人不单独搬抬、不抓关节。
+- [ ] 按带教示范使用本机实际吊点和吊具；不根据图片猜位置或连接方法。
+- [ ] 保护架持续承重，双脚按现场要求离地，脚轮/结构按实机方法锁止。
+- [ ] 四肢自然，无吊绳、衣物、线缆或保护架缠绕。
+- [ ] 机器人下方、夹点和可能摆动区域无人；两人复核“承重、锁止、清空”。
 
-```bash
-ip -br link
-ip -br -4 addr
-nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status
-```
+## 阶段 3：遥控器、电池和受监督上电
 
-在 Ubuntu Network 设置中把**人工追线确认的专用 NIC**设为：
+- [ ] 带教再次确认支撑、遥控器准备状态和目标实机的上电流程。
+- [ ] 按带教指认安装电池；方向或阻力有疑问立即停手，不强压。
+- [ ] 人员退出夹点/下落区；安全负责人持遥控器，电脑端不运行机器人程序。
+- [ ] 本人在带教监督下按本机流程上电，随后退到安全观察位置。
+- [ ] 带教确认初始化结束、实际开机状态、固件/运控版本和遥控实时连接。
+- [ ] 记录灯光、声音、风扇、等待时间、是否保持力矩和任何报警；不手推验证。
+- [ ] 在上述状态全部确认前，不按组合键、不开始 H1。
 
-```text
-IPv4 manual: 192.168.123.99/24
-Gateway: blank
-DNS: blank
-No default route / no sharing / no bridge
-```
+手册中的按钮位置、按压方式、等待时间和指示只属于对应版本，**不是目标实机指令**。
 
-```bash
-IFACE=replace_with_verified_g1_interface
-cat "/sys/class/net/$IFACE/carrier"
-ip -br -4 addr show dev "$IFACE"
-ip route get 192.168.123.161
-ping -I "$IFACE" -c 3 -W 1 192.168.123.161
-```
+## 阶段 4：连接 H1，人的任务是观察机器人
 
-- [ ] carrier=`1`。
-- [ ] 本机为 `192.168.123.99/24`。
-- [ ] `.161` route 直接走 `$IFACE`，无普通网关。
-- [ ] PC1 ping 成功。失败时不启动 launcher。
+- [ ] 带教指认本机开发 Ethernet 接口，并确认线缆、拓扑和插线时机。
+- [ ] 从机器人到电脑逐段追线；不凭外形试插，不在多个端口间轮流尝试。
+- [ ] 线缆避开关节、双脚、吊绳、脚轮和人员通道。
+- [ ] 把实机身份、版本、端口/线缆、遥控和支撑状态告诉 Codex，只执行其确认的 H1 state-only 步骤。
+- [ ] 开始前互报“人员清空、保护架承重、遥控正常、只读 H1”。
+- [ ] 安全负责人只看机器人/支撑，电脑操作员只看 H1；全程不碰机器人、不按模式键。
+- [ ] 机器人必须无动作、抖动、异响、异味、报警、遥控掉线或支撑变化。
 
-## 3. 安全上电
+电脑无数据：机器人保持原状态，继续问 Codex；**不切模式、不 debug、不运行控制例程。**
 
-- [ ] 机器人由合格吊架完全吊起，肩部吊绳受力、双脚离地；人员远离夹点/下落区。
-- [ ] 先开启已绑定遥控器并确认 DL/连接，再按实物当前官方说明装电池、短按一次后
-  长按至少 2 秒，等待约 1 分钟进入零力矩。
-- [ ] 无红色异常/报警；不按 `L2+Up`、`R2+A`、`L2+R2`、`L2+A` 或其他模式键。
+## 阶段 5：结束 H1、正常关机和撤场
 
-## 4. 唯一运行命令
+- [ ] 电脑操作员宣布 H1 结束并确认只读程序退出；安全负责人确认机器人状态无变化。
+- [ ] 保护架继续承重，人员不进入机器人下方或夹点。
+- [ ] 带教重新说明本机阻尼/关机流程；指定人员执行，其他人不扶关节、不接四肢。
+- [ ] 带教确认完全关机后，再决定拔线、关遥控器、取电池和四肢摆放时机。
+- [ ] 是否卸吊、怎样卸吊、谁可进入下落区均由带教人员决定。
+- [ ] 保存现场记录和电脑 evidence；到此停止，不进入 H2/H3/MPC/output。
 
-替换 4 个变量；占位值不应直接运行：
+## 立即 STOP
 
-```bash
-cd /home/fjk/g1_ws/hold-my-beer-mpc
-IFACE=replace_with_verified_g1_interface
-BRIDGE_CPU=5
-INSPECT_CPU=7
-GROUP=h1_g1_serial4_yyyymmdd_hhmm
+出现非预期动作/发力、支撑变化、遥控掉线、报警/异响/异味/烟/异常发热，或任何步骤不确定：
 
-env -u UNITREE_INGRESS_SESSION_NONCE -u CYCLONEDDS_URI \
-  G1_MPC_PYTHON=/home/fjk/miniforge3/envs/g1_mpc/bin/python \
-  UNITREE_SDK2_DIR=/home/fjk/g1_ws/unitree_sdk2 \
-  UNITREE_STATE_BRIDGE_BUILD_DIR="/tmp/hold-my-beer-mpc-h1-state-only-$GROUP" \
-  ./tools/realtime/run_hardware_state_inspection.sh "$IFACE" \
-  --bridge-cpu "$BRIDGE_CPU" \
-  --inspect-cpu "$INSPECT_CPU" \
-  --duration-s 10 \
-  --inspect-samples 500 \
-  --group "$GROUP"
-```
+1. 任一人喊 STOP，所有人停手并退出危险区；
+2. 电脑操作员 Ctrl-C，安全负责人执行本机已确认的处置；
+3. 不靠近抓机器人，不在通电时调吊具，不随机按键、不清码、不校准、不反复重启；
+4. 上电后的 STOP 结束本次 session；安全关机后记录原始现象，交由带教/厂商排查。
 
-机器人有任何非预期动作/报警：现场操作员执行已验证的 emergency/damping；电脑操作员
-Ctrl-C。先确保物理安全，不在站立时直接断电。
+## 本次实机记录
 
-## 5. PASS 后人工验收
-
-```bash
-SESSION="evaluation/hardware_shadow/state_inspection/$GROUP"
-find "$SESSION" -maxdepth 1 -type f -printf '%f\t%s bytes\n' | sort
-sed -n '1,240p' "$SESSION/summary.json"
-sed -n '1,200p' "$SESSION/state_bridge_summary.json"
-wc -l "$SESSION/raw_state_trace.jsonl"
-```
-
-- [ ] 终端显示 `read-only inspection: PASS`。
-- [ ] raw trace 为 500 行，5 个 evidence 文件完整。
-- [ ] `output_capability=absent`，controller/predictor 均 false，publish count=0。
-- [ ] protocol=3；observed/expected/bridge-summary 三处 nonce 是同一非零值；required
-  flags=true；max skew <=5 ms。
-- [ ] LowState valid、torso IMU、paired count 均覆盖 500；CRC/skew rejection 已记录。
-- [ ] bridge 记录了最后一个 version；整段 mode 稳定；timestamp/tick 单调；state age
-  <=20 ms（当前 trace 不能证明 version 在整段稳定）。
-- [ ] 不用 `mode_machine_matches_reference` 单独判 PASS；以 App Machine Type、实物和
-  对应固件/模型资料为准。
-- [ ] quaternion norm 接近 1；q/dq/tau/temperature 无明显异常；22..26 与右臂姿态大致相符。
-- [ ] 机器人/Explore 无报警，全程无模式、ownership 或动作变化。
-
-脚本 PASS **不等于** model/index/sign/mode/IMU contract verified。任何 CRC rejection、
-异常 mode、跳变、IMU/温度疑点都标为 REVIEW，用新 group 重跑；不放宽 gate。
-
-## 6. 失败快速定位
-
-| bridge counters | 首查方向 |
+| 项目 | 现场填写 |
 | --- | --- |
-| LowState=0，torso=0 | NIC/IP/route、PC1 ping、DDS domain 0、multicast/firewall、目标 SDK 支持 |
-| received>0，CRC-valid=0 | SDK/IDL/固件/type 不匹配；禁止关闭 CRC |
-| CRC-valid>0，torso=0 | 目标是否发布 `rt/secondary_imu`；禁止用 pelvis IMU 替代 |
-| 两路>0，paired=0 | host-arrival skew、CPU/负载、丢包；禁止放宽 5 ms |
-| paired>0，collector incomplete | state age/rate、CPU；可增 duration，不减 500 samples |
-| taskset fail | 从 `taskset -pc $$` 选两个 allowed CPU 并传参 |
+| 日期、地点、本人、带教/安全负责人 |  |
+| SKU/具体配置、序列号、DOF、手型/腰部 |  |
+| 固件/运控版本、适用手册/遥控说明 |  |
+| 支撑、吊点、电池、遥控/急停及各确认人 |  |
+| 开发接口、线缆路径、实际开机状态 |  |
+| H1 是否有动作、报警、异常及 Codex 结果 |  |
+| 关机/卸吊结果和尚未确认的问题 |  |
 
-失败目录可能只有 inspection/bridge logs 和 bridge summary；没有 raw trace/summary 就不是
-有效 capture。保留旧目录，换唯一 group，不覆盖证据，不进 debug mode、不换 topic 猜测。
-
-## 7. 收尾并停止
-
-```bash
-pgrep -af unitree_arm_state_bridge || true
-ls /dev/shm/g1_state_inspection_* 2>/dev/null || true
-```
-
-- [ ] 复制整个 `$SESSION` 到独立存储并保存 hashes；`evaluation/` 被 Git 忽略。
-- [ ] 保持完全吊装和绳索受力，按当前官方说明进入所需阻尼/关机前状态并正常关机。
-- [ ] 断开 G1 网线、停用专用 profile、恢复普通 LAN，检查默认路由。
-- [ ] 写下结论：`ACCEPTED CAPTURE / REVIEW / FAIL CLOSED / INCIDENT`。
-- [ ] **到此停止：不改 YAML，不运行 H2/H3/MPC，不启用任何输出。**
+离场前复述：**H1 不需要机器人做任何动作；不知道就停手问，不在实机上试。**
