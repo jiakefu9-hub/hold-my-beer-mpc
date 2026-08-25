@@ -149,9 +149,14 @@ robot-side `kp/kd` 必须为零。绝不能在两侧重复计算 PD。
 
 单用途入口：
 
+第一次上机应先阅读详细
+[H1 现场操作手册](G1_H1_FIELD_RUNBOOK.md)，现场使用
+[一页速查表](G1_H1_FIELD_CHECKLIST.md)。
+
 ```bash
 cd /home/fjk/g1_ws/hold-my-beer-mpc
-./tools/realtime/run_hardware_state_inspection.sh YOUR_VERIFIED_G1_INTERFACE \
+env -u UNITREE_INGRESS_SESSION_NONCE \
+  ./tools/realtime/run_hardware_state_inspection.sh YOUR_VERIFIED_G1_INTERFACE \
   --duration-s 10 \
   --inspect-samples 500 \
   --group first_real_g1_readonly
@@ -163,13 +168,14 @@ cd /home/fjk/g1_ws/hold-my-beer-mpc
 
 ### H1：第一次真实 G1 session 验收
 
-机器人保持厂商现有安全 stand/locomotion mode；项目不调用 `ReleaseMode`、
-`SelectMode`，不进入 debug/zero-torque mode，不取得 arm ownership。session 后人工
-审查：
+第一次 H1 由合格吊架把机器人完全吊起，并按目标版本官方说明上电后停留在 factory
+零力矩状态；不按准备/运动/debug/诊断姿态组合键。项目不调用 `ReleaseMode`、
+`SelectMode`，不进入 debug/develop，不取得 arm ownership。session 后人工审查：
 
 - bridge output capability absent，command publish/write 为 0；
 - LowState received/CRC-valid/CRC-rejected 数量及 secondary-IMU/pair/skew 统计；
-- version、`mode_pr`、`mode_machine` 是否稳定并与目标型号资料一致；
+- bridge 最后收到的 version 已记录；`mode_pr`、`mode_machine` 的整段观察值是否稳定并
+  与目标型号资料一致（当前 trace 不能证明 version 在整段稳定）；
 - sample ID、host timestamp、robot tick 和 rate/gap 是否单调合理；
 - 35-slot 状态有限，右臂 22..26 与已知姿态的符号/幅值一致；
 - quaternion norm、静止重力方向/模长、gyro bias 和 torso/pelvis 来源没有混用；
@@ -181,11 +187,13 @@ cd /home/fjk/g1_ws/hold-my-beer-mpc
 ### 2026-08-23 第一次连接尝试
 
 在当时唯一有 carrier 的有线接口 `enx6c1ff701509c`（`192.168.31.159/24`）上执行了
-10 s / 500-sample state-only inspection。该接口没有收到任何 `rt/lowstate` 或
+旧版 state-only 连接尝试。它早于当前 protocol-v3 HEAD，且该接口没有收到任何
+`rt/lowstate` 或
 `rt/secondary_imu`：LowState received/CRC-valid/CRC-rejected 为 `0/0/0`，torso
 IMU 和 paired state 均为 0。collector 因 `0/500` fresh paired samples 按合同
 fail closed；没有运行 predictor/MPC，没有 publisher/command write，也没有残留
-bridge 或 shared-memory 对象。
+bridge 或 shared-memory 对象。旧目录缺少当前 H1 所需的 nonce、inspection log、raw
+trace 和 Python summary，因此不能作为当前 protocol-v3 launcher 的完整执行证据。
 
 证据位于
 `evaluation/hardware_shadow/state_inspection/first_real_g1_readonly_20260823/`。

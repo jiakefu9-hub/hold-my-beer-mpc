@@ -163,11 +163,15 @@ production policy 默认未验证、未授权，因而不可 arming。详见
 6. [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)：完整 6 ms 计时口径和 CPU 7 环境。
 7. [HARDWARE_INTEGRATION_PLAN.md](HARDWARE_INTEGRATION_PLAN.md)：Unitree 官方
    契约核对、state/proposal/command/receipt 接口和 H0-H3/O0-O4 阶段门。
-8. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)、[HARDWARE_OFFLINE_PREPARATION.md](HARDWARE_OFFLINE_PREPARATION.md)：第一次只读 session 的入口、证据和
-   禁止声明。
-9. [disturbance_template/README.md](disturbance_template/README.md)：v2 的离线来源、
+8. [G1_H1_FIELD_RUNBOOK.md](G1_H1_FIELD_RUNBOOK.md) 与
+   [G1_H1_FIELD_CHECKLIST.md](G1_H1_FIELD_CHECKLIST.md)：第一次真实 G1 H1 只读现场
+   操作手册与一页速查表。
+9. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)、
+   [HARDWARE_OFFLINE_PREPARATION.md](HARDWARE_OFFLINE_PREPARATION.md)：只读路径的
+   实现边界、证据和禁止声明。
+10. [disturbance_template/README.md](disturbance_template/README.md)：v2 的离线来源、
    schema、parity 和本地产物边界。
-10. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
+11. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
     输出链。
 
 [CHALLENGE.md](CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。

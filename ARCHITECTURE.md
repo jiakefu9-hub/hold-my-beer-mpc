@@ -112,11 +112,12 @@ flowchart LR
 
 当前批准入口是
 [`tools/realtime/run_hardware_state_inspection.sh`](tools/realtime/run_hardware_state_inspection.sh)：
-C++ bridge 只有 subscriber，没有 `LowCmd`、command topic 或 publisher。launcher 每次
+C++ bridge 应用层只有 subscriber，没有 `LowCmd`、command topic 或
+`ChannelPublisher`。launcher 每次
 生成非零 ingress session nonce，bridge 把它与 CRC-valid 的 LowState 和配对 torso
 IMU 一起写入 state slot；Python 只读检查也必须核对同一个 nonce、三项 ingress
-flags、两路时间与不超过 5 ms 的 skew。机器人目前不在现场，所以 H1
-仍是 **PARTIAL**，离线测试不是真实 G1 证据。
+flags、两路时间与不超过 5 ms 的 skew。当前仍没有有效真实 G1 样本，所以 H1
+仍是 **PARTIAL**，离线测试和旧的 0-sample 连接失败都不是真实状态验收证据。
 
 Stage 2 另增了一条 **publisher-absent C++ HIL**，专用于把 Python 产生的
 offline-certified command 经 protocol-v3 送到最后一道 C++ 安全边界。HIL 的
@@ -229,4 +230,6 @@ IPC 协议和输出许可；仅修改图或仅修改代码都视为未完成。
   [`right_arm_runtime/README.md`](right_arm_runtime/README.md)
 - Shadow 操作边界：[`HARDWARE_SHADOW.md`](HARDWARE_SHADOW.md)
 - 真机接口和阶段 gate：[`HARDWARE_INTEGRATION_PLAN.md`](HARDWARE_INTEGRATION_PLAN.md)
+- 第一次 H1 现场操作：[`G1_H1_FIELD_RUNBOOK.md`](G1_H1_FIELD_RUNBOOK.md)、
+  [`G1_H1_FIELD_CHECKLIST.md`](G1_H1_FIELD_CHECKLIST.md)
 - 离线准备和现场待验项：[`HARDWARE_OFFLINE_PREPARATION.md`](HARDWARE_OFFLINE_PREPARATION.md)

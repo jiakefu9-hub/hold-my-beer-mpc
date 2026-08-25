@@ -13,14 +13,17 @@
 [ARCHITECTURE.md](ARCHITECTURE.md)。两部分共用接口、Unitree 官方实现核对和
 H0-H3/O0-O4 阶段门见
 [HARDWARE_INTEGRATION_PLAN.md](HARDWARE_INTEGRATION_PLAN.md)。
+第一次真实 G1 操作请按
+[H1 现场操作手册](G1_H1_FIELD_RUNBOOK.md) 和
+[一页速查表](G1_H1_FIELD_CHECKLIST.md) 执行。
 
 ## 安全边界
 
 只读 shadow 有两层相互独立的输出屏障：
 
 1. `unitree_arm_state_bridge` 只订阅 `rt/lowstate` 和
-   `rt/secondary_imu`。该 binary 的编译单元没有 LowCmd、command topic 或
-   publisher；LowState 先按 Unitree 官方 SDK2 算法校验 CRC，坏包计数并拒绝
+   `rt/secondary_imu`。该应用编译单元没有 LowCmd、command topic 或
+   `ChannelPublisher`；LowState 先按 Unitree 官方 SDK2 算法校验 CRC，坏包计数并拒绝
    写入 shared memory；
 2. `run_hardware_shadow.py` 以只读文件描述符和 private copy-on-write mapping
    打开 POSIX shared memory。第一次 inspection 在原始状态证据处停止；以后若启用
@@ -34,7 +37,7 @@ Unitree command publisher。
 
 ```text
 rt/lowstate + rt/secondary_imu
-    -> C++ state-only bridge（DDS receive，无 publisher）
+    -> C++ state-only bridge（DDS receive，应用层无 publisher）
     -> protocol-v3 paired-state slot（显式 ingress session nonce）
     -> read-only Python state source
        |-> H0/H1: strict raw inspection + JSONL evidence（本轮在这里停止）
@@ -104,13 +107,14 @@ cmake --build /tmp/hold-my-beer-mpc-unitree-state-only-build \
 
 ## 第一次 session：只检查状态
 
-必须人工选择连接机器人且已核对的有线网卡，不能猜测。机器人保持厂商现有安全
-stand/locomotion mode；本项目不调用 motion switcher，不取得 arm ownership。使用
-单用途入口：
+必须人工选择连接机器人且已核对的有线网卡，不能猜测。第一次 H1 必须由合格吊架把
+机器人完全吊起，并按目标版本官方说明上电后停留在 factory 零力矩状态；不按模式键。
+本项目不调用 motion switcher，不取得 arm ownership。使用单用途入口：
 
 ```bash
 cd /home/fjk/g1_ws/hold-my-beer-mpc
-./tools/realtime/run_hardware_state_inspection.sh YOUR_VERIFIED_G1_INTERFACE \
+env -u UNITREE_INGRESS_SESSION_NONCE \
+  ./tools/realtime/run_hardware_state_inspection.sh YOUR_VERIFIED_G1_INTERFACE \
   --duration-s 10 \
   --inspect-samples 500 \
   --group first_real_g1_readonly
@@ -121,11 +125,13 @@ inspection 不要求 verification flags 为真，也不运行 predictor/MPC。�
 closed。证据目录保存完整 35-slot `raw_state_trace.jsonl`、Python summary、bridge
 log/summary、CRC/skew 计数和 repo/SDK/config/binary/NIC metadata。
 
-2026-08-23 的首次连接尝试在 `enx6c1ff701509c` 上运行 10 s，结果为 LowState 0、
+2026-08-23 的旧版连接尝试在 `enx6c1ff701509c` 上运行，结果为 LowState 0、
 secondary IMU 0、paired state 0，collector 因 `0/500` fail closed。证据在
 `evaluation/hardware_shadow/state_inspection/first_real_g1_readonly_20260823/`。
 该接口当时位于普通 `192.168.31.0/24` LAN，没有证据证明已连接目标 G1；所以这不是
-有效真实状态 session，verification flags 保持不变，完整 shadow 不得继续。
+有效真实状态 session。该尝试早于当前 protocol-v3 HEAD，旧目录也没有当前所需 nonce、
+inspection log、raw trace 或 Python summary；verification flags 保持不变，完整 shadow
+不得继续。
 
 在改变任何 verification flag 前，必须用目标型号/固件的正式资料或受控测量
 确认：
