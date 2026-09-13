@@ -91,6 +91,15 @@ class _EmptyClient:
         return _state(0, 0)
 
 
+class _TickClient(_FreshClient):
+    def __init__(self, ticks, **kwargs):
+        super().__init__(**kwargs)
+        self.ticks = iter(ticks)
+
+    def read_state(self):
+        return replace(super().read_state(), robot_tick=next(self.ticks))
+
+
 class HardwareStateInspectionTest(unittest.TestCase):
     def test_requires_complete_fresh_monotonic_trace(self):
         hardware, controller = _configs()
@@ -120,6 +129,63 @@ class HardwareStateInspectionTest(unittest.TestCase):
         )
         self.assertEqual(len(records[0]["q_rad"]), 35)
         self.assertEqual(records[0]["mapped_right_arm"], records[0]["q_rad"][22:27])
+
+    def test_fresh_tick_repeats_and_uint32_wrap_are_accepted_and_counted(self):
+        hardware, controller = _configs()
+        for ticks, repeat_count in (
+            ([2211949, 2211950, 2211950, 2211951, 2211953], 1),
+            ([0xFFFFFFFE, 0xFFFFFFFF, 0, 0, 1], 1),
+        ):
+            with self.subTest(ticks=ticks):
+                summary, records = _inspect_only(
+                    client=_TickClient(ticks),
+                    hardware_config=hardware,
+                    controller_config=controller,
+                    sample_count=len(ticks),
+                    timeout_s=1.0,
+                    expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+                )
+                self.assertEqual([r["robot_tick"] for r in records], ticks)
+                self.assertEqual(summary["robot_tick_delta_min"], 0)
+                self.assertEqual(summary["robot_tick_repeat_count"], repeat_count)
+                self.assertEqual(summary["robot_tick_regression_count"], 0)
+                self.assertEqual(
+                    summary["robot_tick_repeat_or_regression_count"], repeat_count
+                )
+                self.assertEqual(summary["command_publish_count"], 0)
+                self.assertFalse(summary["controller_executed"])
+                self.assertFalse(summary["predictor_executed"])
+
+    def test_tick_regression_and_ambiguous_half_range_fail_closed(self):
+        hardware, controller = _configs()
+        for ticks in ([100, 100, 99], [0, 0xFFFFFFFF], [100, 100 + (1 << 31)]):
+            with self.subTest(ticks=ticks):
+                with self.assertRaisesRegex(HardwareStateError, "robot tick regressed"):
+                    _inspect_only(
+                        client=_TickClient(ticks),
+                        hardware_config=hardware,
+                        controller_config=controller,
+                        sample_count=len(ticks),
+                        timeout_s=1.0,
+                        expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+                    )
+
+    def test_repeated_tick_does_not_relax_timestamp_or_finite_checks(self):
+        hardware, controller = _configs()
+        for kwargs, reason in (
+            ({"timestamp_mode": "fixed"}, "timestamp"),
+            ({"nan_q": True}, "NaN/Inf"),
+        ):
+            with self.subTest(reason=reason):
+                with self.assertRaisesRegex(HardwareStateError, reason):
+                    _inspect_only(
+                        client=_TickClient([100, 100], **kwargs),
+                        hardware_config=hardware,
+                        controller_config=controller,
+                        sample_count=2,
+                        timeout_s=1.0,
+                        expected_ingress_session_nonce=TEST_INGRESS_NONCE,
+                    )
 
     def test_incomplete_or_only_stale_input_fails_closed(self):
         hardware, controller = _configs()

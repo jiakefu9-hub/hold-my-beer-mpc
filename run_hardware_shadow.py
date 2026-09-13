@@ -192,10 +192,11 @@ def _inspect_only(
         robot_tick = int(state.robot_tick)
         if previous_robot_tick is not None:
             tick_delta = (robot_tick - previous_robot_tick) & 0xFFFFFFFF
-            if tick_delta == 0 or tick_delta >= (1 << 31):
-                raise HardwareStateError(
-                    "inspection robot tick repeated or regressed"
-                )
+            # The observed G1 tick is a millisecond clock, not a DDS sequence.
+            # Distinct fresh samples can share a tick. Preserve the uint32
+            # wrap-aware regression check; sample/time checks remain strict.
+            if tick_delta >= (1 << 31):
+                raise HardwareStateError("inspection robot tick regressed")
         record = _inspection_record(state, read_monotonic_ns=read_ns)
         # Build the existing adapter's compact view as an independent mapping
         # check, without running predictor or MPC.
@@ -276,7 +277,10 @@ def _inspect_only(
         "robot_tick_delta_max": (
             max(robot_tick_deltas) if robot_tick_deltas else None
         ),
-        "robot_tick_repeat_or_regression_count": 0,
+        "robot_tick_repeat_count": robot_tick_deltas.count(0),
+        "robot_tick_regression_count": 0,
+        # Retain the existing combined metric, now with its actual value.
+        "robot_tick_repeat_or_regression_count": robot_tick_deltas.count(0),
         "quaternion_norm_min": min(
             item["quaternion_norm"] for item in records
         ),

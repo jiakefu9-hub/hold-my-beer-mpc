@@ -146,10 +146,10 @@ def audit_state_trace(
             raise HardwareStateTraceAuditError("timestamp repeated or regressed")
         if ticks:
             delta = (robot_tick - ticks[-1]) & 0xFFFFFFFF
-            if delta == 0 or delta >= (1 << 31):
-                raise HardwareStateTraceAuditError(
-                    "robot_tick repeated or regressed"
-                )
+            # Match H1: millisecond ticks may repeat across distinct samples;
+            # sample IDs and host timestamps must still strictly increase.
+            if delta >= (1 << 31):
+                raise HardwareStateTraceAuditError("robot_tick regressed")
 
         mapped = record.get("mapped_right_arm")
         if mapped is not None:
@@ -232,6 +232,8 @@ def audit_state_trace(
             "min": min(tick_deltas) if tick_deltas else None,
             "max": max(tick_deltas) if tick_deltas else None,
         },
+        "robot_tick_repeat_count": tick_deltas.count(0),
+        "robot_tick_regression_count": 0,
         "quaternion_norm": {
             "min": min(quaternion_norms),
             "max": max(quaternion_norms),

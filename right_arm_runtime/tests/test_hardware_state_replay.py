@@ -91,6 +91,53 @@ class HardwareStateReplayTest(unittest.TestCase):
         self.assertEqual(len(report["trace_sha256"]), 64)
         self.assertEqual(len(report["bridge_summary_sha256"]), 64)
 
+    def test_fresh_tick_repeats_and_uint32_wrap_are_accepted_and_counted(self):
+        for ticks in (
+            [2211949, 2211950, 2211950, 2211951, 2211953],
+            [0xFFFFFFFE, 0xFFFFFFFF, 0, 0, 1],
+        ):
+            with self.subTest(ticks=ticks):
+                records = [
+                    {**_record(i), "robot_tick": tick}
+                    for i, tick in enumerate(ticks, start=1)
+                ]
+                report = audit_state_trace(
+                    records,
+                    source_kind="synthetic_test_fixture",
+                    bridge_summary=_bridge_summary(len(records)),
+                )
+                self.assertEqual(report["status"], "PASS")
+                self.assertEqual(report["robot_tick_delta"]["min"], 0)
+                self.assertEqual(report["robot_tick_repeat_count"], 1)
+                self.assertEqual(report["robot_tick_regression_count"], 0)
+                self.assertFalse(report["hardware_session_verified"])
+                self.assertFalse(report["verification_flags_modified"])
+
+    def test_tick_regression_and_ambiguous_half_range_fail_closed(self):
+        for ticks in ([100, 100, 99], [0, 0xFFFFFFFF], [100, 100 + (1 << 31)]):
+            with self.subTest(ticks=ticks):
+                records = [
+                    {**_record(i), "robot_tick": tick}
+                    for i, tick in enumerate(ticks, start=1)
+                ]
+                with self.assertRaisesRegex(
+                    HardwareStateTraceAuditError, "robot_tick regressed"
+                ):
+                    audit_state_trace(records, source_kind="synthetic_test_fixture")
+
+    def test_repeated_tick_does_not_relax_sample_or_time_identity(self):
+        first = _record(1)
+        for field in ("sample_id", "source_monotonic_timestamp_ns"):
+            second = {**_record(2), "robot_tick": first["robot_tick"]}
+            second[field] = first[field]
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(
+                    HardwareStateTraceAuditError, "sample_id|timestamp"
+                ):
+                    audit_state_trace(
+                        [first, second], source_kind="synthetic_test_fixture"
+                    )
+
     def test_regression_nonfinite_mapping_and_bridge_mismatch_fail(self):
         duplicate = _record(1)
         with self.assertRaisesRegex(HardwareStateTraceAuditError, "sample_id"):
