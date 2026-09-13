@@ -121,8 +121,11 @@ env -u UNITREE_INGRESS_SESSION_NONCE \
 ```
 
 inspection 不要求 verification flags 为真，也不运行 predictor/MPC。它要求完整收到
-指定数量的 fresh、unique、finite、timestamp/tick 单调 paired samples；否则 fail
-closed。证据目录保存完整 35-slot `raw_state_trace.jsonl`、Python summary、bridge
+指定数量的 fresh、unique、finite paired samples，sample ID 和 host timestamp
+严格递增；毫秒 robot tick 允许重复并单独计数，仍拒绝 uint32 模差值 `>= 2^31` 的
+回退或歧义跳变，正常回绕可接受。其他 fail-closed 条件不变；此规则仅修正 H1 inspection
+及其离线 trace 审计，完整 shadow adapter 的 gate/verification flags 未获放宽。
+证据目录保存完整 35-slot `raw_state_trace.jsonl`、Python summary、bridge
 log/summary、CRC/skew 计数和 repo/SDK/config/binary/NIC metadata。
 
 2026-08-23 的旧版连接尝试在 `enx6c1ff701509c` 上运行，结果为 LowState 0、

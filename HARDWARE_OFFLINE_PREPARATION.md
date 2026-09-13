@@ -2,6 +2,13 @@
 
 状态：**offline code/test validated；H1 仍为 PARTIAL；hardware-unverified**。
 
+2026-09-11：已完成 500 条真实 H1 state-only 采集及离线 trace 审计，软件检查 PASS；
+完整现场/语义验收仍未完成，见 [session 记录](G1_H1_SESSION_20260911.md)。
+
+同日完成 publisher-absent HIL 纯离线复验：CTest 9/9、Python 17/17、两组端到端
+回执审计 PASS；真实 transport/hardware output 均为 0，见
+[HIL 离线验证记录](G1_HIL_OFFLINE_20260911.md)。
+
 本文记录机器人不在现场期间完成的 H2-prep 与 Stage-2 O0/O1。它不替代第一次真实 G1
 只读 session，不修改 `configs/g1_hardware_shadow.yaml` 的 verification flags，也不
 授予 `rt/arm_sdk`、`rt/lowcmd` 或任何其他真实输出能力。Latency 实验保持冻结。
@@ -12,11 +19,18 @@
 读取 state-only inspection 保存的 `raw_state_trace.jsonl`。它检查：
 
 - 35-slot `q/dq/ddq/tau_est`、温度和 IMU 数组的 shape/有限性；
-- sample ID、host monotonic timestamp、uint32 robot tick 的单调性；
+- sample ID、host monotonic timestamp 严格递增；uint32 robot tick 允许相等，拒绝
+  模差值 `>= 2^31` 的回退或歧义跳变，允许正常回绕；
 - persisted right-arm mapping 是否严格等于 slots 22..26；
 - bridge summary 是否声明 output capability absent，CRC-valid/paired 数是否覆盖 trace；
 - state age、sample dt、tick delta、quaternion norm、速度/力矩/温度的观察统计；
 - trace 和 bridge summary 的 SHA256，保证后续人工审核绑定到准确输入。
+
+2026-09-11 实机只读诊断观察到约 1042 Hz 的 LowState 和约 1000 tick/s 的计时；
+相邻不同状态可共享毫秒 tick。H1 与此离线审计因此分别报告 `robot_tick_repeat_count`
+和 `robot_tick_regression_count`。H1 summary 保留旧的
+`robot_tick_repeat_or_regression_count`，其值为实际重复数（成功结果无回退），不再
+固定写 0。重复 tick 不豁免已有的 sample/time、新鲜度、CRC 或配对检查。
 
 审计结果把 `offline_trace_contract_passed` 与 `hardware_session_verified` 分开。即使真实
 capture 的结构审计 PASS，后者仍固定为 `false`，并列出型号/固件、motor sign、tick/

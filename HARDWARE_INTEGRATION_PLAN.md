@@ -142,8 +142,10 @@ robot-side `kp/kd` 必须为零。绝不能在两侧重复计算 PD。
 4. 两个状态流各有新样本且本机 callback skew 不超过 5 ms 才形成 paired state。
 5. Python 以 `O_RDONLY + MAP_PRIVATE` 打开 shared memory，只收集状态；不实例化
    predictor、MPC 或 command builder。
-6. 必须收到请求数量的 fresh、unique、finite、timestamp/tick 单调 paired samples；
-   incomplete、stale、NaN/Inf、重复或倒退一律 fail closed。
+6. 必须收到请求数量的 fresh、unique、finite paired samples；sample ID 和 host
+   timestamp 严格递增，uint32 robot tick 允许重复、拒绝模差值 `>= 2^31` 的回退或
+   歧义跳变，保留正常 uint32 回绕。tick 是毫秒时钟，不作为每帧唯一序号；重复另行
+   计数。incomplete、stale、NaN/Inf 及既有 sample/time/ingress 拒绝条件不变。
 7. 保存完整 35-slot JSONL trace、inspection summary、bridge log/summary、repo/SDK/
    config/binary hash 和显式 NIC 信息。
 
