@@ -1,0 +1,58 @@
+# COPY THIS FILE; do not run it as-is.
+# Numeric values below are conservative software-envelope examples, not Unitree
+# limits and not target-robot approvals. Every value must be reviewed on site.
+schema=g1_arm_static_site_v2
+synthetic_fixture=false
+robot_id=UNSET
+model_name=UNSET
+joint_layout=g1_23_arm5
+confirmed_by=UNSET
+loco_service=sport
+profile_status=DRAFT
+
+hardware_identity_confirmed=false
+mapping_confirmed=false
+weight_scope_confirmed=false
+invalid_slots_confirmed=false
+locked_stand_mode_confirmed=false
+# Review procedures before the FIRST small hoisted trial; do not claim that
+# hardware release/watchdog tests have already passed. See PRETEST_REVIEW.md.
+# Loss plan: assume old output may persist; independent operator stop, no
+# auto-resume/reconnect; stop processes and re-establish safe state before retry.
+loss_response_plan_reviewed=false
+# Review ramp-to-zero code/preview and the operator fallback if release fails.
+# Actual smooth hand-back is an outcome to record during A2, not a prerequisite.
+normal_release_plan_reviewed=false
+emergency_procedure_confirmed=false
+no_competing_user_publishers_confirmed=false
+safety_parameters_confirmed=false
+
+# Raw values only. Do not label them as a mode until target documentation agrees.
+expected_mode_pr=0
+expected_mode_machine=4
+
+# g1_23_arm5: left Arm5 0..4, right Arm5 5..9, waist yaw 10.
+# waist roll/pitch slots 11/12 are invalid and must remain all-zero.
+valid_slots=0,1,2,3,4,5,6,7,8,9,10
+invalid_slot_policy=zero
+selected_slot=5
+
+offset_rad=0.02
+max_velocity_rad_s=0.02
+kp=20,20,20,20,20,20,20,20,20,20,20,0,0
+kd=1,1,1,1,1,1,1,1,1,1,1,0,0
+q_min=-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0
+q_max=1,1,1,1,1,1,1,1,1,1,1,0,0
+max_weight=0.1
+weight_rate_per_s=0.05
+hold_s=0.2
+control_period_ms=20
+state_timeout_ms=20
+startup_wait_s=5
+startup_valid_samples=50
+startup_max_abs_dq_rad_s=0.05
+runtime_max_abs_dq_rad_s=0.2
+max_selected_tracking_error_rad=0.1
+max_unselected_drift_rad=0.1
+deadline_tolerance_ms=10
+total_timeout_s=8
