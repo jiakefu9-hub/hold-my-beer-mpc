@@ -174,6 +174,9 @@ production policy 默认未验证、未授权，因而不可 arming。详见
 11. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
     输出链。
 
+[G1 下一次现场协同验证方案与历史证据索引](docs/g1_field_validation/README.md)：
+悬挂静态 Arm SDK → 落地平衡 → 有条件的动态协同；仅为待执行方案，不代表输出已解禁。
+
 [CHALLENGE.md](CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。
 
 ## Git、证据与历史恢复
