@@ -228,6 +228,63 @@ void TestPlanner(
         tracking_state, profile, state, move_a), "drift"));
 }
 
+void TestA3(
+    const std::string& profile_path,
+    const std::string& state_path) {
+    const auto profile = gc::LoadSiteProfile(profile_path);
+    auto state = gc::LoadOfflineSnapshot(state_path).state;
+    for (std::size_t slot = 0; slot <= 10U; ++slot) {
+        state.q[gc::kArmMotorIndices[slot]] = 0.3;
+    }
+    CHECK(gc::IsA3BalanceHold(profile));
+    CHECK(gc::ValidateProfile(profile, gc::ValidationUse::kPreview).ok());
+    CHECK(Contains(gc::ValidateProfile(
+        profile, gc::ValidationUse::kRealOutput), "synthetic_fixture"));
+
+    auto real = profile;
+    real.synthetic_fixture = false;
+    CHECK(gc::ValidateProfile(real, gc::ValidationUse::kRealOutput).ok());
+    auto wrong_fsm = real;
+    wrong_fsm.required_fsm = 4;
+    CHECK(Contains(gc::ValidateProfile(
+        wrong_fsm, gc::ValidationUse::kPreview), "FSM 500"));
+    auto nonzero_target = real;
+    nonzero_target.target_q[5] = 0.01;
+    CHECK(Contains(gc::ValidateProfile(
+        nonzero_target, gc::ValidationUse::kPreview), "must be zero"));
+    auto excessive_weight = real;
+    excessive_weight.max_weight = 1.001;
+    CHECK(Contains(gc::ValidateProfile(
+        excessive_weight, gc::ValidationUse::kPreview), "max_weight"));
+
+    gc::TrajectoryPlanner planner(profile, state);
+    CHECK(std::abs(planner.total_duration_s() - 11.0) < 1e-12);
+    const auto start = planner.Sample(0.0);
+    CHECK(start.phase == gc::Phase::kRampIn && start.weight == 0.0);
+    CHECK(std::abs(start.q[5] - 0.3) < 1e-12);
+    const auto halfway = planner.Sample(1.5);
+    CHECK(halfway.phase == gc::Phase::kRampIn);
+    CHECK(std::abs(halfway.weight - 0.5) < 1e-12);
+    CHECK(std::abs(halfway.q[5] - 0.15) < 1e-12);
+    const auto hold = planner.Sample(3.0);
+    CHECK(hold.phase == gc::Phase::kHold);
+    CHECK(std::abs(hold.weight - 1.0) < 1e-12);
+    CHECK(std::all_of(hold.q.begin(), hold.q.end(), [](double q) {
+        return q == 0.0;
+    }));
+    const auto release = planner.Sample(9.5);
+    CHECK(release.phase == gc::Phase::kRampOut);
+    CHECK(std::abs(release.weight - 0.5) < 1e-12);
+    const auto done = planner.Sample(11.0);
+    CHECK(done.phase == gc::Phase::kComplete && done.terminal);
+    CHECK(done.weight == 0.0);
+
+    auto tracking = state;
+    tracking.q[22] = 0.51;
+    CHECK(Contains(gc::ValidateRuntimeTracking(
+        tracking, profile, state, hold), "A3 tracking"));
+}
+
 void TestTimeAndTick() {
     CHECK(!gc::TickRegressed(10U, 10U));
     CHECK(!gc::TickRegressed(10U, 11U));
@@ -243,13 +300,14 @@ void TestTimeAndTick() {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        std::cerr << "usage: core_test PROFILE STATE\n";
+    if (argc != 4) {
+        std::cerr << "usage: core_test A2_PROFILE A3_PROFILE STATE\n";
         return 2;
     }
     TestProfile(argv[1]);
-    TestState(argv[1], argv[2]);
-    TestPlanner(argv[1], argv[2]);
+    TestState(argv[1], argv[3]);
+    TestPlanner(argv[1], argv[3]);
+    TestA3(argv[2], argv[3]);
     TestTimeAndTick();
     if (failures != 0) {
         std::cerr << failures << " commissioning core checks failed\n";

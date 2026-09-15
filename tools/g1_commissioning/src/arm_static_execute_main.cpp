@@ -31,7 +31,15 @@ namespace {
 
 constexpr const char* kStateTopic = "rt/lowstate";
 constexpr const char* kArmSdkTopic = "rt/arm_sdk";
+#ifdef G1_A3_BALANCE_HOLD_EXECUTABLE
+constexpr bool kA3Executable = true;
+constexpr const char* kStageName = "A3";
+constexpr const char* kOutputPermit = "A3_GROUNDED_BALANCE_HOLD_ONLY";
+#else
+constexpr bool kA3Executable = false;
+constexpr const char* kStageName = "A2";
 constexpr const char* kOutputPermit = "A2_HOISTED_STATIC_ONLY";
+#endif
 volatile std::sig_atomic_t stop_requested = 0;
 
 void HandleSignal(int) { stop_requested = 1; }
@@ -46,7 +54,8 @@ struct Options {
 
 void Usage(const char* executable) {
     std::cout
-        << "DANGER: explicit A2 hoisted-static rt/arm_sdk output executable.\n\n"
+        << "DANGER: explicit " << kStageName
+        << " rt/arm_sdk output executable.\n\n"
         << "Usage: " << executable << " NETWORK_INTERFACE --profile FILE"
         << " --log JSONL --session-label LABEL"
         << " --permit-real-output " << kOutputPermit << "\n\n"
@@ -237,7 +246,7 @@ int InterlockStop(std::ofstream& log, const std::string& reason) {
         << "\"final_frame_attempted\":false,\"reason\":\""
         << gc::JsonEscape(reason) << "\"}\n";
     log.flush();
-    std::cerr << "A2 interlock stopped output: " << reason << '\n';
+    std::cerr << kStageName << " interlock stopped output: " << reason << '\n';
     return 4;
 }
 
@@ -249,6 +258,11 @@ int main(int argc, char** argv) {
     try {
         const Options options = ParseOptions(argc, argv);
         const gc::SiteProfile profile = gc::LoadSiteProfile(options.profile_path);
+        if (gc::IsA3BalanceHold(profile) != kA3Executable) {
+            throw std::runtime_error(
+                std::string("profile/executable stage mismatch: expected ") +
+                kStageName);
+        }
         const auto profile_validation = gc::ValidateProfile(
             profile, gc::ValidationUse::kRealOutput);
         if (!profile_validation.ok()) {
@@ -275,7 +289,8 @@ int main(int argc, char** argv) {
         unitree::robot::ChannelFactory::Instance()->Init(
             0, options.network_interface);
         auto inbox = std::make_shared<gc::LowStateInbox>();
-        auto interlock = std::make_shared<gc::ArmStopInterlock>();
+        auto interlock = std::make_shared<gc::ArmStopInterlock>(
+            profile.required_fsm);
         auto subscriber = std::make_shared<unitree::robot::ChannelSubscriber<
             unitree_hg::msg::dds_::LowState_>>(kStateTopic);
         subscriber->InitChannel(
@@ -284,7 +299,8 @@ int main(int argc, char** argv) {
             }, 1);
         gc::FsmMonitor fsm_monitor(interlock);
         log << "{\"schema\":\"g1_arm_stop_interlock_config_v1\","
-            << "\"required_fsm\":4,\"mode_max_age_ms\":200,"
+            << "\"required_fsm\":" << profile.required_fsm
+            << ",\"mode_max_age_ms\":200,"
             << "\"rpc_timeout_ms\":100,\"poll_wait_ms\":50,"
             << "\"remote_stop_mask\":544,\"auto_reset\":false}\n";
 
@@ -303,8 +319,10 @@ int main(int argc, char** argv) {
         log.flush();
 
         const std::string expected_confirmation = "EXECUTE " + profile.robot_id;
-        std::cout
-            << "Publisher has NOT been created. Confirm hoist, clear workspace, "
+        std::cout << "Publisher has NOT been created. "
+            << (kA3Executable
+                    ? "Confirm FSM 500, grounded stationary self-balance, clear workspace, "
+                    : "Confirm hoist, clear workspace, ")
             << "field approver, and robot ID.\nType exactly: "
             << expected_confirmation << "\n> " << std::flush;
         std::string confirmation;
@@ -470,7 +488,7 @@ int main(int argc, char** argv) {
                 << "\"reason\":\"" << gc::JsonEscape(error.what()) << "\"}\n";
             log.flush();
         }
-        std::cerr << "A2 static commissioning refused/failed: "
+        std::cerr << kStageName << " commissioning refused/failed: "
                   << error.what() << '\n';
         return 1;
     }

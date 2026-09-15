@@ -18,6 +18,8 @@ constexpr double kHardOffsetLimitRad = 5.0 * kPi / 180.0;
 constexpr double kHardVelocityLimitRadS = 0.1;
 constexpr double kHardWeightLimit = 0.5;
 constexpr double kHardWeightRateLimitPerS = 0.2;
+constexpr double kA3HardWeightLimit = 1.0;
+constexpr double kA3HardWeightRateLimitPerS = 0.5;
 constexpr double kHardKpLimit = 80.0;
 constexpr double kHardKdLimit = 5.0;
 constexpr double kHardTotalTimeoutS = 30.0;
@@ -207,11 +209,16 @@ SiteProfile LoadSiteProfile(const std::string& path) {
     auto values = LoadKeyValues(path);
     SiteProfile profile;
     profile.schema = Take(values, "schema");
-    if (profile.schema != "g1_arm_static_site_v2") {
+    if (profile.schema == "g1_arm_static_site_v2") {
+        profile.kind = ProfileKind::kA2HoistedStatic;
+        profile.required_fsm = 4;
+    } else if (profile.schema == "g1_arm_balance_hold_site_v1") {
+        profile.kind = ProfileKind::kA3GroundedBalanceHold;
+    } else {
         throw std::runtime_error(
-            "unsupported profile schema: use g1_arm_static_site_v2 and review "
-            "loss_response_plan_reviewed/normal_release_plan_reviewed; "
-            "legacy confirmation flags are not migrated automatically");
+            "unsupported profile schema: use g1_arm_static_site_v2 or "
+            "g1_arm_balance_hold_site_v1; legacy confirmation flags are not "
+            "migrated automatically");
     }
     profile.synthetic_fixture = ParseBool(
         Take(values, "synthetic_fixture"), "synthetic_fixture");
@@ -231,9 +238,18 @@ SiteProfile LoadSiteProfile(const std::string& path) {
         Take(values, "weight_scope_confirmed"), "weight_scope_confirmed");
     profile.invalid_slots_confirmed = ParseBool(
         Take(values, "invalid_slots_confirmed"), "invalid_slots_confirmed");
-    profile.locked_stand_mode_confirmed = ParseBool(
-        Take(values, "locked_stand_mode_confirmed"),
-        "locked_stand_mode_confirmed");
+    if (profile.kind == ProfileKind::kA2HoistedStatic) {
+        profile.locked_stand_mode_confirmed = ParseBool(
+            Take(values, "locked_stand_mode_confirmed"),
+            "locked_stand_mode_confirmed");
+    } else {
+        profile.regular_motion_mode_confirmed = ParseBool(
+            Take(values, "regular_motion_mode_confirmed"),
+            "regular_motion_mode_confirmed");
+        profile.grounded_self_balance_confirmed = ParseBool(
+            Take(values, "grounded_self_balance_confirmed"),
+            "grounded_self_balance_confirmed");
+    }
     profile.loss_response_plan_reviewed = ParseBool(
         Take(values, "loss_response_plan_reviewed"), "loss_response_plan_reviewed");
     profile.normal_release_plan_reviewed = ParseBool(
@@ -254,12 +270,23 @@ SiteProfile LoadSiteProfile(const std::string& path) {
         Take(values, "expected_mode_machine"), "expected_mode_machine");
     profile.valid_slots = ParseValidSlots(Take(values, "valid_slots"));
     profile.invalid_slot_policy = Take(values, "invalid_slot_policy");
-    profile.selected_slot = ParseSize(
-        Take(values, "selected_slot"), "selected_slot");
-
-    profile.offset_rad = ParseDouble(Take(values, "offset_rad"), "offset_rad");
-    profile.max_velocity_rad_s = ParseDouble(
-        Take(values, "max_velocity_rad_s"), "max_velocity_rad_s");
+    if (profile.kind == ProfileKind::kA2HoistedStatic) {
+        profile.selected_slot = ParseSize(
+            Take(values, "selected_slot"), "selected_slot");
+        profile.offset_rad = ParseDouble(Take(values, "offset_rad"), "offset_rad");
+        profile.max_velocity_rad_s = ParseDouble(
+            Take(values, "max_velocity_rad_s"), "max_velocity_rad_s");
+    } else {
+        const auto required_fsm = ParseUint64(
+            Take(values, "required_fsm"), "required_fsm");
+        if (required_fsm > static_cast<std::uint64_t>(
+                std::numeric_limits<int>::max())) {
+            throw std::runtime_error("required_fsm is too large");
+        }
+        profile.required_fsm = static_cast<int>(required_fsm);
+        profile.target_q = ParseDoubleArray<kArmSlotCount>(
+            Take(values, "target_q"), "target_q");
+    }
     profile.kp = ParseDoubleArray<kArmSlotCount>(Take(values, "kp"), "kp");
     profile.kd = ParseDoubleArray<kArmSlotCount>(Take(values, "kd"), "kd");
     profile.q_min = ParseDoubleArray<kArmSlotCount>(
@@ -285,12 +312,18 @@ SiteProfile LoadSiteProfile(const std::string& path) {
     profile.runtime_max_abs_dq_rad_s = ParseDouble(
         Take(values, "runtime_max_abs_dq_rad_s"),
         "runtime_max_abs_dq_rad_s");
-    profile.max_selected_tracking_error_rad = ParseDouble(
-        Take(values, "max_selected_tracking_error_rad"),
-        "max_selected_tracking_error_rad");
-    profile.max_unselected_drift_rad = ParseDouble(
-        Take(values, "max_unselected_drift_rad"),
-        "max_unselected_drift_rad");
+    if (profile.kind == ProfileKind::kA2HoistedStatic) {
+        profile.max_selected_tracking_error_rad = ParseDouble(
+            Take(values, "max_selected_tracking_error_rad"),
+            "max_selected_tracking_error_rad");
+        profile.max_unselected_drift_rad = ParseDouble(
+            Take(values, "max_unselected_drift_rad"),
+            "max_unselected_drift_rad");
+    } else {
+        profile.max_all_tracking_error_rad = ParseDouble(
+            Take(values, "max_all_tracking_error_rad"),
+            "max_all_tracking_error_rad");
+    }
     profile.deadline_tolerance_ms = ParseDouble(
         Take(values, "deadline_tolerance_ms"), "deadline_tolerance_ms");
     profile.total_timeout_s = ParseDouble(
@@ -300,6 +333,10 @@ SiteProfile LoadSiteProfile(const std::string& path) {
         throw std::runtime_error("unknown profile key: " + values.begin()->first);
     }
     return profile;
+}
+
+bool IsA3BalanceHold(const SiteProfile& profile) noexcept {
+    return profile.kind == ProfileKind::kA3GroundedBalanceHold;
 }
 
 OfflineSnapshot LoadOfflineSnapshot(const std::string& path) {
@@ -350,7 +387,13 @@ OfflineSnapshot LoadOfflineSnapshot(const std::string& path) {
 ValidationResult ValidateProfile(
     const SiteProfile& profile, ValidationUse use) {
     ValidationResult result;
-    AddIf(result, profile.schema != "g1_arm_static_site_v2",
+    const bool a3 = IsA3BalanceHold(profile);
+    AddIf(result,
+          a3 != (profile.schema == "g1_arm_balance_hold_site_v1"),
+          "profile kind/schema mismatch");
+    AddIf(result,
+          profile.schema != "g1_arm_static_site_v2" &&
+              profile.schema != "g1_arm_balance_hold_site_v1",
           "unsupported profile schema");
     AddIf(result, profile.joint_layout != "g1_23_arm5",
           "only the explicitly confirmed g1_23_arm5 layout is supported");
@@ -360,22 +403,39 @@ ValidationResult ValidateProfile(
           "g1_23_arm5 valid_slots must be exactly 0..10");
     AddIf(result, profile.invalid_slot_policy != "zero",
           "invalid_slot_policy must be zero");
-    AddIf(result, profile.selected_slot < 5U || profile.selected_slot > 9U,
-          "first commissioning motion must select one right Arm5 slot (5..9)");
-    AddIf(result, !(std::abs(profile.offset_rad) > 0.0 &&
-                    std::abs(profile.offset_rad) <= kHardOffsetLimitRad),
-          "offset_rad must be nonzero and no more than 5 degrees");
-    AddIf(result, !(profile.max_velocity_rad_s > 0.0 &&
-                    profile.max_velocity_rad_s <= kHardVelocityLimitRadS),
-          "max_velocity_rad_s must be in (0, 0.1]");
-    AddIf(result, !(profile.max_weight > 0.0 &&
-                    profile.max_weight <= kHardWeightLimit),
-          "max_weight must be in (0, 0.5]");
-    AddIf(result, !(profile.weight_rate_per_s > 0.0 &&
-                    profile.weight_rate_per_s <= kHardWeightRateLimitPerS),
-          "weight_rate_per_s must be in (0, 0.2]");
-    AddIf(result, !(profile.hold_s >= 0.0 && profile.hold_s <= 2.0),
-          "hold_s must be in [0, 2]");
+    if (!a3) {
+        AddIf(result, profile.selected_slot < 5U || profile.selected_slot > 9U,
+              "first commissioning motion must select one right Arm5 slot (5..9)");
+        AddIf(result, !(std::abs(profile.offset_rad) > 0.0 &&
+                        std::abs(profile.offset_rad) <= kHardOffsetLimitRad),
+              "offset_rad must be nonzero and no more than 5 degrees");
+        AddIf(result, !(profile.max_velocity_rad_s > 0.0 &&
+                        profile.max_velocity_rad_s <= kHardVelocityLimitRadS),
+              "max_velocity_rad_s must be in (0, 0.1]");
+        AddIf(result, !(profile.max_weight > 0.0 &&
+                        profile.max_weight <= kHardWeightLimit),
+              "max_weight must be in (0, 0.5]");
+        AddIf(result, !(profile.weight_rate_per_s > 0.0 &&
+                        profile.weight_rate_per_s <= kHardWeightRateLimitPerS),
+              "weight_rate_per_s must be in (0, 0.2]");
+        AddIf(result, !(profile.hold_s >= 0.0 && profile.hold_s <= 2.0),
+              "hold_s must be in [0, 2]");
+    } else {
+        AddIf(result, profile.required_fsm != 500,
+              "A3 requires regular-motion FSM 500");
+        AddIf(result, !Finite(profile.target_q), "target_q must be finite");
+        AddIf(result, !(profile.max_weight > 0.0 &&
+                        profile.max_weight <= kA3HardWeightLimit),
+              "A3 max_weight must be in (0, 1]");
+        AddIf(result, !(profile.weight_rate_per_s > 0.0 &&
+                        profile.weight_rate_per_s <= kA3HardWeightRateLimitPerS),
+              "A3 weight_rate_per_s must be in (0, 0.5]");
+        AddIf(result, !(profile.hold_s >= 0.0 && profile.hold_s <= 10.0),
+              "A3 hold_s must be in [0, 10]");
+        AddIf(result, !(profile.max_all_tracking_error_rad > 0.0 &&
+                        profile.max_all_tracking_error_rad <= 0.5),
+              "A3 max_all_tracking_error_rad must be in (0, 0.5]");
+    }
     AddIf(result, !(profile.control_period_ms >= 4.0 &&
                     profile.control_period_ms <= 20.0),
           "control_period_ms must be in [4, 20]");
@@ -394,12 +454,14 @@ ValidationResult ValidateProfile(
     AddIf(result, !(profile.runtime_max_abs_dq_rad_s > 0.0 &&
                     profile.runtime_max_abs_dq_rad_s <= 0.5),
           "runtime_max_abs_dq_rad_s must be in (0, 0.5]");
-    AddIf(result, !(profile.max_selected_tracking_error_rad > 0.0 &&
-                    profile.max_selected_tracking_error_rad <= 0.2),
-          "max_selected_tracking_error_rad must be in (0, 0.2]");
-    AddIf(result, !(profile.max_unselected_drift_rad > 0.0 &&
-                    profile.max_unselected_drift_rad <= 0.2),
-          "max_unselected_drift_rad must be in (0, 0.2]");
+    if (!a3) {
+        AddIf(result, !(profile.max_selected_tracking_error_rad > 0.0 &&
+                        profile.max_selected_tracking_error_rad <= 0.2),
+              "max_selected_tracking_error_rad must be in (0, 0.2]");
+        AddIf(result, !(profile.max_unselected_drift_rad > 0.0 &&
+                        profile.max_unselected_drift_rad <= 0.2),
+              "max_unselected_drift_rad must be in (0, 0.2]");
+    }
     AddIf(result, !(profile.deadline_tolerance_ms >= 0.0 &&
                     profile.deadline_tolerance_ms <=
                         profile.control_period_ms),
@@ -426,21 +488,30 @@ ValidationResult ValidateProfile(
                             profile.q_min[slot] >= -2.0 * kPi &&
                             profile.q_max[slot] <= 2.0 * kPi),
                   prefix + "q limits are invalid");
+            if (a3) {
+                AddIf(result, profile.target_q[slot] != 0.0,
+                      prefix + "A3 target_q must be zero");
+                AddIf(result, profile.target_q[slot] < profile.q_min[slot] ||
+                                  profile.target_q[slot] > profile.q_max[slot],
+                      prefix + "target_q is outside q limits");
+            }
         } else {
             AddIf(result, profile.kp[slot] != 0.0 || profile.kd[slot] != 0.0 ||
                               profile.q_min[slot] != 0.0 ||
                               profile.q_max[slot] != 0.0,
                   prefix + "invalid slots must have zero kp/kd/q limits");
+            AddIf(result, a3 && profile.target_q[slot] != 0.0,
+                  prefix + "invalid slots must have zero target_q");
         }
     }
 
     const double ramp = profile.weight_rate_per_s > 0.0
                             ? profile.max_weight / profile.weight_rate_per_s
                             : std::numeric_limits<double>::infinity();
-    const double move = profile.max_velocity_rad_s > 0.0
+    const double move = !a3 && profile.max_velocity_rad_s > 0.0
                             ? std::abs(profile.offset_rad) /
                                   profile.max_velocity_rad_s
-                            : std::numeric_limits<double>::infinity();
+                            : 0.0;
     const double planned = 2.0 * ramp + 2.0 * move + profile.hold_s;
     AddIf(result, !std::isfinite(planned) ||
                       profile.total_timeout_s < planned + 0.5,
@@ -465,8 +536,15 @@ ValidationResult ValidateProfile(
               "arm weight scope is not confirmed");
         AddIf(result, !profile.invalid_slots_confirmed,
               "invalid slot policy is not confirmed");
-        AddIf(result, !profile.locked_stand_mode_confirmed,
-              "locked-stand raw mode contract is not confirmed");
+        if (!a3) {
+            AddIf(result, !profile.locked_stand_mode_confirmed,
+                  "locked-stand raw mode contract is not confirmed");
+        } else {
+            AddIf(result, !profile.regular_motion_mode_confirmed,
+                  "regular-motion FSM 500 is not confirmed");
+            AddIf(result, !profile.grounded_self_balance_confirmed,
+                  "grounded stationary self-balance is not confirmed");
+        }
         AddIf(result, !profile.loss_response_plan_reviewed,
               "state-loss operator response/no-auto-resume plan is not reviewed");
         AddIf(result, !profile.normal_release_plan_reviewed,
@@ -526,7 +604,8 @@ ValidationResult ValidateState(
         AddIf(result, std::abs(state.dq[motor]) > dq_limit,
               std::string(kArmSlotNames[slot]) + " exceeds dq limit");
     }
-    if (startup_check && profile.selected_slot < kArmSlotCount &&
+    if (!IsA3BalanceHold(profile) && startup_check &&
+        profile.selected_slot < kArmSlotCount &&
         profile.valid_slots[profile.selected_slot]) {
         const std::size_t motor = kArmMotorIndices[profile.selected_slot];
         const double endpoint = state.q[motor] + profile.offset_rad;
@@ -544,12 +623,19 @@ ValidationResult ValidateRuntimeTracking(
     const StateSample& initial_state,
     const CommandFrame& command) {
     ValidationResult result;
+    const bool a3 = IsA3BalanceHold(profile);
     for (std::size_t slot = 0; slot < kArmSlotCount; ++slot) {
         if (!profile.valid_slots[slot]) {
             continue;
         }
         const std::size_t motor = kArmMotorIndices[slot];
-        if (slot == profile.selected_slot) {
+        if (a3) {
+            AddIf(result,
+                  std::abs(state.q[motor] - command.q[slot]) >
+                      profile.max_all_tracking_error_rad,
+                  std::string(kArmSlotNames[slot]) +
+                      " exceeded A3 tracking error limit");
+        } else if (slot == profile.selected_slot) {
             AddIf(result,
                   std::abs(state.q[motor] - command.q[slot]) >
                       profile.max_selected_tracking_error_rad,
@@ -569,8 +655,10 @@ TrajectoryPlanner::TrajectoryPlanner(
     SiteProfile profile, StateSample initial_state)
     : profile_(std::move(profile)), initial_state_(std::move(initial_state)) {
     ramp_duration_s_ = profile_.max_weight / profile_.weight_rate_per_s;
-    move_duration_s_ =
-        std::abs(profile_.offset_rad) / profile_.max_velocity_rad_s;
+    if (!IsA3BalanceHold(profile_)) {
+        move_duration_s_ =
+            std::abs(profile_.offset_rad) / profile_.max_velocity_rad_s;
+    }
 }
 
 double TrajectoryPlanner::total_duration_s() const noexcept {
@@ -589,6 +677,39 @@ CommandFrame TrajectoryPlanner::Sample(double elapsed_s) const {
         frame.q[slot] = initial_state_.q[kArmMotorIndices[slot]];
         frame.kp[slot] = profile_.kp[slot];
         frame.kd[slot] = profile_.kd[slot];
+    }
+
+    if (IsA3BalanceHold(profile_)) {
+        const double ramp_in_end = ramp_duration_s_;
+        const double hold_end = ramp_in_end + profile_.hold_s;
+        const double ramp_out_end = hold_end + ramp_duration_s_;
+        double pose_ratio = 1.0;
+        if (frame.elapsed_s < ramp_in_end) {
+            frame.phase = Phase::kRampIn;
+            pose_ratio = std::clamp(frame.elapsed_s / ramp_duration_s_, 0.0, 1.0);
+            frame.weight = profile_.max_weight * pose_ratio;
+        } else if (frame.elapsed_s < hold_end) {
+            frame.phase = Phase::kHold;
+            frame.weight = profile_.max_weight;
+        } else if (frame.elapsed_s < ramp_out_end) {
+            frame.phase = Phase::kRampOut;
+            const double release_elapsed = frame.elapsed_s - hold_end;
+            frame.weight = std::max(
+                0.0, profile_.max_weight -
+                         profile_.weight_rate_per_s * release_elapsed);
+        } else {
+            frame.phase = Phase::kComplete;
+            frame.weight = 0.0;
+            frame.terminal = true;
+        }
+        for (std::size_t slot = 0; slot < kArmSlotCount; ++slot) {
+            if (!profile_.valid_slots[slot]) continue;
+            const double initial = initial_state_.q[kArmMotorIndices[slot]];
+            frame.q[slot] = initial +
+                (profile_.target_q[slot] - initial) * pose_ratio;
+        }
+        frame.weight = std::clamp(frame.weight, 0.0, profile_.max_weight);
+        return frame;
     }
 
     const double ramp_in_end = ramp_duration_s_;
@@ -724,19 +845,31 @@ std::string ProfileSummaryJson(
     const SiteProfile& profile,
     const ValidationResult& output_validation) {
     std::ostringstream output;
+    const bool a3 = IsA3BalanceHold(profile);
     output << std::setprecision(17)
            << "{\"schema\":\"g1_arm_static_profile_summary_v1\""
+           << ",\"profile_kind\":\""
+           << (a3 ? "A3_GROUNDED_BALANCE_HOLD" : "A2_HOISTED_STATIC")
+           << "\""
            << ",\"robot_id\":\"" << JsonEscape(profile.robot_id) << "\""
            << ",\"model_name\":\"" << JsonEscape(profile.model_name) << "\""
            << ",\"joint_layout\":\"" << JsonEscape(profile.joint_layout) << "\""
-           << ",\"selected_slot\":" << profile.selected_slot
-           << ",\"selected_joint\":\""
-           << (profile.selected_slot < kArmSlotCount
-                   ? kArmSlotNames[profile.selected_slot]
-                   : "invalid") << "\""
+           << ",\"required_fsm\":" << profile.required_fsm
+           << ",\"selected_slot\":";
+    if (a3) {
+        output << "null,\"selected_joint\":null";
+    } else {
+        output << profile.selected_slot << ",\"selected_joint\":\""
+               << (profile.selected_slot < kArmSlotCount
+                       ? kArmSlotNames[profile.selected_slot]
+                       : "invalid") << "\"";
+    }
+    output
            << ",\"offset_rad\":" << profile.offset_rad
            << ",\"max_velocity_rad_s\":" << profile.max_velocity_rad_s
            << ",\"max_weight\":" << profile.max_weight
+           << ",\"weight_rate_per_s\":" << profile.weight_rate_per_s
+           << ",\"hold_s\":" << profile.hold_s
            << ",\"profile_schema\":\"" << JsonEscape(profile.schema) << "\""
            << ",\"loss_response_plan_reviewed\":"
            << (profile.loss_response_plan_reviewed ? "true" : "false")

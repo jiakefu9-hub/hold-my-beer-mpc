@@ -13,6 +13,9 @@ public:
     static constexpr std::uint64_t kMaxModeAgeNs = 200000000ULL;
     static constexpr std::uint16_t kL2B = (1U << 5U) | (1U << 9U);
 
+    explicit ArmStopInterlock(int required_fsm = 4)
+        : required_fsm_(required_fsm) {}
+
     // Pinned SDK example/g1/low_level/gamepad.hpp: button word at bytes 2,3,
     // little-endian, L2=bit5, B=bit9. Caller must first validate LowState CRC.
     void ObserveRemote(std::uint8_t byte2, std::uint8_t byte3) {
@@ -26,7 +29,9 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         if (!fault_.empty()) return;
         if (rc != 0) fault_ = "FSM getter failed: rc=" + std::to_string(rc);
-        else if (fsm != 4) fault_ = "left locked-standing: FSM=" + std::to_string(fsm);
+        else if (fsm != required_fsm_)
+            fault_ = "left required FSM " + std::to_string(required_fsm_) +
+                     ": FSM=" + std::to_string(fsm);
         else if (request_ns == 0 || reply_ns < request_ns ||
                  reply_ns - request_ns > kMaxModeAgeNs)
             fault_ = "invalid or late FSM reply";
@@ -58,6 +63,7 @@ public:
     }
 
 private:
+    const int required_fsm_;
     std::mutex mutex_;
     bool have_mode_{false};
     std::uint64_t mode_request_ns_{0};

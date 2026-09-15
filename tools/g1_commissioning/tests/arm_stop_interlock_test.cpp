@@ -20,6 +20,12 @@ int main() {
     startup.ObserveMode(0, 4, t + 50 * ms, t + 51 * ms);
     CHECK(startup.Check(t + 52 * ms).empty());
 
+    ArmStopInterlock regular_motion(500);
+    regular_motion.ObserveMode(0, 500, t, t + ms);
+    CHECK(regular_motion.Check(t + 2 * ms).empty());
+    regular_motion.ObserveMode(0, 4, t + 50 * ms, t + 51 * ms);
+    CHECK(!regular_motion.Check(t + 52 * ms).empty());
+
     for (int mode : {0, 1, 2, 3, 500, -1}) {
         ArmStopInterlock gate;
         Healthy(gate);

@@ -1,0 +1,53 @@
+# COPY THIS FILE; do not run it as-is. This A3 profile is separate from A2.
+# It assumes the operator has already placed the grounded robot in stationary,
+# self-balancing Regular Motion Mode and software reads back FSM 500.
+schema=g1_arm_balance_hold_site_v1
+synthetic_fixture=false
+robot_id=UNSET
+model_name=UNSET
+joint_layout=g1_23_arm5
+confirmed_by=UNSET
+loco_service=sport
+profile_status=DRAFT
+
+hardware_identity_confirmed=false
+mapping_confirmed=false
+weight_scope_confirmed=false
+invalid_slots_confirmed=false
+regular_motion_mode_confirmed=false
+grounded_self_balance_confirmed=false
+loss_response_plan_reviewed=false
+normal_release_plan_reviewed=false
+emergency_procedure_confirmed=false
+no_competing_user_publishers_confirmed=false
+safety_parameters_confirmed=false
+
+# Replace these raw LowState values with a fresh A1 query captured in FSM 500.
+expected_mode_pr=0
+expected_mode_machine=4
+
+# Arm5: left 0..4, right 5..9, single waist yaw 10. Slots 11/12 invalid.
+valid_slots=0,1,2,3,4,5,6,7,8,9,10
+invalid_slot_policy=zero
+required_fsm=500
+
+# Requested A3 pose: both arms and the single waist-yaw joint at zero radians.
+target_q=0,0,0,0,0,0,0,0,0,0,0,0,0
+kp=20,20,20,20,20,20,20,20,20,20,20,0,0
+kd=1,1,1,1,1,1,1,1,1,1,1,0,0
+q_min=-1.2,-1.2,-1.2,-1.2,-1.2,-1.2,-1.2,-1.2,-1.2,-1.2,-1.2,0,0
+q_max=1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,1.2,0,0
+
+# 0 -> 1 in 3 s, hold 5 s, 1 -> 0 in 3 s: 11 s total.
+max_weight=1
+weight_rate_per_s=0.3333333333333333
+hold_s=5
+control_period_ms=20
+state_timeout_ms=20
+startup_wait_s=5
+startup_valid_samples=50
+startup_max_abs_dq_rad_s=0.05
+runtime_max_abs_dq_rad_s=0.5
+max_all_tracking_error_rad=0.5
+deadline_tolerance_ms=10
+total_timeout_s=12

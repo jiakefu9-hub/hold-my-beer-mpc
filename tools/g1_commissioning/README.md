@@ -1,6 +1,6 @@
 # G1 Arm SDK commissioning tools
 
-This directory contains isolated A1a/A1b/A2 field tools, not the production hardware
+This directory contains isolated A1a/A1b/A2/A3 field tools, not the production hardware
 adapter and not an extension of the publisher-absent HIL. The operator-facing
 procedure and evidence boundaries are in
 [`docs/g1_field_validation/README.md`](../../docs/g1_field_validation/README.md).
@@ -13,11 +13,12 @@ procedure and evidence boundaries are in
 | `g1_commissioning_query` | no | LowState + four getter RPCs | no LowCmd type or command publisher |
 | `g1_commissioning_mode_step` | no | LowState + FSM get/set RPC | one request: 0 to 1, or 1 to 4; no joint publisher |
 | `g1_arm_static_execute` | no | LowState + one publisher | only `rt/arm_sdk`; explicit A2 gates |
+| `g1_arm_balance_hold_execute` | no | LowState + one publisher | only `rt/arm_sdk`; explicit grounded A3/FSM 500 gates |
 | `g1_arm_stop_observe` | no | LowState + FSM getter | three-second stop-monitor observation; no joint publisher |
 
 All networked targets are opt-in at CMake configure time. Merely running the
 A2 executable without its complete arguments exits before DDS initialization.
-Even with valid arguments, it validates a field-reviewed profile and consecutive
+Even with valid arguments, each output executable validates its matching field-reviewed profile and consecutive
 fresh states, requires an interactive `EXECUTE <robot_id>` response, revalidates
 new states, and only then constructs the publisher.
 
@@ -63,7 +64,7 @@ ctest --test-dir /tmp/g1-commissioning-modes --output-on-failure
 Network execution requires the explicitly authorized hoisted A1b procedure in the
 field guide; do not run a valid mode command as an offline build test.
 
-Compile-check both opt-in device targets without running them:
+Compile-check all opt-in device targets without running them:
 
 ```bash
 cmake -S tools/g1_commissioning -B /tmp/g1-commissioning-full \
@@ -89,6 +90,17 @@ field template also fails that gate until every identity, behavior and numeric
 review item is explicitly filled and confirmed. Software hard caps (5 degrees,
 0.1 rad/s, weight 0.5, weight rate 0.2/s, 30 seconds) are additional engineering
 ceilings, not manufacturer limits or recommendations.
+
+The separate [`a3_balance_hold.template`](profiles/a3_balance_hold.template) is
+for the next grounded balance test. It targets both Arm5 arms and the single
+waist-yaw joint at SDK coordinate zero. During its 3-second entry, each target
+interpolates from the freshly measured pose to zero while global weight ramps
+from 0 to 1; it holds for 5 seconds, then keeps the zero target while weight
+returns to 0 over 3 seconds. The A3 executor does not switch modes or command
+locomotion. It requires continuously observed `GetFsmId()==500`, rejects the A2
+schema/permit, and retains the state, remote L2+B, deadline and manual
+`EXECUTE <robot_id>` gates. The template is `DRAFT`; raw LowState mode bytes
+must be replaced from a fresh FSM-500 query before field use.
 
 ## Runtime behavior that needs field review
 
@@ -152,5 +164,19 @@ A working stop interlock does not turn a DRAFT template into a reviewed profile.
   hand-back is an A2 outcome, not required historical proof before the first A2.
   Old v1 profiles/flags are rejected rather than silently reinterpreted.
 
-Do not run any networked target during offline preparation. Actual A1a/A1b/A2
+### A3 balance hold (offline implementation only, 2026-09-15)
+
+- `g1_arm_balance_hold_execute` is built only when real-output targets are
+  explicitly enabled. No robot execution has been performed.
+- The profile and executable are stage-bound: A3 accepts only
+  `g1_arm_balance_hold_site_v1` plus permit
+  `A3_GROUNDED_BALANCE_HOLD_ONLY`; A2 accepts only its A2 schema and permit.
+- A3 requires the operator to establish grounded, stationary self-balance first.
+  It only monitors FSM 500 and publishes the arm message; it never calls
+  `Start()`, `SetFsmId`, `ReleaseMode`, `rt/lowcmd`, or a walking API.
+- A3's weight-1 and 3/5/3-second envelope is separate from A2's weight-0.5
+  hard cap. Initial gains remain the field-proven conservative `kp=20, kd=1`,
+  not the larger simulation gains.
+
+Do not run any networked target during offline preparation. Actual A1a/A1b/A2/A3
 commands are intentionally kept in the field guide, next to their human gates.

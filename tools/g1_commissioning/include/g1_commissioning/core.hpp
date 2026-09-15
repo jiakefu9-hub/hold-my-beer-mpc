@@ -27,7 +27,13 @@ constexpr std::array<const char*, kArmSlotCount> kArmSlotNames{
     "waist_yaw", "waist_roll", "waist_pitch",
 };
 
+enum class ProfileKind {
+    kA2HoistedStatic,
+    kA3GroundedBalanceHold,
+};
+
 struct SiteProfile {
+    ProfileKind kind{ProfileKind::kA2HoistedStatic};
     std::string schema;
     bool synthetic_fixture{false};
     std::string robot_id;
@@ -42,6 +48,8 @@ struct SiteProfile {
     bool weight_scope_confirmed{false};
     bool invalid_slots_confirmed{false};
     bool locked_stand_mode_confirmed{false};
+    bool regular_motion_mode_confirmed{false};
+    bool grounded_self_balance_confirmed{false};
     // Pre-test procedure reviews, NOT claims of previous hardware test success.
     // Unknown firmware loss behavior must be treated as potentially persistent
     // output; review an independent operator response and prohibit auto-resume.
@@ -55,10 +63,12 @@ struct SiteProfile {
     std::uint8_t expected_mode_machine{0};
     std::array<bool, kArmSlotCount> valid_slots{};
     std::string invalid_slot_policy;
+    int required_fsm{4};
     std::size_t selected_slot{0};
 
     double offset_rad{0.0};
     double max_velocity_rad_s{0.0};
+    std::array<double, kArmSlotCount> target_q{};
     std::array<double, kArmSlotCount> kp{};
     std::array<double, kArmSlotCount> kd{};
     std::array<double, kArmSlotCount> q_min{};
@@ -74,9 +84,12 @@ struct SiteProfile {
     double runtime_max_abs_dq_rad_s{0.0};
     double max_selected_tracking_error_rad{0.0};
     double max_unselected_drift_rad{0.0};
+    double max_all_tracking_error_rad{0.0};
     double deadline_tolerance_ms{0.0};
     double total_timeout_s{0.0};
 };
+
+[[nodiscard]] bool IsA3BalanceHold(const SiteProfile& profile) noexcept;
 
 struct StateSample {
     bool synthetic_fixture{false};

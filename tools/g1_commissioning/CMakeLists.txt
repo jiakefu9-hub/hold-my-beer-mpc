@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(G1_COMMISSIONING_BUILD_DEVICE_QUERY
     "Build the networked A1 getter-only query executable" OFF)
 option(G1_COMMISSIONING_BUILD_REAL_OUTPUT
-    "Build the explicit A2 rt/arm_sdk output executable" OFF)
+    "Build the explicit A2/A3 rt/arm_sdk output executables" OFF)
 option(G1_COMMISSIONING_BUILD_MODE_STEP
     "Build explicit A1b one-shot damping/locked-standing RPC tool" OFF)
 set(UNITREE_SDK2_DIR "/home/fjk/g1_ws/unitree_sdk2" CACHE PATH
@@ -68,6 +68,13 @@ if(G1_COMMISSIONING_BUILD_REAL_OUTPUT)
         g1_commissioning_device_state unitree_sdk2)
     target_compile_options(g1_arm_static_execute PRIVATE
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    add_executable(g1_arm_balance_hold_execute src/arm_static_execute_main.cpp)
+    target_compile_definitions(g1_arm_balance_hold_execute PRIVATE
+        G1_A3_BALANCE_HOLD_EXECUTABLE=1)
+    target_link_libraries(g1_arm_balance_hold_execute PRIVATE
+        g1_commissioning_device_state unitree_sdk2)
+    target_compile_options(g1_arm_balance_hold_execute PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
 
 include(CTest)
@@ -94,6 +101,7 @@ if(BUILD_TESTING)
 
     set(test_profile "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/synthetic_profile.conf")
     set(test_state "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/synthetic_state.conf")
+    set(test_a3_profile "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/synthetic_a3_profile.conf")
     add_test(NAME g1_profile_migration_rejection
         COMMAND "${CMAKE_COMMAND}"
             -DPREVIEW=$<TARGET_FILE:g1_arm_static_preview>
@@ -102,7 +110,7 @@ if(BUILD_TESTING)
             -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_profile_migration.cmake)
     add_test(NAME g1_commissioning_core
-        COMMAND g1_commissioning_core_test "${test_profile}" "${test_state}")
+        COMMAND g1_commissioning_core_test "${test_profile}" "${test_a3_profile}" "${test_state}")
     add_test(NAME g1_commissioning_preview
         COMMAND "${CMAKE_COMMAND}"
             -DPREVIEW=$<TARGET_FILE:g1_arm_static_preview>
