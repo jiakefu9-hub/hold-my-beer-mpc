@@ -27,8 +27,9 @@
 - profile 与 executable 不匹配时拒绝；synthetic fixture 永久拒绝真实输出。
 - publisher 前：field-reviewed profile、连续新鲜状态、FSM 500、人工
   `EXECUTE <robot_id>`，随后再收集一轮新状态。
-- 运行时继续检查 FSM 500、遥控器 L2+B、CRC、状态新鲜度、tick 回退、raw mode、
-  关节范围、反馈速度、跟踪误差、deadline 和 DDS write。
+- 运行时检查 FSM 500、遥控器 L2+B、CRC、100 ms 状态新鲜度、tick 回退、有限数值和
+  DDS write。A3 不以反馈速度、跟踪误差、raw mode、统一 ±1.2 rad 角度范围或单次
+  deadline 迟到中止；这些值仅记录。A2 的既有 gate 未改变。
 - L2+B 或 FSM 离开 500 时停止正常写入且不再发最后一帧；这仍是软件联锁，
   不是独立硬件急停或固件失联安全认证。
 
@@ -40,12 +41,23 @@
 - synthetic A3 preview：553 行（1 行 profile 摘要 + 552 帧），计划时长 11 秒，
   明确报告 `real_output_profile_gate_passed=false`。
 - 覆盖：3/5/3 秒相位、weight 0/0.5/1/0、从非零启动姿态插值到零、
-  A3 weight 超限、非零目标、FSM 非 500、A2/A3 联锁条件。
+  A3 weight 超限、非零目标、FSM 非 500、A2/A3 联锁条件；另用极端但有限的
+  `q=5 rad`、`dq=100 rad/s` 和 raw mode 255 验证这些值不会触发 A3 gate。
 
 ## 下次现场尚需取得的事实
 
 1. 在实际原地自主平衡状态查询并保存 `fsm_id`；只有读回 500 才使用本 A3 入口。
-2. 保存该状态的新 LowState snapshot，填写实际 `mode_pr/mode_machine`，不能照抄模板示例值。
+2. 保存该状态的新 LowState snapshot，用于离线 preview；raw mode 只记录，不再作为 A3 gate。
 3. 从模板复制新的 field profile，逐项审阅后再做离线 preview；模板自身保持 DRAFT。
 4. A3 真机结果须另建 session，记录视频、profile、JSONL、实际关节跟踪、是否平顺交还；
    本记录不能当作 A3 硬件通过证明。
+
+## 下次附加 IMU yaw 实验
+
+- 开机时整机朝场地左向；网络可用后尽早开始既有 H1 state-only 长时采集。
+- 依次保留开机朝左、FSM 500 朝左、内置运控转到前向、朝前运行 A3 四个稳定窗口。
+- H1 保存 `rt/secondary_imu` torso 四元数/RPY/gyro/raw accel 与关节状态；A3 JSONL
+  保存同机 monotonic 时间，现场视频提供物理朝向标签。二者事后按时间对齐。
+- 重点比较 wrap 后的 torso yaw 差值及 waist yaw；不使用 IMU 推断平移位置原点。
+- 官方资料未确认目标固件的 yaw 零点建立时刻；结果按“支持／不支持某假设”记录，
+  不把一次约 90°变化直接写成已经证明世界坐标系定义。
