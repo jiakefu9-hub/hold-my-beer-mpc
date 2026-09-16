@@ -49,6 +49,30 @@ endif()
 
 message(STATUS "commissioning source/capability isolation verified")
 
+foreach(source IN ITEMS PHASE_PROBE RAW_CAPTURE RAW_CAPTURE_HEADER)
+    if(DEFINED ${source})
+        file(READ "${${source}}" readonly_capture)
+        foreach(forbidden IN ITEMS "ChannelPublisher" "LowCmd_" "rt/arm_sdk" "rt/lowcmd"
+                "ROBOT_API_ID_LOCO_SET_" "ReleaseMode" "SetFsmId" "SetVelocity")
+            if(readonly_capture MATCHES "${forbidden}")
+                message(FATAL_ERROR "${source} contains output capability: ${forbidden}")
+            endif()
+        endforeach()
+    endif()
+endforeach()
+if(DEFINED WALK_CAPTURE)
+    file(READ "${WALK_CAPTURE}" walk_capture)
+    foreach(forbidden IN ITEMS "rt/lowcmd" "ReleaseMode" "SetFsmId" "SelectMode" "LocoClient"
+            "ROBOT_API_ID_LOCO_SET_FSM" "ROBOT_API_ID_LOCO_SWITCH_TO_")
+        if(walk_capture MATCHES "${forbidden}")
+            message(FATAL_ERROR "walk collector crosses motion boundary: ${forbidden}")
+        endif()
+    endforeach()
+    if(NOT build_file MATCHES "G1_COMMISSIONING_BUILD_WALK_CAPTURE.*OFF")
+        message(FATAL_ERROR "walking output must default OFF")
+    endif()
+endif()
+
 if(DEFINED FSM_MONITOR)
     file(READ "${FSM_MONITOR}" fsm_monitor)
     foreach(forbidden IN ITEMS "ChannelPublisher" "LowCmd_" "rt/arm_sdk" "rt/lowcmd"

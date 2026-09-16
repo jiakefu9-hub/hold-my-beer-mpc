@@ -1,0 +1,38 @@
+# Copy and review for this walking session. Existing A3 arm schema/pose/gates
+# are reused; a separate executable and explicit permit authorize locomotion.
+# The operator establishes grounded stationary Regular Motion Mode first.
+schema=g1_arm_balance_hold_site_v1
+synthetic_fixture=false
+robot_id=UNSET
+model_name=UNSET
+joint_layout=g1_23_arm5
+confirmed_by=UNSET
+loco_service=sport
+profile_status=DRAFT
+hardware_identity_confirmed=false
+mapping_confirmed=false
+weight_scope_confirmed=false
+invalid_slots_confirmed=false
+regular_motion_mode_confirmed=false
+grounded_self_balance_confirmed=false
+loss_response_plan_reviewed=false
+normal_release_plan_reviewed=false
+emergency_procedure_confirmed=false
+no_competing_user_publishers_confirmed=false
+safety_parameters_confirmed=false
+valid_slots=0,1,2,3,4,5,6,7,8,9,10
+invalid_slot_policy=zero
+required_fsm=500
+# Same static pose as the last world-upright A3 trial; not dynamic stabilization.
+target_q=-0.06981317007977318,-0.017453292519943295,0,-0.1413716694115407,0,-0.06981317007977318,0.017453292519943295,0,-0.1361356816555577,0,0,0,0
+kp=20,20,20,20,20,20,20,20,20,20,20,0,0
+kd=1,1,1,1,1,1,1,1,1,1,1,0,0
+# Arm plan 3 + 13 + 3 = 19 s; walk is only t=[5,13).
+max_weight=1
+weight_rate_per_s=0.3333333333333333
+hold_s=13
+control_period_ms=20
+state_timeout_ms=100
+startup_wait_s=5
+startup_valid_samples=50
+total_timeout_s=20

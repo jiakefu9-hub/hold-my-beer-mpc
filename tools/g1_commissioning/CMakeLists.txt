@@ -11,6 +11,8 @@ option(G1_COMMISSIONING_BUILD_REAL_OUTPUT
     "Build the explicit A2/A3 rt/arm_sdk output executables" OFF)
 option(G1_COMMISSIONING_BUILD_MODE_STEP
     "Build explicit A1b one-shot damping/locked-standing RPC tool" OFF)
+option(G1_COMMISSIONING_BUILD_WALK_CAPTURE
+    "Build explicit timed arm plus velocity-output raw collector" OFF)
 set(UNITREE_SDK2_DIR "/home/fjk/g1_ws/unitree_sdk2" CACHE PATH
     "Pinned external Unitree SDK2 source directory")
 
@@ -25,7 +27,7 @@ target_compile_options(g1_arm_static_preview PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
 if(G1_COMMISSIONING_BUILD_DEVICE_QUERY OR G1_COMMISSIONING_BUILD_REAL_OUTPUT
-   OR G1_COMMISSIONING_BUILD_MODE_STEP)
+   OR G1_COMMISSIONING_BUILD_MODE_STEP OR G1_COMMISSIONING_BUILD_WALK_CAPTURE)
     if(NOT EXISTS "${UNITREE_SDK2_DIR}/CMakeLists.txt")
         message(FATAL_ERROR "UNITREE_SDK2_DIR is invalid: ${UNITREE_SDK2_DIR}")
     endif()
@@ -43,7 +45,18 @@ if(G1_COMMISSIONING_BUILD_DEVICE_QUERY OR G1_COMMISSIONING_BUILD_REAL_OUTPUT
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
 
+if(G1_COMMISSIONING_BUILD_DEVICE_QUERY OR G1_COMMISSIONING_BUILD_WALK_CAPTURE)
+    add_library(g1_raw_capture src/raw_capture.cpp)
+    target_link_libraries(g1_raw_capture PUBLIC g1_commissioning_device_state)
+    target_compile_options(g1_raw_capture PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+endif()
+
 if(G1_COMMISSIONING_BUILD_DEVICE_QUERY)
+    add_executable(g1_phase_probe src/phase_probe_main.cpp)
+    target_link_libraries(g1_phase_probe PRIVATE g1_raw_capture)
+    target_compile_options(g1_phase_probe PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     add_executable(g1_commissioning_query src/query_main.cpp)
     target_link_libraries(g1_commissioning_query PRIVATE
         g1_commissioning_device_state unitree_sdk2)
@@ -82,8 +95,36 @@ if(G1_COMMISSIONING_BUILD_REAL_OUTPUT)
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
 
+if(G1_COMMISSIONING_BUILD_WALK_CAPTURE)
+    add_executable(g1_walk_capture src/walk_capture_main.cpp)
+    target_link_libraries(g1_walk_capture PRIVATE g1_raw_capture)
+    target_compile_options(g1_walk_capture PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(g1_timed_capture_test tests/timed_capture_test.cpp)
+    target_link_libraries(g1_timed_capture_test PRIVATE g1_commissioning_core)
+    add_test(NAME g1_timed_capture_plan
+        COMMAND g1_timed_capture_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/synthetic_a3_profile.conf
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/synthetic_state.conf)
+    if(TARGET g1_raw_capture)
+        add_executable(g1_raw_capture_test tests/raw_capture_test.cpp)
+        target_link_libraries(g1_raw_capture_test PRIVATE g1_raw_capture)
+        add_test(NAME g1_raw_capture_journal
+            COMMAND g1_raw_capture_test ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
+    if(TARGET g1_walk_capture)
+        add_test(NAME g1_walk_capture_cli_rejection
+            COMMAND ${CMAKE_COMMAND}
+                -DEXECUTABLE=$<TARGET_FILE:g1_walk_capture>
+                -DPROFILE=${CMAKE_CURRENT_SOURCE_DIR}/profiles/timed_walk_capture.template
+                -DSYNTHETIC=${CMAKE_CURRENT_SOURCE_DIR}/tests/data/synthetic_a3_profile.conf
+                -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/must_not_create_walk_capture
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_walk_capture_cli.cmake)
+    endif()
     if(G1_COMMISSIONING_BUILD_REAL_OUTPUT)
         add_executable(g1_arm_stop_device_test tests/arm_stop_device_test.cpp)
         target_link_libraries(g1_arm_stop_device_test PRIVATE
@@ -129,6 +170,10 @@ if(BUILD_TESTING)
             -DPREVIEW=${CMAKE_CURRENT_SOURCE_DIR}/src/preview_main.cpp
             -DQUERY=${CMAKE_CURRENT_SOURCE_DIR}/src/query_main.cpp
             -DIMU_OBSERVER=${CMAKE_CURRENT_SOURCE_DIR}/src/imu_zero_observer_main.cpp
+            -DPHASE_PROBE=${CMAKE_CURRENT_SOURCE_DIR}/src/phase_probe_main.cpp
+            -DRAW_CAPTURE=${CMAKE_CURRENT_SOURCE_DIR}/src/raw_capture.cpp
+            -DRAW_CAPTURE_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/include/g1_commissioning/raw_capture.hpp
+            -DWALK_CAPTURE=${CMAKE_CURRENT_SOURCE_DIR}/src/walk_capture_main.cpp
             -DMODE_STEP=${CMAKE_CURRENT_SOURCE_DIR}/src/mode_step_main.cpp
             -DEXECUTE=${CMAKE_CURRENT_SOURCE_DIR}/src/arm_static_execute_main.cpp
             -DFSM_MONITOR=${CMAKE_CURRENT_SOURCE_DIR}/include/g1_commissioning/device_fsm_monitor.hpp
