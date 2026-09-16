@@ -264,10 +264,12 @@ SiteProfile LoadSiteProfile(const std::string& path) {
         Take(values, "safety_parameters_confirmed"),
         "safety_parameters_confirmed");
 
-    profile.expected_mode_pr = ParseByte(
-        Take(values, "expected_mode_pr"), "expected_mode_pr");
-    profile.expected_mode_machine = ParseByte(
-        Take(values, "expected_mode_machine"), "expected_mode_machine");
+    if (profile.kind == ProfileKind::kA2HoistedStatic) {
+        profile.expected_mode_pr = ParseByte(
+            Take(values, "expected_mode_pr"), "expected_mode_pr");
+        profile.expected_mode_machine = ParseByte(
+            Take(values, "expected_mode_machine"), "expected_mode_machine");
+    }
     profile.valid_slots = ParseValidSlots(Take(values, "valid_slots"));
     profile.invalid_slot_policy = Take(values, "invalid_slot_policy");
     if (profile.kind == ProfileKind::kA2HoistedStatic) {
@@ -289,10 +291,12 @@ SiteProfile LoadSiteProfile(const std::string& path) {
     }
     profile.kp = ParseDoubleArray<kArmSlotCount>(Take(values, "kp"), "kp");
     profile.kd = ParseDoubleArray<kArmSlotCount>(Take(values, "kd"), "kd");
-    profile.q_min = ParseDoubleArray<kArmSlotCount>(
-        Take(values, "q_min"), "q_min");
-    profile.q_max = ParseDoubleArray<kArmSlotCount>(
-        Take(values, "q_max"), "q_max");
+    if (profile.kind == ProfileKind::kA2HoistedStatic) {
+        profile.q_min = ParseDoubleArray<kArmSlotCount>(
+            Take(values, "q_min"), "q_min");
+        profile.q_max = ParseDoubleArray<kArmSlotCount>(
+            Take(values, "q_max"), "q_max");
+    }
     profile.max_weight = ParseDouble(
         Take(values, "max_weight"), "max_weight");
     profile.weight_rate_per_s = ParseDouble(
@@ -306,26 +310,22 @@ SiteProfile LoadSiteProfile(const std::string& path) {
         Take(values, "startup_wait_s"), "startup_wait_s");
     profile.startup_valid_samples = ParseSize(
         Take(values, "startup_valid_samples"), "startup_valid_samples");
-    profile.startup_max_abs_dq_rad_s = ParseDouble(
-        Take(values, "startup_max_abs_dq_rad_s"),
-        "startup_max_abs_dq_rad_s");
-    profile.runtime_max_abs_dq_rad_s = ParseDouble(
-        Take(values, "runtime_max_abs_dq_rad_s"),
-        "runtime_max_abs_dq_rad_s");
     if (profile.kind == ProfileKind::kA2HoistedStatic) {
+        profile.startup_max_abs_dq_rad_s = ParseDouble(
+            Take(values, "startup_max_abs_dq_rad_s"),
+            "startup_max_abs_dq_rad_s");
+        profile.runtime_max_abs_dq_rad_s = ParseDouble(
+            Take(values, "runtime_max_abs_dq_rad_s"),
+            "runtime_max_abs_dq_rad_s");
         profile.max_selected_tracking_error_rad = ParseDouble(
             Take(values, "max_selected_tracking_error_rad"),
             "max_selected_tracking_error_rad");
         profile.max_unselected_drift_rad = ParseDouble(
             Take(values, "max_unselected_drift_rad"),
             "max_unselected_drift_rad");
-    } else {
-        profile.max_all_tracking_error_rad = ParseDouble(
-            Take(values, "max_all_tracking_error_rad"),
-            "max_all_tracking_error_rad");
+        profile.deadline_tolerance_ms = ParseDouble(
+            Take(values, "deadline_tolerance_ms"), "deadline_tolerance_ms");
     }
-    profile.deadline_tolerance_ms = ParseDouble(
-        Take(values, "deadline_tolerance_ms"), "deadline_tolerance_ms");
     profile.total_timeout_s = ParseDouble(
         Take(values, "total_timeout_s"), "total_timeout_s");
 
@@ -430,31 +430,30 @@ ValidationResult ValidateProfile(
         AddIf(result, !(profile.weight_rate_per_s > 0.0 &&
                         profile.weight_rate_per_s <= kA3HardWeightRateLimitPerS),
               "A3 weight_rate_per_s must be in (0, 0.5]");
-        AddIf(result, !(profile.hold_s >= 0.0 && profile.hold_s <= 10.0),
-              "A3 hold_s must be in [0, 10]");
-        AddIf(result, !(profile.max_all_tracking_error_rad > 0.0 &&
-                        profile.max_all_tracking_error_rad <= 0.5),
-              "A3 max_all_tracking_error_rad must be in (0, 0.5]");
+        AddIf(result, !(profile.hold_s >= 0.0 && profile.hold_s <= 20.0),
+              "A3 hold_s must be in [0, 20]");
     }
     AddIf(result, !(profile.control_period_ms >= 4.0 &&
                     profile.control_period_ms <= 20.0),
           "control_period_ms must be in [4, 20]");
+    const double state_timeout_cap_ms = a3 ? 100.0 : 20.0;
     AddIf(result, !(profile.state_timeout_ms > 0.0 &&
-                    profile.state_timeout_ms <= 20.0),
-          "state_timeout_ms must be in (0, 20]");
+                    profile.state_timeout_ms <= state_timeout_cap_ms),
+          a3 ? "A3 state_timeout_ms must be in (0, 100]"
+             : "state_timeout_ms must be in (0, 20]");
     AddIf(result, !(profile.startup_wait_s > 0.0 &&
                     profile.startup_wait_s <= 10.0),
           "startup_wait_s must be in (0, 10]");
     AddIf(result, profile.startup_valid_samples < 10U ||
                       profile.startup_valid_samples > 500U,
           "startup_valid_samples must be in [10, 500]");
-    AddIf(result, !(profile.startup_max_abs_dq_rad_s > 0.0 &&
-                    profile.startup_max_abs_dq_rad_s <= 0.2),
-          "startup_max_abs_dq_rad_s must be in (0, 0.2]");
-    AddIf(result, !(profile.runtime_max_abs_dq_rad_s > 0.0 &&
-                    profile.runtime_max_abs_dq_rad_s <= 0.5),
-          "runtime_max_abs_dq_rad_s must be in (0, 0.5]");
     if (!a3) {
+        AddIf(result, !(profile.startup_max_abs_dq_rad_s > 0.0 &&
+                        profile.startup_max_abs_dq_rad_s <= 0.2),
+              "startup_max_abs_dq_rad_s must be in (0, 0.2]");
+        AddIf(result, !(profile.runtime_max_abs_dq_rad_s > 0.0 &&
+                        profile.runtime_max_abs_dq_rad_s <= 0.5),
+              "runtime_max_abs_dq_rad_s must be in (0, 0.5]");
         AddIf(result, !(profile.max_selected_tracking_error_rad > 0.0 &&
                         profile.max_selected_tracking_error_rad <= 0.2),
               "max_selected_tracking_error_rad must be in (0, 0.2]");
@@ -462,15 +461,17 @@ ValidationResult ValidateProfile(
                         profile.max_unselected_drift_rad <= 0.2),
               "max_unselected_drift_rad must be in (0, 0.2]");
     }
-    AddIf(result, !(profile.deadline_tolerance_ms >= 0.0 &&
-                    profile.deadline_tolerance_ms <=
-                        profile.control_period_ms),
-          "deadline_tolerance_ms must be in [0, control_period_ms]");
+    if (!a3) {
+        AddIf(result, !(profile.deadline_tolerance_ms >= 0.0 &&
+                        profile.deadline_tolerance_ms <=
+                            profile.control_period_ms),
+              "deadline_tolerance_ms must be in [0, control_period_ms]");
+    }
     AddIf(result, !(profile.total_timeout_s > 0.0 &&
                     profile.total_timeout_s <= kHardTotalTimeoutS),
           "total_timeout_s must be in (0, 30]");
     AddIf(result, !Finite(profile.kp) || !Finite(profile.kd) ||
-                      !Finite(profile.q_min) || !Finite(profile.q_max),
+                      (!a3 && (!Finite(profile.q_min) || !Finite(profile.q_max))),
           "profile arrays must be finite");
 
     for (std::size_t slot = 0; slot < kArmSlotCount; ++slot) {
@@ -484,21 +485,26 @@ ValidationResult ValidateProfile(
             AddIf(result, !(profile.kd[slot] > 0.0 &&
                             profile.kd[slot] <= kHardKdLimit),
                   prefix + "kd must be in (0, 5]");
-            AddIf(result, !(profile.q_min[slot] < profile.q_max[slot] &&
-                            profile.q_min[slot] >= -2.0 * kPi &&
-                            profile.q_max[slot] <= 2.0 * kPi),
-                  prefix + "q limits are invalid");
-            if (a3) {
-                AddIf(result, profile.target_q[slot] != 0.0,
-                      prefix + "A3 target_q must be zero");
-                AddIf(result, profile.target_q[slot] < profile.q_min[slot] ||
-                                  profile.target_q[slot] > profile.q_max[slot],
-                      prefix + "target_q is outside q limits");
+            if (!a3) {
+                AddIf(result, !(profile.q_min[slot] < profile.q_max[slot] &&
+                                profile.q_min[slot] >= -2.0 * kPi &&
+                                profile.q_max[slot] <= 2.0 * kPi),
+                      prefix + "q limits are invalid");
+            } else {
+                // Reviewed photo-pose envelope; all other axes remain zero.
+                const double min_target = (slot == 0U || slot == 5U)
+                    ? -4.0 * kPi / 180.0
+                    : ((slot == 3U || slot == 8U) ? -10.0 * kPi / 180.0
+                       : (slot == 1U ? -kPi / 180.0 : 0.0));
+                const double max_target = slot == 6U ? kPi / 180.0 : 0.0;
+                AddIf(result, !(profile.target_q[slot] >= min_target &&
+                                profile.target_q[slot] <= max_target),
+                      prefix + "A3 target_q outside reviewed photo-pose envelope");
             }
         } else {
             AddIf(result, profile.kp[slot] != 0.0 || profile.kd[slot] != 0.0 ||
-                              profile.q_min[slot] != 0.0 ||
-                              profile.q_max[slot] != 0.0,
+                              (!a3 && (profile.q_min[slot] != 0.0 ||
+                                       profile.q_max[slot] != 0.0)),
                   prefix + "invalid slots must have zero kp/kd/q limits");
             AddIf(result, a3 && profile.target_q[slot] != 0.0,
                   prefix + "invalid slots must have zero target_q");
@@ -566,6 +572,7 @@ ValidationResult ValidateState(
     bool startup_check,
     bool require_real_state) {
     ValidationResult result;
+    const bool a3 = IsA3BalanceHold(profile);
     AddIf(result, require_real_state && state.synthetic_fixture,
           "synthetic state is forbidden for real output");
     AddIf(result, !state.crc_valid, "LowState CRC is invalid");
@@ -582,10 +589,12 @@ ValidationResult ValidateState(
         AddIf(result, age_ms > profile.state_timeout_ms,
               "state is stale");
     }
-    AddIf(result, state.mode_pr != profile.expected_mode_pr,
-          "mode_pr does not match the confirmed raw value");
-    AddIf(result, state.mode_machine != profile.expected_mode_machine,
-          "mode_machine does not match the confirmed raw value");
+    if (!a3) {
+        AddIf(result, state.mode_pr != profile.expected_mode_pr,
+              "mode_pr does not match the confirmed raw value");
+        AddIf(result, state.mode_machine != profile.expected_mode_machine,
+              "mode_machine does not match the confirmed raw value");
+    }
     AddIf(result, !Finite(state.q) || !Finite(state.dq),
           "state q/dq contains non-finite values");
 
@@ -594,15 +603,17 @@ ValidationResult ValidateState(
             continue;
         }
         const std::size_t motor = kArmMotorIndices[slot];
-        AddIf(result,
-              state.q[motor] < profile.q_min[slot] ||
-                  state.q[motor] > profile.q_max[slot],
-              std::string(kArmSlotNames[slot]) + " is outside q limits");
-        const double dq_limit = startup_check
-                                    ? profile.startup_max_abs_dq_rad_s
-                                    : profile.runtime_max_abs_dq_rad_s;
-        AddIf(result, std::abs(state.dq[motor]) > dq_limit,
-              std::string(kArmSlotNames[slot]) + " exceeds dq limit");
+        if (!a3) {
+            AddIf(result,
+                  state.q[motor] < profile.q_min[slot] ||
+                      state.q[motor] > profile.q_max[slot],
+                  std::string(kArmSlotNames[slot]) + " is outside q limits");
+            const double dq_limit = startup_check
+                                        ? profile.startup_max_abs_dq_rad_s
+                                        : profile.runtime_max_abs_dq_rad_s;
+            AddIf(result, std::abs(state.dq[motor]) > dq_limit,
+                  std::string(kArmSlotNames[slot]) + " exceeds dq limit");
+        }
     }
     if (!IsA3BalanceHold(profile) && startup_check &&
         profile.selected_slot < kArmSlotCount &&
@@ -624,18 +635,15 @@ ValidationResult ValidateRuntimeTracking(
     const CommandFrame& command) {
     ValidationResult result;
     const bool a3 = IsA3BalanceHold(profile);
+    if (a3) {
+        return result;
+    }
     for (std::size_t slot = 0; slot < kArmSlotCount; ++slot) {
         if (!profile.valid_slots[slot]) {
             continue;
         }
         const std::size_t motor = kArmMotorIndices[slot];
-        if (a3) {
-            AddIf(result,
-                  std::abs(state.q[motor] - command.q[slot]) >
-                      profile.max_all_tracking_error_rad,
-                  std::string(kArmSlotNames[slot]) +
-                      " exceeded A3 tracking error limit");
-        } else if (slot == profile.selected_slot) {
+        if (slot == profile.selected_slot) {
             AddIf(result,
                   std::abs(state.q[motor] - command.q[slot]) >
                       profile.max_selected_tracking_error_rad,

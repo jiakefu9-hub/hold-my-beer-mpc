@@ -11,6 +11,7 @@ procedure and evidence boundaries are in
 | --- | --- | --- | --- |
 | `g1_arm_static_preview` | yes | none; no SDK linked | records offline would-write frames only |
 | `g1_commissioning_query` | no | LowState + four getter RPCs | no LowCmd type or command publisher |
+| `g1_imu_zero_observer` | no | torso IMU + getter-only FSM | continuously logs quaternion/RPY/FSM; no publisher or setter |
 | `g1_commissioning_mode_step` | no | LowState + FSM get/set RPC | one request: 0 to 1, or 1 to 4; no joint publisher |
 | `g1_arm_static_execute` | no | LowState + one publisher | only `rt/arm_sdk`; explicit A2 gates |
 | `g1_arm_balance_hold_execute` | no | LowState + one publisher | only `rt/arm_sdk`; explicit grounded A3/FSM 500 gates |
@@ -26,6 +27,11 @@ The query uses small `Client` subclasses which register only getter IDs. It does
 not use the official `LocoClient::Init`, because that method registers setter IDs
 as well. RPC discovery/request traffic is still network output; “read-only” here
 means it requests data and never calls a motion/mode mutator.
+
+`g1_imu_zero_observer` is built with the same device-query option. It subscribes
+only to `rt/secondary_imu`, registers only the FSM getter, prints quaternion/RPY
+at 5 Hz and writes a new JSONL log. Its field procedure is
+[`IMU_ZERO_REFERENCE_TEST.md`](../../docs/g1_field_validation/IMU_ZERO_REFERENCE_TEST.md).
 
 The separate A1b mode tool is **not read-only**: a mode RPC changes motor behavior.
 It registers only GetFsmId/SetFsmId, accepts only `damp` (1) or `locked-stand` (4),
@@ -92,15 +98,17 @@ review item is explicitly filled and confirmed. Software hard caps (5 degrees,
 ceilings, not manufacturer limits or recommendations.
 
 The separate [`a3_balance_hold.template`](profiles/a3_balance_hold.template) is
-for the next grounded balance test. It targets both Arm5 arms and the single
-waist-yaw joint at SDK coordinate zero. During its 3-second entry, each target
-interpolates from the freshly measured pose to zero while global weight ramps
-from 0 to 1; it holds for 5 seconds, then keeps the zero target while weight
+for the grounded balance test. The current static world-upright pose targets
+shoulder pitch -4 degrees on both arms, shoulder roll left -1/right +1 degree,
+and elbow pitch left -8.1/right -7.8 degrees; other arm axes and the single waist
+yaw remain zero. During its 3-second entry, each target
+interpolates from the freshly measured pose while global weight ramps
+from 0 to 1; it holds for 20 seconds, then keeps the target while weight
 returns to 0 over 3 seconds. The A3 executor does not switch modes or command
 locomotion. It requires continuously observed `GetFsmId()==500`, rejects the A2
-schema/permit, and retains the state, remote L2+B, deadline and manual
-`EXECUTE <robot_id>` gates. The template is `DRAFT`; raw LowState mode bytes
-must be replaced from a fresh FSM-500 query before field use.
+schema/permit, and retains the state, remote L2+B, FSM and manual
+`EXECUTE <robot_id>` gates. The template is `DRAFT`; a fresh FSM-500 query is
+still required before field use.
 
 ## Runtime behavior that needs field review
 
@@ -164,19 +172,61 @@ A working stop interlock does not turn a DRAFT template into a reviewed profile.
   hand-back is an A2 outcome, not required historical proof before the first A2.
   Old v1 profiles/flags are rejected rather than silently reinterpreted.
 
-### A3 balance hold (offline implementation only, 2026-09-15)
+### A3 balance hold (implemented 2026-09-15; first hardware run 2026-09-16)
 
 - `g1_arm_balance_hold_execute` is built only when real-output targets are
-  explicitly enabled. No robot execution has been performed.
+  explicitly enabled. The first FSM-500 hardware run completed its 3/5/3-second
+  plan and normal weight-zero release; see the linked field session record below.
 - The profile and executable are stage-bound: A3 accepts only
   `g1_arm_balance_hold_site_v1` plus permit
   `A3_GROUNDED_BALANCE_HOLD_ONLY`; A2 accepts only its A2 schema and permit.
 - A3 requires the operator to establish grounded, stationary self-balance first.
   It only monitors FSM 500 and publishes the arm message; it never calls
   `Start()`, `SetFsmId`, `ReleaseMode`, `rt/lowcmd`, or a walking API.
-- A3's weight-1 and 3/5/3-second envelope is separate from A2's weight-0.5
-  hard cap. Initial gains remain the field-proven conservative `kp=20, kd=1`,
-  not the larger simulation gains.
+- A3's weight-1 envelope is separate from A2's weight-0.5 hard cap. The current
+  photo profile uses 3/20/3 seconds; the A3-only hold bound is 20 seconds, and a
+  3/20/3-second field repeat completed on 2026-09-16. Initial gains remain the
+  field-proven conservative `kp=20, kd=1`, not the larger simulation gains.
+- A3 deliberately does not abort on measured joint velocity, tracking error,
+  exact LowState `mode_pr/mode_machine`, a shared ±1.2 rad measured-angle
+  envelope, or a single control-thread deadline miss. Those values remain in
+  command/state logs where applicable; delayed A3 cycles resume from the current
+  time without catch-up write bursts. A2 keeps its existing gates unchanged.
+- A3 still requires continuous FSM 500 monitoring, valid finite CRC-checked
+  state no more than 100 ms old, no tick rollback, no L2+B request, successful
+  DDS writes, and a finite profile-bounded plan (11 seconds for the default
+  profile, 26 seconds for the validated 20-second hold). These are the minimal
+  runtime refusal conditions, not hardware safety certification.
+- Hardware evidence and its physical-observation boundary are recorded in
+  [`20260916_A3_HARDWARE.md`](../../docs/g1_field_validation/sessions/20260916_A3_HARDWARE.md).
+
+### Bottle-center endpoint pose
+
+[`endpoint_pose.py`](endpoint_pose.py) performs offline forward kinematics using
+the XML selected by `configs/g1.yaml`, `imu_in_torso` as base, and the actual
+`left_grasp_site` / `right_grasp_site` bottle-center sites. Run it with the existing
+`g1_mpc` Python environment, an execute JSONL, and a concurrent torso observer log:
+
+```bash
+python tools/g1_commissioning/endpoint_pose.py \
+  --execute SESSION/execute.jsonl --imu SESSION/torso_imu.jsonl \
+  --output SESSION/endpoint_pose.jsonl
+```
+
+It reports measured-joint FK position relative to the torso IMU, orientation in
+that base frame, and orientation in the IMU navigation frame. The body-frame
+bottle-Z tilt and world-vertical bottle-Z tilt are separate metrics: current
+pose tuning minimizes the former. Absolute world
+translation is unavailable. IMU samples are matched by host receive time within
+125 ms (the observer logs at about 5 Hz); missing matches produce null world
+poses. This is static-pose evidence, not synchronized acceleration estimation.
+XML and input hashes are stored. Tests:
+`python tools/g1_commissioning/tests/test_endpoint_pose.py`.
+
+The current target envelope allows shoulder pitch [-4,0] degrees, elbow pitch
+[-10,0] degrees, left shoulder roll [-1,0] degree, and right shoulder roll
+[0,+1] degree, with all other targets zero. Legacy zero profiles remain valid.
+See [endpoint frame definition](../../docs/g1_field_validation/ENDPOINT_FRAME.md).
 
 Do not run any networked target during offline preparation. Actual A1a/A1b/A2/A3
 commands are intentionally kept in the field guide, next to their human gates.

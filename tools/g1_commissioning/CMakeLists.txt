@@ -49,6 +49,11 @@ if(G1_COMMISSIONING_BUILD_DEVICE_QUERY)
         g1_commissioning_device_state unitree_sdk2)
     target_compile_options(g1_commissioning_query PRIVATE
         -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    add_executable(g1_imu_zero_observer src/imu_zero_observer_main.cpp)
+    target_link_libraries(g1_imu_zero_observer PRIVATE
+        g1_commissioning_device_state unitree_sdk2)
+    target_compile_options(g1_imu_zero_observer PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
 
 if(G1_COMMISSIONING_BUILD_MODE_STEP)
@@ -123,6 +128,7 @@ if(BUILD_TESTING)
             -DCORE=${CMAKE_CURRENT_SOURCE_DIR}/src/core.cpp
             -DPREVIEW=${CMAKE_CURRENT_SOURCE_DIR}/src/preview_main.cpp
             -DQUERY=${CMAKE_CURRENT_SOURCE_DIR}/src/query_main.cpp
+            -DIMU_OBSERVER=${CMAKE_CURRENT_SOURCE_DIR}/src/imu_zero_observer_main.cpp
             -DMODE_STEP=${CMAKE_CURRENT_SOURCE_DIR}/src/mode_step_main.cpp
             -DEXECUTE=${CMAKE_CURRENT_SOURCE_DIR}/src/arm_static_execute_main.cpp
             -DFSM_MONITOR=${CMAKE_CURRENT_SOURCE_DIR}/include/g1_commissioning/device_fsm_monitor.hpp

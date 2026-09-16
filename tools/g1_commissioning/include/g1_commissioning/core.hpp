@@ -84,7 +84,6 @@ struct SiteProfile {
     double runtime_max_abs_dq_rad_s{0.0};
     double max_selected_tracking_error_rad{0.0};
     double max_unselected_drift_rad{0.0};
-    double max_all_tracking_error_rad{0.0};
     double deadline_tolerance_ms{0.0};
     double total_timeout_s{0.0};
 };

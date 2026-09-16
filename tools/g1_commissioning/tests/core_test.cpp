@@ -251,11 +251,47 @@ void TestA3(
     auto nonzero_target = real;
     nonzero_target.target_q[5] = 0.01;
     CHECK(Contains(gc::ValidateProfile(
-        nonzero_target, gc::ValidationUse::kPreview), "must be zero"));
+        nonzero_target, gc::ValidationUse::kPreview), "photo-pose envelope"));
+    auto photo = real;
+    photo.target_q[0] = photo.target_q[5] = -0.06981317007977318;
+    photo.target_q[3] = photo.target_q[8] = -0.17453292519943295;
+    CHECK(gc::ValidateProfile(photo, gc::ValidationUse::kRealOutput).ok());
+    auto world_photo = photo;
+    world_photo.target_q[1] = -0.017453292519943295;
+    world_photo.target_q[6] = 0.017453292519943295;
+    CHECK(gc::ValidateProfile(world_photo, gc::ValidationUse::kRealOutput).ok());
+    for (const std::size_t slot : {1U, 6U}) {
+        auto outside = world_photo;
+        outside.target_q[slot] *= 1.001;
+        CHECK(!gc::ValidateProfile(outside, gc::ValidationUse::kPreview).ok());
+        outside = world_photo;
+        outside.target_q[slot] *= -1.0;
+        CHECK(!gc::ValidateProfile(outside, gc::ValidationUse::kPreview).ok());
+    }
+    const gc::TrajectoryPlanner photo_planner(photo, state);
+    const auto photo_hold = photo_planner.Sample(3.0);
+    CHECK(std::abs(photo_hold.weight - 1.0) < 1e-12);
+    for (std::size_t slot = 0; slot < gc::kArmSlotCount; ++slot) {
+        CHECK(std::abs(photo_hold.q[slot] - photo.target_q[slot]) < 1e-12);
+    }
+    for (const std::size_t slot : {0U, 3U, 5U, 8U, 9U, 10U, 11U}) {
+        auto outside = photo;
+        outside.target_q[slot] -= 0.001;
+        CHECK(!gc::ValidateProfile(outside, gc::ValidationUse::kPreview).ok());
+    }
     auto excessive_weight = real;
     excessive_weight.max_weight = 1.001;
     CHECK(Contains(gc::ValidateProfile(
         excessive_weight, gc::ValidationUse::kPreview), "max_weight"));
+    auto maximum_hold = real;
+    maximum_hold.hold_s = 20.0;
+    maximum_hold.total_timeout_s = 27.0;
+    CHECK(gc::ValidateProfile(
+        maximum_hold, gc::ValidationUse::kPreview).ok());
+    auto excessive_hold = maximum_hold;
+    excessive_hold.hold_s = 20.001;
+    CHECK(Contains(gc::ValidateProfile(
+        excessive_hold, gc::ValidationUse::kPreview), "hold_s"));
 
     gc::TrajectoryPlanner planner(profile, state);
     CHECK(std::abs(planner.total_duration_s() - 11.0) < 1e-12);
@@ -279,10 +315,17 @@ void TestA3(
     CHECK(done.phase == gc::Phase::kComplete && done.terminal);
     CHECK(done.weight == 0.0);
 
-    auto tracking = state;
-    tracking.q[22] = 0.51;
-    CHECK(Contains(gc::ValidateRuntimeTracking(
-        tracking, profile, state, hold), "A3 tracking"));
+    auto relaxed_state = state;
+    relaxed_state.mode_pr = 255;
+    relaxed_state.mode_machine = 255;
+    for (std::size_t slot = 0; slot <= 10U; ++slot) {
+        relaxed_state.q[gc::kArmMotorIndices[slot]] = 5.0;
+        relaxed_state.dq[gc::kArmMotorIndices[slot]] = 100.0;
+    }
+    CHECK(gc::ValidateState(
+        relaxed_state, profile, 1001000000ULL, true, false).ok());
+    CHECK(gc::ValidateRuntimeTracking(
+        relaxed_state, profile, state, hold).ok());
 }
 
 void TestTimeAndTick() {

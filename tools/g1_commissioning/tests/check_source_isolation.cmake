@@ -76,6 +76,23 @@ if(DEFINED STOP_OBSERVER)
     endforeach()
 endif()
 
+if(DEFINED IMU_OBSERVER)
+    file(READ "${IMU_OBSERVER}" imu_observer)
+    foreach(forbidden IN ITEMS "ChannelPublisher" "LowCmd_" "rt/arm_sdk" "rt/lowcmd"
+                               "ReleaseMode" "SelectMode" "SetFsm" "SetVelocity"
+                               "ROBOT_API_ID_LOCO_SET_")
+        if(imu_observer MATCHES "${forbidden}")
+            message(FATAL_ERROR "IMU observer contains command capability: ${forbidden}")
+        endif()
+    endforeach()
+    foreach(required IN ITEMS "rt/secondary_imu" "FsmGetter"
+                              "publisher_created" "mode_setter_registered")
+        if(NOT imu_observer MATCHES "${required}")
+            message(FATAL_ERROR "IMU observer lacks read-only evidence: ${required}")
+        endif()
+    endforeach()
+endif()
+
 if(DEFINED MODE_STEP)
     file(READ "${MODE_STEP}" mode_step)
     foreach(forbidden IN ITEMS "ChannelPublisher" "LowCmd_" "rt/arm_sdk" "rt/lowcmd"

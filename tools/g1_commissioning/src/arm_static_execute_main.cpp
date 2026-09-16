@@ -381,7 +381,7 @@ int main(int argc, char** argv) {
             const auto state = inbox->Latest();
             const auto stop = interlock->Check(gc::MonotonicNowNs());
             if (!stop.empty()) return InterlockStop(log, stop);
-            if (!gc::DeadlineHealthy(
+            if (!gc::IsA3BalanceHold(profile) && !gc::DeadlineHealthy(
                     scheduled_ns, actual_ns, profile.deadline_tolerance_ms)) {
                 return FaultStop(
                     publisher, log, profile, state ? &*state : nullptr,
@@ -477,7 +477,14 @@ int main(int argc, char** argv) {
                 log.flush();
                 return 0;
             }
-            scheduled += period;
+            if (gc::IsA3BalanceHold(profile)) {
+                // A3 intentionally does not fail on a single scheduling miss.
+                // Schedule from the current iteration instead of issuing a
+                // burst of catch-up writes after a delayed cycle.
+                scheduled = actual + period;
+            } else {
+                scheduled += period;
+            }
         }
     } catch (const std::exception& error) {
         if (log.is_open()) {
