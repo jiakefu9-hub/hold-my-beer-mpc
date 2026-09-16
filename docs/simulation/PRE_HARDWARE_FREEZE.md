@@ -27,7 +27,7 @@ run.sh
 ```
 
 这条链只有一份 MPC 和一份 full-task predictor。平台边界详见
-[ARCHITECTURE.md](ARCHITECTURE.md)。
+[ARCHITECTURE.md](../../ARCHITECTURE.md)。
 
 冻结行为如下：
 
@@ -42,8 +42,8 @@ run.sh
 - 唯一 headline 为 `[0, 8.0 s)`；PD 启动段也包含在 headline 内。
 - MuJoCo 物理周期 2 ms，右臂 MPC 周期 6 ms，下肢策略周期 20 ms。
 
-唯一正式运行命令见 [README.md](README.md)。正式入口必须通过仓库根
-[`run.sh`](run.sh)，不能直接执行 `python main_sim.py`。
+唯一正式运行命令见 [README.md](../../README.md)。正式入口必须通过仓库根
+[`run.sh`](../../run.sh)，不能直接执行 `python main_sim.py`。
 
 ## 2. 冻结资产
 
@@ -127,7 +127,7 @@ async/free-running 均未执行，也不属于当前 freeze 的待办。
 ## 5. 受控 CPU7 证据
 
 轻量、可提交的证据包位于
-[`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/)。
+[`evaluation_summary/full_task_template_v2_final_freeze/`](../../evaluation_summary/full_task_template_v2_final_freeze/)。
 它保存 3 条 nominal 和 3 条 `heldout_pair_02_minus` 受控运行、六份完整
 `perf_intervals.csv`、环境 preflight、安全诊断、聚合结果和代表图。
 

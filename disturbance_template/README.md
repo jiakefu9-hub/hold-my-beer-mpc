@@ -8,7 +8,7 @@
 下肢行走仍由根控制循环加载 `policy/motion.pt` 并执行 Torch 推理。它是 locomotion
 controller，不是已移除的 neural disturbance predictor。
 
-时间语义和在线行为以 [FULL_TASK_TEMPLATE.md](../FULL_TASK_TEMPLATE.md) 为准，
+时间语义和在线行为以 [FULL_TASK_TEMPLATE.md](../docs/simulation/FULL_TASK_TEMPLATE.md) 为准，
 平台边界见 [ARCHITECTURE.md](../ARCHITECTURE.md)。
 
 ## 目录职责

@@ -3,11 +3,11 @@
 状态：**offline code/test validated；H1 仍为 PARTIAL；hardware-unverified**。
 
 2026-09-11：已完成 500 条真实 H1 state-only 采集及离线 trace 审计，软件检查 PASS；
-完整现场/语义验收仍未完成，见 [session 记录](G1_H1_SESSION_20260911.md)。
+完整现场/语义验收仍未完成，见 [session 记录](../g1_field_validation/sessions/20260911_H1.md)。
 
 同日完成 publisher-absent HIL 纯离线复验：CTest 9/9、Python 17/17、两组端到端
 回执审计 PASS；真实 transport/hardware output 均为 0，见
-[HIL 离线验证记录](G1_HIL_OFFLINE_20260911.md)。
+[HIL 离线验证记录](../g1_field_validation/sessions/20260911_HIL_OFFLINE.md)。
 
 本文记录机器人不在现场期间完成的 H2-prep 与 Stage-2 O0/O1。它不替代第一次真实 G1
 只读 session，不修改 `configs/g1_hardware_shadow.yaml` 的 verification flags，也不
@@ -15,7 +15,7 @@
 
 ## 状态 trace 离线审计（H2-prep）
 
-[`right_arm_runtime/hardware_state_replay.py`](right_arm_runtime/hardware_state_replay.py)
+[`right_arm_runtime/hardware_state_replay.py`](../../right_arm_runtime/hardware_state_replay.py)
 读取 state-only inspection 保存的 `raw_state_trace.jsonl`。它检查：
 
 - 35-slot `q/dq/ddq/tau_est`、温度和 IMU 数组的 shape/有限性；
@@ -53,7 +53,7 @@ H1 连接尝试没有产生任何 state sample，不能运行该审计，也不�
 
 ## Future output 离线合同（O0）
 
-[`right_arm_runtime/hardware_output_contract.py`](right_arm_runtime/hardware_output_contract.py)
+[`right_arm_runtime/hardware_output_contract.py`](../../right_arm_runtime/hardware_output_contract.py)
 定义不含发布能力的以下边界：
 
 1. `ValidatedStateIdentity`：session nonce、source sample/timestamp 和 13-slot 当前 q；
@@ -81,8 +81,8 @@ O0 合同和故障注入层，不是 output adapter 已完成。
 
 ## Protocol-v3 与 publisher-absent C++ HIL（O1）
 
-[`right_arm_runtime/unitree_shm.py`](right_arm_runtime/unitree_shm.py) 和
-[`cpp/unitree_arm_adapter/include/unitree_arm_adapter/protocol.hpp`](cpp/unitree_arm_adapter/include/unitree_arm_adapter/protocol.hpp)
+[`right_arm_runtime/unitree_shm.py`](../../right_arm_runtime/unitree_shm.py) 和
+[`cpp/unitree_arm_adapter/include/unitree_arm_adapter/protocol.hpp`](../../cpp/unitree_arm_adapter/include/unitree_arm_adapter/protocol.hpp)
 共用一个锁定的 protocol-v3 ABI：
 
 | 项目 | 大小 / 偏移 |
@@ -107,7 +107,7 @@ Python 唯一的正式全绑定写入口是
 false，然后仍将 `REQUEST_OUTPUT` 保持为 0。普通 `write_*` API 传
 `request_output=True` 会在 Python 端拒绝。
 
-C++ [`unitree_arm_adapter_hil`](cpp/unitree_arm_adapter/src/hil_main.cpp) 固定每 2 ms 执行一次最后边界；
+C++ [`unitree_arm_adapter_hil`](../../cpp/unitree_arm_adapter/src/hil_main.cpp) 固定每 2 ms 执行一次最后边界；
 非 2000 us 的 `--period-us` 会在打开 shared memory 前拒绝：
 
 1. 用 command seqlock sequence 区分新 proposal、未变 slot 的 hold 和重写/replay；

@@ -182,7 +182,7 @@ $$
 ### 4.2 统一 base 扰动预测
 
 完整 predictor、模板资产和实验结论见
-[FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)。本节只定义 MPC 依赖的接口和
+[FULL_TASK_TEMPLATE.md](../simulation/FULL_TASK_TEMPLATE.md)。本节只定义 MPC 依赖的接口和
 时间语义。
 
 控制器每拍先调用 `update(observation)`，再调用 `predict(N, dt)`。正式 factory

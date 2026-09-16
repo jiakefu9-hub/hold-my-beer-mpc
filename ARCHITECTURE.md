@@ -4,11 +4,13 @@
 独立进程，以及上真机时哪些部分会替换。算法、协议和安全门的详细设计不在这里
 重复，见文末链接。
 
-当前状态只有三句话：
+当前状态（现场证据更新至 2026-09-16）：
 
 - **Simulation** 是当前正式、已验证的控制路径；
-- **Shadow** 只允许读取真实 G1 状态，当前仍缺真实机器人证据；
-- **Future / Hardware output** 只有接口和离线准备，未授权、未启用。
+- **Shadow** 只允许读取真实 G1 状态，H1 已有真实采集／审计，完整硬件验收仍未完成；
+- **Future / production Hardware output** 只有接口和离线准备，未授权、未启用；
+- **独立 commissioning** 已验证 A2/A3 Arm SDK 静态／平衡控臂，另有离线就绪的原始行走采集，
+  不运行 MPC，不接通 production adapter。
 
 图中实线表示当前已有的调用或数据路径，虚线表示现场 gate 之后或未来才允许接通
 的路径。
@@ -21,10 +23,14 @@ flowchart LR
   Core["共享控制核心<br/>full-task v2 · continuous-H<br/>运动学 · ArmMPCPolicy"]
   Shadow["Shadow<br/>真实状态只读路径"]
   Hardware["Future / Hardware output<br/>未启用"]
+  Field["独立 commissioning<br/>A2/A3 已实测 · walk capture 待实测"]
+  Robot["真实 G1<br/>保留内置运控"]
 
   Sim <--> Core
   Shadow -. "完整 shadow 仍需现场 gate" .-> Core
   Core -. "proposal，尚未授权输出" .-> Hardware
+  Robot -->|状态 / getter| Field
+  Field -->|受限 Arm SDK / 显式速度工具| Robot
 ```
 
 “共享控制核心”是逻辑边界，不代表一个单独进程。full-task predictor、continuous-H
@@ -116,8 +122,9 @@ C++ bridge 应用层只有 subscriber，没有 `LowCmd`、command topic 或
 `ChannelPublisher`。launcher 每次
 生成非零 ingress session nonce，bridge 把它与 CRC-valid 的 LowState 和配对 torso
 IMU 一起写入 state slot；Python 只读检查也必须核对同一个 nonce、三项 ingress
-flags、两路时间与不超过 5 ms 的 skew。当前仍没有有效真实 G1 样本，所以 H1
-仍是 **PARTIAL**，离线测试和旧的 0-sample 连接失败都不是真实状态验收证据。
+flags、两路时间与不超过 5 ms 的 skew。[2026-09-11 H1](docs/g1_field_validation/sessions/20260911_H1.md)
+已经完成 500/500 真实采集与离线审计；完整硬件语义／物理验收仍未签认，所以
+不能把软件 PASS 写成 `hardware_session_verified=true`，也不能再称“没有真实样本”。
 
 Stage 2 另增了一条 **publisher-absent C++ HIL**，专用于把 Python 产生的
 offline-certified command 经 protocol-v3 送到最后一道 C++ 安全边界。HIL 的
@@ -139,7 +146,22 @@ anchor。新 proposal 必须在有界 cache 中精确命中
 [`right_arm_runtime/unitree_shm.py`](right_arm_runtime/unitree_shm.py)、
 [`cpp/unitree_arm_adapter/src/state_bridge_main.cpp`](cpp/unitree_arm_adapter/src/state_bridge_main.cpp)。
 
-## Future / Hardware：仅保留边界，当前无 output target
+## 独立现场 commissioning：不经过 production adapter
+
+代码集中在 [`tools/g1_commissioning/`](tools/g1_commissioning/README.md)，现场入口在
+[`docs/g1_field_validation/`](docs/g1_field_validation/README.md)。与共享 MPC/HIL 链保持隔离：
+
+- 默认仅构建 SDK-free 离线 preview；查询、模式步骤、A2/A3、行走采集分别 opt-in。
+- H1 和 phase/IMU observer 只读；A1b 是独立模式 RPC；A2/A3 是显式 `rt/arm_sdk` 输出。
+- `g1_walk_capture` 复用 A3 的固定目标／状态门和人工确认，加独立速度 RPC 线程。
+  躯干 IMU／LowState 回调进入有界异步日志队列；FSM、相位查询各在线程中运行，
+  相位结果不决定当前 19 秒时间表。航向目标固定 IMU 世界系 yaw=0。
+- A2/A3 有 [实机结果](docs/g1_field_validation/sessions/README.md)，相位／行走采集只有
+  离线测试；这条支路没有 PID/MPC 真机闭环，不创建 `rt/lowcmd`、不进入 debug。
+
+目录整理只移动文档，不改变这些代码路径、输出许可、SDK 位置或原始证据路径。
+
+## Future / production Hardware：仅保留边界，当前无 output target
 
 ```mermaid
 flowchart LR
@@ -175,7 +197,7 @@ flowchart LR
 ```
 
 仓库已有 protocol-v3、C++ supervisor/13-slot formatter、publisher-absent HIL
-和 receipt，但**没有真实 Unitree command publisher target 或 launcher**。原
+和 receipt，但**该 production adapter 没有真实 Unitree command publisher target 或 launcher**。原
 `dds_main.cpp` 已移除，`UNITREE_ARM_ADAPTER_BUILD_DDS=ON` 会在 CMake 阶段 fail
 closed。这保证 Stage 2 只验证“如果到达 sink 边界会写什么”，而不是在仓库中
 预留一个可被 CLI 误开的真机输出。
@@ -203,10 +225,12 @@ MuJoCo 的 `max_abs_qacc=10 rad/s²` 不能默认照搬成真机 hard-stop；真
 | 路径 | 当前状态 |
 | --- | --- |
 | Simulation：full-task v2 + continuous-H + 24 ms handoff + process | **simulation-validated**；仅限冻结模型、任务和受控运行环境 |
-| H1 state inspection | 代码与离线合同已就绪；无真实 G1 样本，**PARTIAL** |
+| H1 state inspection | 已有真实 500/500 采集及离线审计 PASS；完整硬件语义／物理验收仍为 **PARTIAL** |
 | 完整只读 shadow | H3-offline full-task proposal replay 已通过；真实 G1 launcher 仍受现场配置 gate 阻止且保持 legacy 兼容，**hardware-unverified** |
 | Publisher-absent HIL | protocol-v3、C++ supervisor、2/6 ms hold、fake command sink 和 receipt 已离线实现；DDS/hardware write 固定为 0 |
-| Future hardware output | 真实 publisher target 已移除/禁止构建；**未集成、未授权、hardware-unverified** |
+| 独立 A2/A3 commissioning | FSM 4 静态响应和 FSM 500 双臂 PD／退权已有实测；不代表动态稳杯通过 |
+| 独立 phase/walk capture | 30 秒只读观察和 19 秒定时原始采集离线就绪；**hardware-not-run** |
+| Future production hardware output | adapter 的真实 publisher target 已移除/禁止构建；**未集成、未授权、hardware-unverified** |
 
 ## 架构与代码同步约定
 
@@ -224,12 +248,12 @@ IPC 协议和输出许可；仅修改图或仅修改代码都视为未完成。
 
 ## 详细设计从哪里继续读
 
-- 固定任务、模板与 H：[`FULL_TASK_TEMPLATE.md`](FULL_TASK_TEMPLATE.md)
-- MPC 数学：[`MPC_DESIGN.md`](MPC_DESIGN.md)
-- Simulation process 与计时：[`REALTIME_RUNTIME.md`](REALTIME_RUNTIME.md)、
+- 固定任务、模板与 H：[`FULL_TASK_TEMPLATE.md`](docs/simulation/FULL_TASK_TEMPLATE.md)
+- MPC 数学：[`MPC_DESIGN.md`](docs/design/MPC_DESIGN.md)
+- Simulation process 与计时：[`REALTIME_RUNTIME.md`](docs/simulation/REALTIME_RUNTIME.md)、
   [`right_arm_runtime/README.md`](right_arm_runtime/README.md)
-- Shadow 操作边界：[`HARDWARE_SHADOW.md`](HARDWARE_SHADOW.md)
-- 真机接口和阶段 gate：[`HARDWARE_INTEGRATION_PLAN.md`](HARDWARE_INTEGRATION_PLAN.md)
-- 第一次 H1 现场操作：[`G1_H1_FIELD_RUNBOOK.md`](G1_H1_FIELD_RUNBOOK.md)、
-  [`G1_H1_FIELD_CHECKLIST.md`](G1_H1_FIELD_CHECKLIST.md)
-- 离线准备和现场待验项：[`HARDWARE_OFFLINE_PREPARATION.md`](HARDWARE_OFFLINE_PREPARATION.md)
+- Shadow 操作边界：[`HARDWARE_SHADOW.md`](docs/hardware/HARDWARE_SHADOW.md)
+- 真机接口和阶段 gate：[`HARDWARE_INTEGRATION_PLAN.md`](docs/hardware/HARDWARE_INTEGRATION_PLAN.md)
+- 第一次 H1 现场操作：[`G1_H1_FIELD_RUNBOOK.md`](docs/g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md)、
+  [`G1_H1_FIELD_CHECKLIST.md`](docs/g1_field_validation/h1/G1_H1_FIELD_CHECKLIST.md)
+- 离线准备和现场待验项：[`HARDWARE_OFFLINE_PREPARATION.md`](docs/hardware/HARDWARE_OFFLINE_PREPARATION.md)

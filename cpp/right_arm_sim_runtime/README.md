@@ -102,4 +102,4 @@ right_arm_sim_runtime_worker --print-layout
 CPU 7 affinity、六个单线程数值库环境变量、Torch 和 GC 并非本 worker 自己
 静默修正，而是由正式 launcher 设置、由 `main_sim.py` 在第一个 `mj_step` 前
 同时核对 parent/worker。这个受控 MuJoCo timing 仍不是硬件 hard-RT 证据；见
-[REALTIME_RUNTIME.md](../../REALTIME_RUNTIME.md)。
+[REALTIME_RUNTIME.md](../../docs/simulation/REALTIME_RUNTIME.md)。

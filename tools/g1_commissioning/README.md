@@ -1,9 +1,10 @@
 # G1 Arm SDK commissioning tools
 
-This directory contains isolated A1a/A1b/A2/A3 field tools, not the production hardware
+This directory contains isolated A1a/A1b/A2/A3 and raw walking-capture field tools, not the production hardware
 adapter and not an extension of the publisher-absent HIL. The operator-facing
-procedure and evidence boundaries are in
-[`docs/g1_field_validation/README.md`](../../docs/g1_field_validation/README.md).
+entry and latest evidence index are in
+[`docs/g1_field_validation/README.md`](../../docs/g1_field_validation/README.md);
+the detailed staged procedure is in [RUNBOOK.md](../../docs/g1_field_validation/RUNBOOK.md).
 
 ## Capability separation
 
@@ -16,6 +17,8 @@ procedure and evidence boundaries are in
 | `g1_arm_static_execute` | no | LowState + one publisher | only `rt/arm_sdk`; explicit A2 gates |
 | `g1_arm_balance_hold_execute` | no | LowState + one publisher | only `rt/arm_sdk`; explicit grounded A3/FSM 500 gates |
 | `g1_arm_stop_observe` | no | LowState + FSM getter | three-second stop-monitor observation; no joint publisher |
+| `g1_phase_probe` | no | torso IMU + LowState + FSM/phase getters | 30-second raw observer; no motion/mode output |
+| `g1_walk_capture` | no | raw subscribers + getters + arm publisher + velocity RPC | separate opt-in 19-second arm/forward-walk capture; no mode setter |
 
 All networked targets are opt-in at CMake configure time. Merely running the
 A2 executable without its complete arguments exits before DDS initialization.
@@ -32,6 +35,16 @@ means it requests data and never calls a motion/mode mutator.
 only to `rt/secondary_imu`, registers only the FSM getter, prints quaternion/RPY
 at 5 Hz and writes a new JSONL log. Its field procedure is
 [`IMU_ZERO_REFERENCE_TEST.md`](../../docs/g1_field_validation/IMU_ZERO_REFERENCE_TEST.md).
+
+The new [raw phase/walking capture guide](../../docs/g1_field_validation/RAW_WALK_CAPTURE.md)
+covers the two new tools, build flags, field commands and log schema. The phase
+observer uses `G1_COMMISSIONING_BUILD_DEVICE_QUERY`; the walking collector requires
+the separate `G1_COMMISSIONING_BUILD_WALK_CAPTURE` option (default OFF). Its fixed
+heading target is **IMU navigation-world +X, yaw=0**, never the starting heading.
+It retains raw data throughout the 19-second session; no disturbance template,
+world-frame data conversion, angular-acceleration derivation or MPC runs online.
+The velocity command and heading correction are active only during seconds 5–13.
+Both tools are offline-tested only; no hardware execution has been performed.
 
 The separate A1b mode tool is **not read-only**: a mode RPC changes motor behavior.
 It registers only GetFsmId/SetFsmId, accepts only `damp` (1) or `locked-stand` (4),
@@ -70,7 +83,8 @@ ctest --test-dir /tmp/g1-commissioning-modes --output-on-failure
 Network execution requires the explicitly authorized hoisted A1b procedure in the
 field guide; do not run a valid mode command as an offline build test.
 
-Compile-check all opt-in device targets without running them:
+Compile-check the query and A2/A3 opt-in device targets without running them
+(the walking collector has its own build instructions in the guide above):
 
 ```bash
 cmake -S tools/g1_commissioning -B /tmp/g1-commissioning-full \

@@ -70,7 +70,7 @@ v_W   = W_R_H v_H
 每个 anchor 的整个 54 ms window 固定使用该 anchor 已确定的同一个 H。实现不会
 读取未来 yaw、不会直接线性平均角度或旋转矩阵，也不额外叠加 H 低通滤波。模板
 构建、offline replay 和在线 predictor 共用
-[`FullTaskContinuousHeadingFrame`](disturbance_template/full_task_protocol.py)。
+[`FullTaskContinuousHeadingFrame`](../../disturbance_template/full_task_protocol.py)。
 
 ## 4. 模板怎样建立
 
@@ -92,8 +92,8 @@ policy 和 task-time origin 相同。每条 episode 保存 2 ms strict pre-step 
 
 | 资产 | 仓库路径 | SHA256 |
 |---|---|---|
-| NPZ | [`disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz) | `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4` |
-| manifest | [`disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json) | `6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6` |
+| NPZ | [`disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz`](../../disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz) | `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4` |
+| manifest | [`disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json`](../../disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json) | `6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6` |
 
 manifest 记录 schema/protocol、build/held-out 设计、固定右臂模式、输入资产、轨迹和
 H 诊断。运行时必须同时验证显式路径、两个 checksum、schema、protocol、shape、
@@ -199,9 +199,9 @@ p95/p99/max 是 `3.419/3.630/3.775/4.511 ms`，overrun 为 0。16,074 次 mapper
 `QP fallback=0`、`final_unsafe=0`、`NO_SAFE_TORQUE=0`，无跌倒和 NaN/Inf。
 
 证据入口是
-[`controlled_runs_aggregate.json`](evaluation_summary/full_task_template_v2_final_freeze/controlled_runs_aggregate.json)
+[`controlled_runs_aggregate.json`](../../evaluation_summary/full_task_template_v2_final_freeze/controlled_runs_aggregate.json)
 和
-[`offline_online_parity.json`](evaluation_summary/full_task_template_v2_final_freeze/offline_online_parity/offline_online_parity.json)。
+[`offline_online_parity.json`](../../evaluation_summary/full_task_template_v2_final_freeze/offline_online_parity/offline_online_parity.json)。
 
 ### 8.3 r1 最终冻结复跑
 
@@ -244,19 +244,19 @@ r1 summary 把 task/protocol gate 与 nominal mapping path 分开：两条均为
   超过 MuJoCo 门限 10 而 fail closed。该实验已在 L1-C PARTIAL 后冻结，不进入
   L1-D 或 async/free-running；这不改变 v2 模板数值或正式 zero-delay 基线。
 
-真机适配边界见 [ARCHITECTURE.md](ARCHITECTURE.md)，正式运行环境和完整计时口径见
+真机适配边界见 [ARCHITECTURE.md](../../ARCHITECTURE.md)，正式运行环境和完整计时口径见
 [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)。
 
 ## 10. 关键实现
 
 | 文件 | 职责 |
 |---|---|
-| [`disturbance_template/full_task_protocol.py`](disturbance_template/full_task_protocol.py) | direct-step task clock、2/6/20 ms 网格、continuous-H |
-| [`disturbance_template/full_task_template_asset.py`](disturbance_template/full_task_template_asset.py) | 运行时 NPZ/hash/schema/SO(3) 校验，不依赖 offline builder |
-| [`disturbance_predictor.py`](disturbance_predictor.py) | `FullTaskTemplatePredictor`、严格 anchor 查询与 world-frame horizon |
-| [`disturbance_template/full_task_startup_pd.py`](disturbance_template/full_task_startup_pd.py) | 24 ms fixed-PD handoff 和诊断 |
-| [`disturbance_template/full_task_recording.py`](disturbance_template/full_task_recording.py) | 2 ms strict pre-step raw/schema/manifest |
-| [`disturbance_template/full_task_fixed_pd_collector.py`](disturbance_template/full_task_fixed_pd_collector.py) | 固定右臂 PD 的 full-task episode 采集 |
-| [`disturbance_template/full_task_template_builder.py`](disturbance_template/full_task_template_builder.py) | 6 ms window、SO(3) 均值、template/held-out 离线构建 |
-| [`disturbance_template/full_task_online_parity.py`](disturbance_template/full_task_online_parity.py) | held-out offline-online replay parity |
-| [`main_sim.py`](main_sim.py) | 正式任务、process runtime、headline 与控制质量记录 |
+| [`disturbance_template/full_task_protocol.py`](../../disturbance_template/full_task_protocol.py) | direct-step task clock、2/6/20 ms 网格、continuous-H |
+| [`disturbance_template/full_task_template_asset.py`](../../disturbance_template/full_task_template_asset.py) | 运行时 NPZ/hash/schema/SO(3) 校验，不依赖 offline builder |
+| [`disturbance_predictor.py`](../../disturbance_predictor.py) | `FullTaskTemplatePredictor`、严格 anchor 查询与 world-frame horizon |
+| [`disturbance_template/full_task_startup_pd.py`](../../disturbance_template/full_task_startup_pd.py) | 24 ms fixed-PD handoff 和诊断 |
+| [`disturbance_template/full_task_recording.py`](../../disturbance_template/full_task_recording.py) | 2 ms strict pre-step raw/schema/manifest |
+| [`disturbance_template/full_task_fixed_pd_collector.py`](../../disturbance_template/full_task_fixed_pd_collector.py) | 固定右臂 PD 的 full-task episode 采集 |
+| [`disturbance_template/full_task_template_builder.py`](../../disturbance_template/full_task_template_builder.py) | 6 ms window、SO(3) 均值、template/held-out 离线构建 |
+| [`disturbance_template/full_task_online_parity.py`](../../disturbance_template/full_task_online_parity.py) | held-out offline-online replay parity |
+| [`main_sim.py`](../../main_sim.py) | 正式任务、process runtime、headline 与控制质量记录 |

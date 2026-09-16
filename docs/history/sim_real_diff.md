@@ -1,5 +1,9 @@
 # 仿真与真机差异记录
 
+> 历史笔记：保留当时的推导和候选方案，不作为当前现场操作指令。
+> 当前运行路径见 [架构](../../ARCHITECTURE.md)，实机已确认的坐标系与结果见
+> [真机已知结论](../g1_field_validation/KNOWN_RESULTS.md)。
+
 ## 1. 四元数与 IMU 运动量来源不同
 
 当前仿真里使用的 `torso_quaternion` 不是从 XML 里的 IMU 传感器直接读出来的，而是直接来自 MuJoCo 引擎状态 `d.xquat[torso_id]`，表示 `torso_link` 相对于 MuJoCo 世界系的姿态。当前模型中的 `imu_in_torso` 只配置了 `gyro` 和 `accelerometer`，没有直接输出 quaternion 的传感器项，所以仿真里的四元数本质上是引擎真值，不是 IMU 原始测量。

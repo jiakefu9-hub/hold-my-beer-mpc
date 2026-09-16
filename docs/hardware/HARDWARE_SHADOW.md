@@ -8,14 +8,14 @@
 不是最终仿真方案的真机迁移，更不是已经完成的真机闭环。
 
 当前冻结仿真、实时环境和平台边界分别见
-[PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)、
-[REALTIME_RUNTIME.md](REALTIME_RUNTIME.md) 和
-[ARCHITECTURE.md](ARCHITECTURE.md)。两部分共用接口、Unitree 官方实现核对和
+[PRE_HARDWARE_FREEZE.md](../simulation/PRE_HARDWARE_FREEZE.md)、
+[REALTIME_RUNTIME.md](../simulation/REALTIME_RUNTIME.md) 和
+[ARCHITECTURE.md](../../ARCHITECTURE.md)。两部分共用接口、Unitree 官方实现核对和
 H0-H3/O0-O4 阶段门见
 [HARDWARE_INTEGRATION_PLAN.md](HARDWARE_INTEGRATION_PLAN.md)。
 第一次真实 G1 操作请按
-[H1 现场操作手册](G1_H1_FIELD_RUNBOOK.md) 和
-[一页速查表](G1_H1_FIELD_CHECKLIST.md) 执行。
+[H1 现场操作手册](../g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md) 和
+[一页速查表](../g1_field_validation/h1/G1_H1_FIELD_CHECKLIST.md) 执行。
 
 ## 安全边界
 
@@ -220,7 +220,7 @@ hardware-unverified。
 
 ## 与 publisher-absent HIL 的边界
 
-[`unitree_arm_adapter_hil`](cpp/unitree_arm_adapter/src/hil_main.cpp) 是另一个无 Unitree SDK/
+[`unitree_arm_adapter_hil`](../../cpp/unitree_arm_adapter/src/hil_main.cpp) 是另一个无 Unitree SDK/
 publisher 的 C++ 进程，用 protocol-v3 command/state/receipt 验证未来 final-sink 合同。
 它复用 paired-state 数据语义，但不是真实 G1 shadow launcher：当前通过的
 只是 synthetic/offline fixture、C++ supervisor、精确 source-state cache、6 ms

@@ -22,7 +22,7 @@ H1 只读取机器人状态。它**不需要**机器人站立、行走、摆臂�
 控制例程“试出来”。
 
 2026-09-11 软件观察更新：已取得 500 条真实配对状态，H1 采集及离线审计 PASS，见
-[本次 session 记录](G1_H1_SESSION_20260911.md)。本次为用户描述的坐姿/damping 只读
+[本次 session 记录](../sessions/20260911_H1.md)。本次为用户描述的坐姿/damping 只读
 采集，不等同于下文要求的完整物理现场验收，也不表示机器人已可接受控制输出。
 
 ### 1.1 为什么手册要求调试模式，而 H1 不进入
@@ -396,8 +396,8 @@ H1 的物理现场接受还要求：
 - 电脑 evidence 已保存；成功或失败都没有继续 H2/H3/MPC/output。
 
 程序显示 PASS 也不证明型号、关节索引/正负号、mode、IMU frame 或主动控制安全已经
-验证。技术验收继续参考 [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md) 和
-[HARDWARE_INTEGRATION_PLAN.md](HARDWARE_INTEGRATION_PLAN.md)，不在现场物理指南中展开。
+验证。技术验收继续参考 [HARDWARE_SHADOW.md](../../hardware/HARDWARE_SHADOW.md) 和
+[HARDWARE_INTEGRATION_PLAN.md](../../hardware/HARDWARE_INTEGRATION_PLAN.md)，不在现场物理指南中展开。
 
 ## 13. 发给 Codex 的现场交接文字
 

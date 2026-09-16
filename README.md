@@ -5,7 +5,21 @@
 绝对时间查询；神经扰动预测路线已经冻结并从当前源码移除。下肢行走仍使用仓库内
 的 Torch RL policy，这与已删除的 neural disturbance predictor 是两件不同的事。
 
-当前正式结论只来自受控 MuJoCo 仿真，不是真机闭环或硬实时证据。
+当前正式 MPC 稳杯结论来自受控 MuJoCo 仿真，不是真机 MPC 闭环或硬实时证据。
+另已完成 G1 的只读状态采集、A2 静态响应、A3 平衡控臂和 IMU 零点观察；
+这些独立现场结果不等于生产 MPC 输出链已经开放。
+
+## 从哪里开始
+
+- 查文件放在哪里：[文档总导航](docs/README.md)。
+- 准备做真机实验：[G1 现场入口](docs/g1_field_validation/README.md)。
+- 回顾这两天的成果：[已知结论](docs/g1_field_validation/KNOWN_RESULTS.md)、
+  [按日期查实验记录](docs/g1_field_validation/sessions/README.md)。
+- 下一步采真实扰动：[30 秒相位观察与 19 秒原始行走采集](docs/g1_field_validation/RAW_WALK_CAPTURE.md)
+  （程序离线就绪，尚未真机执行）。
+- 查程序／运行边界：[工具导航](tools/README.md)、[运行时架构](ARCHITECTURE.md)。
+
+以下是当前冻结的**仿真**方案，与真机原始采集的时间表和坐标系约定分开使用。
 
 ## 冻结方案
 
@@ -119,7 +133,7 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认
 这记录为当前冻结控制链对 2 ms MPC-result age 的边缘敏感性，而不是实现错误或
 真机安全门结论。实验已在该停止门收束：不进入 L1-D，不继续 4 ms held-out、
 完整任务或 async/free-running。设计、结果和证据路径见
-[EXPERIMENTAL_MPC_LATENCY_PLAN.md](EXPERIMENTAL_MPC_LATENCY_PLAN.md)。
+[EXPERIMENTAL_MPC_LATENCY_PLAN.md](docs/simulation/EXPERIMENTAL_MPC_LATENCY_PLAN.md)。
 
 ## 运行时架构
 
@@ -128,14 +142,17 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认
 
 - **Simulation** 是当前正式路径：Python 拥有 MuJoCo，独立 C++ worker 执行右臂
   RNEA、mapper 和 executor；
-- **Shadow** 只读真实状态，当前 H1 为 PARTIAL；共享 full-task core 已通过
+- **Shadow** 只读真实状态，H1 已有 500/500 真实采集与审计 PASS，完整硬件语义／
+  现场验收仍为 PARTIAL；共享 full-task core 已通过
   synthetic/replay H3-offline proposal 测试，现场 launcher 仍受 gate 限制；
 - **Publisher-absent HIL** 用 protocol-v3 把 offline-certified command 送到 C++
   supervisor 和 recording command sink，只记录 would-write/receipt，DDS write 和
   hardware output 始终为 0；
-- **Future / Hardware output** 尚未授权。Stage 2 已移除/禁止构建真实
+- **Future / production Hardware output** 尚未授权。Stage 2 已移除/禁止构建真实
   command publisher target；真机安全合同也不会直接照搬 MuJoCo 的
   `max_abs_qacc=10 rad/s²`。
+- **独立现场工具** 位于 `tools/g1_commissioning/`：A2/A3 已实测 `rt/arm_sdk`，
+  新 phase/walk collector 仅离线就绪；不经过上述生产 adapter，不运行 MPC。
 
 Hardware IPC 现为 protocol-v3：3328 B 的 POSIX shared memory 包含 command、
 paired-state 和完整 receipt 三个 seqlock slot。state bridge 启动时绑定显式非零
@@ -144,7 +161,7 @@ deadline、13-slot mask 和状态机；一个 6 ms proposal 只能在相对 `0/2
 的三拍内保持，且必须在有界 cache 精确命中它绑定的 source state。
 production policy 默认未验证、未授权，因而不可 arming。详见
 [ARCHITECTURE.md](ARCHITECTURE.md) 和
-[HARDWARE_OFFLINE_PREPARATION.md](HARDWARE_OFFLINE_PREPARATION.md)。
+[HARDWARE_OFFLINE_PREPARATION.md](docs/hardware/HARDWARE_OFFLINE_PREPARATION.md)。
 
 唯一的进程、IPC、数据流和平台替换地图见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 若入口、进程/worker、IPC、模块边界或 Simulation/Shadow/Hardware 路径变化，
@@ -152,32 +169,32 @@ production policy 默认未验证、未授权，因而不可 arming。详见
 
 ## 推荐阅读顺序
 
-1. [FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)：固定任务协议、continuous-H、
+1. [FULL_TASK_TEMPLATE.md](docs/simulation/FULL_TASK_TEMPLATE.md)：固定任务协议、continuous-H、
    模板 schema、在线查询、24 ms handoff 与证据边界。
 2. [ARCHITECTURE.md](ARCHITECTURE.md)：共享控制核心、MuJoCo adapter、只读 hardware
    shadow 与未来真机输出边界。
-3. [PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)：冻结门槛、安全结论及真机前缺口。
-4. [MPC_DESIGN.md](MPC_DESIGN.md)：右臂 MPC 数学、QP 和执行合同。
-5. [HEADING_CONTROL.md](HEADING_CONTROL.md)：direct-step planned/runtime command、20 ms 命令更新
+3. [PRE_HARDWARE_FREEZE.md](docs/simulation/PRE_HARDWARE_FREEZE.md)：冻结门槛、安全结论及真机前缺口。
+4. [MPC_DESIGN.md](docs/design/MPC_DESIGN.md)：右臂 MPC 数学、QP 和执行合同。
+5. [HEADING_CONTROL.md](docs/simulation/HEADING_CONTROL.md)：direct-step planned/runtime command、20 ms 命令更新
    和 heading controller 与 continuous-H 的边界。
-6. [REALTIME_RUNTIME.md](REALTIME_RUNTIME.md)：完整 6 ms 计时口径和 CPU 7 环境。
-7. [HARDWARE_INTEGRATION_PLAN.md](HARDWARE_INTEGRATION_PLAN.md)：Unitree 官方
+6. [REALTIME_RUNTIME.md](docs/simulation/REALTIME_RUNTIME.md)：完整 6 ms 计时口径和 CPU 7 环境。
+7. [HARDWARE_INTEGRATION_PLAN.md](docs/hardware/HARDWARE_INTEGRATION_PLAN.md)：Unitree 官方
    契约核对、state/proposal/command/receipt 接口和 H0-H3/O0-O4 阶段门。
-8. [G1_H1_FIELD_RUNBOOK.md](G1_H1_FIELD_RUNBOOK.md) 与
-   [G1_H1_FIELD_CHECKLIST.md](G1_H1_FIELD_CHECKLIST.md)：第一次真实 G1 H1 只读现场
+8. [G1_H1_FIELD_RUNBOOK.md](docs/g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md) 与
+   [G1_H1_FIELD_CHECKLIST.md](docs/g1_field_validation/h1/G1_H1_FIELD_CHECKLIST.md)：第一次真实 G1 H1 只读现场
    操作手册与一页速查表。
-9. [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)、
-   [HARDWARE_OFFLINE_PREPARATION.md](HARDWARE_OFFLINE_PREPARATION.md)：只读路径的
+9. [HARDWARE_SHADOW.md](docs/hardware/HARDWARE_SHADOW.md)、
+   [HARDWARE_OFFLINE_PREPARATION.md](docs/hardware/HARDWARE_OFFLINE_PREPARATION.md)：只读路径的
    实现边界、证据和禁止声明。
 10. [disturbance_template/README.md](disturbance_template/README.md)：v2 的离线来源、
    schema、parity 和本地产物边界。
 11. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
     输出链。
 
-[G1 下一次现场协同验证方案与历史证据索引](docs/g1_field_validation/README.md)：
-悬挂静态 Arm SDK → 落地平衡 → 有条件的动态协同；仅为待执行方案，不代表输出已解禁。
+[G1 现场实验入口](docs/g1_field_validation/README.md)统一链接操作方案、已知结论和
+历史证据；A2/A3 已有实机结果，行走采集仍待实测。之后 PID/MPC 真机实验按同一规则归档。
 
-[CHALLENGE.md](CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。
+[CHALLENGE.md](docs/history/CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。
 
 ## Git、证据与历史恢复
 

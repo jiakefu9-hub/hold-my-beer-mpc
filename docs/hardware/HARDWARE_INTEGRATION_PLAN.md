@@ -152,8 +152,8 @@ robot-side `kp/kd` 必须为零。绝不能在两侧重复计算 PD。
 单用途入口：
 
 第一次上机应先阅读详细
-[H1 现场操作手册](G1_H1_FIELD_RUNBOOK.md)，现场使用
-[一页速查表](G1_H1_FIELD_CHECKLIST.md)。
+[H1 现场操作手册](../g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md)，现场使用
+[一页速查表](../g1_field_validation/h1/G1_H1_FIELD_CHECKLIST.md)。
 
 ```bash
 cd /home/fjk/g1_ws/hold-my-beer-mpc

@@ -3,8 +3,8 @@
 > **归档状态（2026-08-12）**：本文记录 2026-07 阶段的 PID/LQR/MPC 递进计划和
 > 当时的实验判断，已经被当前实现取代。不要把下文的 phase-template-only、旧
 > horizon、旧 timing 或 LQR 待办当作现行方案。当前事实基准是
-> [PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)，仓库入口见
-> [README.md](README.md)。
+> [PRE_HARDWARE_FREEZE.md](../simulation/PRE_HARDWARE_FREEZE.md)，仓库入口见
+> [README.md](../../README.md)。
 
 ## 2026-08-12 历史快照
 
@@ -12,14 +12,14 @@
   `mpc_q_ee_alpha=0.0005`。
 - 当时的 predictor 路线包含 `template/neural/hybrid_residual/zoh`；这是已删除
   neural disturbance predictor 前的历史结论，不是当前正式方案。当前设计见
-  [FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)。
+  [FULL_TASK_TEMPLATE.md](../simulation/FULL_TASK_TEMPLATE.md)。
 - 200 ms causal dataset、absolute/residual MLP、unseen schedule 泛化和 payload
   mismatch 诊断已经完成；当前不继续调预测精度，也没有开始 GRU。
 - 当时的 PREEMPT_RT target timing gate 结果只作为历史实验记录；当前冻结
   证据是 CPU 7 / `SCHED_OTHER` 受控 MuJoCo 运行，不是真机硬实时证明。
 - hardware shadow 仍为 **硬件未验证（hardware-unverified）**，没有控制输出端。
   第一次真机工作从只读状态契约确认开始，见
-  [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)。
+  [HARDWARE_SHADOW.md](../hardware/HARDWARE_SHADOW.md)。
 
 以下内容原样保留作为实验决策历史。
 
@@ -80,7 +80,7 @@
 - **末端姿态偏差对比曲线**：比较第 1 组到第 4 组在末端姿态稳定性上的差异。这里的姿态基准不采用挂瓶后自然下垂形成的被动稳态姿态，而采用手臂理论上的 `0` 度目标姿态（即理想水平姿态）作为参考基准。
 - **末端线加速度对比曲线**：直接反映“水会不会洒出来”的风险。
 - **末端角速度/角加速度对比曲线**：工程展示上可优先看角速度；若严格对应
-  [MPC_DESIGN.md](MPC_DESIGN.md) 代价函数，则应重点统计角加速度项。
+  [MPC_DESIGN.md](../design/MPC_DESIGN.md) 代价函数，则应重点统计角加速度项。
 - **控制输入或关节力矩平滑度对比**：评估不同控制器是否引入额外抖动。
 
 这样定义的姿态误差同时包含了挂瓶负载引起的静态下垂误差和行走过程中的动态扰动误差，因此更能直接体现 PID、LQR、MPC 等控制算法将末端拉回理想目标姿态附近的能力。

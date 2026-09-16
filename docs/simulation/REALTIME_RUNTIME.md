@@ -76,7 +76,7 @@ MPC_CONTROL_CPU=7 MPC_CONTROL_NUM_THREADS=1 ./run.sh \
 完整 6 ms interval 从一个右臂 MPC anchor 的状态/预测开始，覆盖 MPC policy、
 两次 DDQ-to-torque 调用及剩余执行路径；不能用 solver-only timing 代替。六条
 CPU 7 受控运行的 compact evidence 位于
-[`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/)：
+[`evaluation_summary/full_task_template_v2_final_freeze/`](../../evaluation_summary/full_task_template_v2_final_freeze/)：
 
 - 7974 个完整 interval，聚合 mean `3.419 ms`，overrun `0`；
 - 16074 次 mapper 调用，未认证输出 `0`；
@@ -173,7 +173,7 @@ cat /proc/cmdline
 
 `run.sh` 仍保留 `MPC_REQUIRE_REALTIME=1` 的低优先级 `SCHED_RR` guard，但它不是
 当前 frozen simulation 命令的一部分。硬件 shadow launcher 会独立检查目标
-环境；详见 [HARDWARE_SHADOW.md](HARDWARE_SHADOW.md)。
+环境；详见 [HARDWARE_SHADOW.md](../hardware/HARDWARE_SHADOW.md)。
 
 ## 证据边界
 

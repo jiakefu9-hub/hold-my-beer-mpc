@@ -2,7 +2,7 @@
 
 本文只描述当前冻结的 MuJoCo 正式路径：`full_task_template v2 + continuous causal-H v2 + 24 ms startup-PD + 右臂 MPC process`。航向控制属于下肢 locomotion policy 的命令输入层；它既不决定右臂何时接管，也不修改 MPC、DDQ-to-torque 或安全认证逻辑。
 
-代码入口与冻结参数见 [`configs/g1.yaml`](configs/g1.yaml)、[`main_sim.py`](main_sim.py)、[`sim_support.py`](sim_support.py)、[`disturbance_template/full_task_protocol.py`](disturbance_template/full_task_protocol.py) 和 [`disturbance_template/full_task_startup_pd.py`](disturbance_template/full_task_startup_pd.py)。
+代码入口与冻结参数见 [`configs/g1.yaml`](../../configs/g1.yaml)、[`main_sim.py`](../../main_sim.py)、[`sim_support.py`](../../sim_support.py)、[`disturbance_template/full_task_protocol.py`](../../disturbance_template/full_task_protocol.py) 和 [`disturbance_template/full_task_startup_pd.py`](../../disturbance_template/full_task_startup_pd.py)。
 
 ## 1. 唯一正式时间线
 
@@ -24,7 +24,7 @@
 - `planned_command` 是绝对 task-time direct-step schedule。`0 <= t < 6.4 s` 使用配置的 nominal command；`t >= 6.4 s` 只把 `vx/vy` 直接置零，保留 nominal `wz=0.0127 rad/s` 作为航向前馈。
 - `runtime_command` 是下肢 policy 真正消费的命令。在每个 20 ms policy 更新点，它先复制 planned command；heading 开启时只把第三维 `wz` 替换为闭环输出，`vx/vy` 不受 heading controller 改写。
 
-因此，`t=6.4 s` 之后“停止”专指平移命令归零，不代表 runtime `wz` 必须为零。planned/runtime 字段的 schema 定义与记录合同见 [`disturbance_template/full_task_recording.py`](disturbance_template/full_task_recording.py)。
+因此，`t=6.4 s` 之后“停止”专指平移命令归零，不代表 runtime `wz` 必须为零。planned/runtime 字段的 schema 定义与记录合同见 [`disturbance_template/full_task_recording.py`](../../disturbance_template/full_task_recording.py)。
 
 ## 3. Heading controller
 
@@ -79,7 +79,7 @@ continuous-H 在 `t=0` 就使用第一个有效 6 ms anchor 的实测 yaw；每�
 - `heading_command_saturated`
 - `planned_command` 与 `runtime_command`
 
-CPU 7 受控证据包位于 [`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/)。其中三次 nominal 的 heading error RMS/最大绝对值均为 `0.011451/0.029599 rad`，三次 `heldout_pair_02_minus` 均为 `0.010899/0.029098 rad`；六条运行的 command saturation fraction 均为 `0`。这些数字来自各运行目录的 `heading_control_diagnostics.json`，而 planned/runtime 的时序图位于 [`representative_plots/`](evaluation_summary/full_task_template_v2_final_freeze/representative_plots/)。它们是受控 MuJoCo 仿真事实，不是真机硬实时或实物航向稳定性证据。
+CPU 7 受控证据包位于 [`evaluation_summary/full_task_template_v2_final_freeze/`](../../evaluation_summary/full_task_template_v2_final_freeze/)。其中三次 nominal 的 heading error RMS/最大绝对值均为 `0.011451/0.029599 rad`，三次 `heldout_pair_02_minus` 均为 `0.010899/0.029098 rad`；六条运行的 command saturation fraction 均为 `0`。这些数字来自各运行目录的 `heading_control_diagnostics.json`，而 planned/runtime 的时序图位于 [`representative_plots/`](../../evaluation_summary/full_task_template_v2_final_freeze/representative_plots/)。它们是受控 MuJoCo 仿真事实，不是真机硬实时或实物航向稳定性证据。
 
 ## 6. 平台边界与限制
 

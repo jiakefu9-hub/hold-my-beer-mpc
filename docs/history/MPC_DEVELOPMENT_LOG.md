@@ -1,10 +1,10 @@
 # 右臂 MPC 开发记录
 
 本文记录右臂 MPC 从设计整理、代码实现到闭环调试的主要决策、依据和实验结果。
-数学定义以 [MPC_DESIGN.md](MPC_DESIGN.md) 为准；本文只回答“当时发现了什么、
+数学定义以 [MPC_DESIGN.md](../design/MPC_DESIGN.md) 为准；本文只回答“当时发现了什么、
 修改了什么、结果怎样、下一步为什么这样改”。早期章节中的 horizon、timing、
 “最终保留”等表述是当时 checkout 的历史快照；当前状态以
-[PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md) 为准。
+[PRE_HARDWARE_FREEZE.md](../simulation/PRE_HARDWARE_FREEZE.md) 为准。
 
 ## 1. 已完成的主要阶段
 
@@ -408,8 +408,8 @@ $$
 本节补记 `disturbance-lab` 分支上的 B0 至 hardware-shadow 历史阶段。
 当时的 `DISTURBANCE_PREDICTOR.md` 已从当前主阅读链删除，仍可从
 `checkpoint/full-task-v2-24ms-20260815` 恢复；当前方案见
-[FULL_TASK_TEMPLATE.md](FULL_TASK_TEMPLATE.md)，当前证据边界见
-[PRE_HARDWARE_FREEZE.md](PRE_HARDWARE_FREEZE.md)。
+[FULL_TASK_TEMPLATE.md](../simulation/FULL_TASK_TEMPLATE.md)，当前证据边界见
+[PRE_HARDWARE_FREEZE.md](../simulation/PRE_HARDWARE_FREEZE.md)。
 
 ### 16.1 B0：统一接口且冻结 template 行为
 

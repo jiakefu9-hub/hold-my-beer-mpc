@@ -148,4 +148,4 @@ binary capability scan。这些都是离线验证，不能提升 H1 或任何 ha
   supervisor/formatter，但不得把 publisher-absent HIL 写成真机输出证据。
 
 更完整的现场阶段见
-[`HARDWARE_INTEGRATION_PLAN.md`](../../HARDWARE_INTEGRATION_PLAN.md)。
+[`HARDWARE_INTEGRATION_PLAN.md`](../../docs/hardware/HARDWARE_INTEGRATION_PLAN.md)。

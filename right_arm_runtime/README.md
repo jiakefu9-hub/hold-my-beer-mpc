@@ -86,7 +86,7 @@ full-task 必须经根目录 `run.sh` 启动。第一个 `mj_step` 前会核对 
 affinity 都严格为 `[7]`、六个数值库线程变量均为 1、Torch intra/inter-op 为
 1、control-loop GC 已关闭、dynamic arming 为 false、startup duration 为
 24 ms 且 handoff anchor 为 4。详见
-[REALTIME_RUNTIME.md](../REALTIME_RUNTIME.md)。
+[REALTIME_RUNTIME.md](../docs/simulation/REALTIME_RUNTIME.md)。
 
 ## Unitree protocol v3
 
@@ -162,6 +162,6 @@ HIL binary 不链接 Unitree SDK，不包含 `LowCmd`、`ChannelPublisher` 或
 `UNITREE_ARM_ADAPTER_BUILD_DDS=ON` 直接 fail closed。production supervisor policy 的现场
 验证和授权字段默认全为 false，因而不可 arming。
 
-详见 [HARDWARE_OFFLINE_PREPARATION.md](../HARDWARE_OFFLINE_PREPARATION.md)。H1
+详见 [HARDWARE_OFFLINE_PREPARATION.md](../docs/hardware/HARDWARE_OFFLINE_PREPARATION.md)。H1
 仍为 PARTIAL；真实 model/index/IMU、arm-weight ownership、release/watchdog 和安全
 阈值必须留到现场验证。

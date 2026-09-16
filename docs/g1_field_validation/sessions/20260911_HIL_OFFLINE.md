@@ -1,7 +1,7 @@
 # Publisher-absent HIL 输出链离线验证（2026-09-11）
 
 结果：**现有离线输出链验证 PASS；真实设备传输/硬件输出均为 0。**
-这是继 [H1 状态采集与审计](G1_H1_SESSION_20260911.md) 后的独立软件验证，全部输入
+这是继 [H1 状态采集与审计](20260911_H1.md) 后的独立软件验证，全部输入
 来自带 synthetic 标记的本地 fixture。未订阅 G1、未使用真实 H1 trace 生成命令，未
 进入 debug、未获取真实 ownership、未运行 MPC，未发送任何 G1 控制命令。
 
@@ -115,7 +115,7 @@ UNITREE_ARM_DRY_RUN=/tmp/g1-publisher-absent-hil-20260911.ggMIwo/unitree_arm_ada
 ```
 
 本次原始 evidence 位于
-[`evaluation/hardware_shadow/publisher_absent_hil/g1_hil_offline_20260911_01/`](evaluation/hardware_shadow/publisher_absent_hil/g1_hil_offline_20260911_01/)：
+[`evaluation/hardware_shadow/publisher_absent_hil/g1_hil_offline_20260911_01/`](../../../evaluation/hardware_shadow/publisher_absent_hil/g1_hil_offline_20260911_01/)：
 
 - `summary.json`：交叉审计结果、源码/二进制/证据 SHA256；
 - `ctest.log` / `ctest.xml` / `python_tests.log`：9 项与 17 项测试结果；
