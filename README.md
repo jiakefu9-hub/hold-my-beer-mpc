@@ -15,8 +15,10 @@
 - 准备做真机实验：[G1 现场入口](docs/g1_field_validation/README.md)。
 - 回顾这两天的成果：[已知结论](docs/g1_field_validation/KNOWN_RESULTS.md)、
   [按日期查实验记录](docs/g1_field_validation/sessions/README.md)。
-- 下一步采真实扰动：[30 秒相位观察与 19 秒原始行走采集](docs/g1_field_validation/RAW_WALK_CAPTURE.md)
-  （程序离线就绪，尚未真机执行）。
+- 下一步采真实扰动：[30 秒相位观察与 21 秒原始行走采集](docs/g1_field_validation/RAW_WALK_CAPTURE.md)
+  （五条有效原始轨迹已采齐，尚未构建模板）。
+- 首次真机 PID：[左臂固定、右臂 PID 的 H0 实验](docs/g1_field_validation/HARDWARE_PID.md)
+  （程序和完整 `[5,18)` 指标已离线就绪，尚未真机运行）。
 - 查程序／运行边界：[工具导航](tools/README.md)、[运行时架构](ARCHITECTURE.md)。
 
 以下是当前冻结的**仿真**方案，与真机原始采集的时间表和坐标系约定分开使用。
@@ -152,7 +154,7 @@ rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认
   command publisher target；真机安全合同也不会直接照搬 MuJoCo 的
   `max_abs_qacc=10 rad/s²`。
 - **独立现场工具** 位于 `tools/g1_commissioning/`：A2/A3 已实测 `rt/arm_sdk`，
-  新 phase/walk collector 仅离线就绪；不经过上述生产 adapter，不运行 MPC。
+  phase observer 已实测且 walk collector 已采齐五条有效轨迹；不经过上述生产 adapter，不运行 MPC。
 
 Hardware IPC 现为 protocol-v3：3328 B 的 POSIX shared memory 包含 command、
 paired-state 和完整 receipt 三个 seqlock slot。state bridge 启动时绑定显式非零
@@ -192,7 +194,8 @@ production policy 默认未验证、未授权，因而不可 arming。详见
     输出链。
 
 [G1 现场实验入口](docs/g1_field_validation/README.md)统一链接操作方案、已知结论和
-历史证据；A2/A3 已有实机结果，行走采集仍待实测。之后 PID/MPC 真机实验按同一规则归档。
+历史证据；A2/A3 与旧版行走采集已有实机结果，真机 PID 程序尚未实测。之后 PID/MPC
+真机实验按同一规则归档。
 
 [CHALLENGE.md](docs/history/CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。
 

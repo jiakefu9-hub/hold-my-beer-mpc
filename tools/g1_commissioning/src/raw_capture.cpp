@@ -92,8 +92,8 @@ std::string RawLowStateJson(const RawLowStateRecord& r) {
     return out.str();
 }
 
-RawJournal::RawJournal(const std::string& directory, std::size_t capacity)
-    : directory_(directory), capacity_(capacity) {
+RawJournal::RawJournal(const std::string& directory, std::size_t capacity, bool record_timing)
+    : directory_(directory), capacity_(capacity), record_timing_(record_timing) {
     if (capacity_ == 0 || !std::filesystem::create_directory(directory_))
         throw std::runtime_error("capture directory must be new; parent must exist: " + directory_);
     output_.open(std::filesystem::path(directory_) / "raw.jsonl");
@@ -103,6 +103,7 @@ RawJournal::RawJournal(const std::string& directory, std::size_t capacity)
 RawJournal::~RawJournal() { Finish(); }
 void RawJournal::Push(RawImuRecord r) { Enqueue(std::move(r)); }
 void RawJournal::Push(RawLowStateRecord r) { Enqueue(std::move(r)); }
+void RawJournal::Push(HostTimingRecord r) { Enqueue(std::move(r)); }
 void RawJournal::Text(std::string json) { Enqueue(std::move(json)); }
 void RawJournal::Enqueue(Record r) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -110,7 +111,7 @@ void RawJournal::Enqueue(Record r) {
         ++dropped_;
         return;
     }
-    queue_.push_back(std::move(r));
+    queue_.push_back({std::move(r), record_timing_ ? MonotonicNowNs() : 0});
     wake_.notify_one();
 }
 void RawJournal::Finish() {
@@ -122,7 +123,7 @@ void RawJournal::Run() noexcept {
     try {
         auto last_flush = std::chrono::steady_clock::now();
         while (true) {
-            Record r;
+            QueuedRecord r;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
                 wake_.wait_for(lock, std::chrono::milliseconds(100),
@@ -136,13 +137,23 @@ void RawJournal::Run() noexcept {
                 r = std::move(queue_.front());
                 queue_.pop_front();
             }
-            std::visit([this](const auto& value) {
+            const auto dequeued = record_timing_ ? MonotonicNowNs() : 0;
+            auto json = std::visit([](const auto& value) -> std::string {
                 using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<T, RawImuRecord>) output_ << RawImuJson(value);
-                else if constexpr (std::is_same_v<T, RawLowStateRecord>) output_ << RawLowStateJson(value);
-                else output_ << value;
-            }, r);
-            output_ << '\n';
+                if constexpr (std::is_same_v<T, RawImuRecord>) return RawImuJson(value);
+                else if constexpr (std::is_same_v<T, RawLowStateRecord>) return RawLowStateJson(value);
+                else if constexpr (std::is_same_v<T, HostTimingRecord>) return HostTimingJson(value);
+                else return value;
+            }, r.data);
+            if (record_timing_) {
+                const auto serialized = MonotonicNowNs();
+                if (json.empty() || json.back() != '}') throw std::runtime_error("expected JSON object");
+                json.pop_back();
+                json += ",\"journal_enqueued_ns\":" + std::to_string(r.enqueued_ns) +
+                    ",\"journal_dequeued_ns\":" + std::to_string(dequeued) +
+                    ",\"journal_serialized_ns\":" + std::to_string(serialized) + "}";
+            }
+            output_ << json << '\n';
             ++written_;
             const auto now = std::chrono::steady_clock::now();
             if (now - last_flush >= std::chrono::milliseconds(100)) {

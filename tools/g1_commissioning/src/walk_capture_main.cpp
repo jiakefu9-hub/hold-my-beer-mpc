@@ -68,6 +68,9 @@ private:
         fields << std::setprecision(17) << ",\"task_elapsed_s\":" << t
             << ",\"vx_m_s\":" << vx << ",\"vy_m_s\":0,\"yaw_rate_rad_s\":" << wz
             << ",\"duration_s\":" << lease << ",\"heading_reference_rad\":" << h.reference
+            << ",\"heading_reference_frozen\":" << (h.reference_frozen ? "true" : "false")
+            << ",\"heading_relative_yaw_rad\":" << h.relative_yaw
+            << ",\"heading_error_rad\":" << h.error
             << ",\"heading_filtered_yaw_rad\":" << h.filtered_yaw
             << ",\"heading_filtered_vertical_rate_rad_s\":" << h.filtered_rate;
         const auto begin = gc::MonotonicNowNs();
@@ -101,12 +104,31 @@ private:
                     const double vertical_rate = -std::sin(pitch) * gyro[0] +
                         std::cos(pitch) * std::sin(roll) * gyro[1] +
                         std::cos(pitch) * std::cos(roll) * gyro[2];
-                    heading.Observe(imu->received_ns, rpy[2], vertical_rate);
-                    h = heading.Current();
+                    const double observation_t =
+                        static_cast<double>(gc::MonotonicNowNs() - epoch_) * 1e-9;
+                    heading.Observe(imu->received_ns, observation_t, rpy[2], vertical_rate);
                 }
                 // Re-evaluate time immediately before each call; never queue an
                 // old nonzero command to be sent after the stop boundary.
                 const double t = static_cast<double>(gc::MonotonicNowNs() - epoch_) * 1e-9;
+                if (t >= gc::TimedWalkPlan::kWalkStart && !heading.ReferenceFrozen()) {
+                    heading.FreezeReference();
+                    h = heading.Current();
+                    std::ostringstream fields;
+                    fields << std::setprecision(17)
+                        << ",\"task_elapsed_s\":" << t
+                        << ",\"yaw0_rad\":" << h.reference
+                        << ",\"h0_from_navigation_world_yaw_rad\":" << -h.reference
+                        << ",\"requested_reference_start_s\":" << gc::CaptureHeading::kReferenceStartS
+                        << ",\"requested_reference_end_s\":" << gc::CaptureHeading::kReferenceEndS
+                        << ",\"reference_sample_count\":" << h.reference_samples
+                        << ",\"reference_first_sample_task_s\":" << h.reference_first_s
+                        << ",\"reference_last_sample_task_s\":" << h.reference_last_s
+                        << ",\"reference_observed_span_s\":" << h.reference_span_s
+                        << ",\"h0_definition\":\"fixed_run_frame_x_along_pre_walk_mean_yaw_z_vertical\"";
+                    journal_->Text(gc::CaptureEvent("heading_reference_frozen", fields.str()));
+                }
+                if (imu && health.empty()) h = heading.Current();
                 const bool walking = !zero_requested_ && !stopped && gc::TimedWalkPlan::Walking(t);
                 if (Send(walking ? gc::TimedWalkPlan::kForwardSpeed : 0.0,
                          walking ? h.correction : 0.0, gc::TimedWalkPlan::Lease(t), t, h) != 0) {
@@ -196,11 +218,13 @@ int Execute(const std::string& nic, const gc::SiteProfile& profile,
     std::filesystem::copy_file(profile_path, std::filesystem::path(journal->directory()) / "arm_profile.conf");
     journal->Text(gc::CaptureEvent("session_start",
         ",\"program\":\"g1_walk_capture\",\"publisher_created\":false,\"mode_setter_registered\":false"
-        ",\"walk_start_s\":5,\"walk_stop_s\":13,\"release_start_s\":16,\"end_s\":19"
-        ",\"speed_m_s\":0.5,\"heading_hold\":true,\"heading_filter_s\":0.8"
-        ",\"heading_target\":\"imu_navigation_world_positive_x\",\"heading_target_yaw_rad\":0"
-        ",\"heading_kp\":0.6,\"heading_kd\":0.1,\"heading_max_rate_rad_s\":0.25"
-        ",\"raw_data_transformed\":false,\"phase_controls_timing\":false"
+        ",\"walk_start_s\":5,\"walk_stop_s\":15,\"release_start_s\":18,\"end_s\":21"
+        ",\"speed_m_s\":0.5,\"heading_hold\":true,\"heading_filter_s\":1"
+        ",\"heading_target\":\"fixed_run_h0_positive_x\""
+        ",\"heading_reference_start_s\":3,\"heading_reference_end_s\":5"
+        ",\"heading_kp\":1,\"heading_kd\":0.1,\"heading_max_rate_rad_s\":0.25"
+        ",\"raw_data_transformed\":false,\"h0_derived_data_requires_postprocess\":true"
+        ",\"phase_controls_timing\":false"
         ",\"network_interface\":\"" + gc::JsonEscape(nic) + "\""));
     journal->Text(gc::ProfileSummaryJson(profile, gc::ValidateProfile(profile, gc::ValidationUse::kRealOutput)));
     unitree::robot::ChannelFactory::Instance()->Init(0, nic);
@@ -209,7 +233,7 @@ int Execute(const std::string& nic, const gc::SiteProfile& profile,
     gc::CaptureStreams streams(journal, inbox, interlock);
     gc::CaptureGetters getters(journal, interlock);
     auto initial = Startup(*inbox, streams, *interlock, *journal, profile, 0);
-    std::cout << "REAL WALK OUTPUT: 3 s arm entry, 2 s wait, 8 s at 0.5 m/s with heading hold,"
+    std::cout << "REAL WALK OUTPUT: 3 s arm entry, 2 s wait, 10 s at 0.5 m/s with heading hold,"
         << " 3 s stop hold, 3 s release. Robot must already balance in FSM 500.\n"
         << "Type exactly: EXECUTE " << profile.robot_id << "\n> " << std::flush;
     std::string reply;
@@ -345,7 +369,8 @@ int main(int argc, char** argv) {
         if (argc == 2 && std::string(argv[1]) == "--help") {
             std::cout << "Usage: g1_walk_capture NIC --profile FIELD_PROFILE --output-dir NEW_DIR"
                 << " --permit-real-output " << kPermit << "\n"
-                << "Real arm AND walking output. 19 s timed plan, IMU world +X heading target (yaw=0)."
+                << "Real arm AND walking output. 21 s timed plan; H0 heading is frozen from"
+                << " mean torso yaw during task seconds [3,5)."
                 << " Operator must establish FSM 500; program never switches modes.\n";
             return 0;
         }

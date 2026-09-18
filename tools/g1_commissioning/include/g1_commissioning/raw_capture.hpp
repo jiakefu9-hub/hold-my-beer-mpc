@@ -1,6 +1,7 @@
 #pragma once
 
 #include "g1_commissioning/device_fsm_monitor.hpp"
+#include "g1_commissioning/host_timing.hpp"
 #include <atomic>
 #include <condition_variable>
 #include <deque>
@@ -36,10 +37,11 @@ std::string CaptureEvent(const std::string& event, const std::string& fields = "
 class RawJournal {
 public:
     explicit RawJournal(const std::string& new_directory,
-                        std::size_t queue_capacity = 8192);
+                        std::size_t queue_capacity = 8192, bool record_timing = false);
     ~RawJournal();
     void Push(RawImuRecord record);
     void Push(RawLowStateRecord record);
+    void Push(HostTimingRecord record);
     void Text(std::string json);
     bool Healthy() const { return !failed_.load() && dropped_.load() == 0; }
     void Finish();  // call after stopping all producers; drains the queue
@@ -47,15 +49,17 @@ public:
     std::uint64_t dropped() const { return dropped_.load(); }
     const std::string& directory() const { return directory_; }
 private:
-    using Record = std::variant<RawImuRecord, RawLowStateRecord, std::string>;
+    using Record = std::variant<RawImuRecord, RawLowStateRecord, HostTimingRecord, std::string>;
+    struct QueuedRecord { Record data; std::uint64_t enqueued_ns; };
     void Enqueue(Record record);
     void Run() noexcept;
     const std::string directory_;
     const std::size_t capacity_;
+    const bool record_timing_;
     std::ofstream output_;
     std::mutex mutex_;
     std::condition_variable wake_;
-    std::deque<Record> queue_;
+    std::deque<QueuedRecord> queue_;
     bool stopping_{false};
     std::atomic<bool> failed_{false};
     std::atomic<std::uint64_t> dropped_{0}, written_{0};

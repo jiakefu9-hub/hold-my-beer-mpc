@@ -153,11 +153,16 @@ anchor。新 proposal 必须在有界 cache 中精确命中
 
 - 默认仅构建 SDK-free 离线 preview；查询、模式步骤、A2/A3、行走采集分别 opt-in。
 - H1 和 phase/IMU observer 只读；A1b 是独立模式 RPC；A2/A3 是显式 `rt/arm_sdk` 输出。
+- `g1_phase_probe` 的主线程在 CPU 7 上按绝对 6 ms 网格只读快照，DDS/RPC/日志线程继承
+  排除该物理核的支持核 affinity。普通 SCHED_OTHER 下记录唤醒、数据年龄、回调入队和
+  原有 getter 往返时间；离线汇总，不量单向 DDS 或电机响应，不运行 PID/MPC。
 - `g1_walk_capture` 复用 A3 的固定目标／状态门和人工确认，加独立速度 RPC 线程。
   躯干 IMU／LowState 回调进入有界异步日志队列；FSM、相位查询各在线程中运行，
-  相位结果不决定当前 19 秒时间表。航向目标固定 IMU 世界系 yaw=0。
-- A2/A3 有 [实机结果](docs/g1_field_validation/sessions/README.md)，相位／行走采集只有
-  离线测试；这条支路没有 PID/MPC 真机闭环，不创建 `rt/lowcmd`、不进入 debug。
+  相位结果不决定当前 21 秒时间表。走前 3–5 秒平均 yaw 被冻结为本轮固定 H0；
+  航向保持以 H0 +X 为目标，离线工具再把全部躯干／骨盆 IMU 样本派生到 H0。
+- A2/A3、相位观察和旧版行走采集有[实机结果](docs/g1_field_validation/sessions/README.md)。
+  独立 `g1_walk_pid.py` 已离线实现“左臂固定、右臂 PID”和完整 `[5,18)` H0 指标，尚未真机运行。
+  这条支路不创建 `rt/lowcmd`、不进入 debug，也不启用 production adapter 或 MPC。
 
 目录整理只移动文档，不改变这些代码路径、输出许可、SDK 位置或原始证据路径。
 
@@ -229,7 +234,8 @@ MuJoCo 的 `max_abs_qacc=10 rad/s²` 不能默认照搬成真机 hard-stop；真
 | 完整只读 shadow | H3-offline full-task proposal replay 已通过；真实 G1 launcher 仍受现场配置 gate 阻止且保持 legacy 兼容，**hardware-unverified** |
 | Publisher-absent HIL | protocol-v3、C++ supervisor、2/6 ms hold、fake command sink 和 receipt 已离线实现；DDS/hardware write 固定为 0 |
 | 独立 A2/A3 commissioning | FSM 4 静态响应和 FSM 500 双臂 PD／退权已有实测；不代表动态稳杯通过 |
-| 独立 phase/walk capture | 30 秒只读观察和 19 秒定时原始采集离线就绪；**hardware-not-run** |
+| 独立 phase/walk capture | 30 秒只读观察已实测；一次吊绳卡住被排除，五条有效原始轨迹已采齐 |
+| 独立真机 PID | 左臂非零 A3 姿态、右臂 PID、固定 H0 与完整 `[5,18)` 评价已离线实现；**hardware-not-run** |
 | Future production hardware output | adapter 的真实 publisher target 已移除/禁止构建；**未集成、未授权、hardware-unverified** |
 
 ## 架构与代码同步约定

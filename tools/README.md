@@ -4,7 +4,7 @@
 
 | 位置 | 用途 | 说明 |
 | --- | --- | --- |
-| [g1_commissioning/](g1_commissioning/README.md) | 独立真机查询、模式步骤、A2/A3、相位和原始行走采集 | 默认无 SDK／网络；设备与输出入口分别显式构建，离线准备不代表已获执行授权 |
+| [g1_commissioning/](g1_commissioning/README.md) | 独立真机查询、A2/A3、原始行走采集和首次 PID | C++ 默认无 SDK／网络；Python PID 也需独立 profile、许可和人工确认；离线准备不代表真机通过 |
 | `realtime/run_hardware_state_inspection.sh` | H1 只读状态检查 | [H1 现场指南](../docs/g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md) |
 | `realtime/audit_hardware_state_trace.py` | 对保存的状态 trace 离线审计 | [H1 结果](../docs/g1_field_validation/sessions/20260911_H1.md) |
 | `realtime/run_hardware_shadow.sh` | 共享核心的 shadow／离线阶段入口 | [Shadow 边界](../docs/hardware/HARDWARE_SHADOW.md)；不是控臂实验启动器 |

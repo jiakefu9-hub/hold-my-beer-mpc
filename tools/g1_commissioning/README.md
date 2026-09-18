@@ -18,9 +18,10 @@ the detailed staged procedure is in [RUNBOOK.md](../../docs/g1_field_validation/
 | `g1_arm_balance_hold_execute` | no | LowState + one publisher | only `rt/arm_sdk`; explicit grounded A3/FSM 500 gates |
 | `g1_arm_stop_observe` | no | LowState + FSM getter | three-second stop-monitor observation; no joint publisher |
 | `g1_phase_probe` | no | torso IMU + LowState + FSM/phase getters | 30-second raw observer; no motion/mode output |
-| `g1_walk_capture` | no | raw subscribers + getters + arm publisher + velocity RPC | separate opt-in 19-second arm/forward-walk capture; no mode setter |
+| `g1_walk_capture` | no | raw subscribers + getters + arm publisher + velocity RPC | separate opt-in 21-second arm/forward-walk capture; no mode setter |
+| `g1_walk_pid.py` | separate Python entry | raw subscribers + FSM getter + arm publisher + velocity RPC | fixed-left/right-PID 21-second H0 experiment; no mode setter or `rt/lowcmd` |
 
-All networked targets are opt-in at CMake configure time. Merely running the
+All networked C++ targets are opt-in at CMake configure time. Merely running the
 A2 executable without its complete arguments exits before DDS initialization.
 Even with valid arguments, each output executable validates its matching field-reviewed profile and consecutive
 fresh states, requires an interactive `EXECUTE <robot_id>` response, revalidates
@@ -39,12 +40,39 @@ at 5 Hz and writes a new JSONL log. Its field procedure is
 The new [raw phase/walking capture guide](../../docs/g1_field_validation/RAW_WALK_CAPTURE.md)
 covers the two new tools, build flags, field commands and log schema. The phase
 observer uses `G1_COMMISSIONING_BUILD_DEVICE_QUERY`; the walking collector requires
-the separate `G1_COMMISSIONING_BUILD_WALK_CAPTURE` option (default OFF). Its fixed
-heading target is **IMU navigation-world +X, yaw=0**, never the starting heading.
-It retains raw data throughout the 19-second session; no disturbance template,
-world-frame data conversion, angular-acceleration derivation or MPC runs online.
-The velocity command and heading correction are active only during seconds 5–13.
-Both tools are offline-tested only; no hardware execution has been performed.
+the separate `G1_COMMISSIONING_BUILD_WALK_CAPTURE` option (default OFF). During
+task seconds 3--5 it circular-means torso yaw and freezes that direction as the
+run's fixed H0 +X before walking. It retains raw data throughout the 21-second
+session; no disturbance template, coordinate conversion, angular-acceleration
+derivation or MPC runs online. `derive_walk_h0.py` subsequently transforms every
+torso and pelvis IMU sample into that fixed H0 without overwriting `raw.jsonl`.
+The velocity command and heading correction are active only during seconds 5–15.
+Both tools' earlier versions have been run on hardware. The phase getter returned
+7301 on the target; the five earlier trajectories used the old world-yaw-zero
+target and are not mixed into the new H0 dataset. Template construction remains offline work.
+
+The separate [hardware PID guide](../../docs/g1_field_validation/HARDWARE_PID.md)
+covers `g1_walk_pid.py`, its fail-closed field profile and
+`analyze_hardware_pid.py`. The left arm retains the established nonzero A3 pose;
+the right arm reuses `ArmPIDPolicy` with measured joints, torso IMU and the
+active XML's `right_grasp_site`. It updates at 20 ms, publishes only Arm SDK
+q/dq references with the existing kp=20/kd=1 device PD, and bounds generated
+right-arm q references to five degrees around the nominal pose. Its headline
+evaluation is the complete `[5,18)` interval from walk start through the
+stop-settle end. The DRAFT template and missing exact permit are rejected before
+DDS initialization. Offline tests do not constitute a hardware PID run.
+
+`g1_phase_probe` additionally defaults to a **6 ms read-only host timing probe on
+CPU 7**, with DDS/RPC/logger threads inheriting a support affinity that excludes
+that physical core and its SMT siblings. `--timing-cpu N` selects another CPU;
+do not taskset the entire process to a single core. It requires SCHED_OTHER and
+does not change kernel, governor, IRQ or realtime scheduler settings. Raw timing
+records include thread/environment snapshots, local state age and logger timing.
+Existing getter timestamps measure application RPC RTT, **not one-way DDS or
+motor-response latency**. The offline standard-library-only
+`analyze_capture_timing.py RAW --output-dir NEW_DIR` produces JSON/Markdown
+statistics; see [timing validation](../../docs/g1_field_validation/TIMING_VALIDATION.md).
+`g1_walk_capture` does not enable this extra probe or change its trajectory.
 
 The separate A1b mode tool is **not read-only**: a mode RPC changes motor behavior.
 It registers only GetFsmId/SetFsmId, accepts only `damp` (1) or `locked-stand` (4),

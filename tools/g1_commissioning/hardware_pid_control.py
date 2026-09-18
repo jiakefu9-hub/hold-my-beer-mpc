@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""Pure control/geometry core for the isolated G1 Arm SDK PID field tool.
+
+This module has no Unitree SDK import and never opens DDS.  It is shared by the
+offline tests, the opt-in device runner, and the offline result analyser.
+"""
+
+from __future__ import annotations
+
+from collections import deque
+from dataclasses import dataclass
+import math
+from pathlib import Path
+import sys
+from typing import Mapping
+
+import numpy as np
+
+from endpoint_pose import EndpointModel, rotation
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+ARM_MOTOR_INDICES = (15, 16, 17, 18, 19, 22, 23, 24, 25, 26, 12, 13, 14)
+WEIGHT_MOTOR_INDEX = 29
+VALID_ARM_SLOTS = tuple(range(11))
+
+ENTRY_END_S = 3.0
+WALK_START_S = 5.0
+WALK_STOP_S = 15.0
+RELEASE_START_S = 18.0
+END_S = 21.0
+FORWARD_SPEED_M_S = 0.5
+
+
+def wrap_angle(value: float) -> float:
+    return math.atan2(math.sin(value), math.cos(value))
+
+
+def yaw_from_quaternion(quaternion_wxyz) -> float:
+    matrix = rotation(quaternion_wxyz)
+    return math.atan2(matrix[1, 0], matrix[0, 0])
+
+
+def vertical_angular_rate(rpy_rad, gyro_imu_rad_s) -> float:
+    """Project local IMU angular velocity onto navigation-frame vertical."""
+    roll, pitch = np.asarray(rpy_rad, dtype=float)[:2]
+    gx, gy, gz = np.asarray(gyro_imu_rad_s, dtype=float)
+    return float(
+        -math.sin(pitch) * gx
+        + math.cos(pitch) * math.sin(roll) * gy
+        + math.cos(pitch) * math.cos(roll) * gz
+    )
+
+
+class FixedH0Heading:
+    """Fixed run heading plus a causal one-second heading-feedback filter."""
+
+    reference_start_s = 3.0
+    reference_end_s = 5.0
+    minimum_reference_span_s = 1.0
+    control_window_s = 1.0
+    kp = 1.0
+    kd = 0.1
+    max_rate = 0.25
+
+    def __init__(self):
+        self._samples = deque()
+        self._reference_sine = 0.0
+        self._reference_cosine = 0.0
+        self._reference_times = []
+        self.reference = None
+
+    def observe(self, received_ns: int, task_s: float, yaw: float, vertical_rate: float):
+        values = (task_s, yaw, vertical_rate)
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError("heading observation must be finite")
+        received_ns = int(received_ns)
+        if self._samples and received_ns <= self._samples[-1][0]:
+            return
+        self._samples.append((received_ns, float(yaw), float(vertical_rate)))
+        window_ns = int(self.control_window_s * 1e9)
+        while len(self._samples) > 1 and received_ns - self._samples[0][0] > window_ns:
+            self._samples.popleft()
+        if (
+            self.reference is None
+            and self.reference_start_s <= task_s < self.reference_end_s
+        ):
+            self._reference_sine += math.sin(yaw)
+            self._reference_cosine += math.cos(yaw)
+            self._reference_times.append(float(task_s))
+
+    def freeze(self) -> float:
+        if self.reference is not None:
+            return self.reference
+        if len(self._reference_times) < 2:
+            raise RuntimeError("H0 needs pre-walk torso-yaw samples")
+        span = self._reference_times[-1] - self._reference_times[0]
+        if span < self.minimum_reference_span_s:
+            raise RuntimeError("H0 needs at least one second of pre-walk yaw samples")
+        self.reference = math.atan2(self._reference_sine, self._reference_cosine)
+        return self.reference
+
+    def current(self) -> dict:
+        if not self._samples:
+            raise RuntimeError("heading needs torso IMU samples")
+        filtered_yaw = math.atan2(
+            sum(math.sin(sample[1]) for sample in self._samples),
+            sum(math.cos(sample[1]) for sample in self._samples),
+        )
+        filtered_rate = float(np.mean([sample[2] for sample in self._samples]))
+        frozen = self.reference is not None
+        relative = wrap_angle(filtered_yaw - self.reference) if frozen else 0.0
+        error = -relative if frozen else 0.0
+        correction = (
+            float(np.clip(self.kp * error - self.kd * filtered_rate,
+                          -self.max_rate, self.max_rate))
+            if frozen else 0.0
+        )
+        first = self._reference_times[0] if self._reference_times else None
+        last = self._reference_times[-1] if self._reference_times else None
+        return {
+            "reference_frozen": frozen,
+            "reference_samples": len(self._reference_times),
+            "reference_first_s": first,
+            "reference_last_s": last,
+            "reference_span_s": 0.0 if first is None else last - first,
+            "reference_rad": 0.0 if self.reference is None else self.reference,
+            "filtered_yaw_rad": filtered_yaw,
+            "relative_yaw_rad": relative,
+            "error_rad": error,
+            "filtered_vertical_rate_rad_s": filtered_rate,
+            "correction_rad_s": correction,
+        }
+
+
+@dataclass(frozen=True)
+class PidParameters:
+    kp_pose: np.ndarray
+    kd_pose: np.ndarray
+    ki_pose: np.ndarray
+    posture_gain: np.ndarray
+    finite_diff_eps: float
+    damping: float
+    integral_limit: float
+    max_dq: float
+    de_g_alpha: float
+    q_offset_limit_rad: np.ndarray
+
+    @classmethod
+    def from_mapping(cls, values: Mapping):
+        def vector(name, count):
+            result = np.asarray(values[name], dtype=float)
+            if result.shape != (count,) or not np.isfinite(result).all():
+                raise ValueError(f"{name} must contain {count} finite values")
+            return result
+
+        result = cls(
+            kp_pose=vector("pid_kp_pose", 2),
+            kd_pose=vector("pid_kd_pose", 2),
+            ki_pose=vector("pid_ki_pose", 2),
+            posture_gain=vector("pid_posture_gain", 5),
+            finite_diff_eps=float(values["pid_finite_diff_eps"]),
+            damping=float(values["pid_damping"]),
+            integral_limit=float(values["pid_integral_limit"]),
+            max_dq=float(values["pid_max_dq"]),
+            de_g_alpha=float(values["pid_de_g_alpha"]),
+            q_offset_limit_rad=np.deg2rad(vector("pid_q_offset_limit_deg", 5)),
+        )
+        scalars = (
+            result.finite_diff_eps,
+            result.damping,
+            result.integral_limit,
+            result.max_dq,
+            result.de_g_alpha,
+        )
+        if not all(math.isfinite(value) and value >= 0.0 for value in scalars):
+            raise ValueError("PID scalar parameters must be finite and non-negative")
+        if result.finite_diff_eps <= 0.0 or result.damping <= 0.0 or result.max_dq <= 0.0:
+            raise ValueError("PID finite-difference, damping and max_dq must be positive")
+        if not 0.0 <= result.de_g_alpha <= 1.0:
+            raise ValueError("pid_de_g_alpha must be in [0,1]")
+        if np.any(result.q_offset_limit_rad <= 0.0) or np.any(
+            result.q_offset_limit_rad > np.deg2rad(5.0) + 1e-12
+        ):
+            raise ValueError("PID q-reference offsets must be in (0,5] degrees")
+        return result
+
+
+class RightArmGravityHelper:
+    """MuJoCo FK helper using the same bottle-center site as simulation."""
+
+    gravity_h0 = np.array([0.0, 0.0, -9.81], dtype=float)
+
+    def __init__(self, model: EndpointModel, arm_slots, yaw0_rad: float):
+        self.model = model
+        self.arm_slots = np.asarray(arm_slots, dtype=float).copy()
+        if self.arm_slots.shape != (13,):
+            raise ValueError("arm_slots must have shape (13,)")
+        self.yaw0_rad = float(yaw0_rad)
+
+    def compute_gravity_error(self, right_q, world_from_body):
+        slots = self.arm_slots.copy()
+        slots[5:10] = np.asarray(right_q, dtype=float)
+        _, body_from_endpoint = self.model.relative(slots)["right"]
+        c, s = math.cos(self.yaw0_rad), math.sin(self.yaw0_rad)
+        h0_from_world = np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]])
+        h0_from_endpoint = h0_from_world @ np.asarray(world_from_body) @ body_from_endpoint
+        return (h0_from_endpoint.T @ self.gravity_h0)[:2]
+
+
+class RightArmHardwarePid:
+    """Simulation PID reused with hardware FK and a reviewed q-reference box."""
+
+    def __init__(self, nominal_right_q, parameters: PidParameters,
+                 model: EndpointModel | None = None, control_dt: float = 0.02):
+        from arm_pid import ArmPIDPolicy
+
+        self.nominal = np.asarray(nominal_right_q, dtype=float).copy()
+        if self.nominal.shape != (5,) or not np.isfinite(self.nominal).all():
+            raise ValueError("nominal_right_q must be five finite angles")
+        self.parameters = parameters
+        self.model = EndpointModel() if model is None else model
+        self.policy = ArmPIDPolicy(
+            default_q=self.nominal,
+            kp_pose=parameters.kp_pose,
+            kd_pose=parameters.kd_pose,
+            ki_pose=parameters.ki_pose,
+            posture_gain=parameters.posture_gain,
+            control_dt=control_dt,
+            finite_diff_eps=parameters.finite_diff_eps,
+            damping=parameters.damping,
+            integral_limit=parameters.integral_limit,
+            max_dq=parameters.max_dq,
+            de_g_alpha=parameters.de_g_alpha,
+        )
+        self.minimum = self.nominal - parameters.q_offset_limit_rad
+        self.maximum = self.nominal + parameters.q_offset_limit_rad
+        self._last_dq = np.zeros(5, dtype=float)
+
+    def reset(self):
+        self.policy.integral_error.fill(0.0)
+        self.policy.prev_e_g = None
+        self.policy.filtered_de_g.fill(0.0)
+        self.policy.q_ref_state = None
+
+    def step(self, arm_slots, imu_quaternion_wxyz, yaw0_rad: float, dt: float):
+        slots = np.asarray(arm_slots, dtype=float)
+        if slots.shape != (13,) or not np.isfinite(slots).all():
+            raise ValueError("arm feedback must be a finite 13-slot vector")
+        world_from_body = rotation(imu_quaternion_wxyz)
+        helper = RightArmGravityHelper(self.model, slots, yaw0_rad)
+        error_before = helper.compute_gravity_error(slots[5:10], world_from_body)
+        q_ref, dq_ref = self.policy.compute_action(
+            {
+                "current_q": slots[5:10],
+                "current_dq": np.asarray(self._last_dq, dtype=float),
+                "torso_rotmat": world_from_body,
+                "dt": float(dt),
+            },
+            {"compute_gravity_error": helper.compute_gravity_error},
+        )
+        unclipped = np.asarray(q_ref, dtype=float)
+        clipped = np.clip(unclipped, self.minimum, self.maximum)
+        was_clipped = np.abs(clipped - unclipped) > 1e-12
+        dq_ref = np.asarray(dq_ref, dtype=float)
+        dq_ref[(clipped <= self.minimum + 1e-12) & (dq_ref < 0.0)] = 0.0
+        dq_ref[(clipped >= self.maximum - 1e-12) & (dq_ref > 0.0)] = 0.0
+        if np.any(was_clipped):
+            self.policy.q_ref_state = clipped.copy()
+        return clipped, dq_ref, {
+            "gravity_error_before_m_s2": error_before.tolist(),
+            "q_ref_unclipped_rad": unclipped.tolist(),
+            "q_reference_clipped": was_clipped.tolist(),
+        }
+
+    def set_measured_dq(self, right_dq):
+        right_dq = np.asarray(right_dq, dtype=float)
+        if right_dq.shape != (5,) or not np.isfinite(right_dq).all():
+            raise ValueError("right_dq must contain five finite values")
+        self._last_dq = right_dq.copy()
+
+
+def stage(task_s: float) -> str:
+    if task_s < ENTRY_END_S:
+        return "arm_ramp_in"
+    if task_s < WALK_START_S:
+        return "stationary_baseline"
+    if task_s < WALK_STOP_S:
+        return "forward_walk"
+    if task_s < RELEASE_START_S:
+        return "stop_settle"
+    if task_s < END_S:
+        return "arm_ramp_out"
+    return "complete"
+
+
+class HardwarePidPlan:
+    """Arm plan: nonzero A3 left pose, right PID, then weight hand-back."""
+
+    def __init__(self, initial_slots, target_slots, kp, kd, controller):
+        self.initial = np.asarray(initial_slots, dtype=float).copy()
+        self.target = np.asarray(target_slots, dtype=float).copy()
+        self.kp = np.asarray(kp, dtype=float).copy()
+        self.kd = np.asarray(kd, dtype=float).copy()
+        if any(array.shape != (13,) for array in
+               (self.initial, self.target, self.kp, self.kd)):
+            raise ValueError("plan arrays must have 13 slots")
+        self.controller = controller
+        self._release_q = None
+        self._last_q = self.initial.copy()
+
+    def sample(self, task_s, measured_slots, measured_dq, imu_quaternion, yaw0_rad, dt):
+        task_s = float(task_s)
+        measured_slots = np.asarray(measured_slots, dtype=float)
+        q = self.target.copy()
+        dq = np.zeros(13)
+        diagnostics = {"pid_active": False}
+        if task_s < ENTRY_END_S:
+            ratio = np.clip(task_s / ENTRY_END_S, 0.0, 1.0)
+            q = self.initial + ratio * (self.target - self.initial)
+            weight = float(ratio)
+        elif task_s < RELEASE_START_S:
+            self.controller.set_measured_dq(np.asarray(measured_dq)[5:10])
+            right_q, right_dq, pid = self.controller.step(
+                measured_slots, imu_quaternion, yaw0_rad, dt
+            )
+            q[5:10] = right_q
+            dq[5:10] = right_dq
+            weight = 1.0
+            diagnostics = {"pid_active": True, **pid}
+        elif task_s < END_S:
+            if self._release_q is None:
+                self._release_q = self._last_q.copy()
+                self._release_q[11:] = 0.0
+            q = self._release_q.copy()
+            weight = float(np.clip(1.0 - (task_s - RELEASE_START_S) / 3.0, 0.0, 1.0))
+        else:
+            q = self.target.copy()
+            weight = 0.0
+        q[11:] = 0.0
+        if task_s < RELEASE_START_S:
+            self._last_q = q.copy()
+        return {
+            "stage": stage(task_s),
+            "q_rad": q,
+            "dq_rad_s": dq,
+            "kp": self.kp,
+            "kd": self.kd,
+            "weight": weight,
+            "terminal": task_s >= END_S,
+            "diagnostics": diagnostics,
+        }

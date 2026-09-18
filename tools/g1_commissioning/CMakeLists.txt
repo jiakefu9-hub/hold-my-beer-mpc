@@ -16,7 +16,7 @@ option(G1_COMMISSIONING_BUILD_WALK_CAPTURE
 set(UNITREE_SDK2_DIR "/home/fjk/g1_ws/unitree_sdk2" CACHE PATH
     "Pinned external Unitree SDK2 source directory")
 
-add_library(g1_commissioning_core src/core.cpp)
+add_library(g1_commissioning_core src/core.cpp src/host_timing.cpp)
 target_include_directories(g1_commissioning_core PUBLIC include)
 target_compile_options(g1_commissioning_core PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
@@ -104,6 +104,22 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(g1_host_timing_test tests/host_timing_test.cpp)
+    target_link_libraries(g1_host_timing_test PRIVATE g1_commissioning_core pthread)
+    add_test(NAME g1_host_timing COMMAND g1_host_timing_test)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME g1_capture_timing_report
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_capture_timing.py)
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE} -c "import numpy"
+            RESULT_VARIABLE G1_NUMPY_IMPORT_RESULT
+            OUTPUT_QUIET ERROR_QUIET)
+        if(G1_NUMPY_IMPORT_RESULT EQUAL 0)
+            add_test(NAME g1_walk_h0_derivation
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_walk_h0.py)
+        endif()
+    endif()
     add_executable(g1_timed_capture_test tests/timed_capture_test.cpp)
     target_link_libraries(g1_timed_capture_test PRIVATE g1_commissioning_core)
     add_test(NAME g1_timed_capture_plan

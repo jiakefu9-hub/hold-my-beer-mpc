@@ -52,6 +52,20 @@ int main(int argc, char** argv) {
     CHECK(rejected);
     journal.Text("{}");
     CHECK(!journal.Healthy() && journal.dropped() == 1);
+    gc::RawJournal timed((directory.string() + "_timed"), 8192, true);
+    timed.Push(imu);
+    timed.Push(gc::HostTimingRecord{});
+    timed.Finish();
+    CHECK(timed.Healthy() && timed.written() == 2);
+    std::ifstream timing_log(std::filesystem::path(timed.directory()) / "raw.jsonl");
+    int timing_lines = 0;
+    while (std::getline(timing_log, line)) {
+        ++timing_lines;
+        CHECK(line.find("\"journal_enqueued_ns\":") != std::string::npos);
+        CHECK(line.find("\"journal_dequeued_ns\":") != std::string::npos);
+        CHECK(line.find("\"journal_serialized_ns\":") != std::string::npos);
+    }
+    CHECK(timing_lines == 2);
     std::cout << "raw preservation, complete drain and no-overwrite: " << failures << " failures\n";
     return failures ? 1 : 0;
 }

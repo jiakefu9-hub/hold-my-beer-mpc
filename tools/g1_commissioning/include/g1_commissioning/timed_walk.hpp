@@ -10,9 +10,9 @@ namespace g1_commissioning {
 // Host monotonic task time, NOT a claimed robot gait phase or distance.
 struct TimedWalkPlan {
     static constexpr double kWalkStart = 5.0;
-    static constexpr double kWalkStop = 13.0;
-    static constexpr double kReleaseStart = 16.0;
-    static constexpr double kEnd = 19.0;
+    static constexpr double kWalkStop = 15.0;
+    static constexpr double kReleaseStart = 18.0;
+    static constexpr double kEnd = 21.0;
     static constexpr double kForwardSpeed = 0.5;
     static constexpr double kVelocityLease = 0.2;
 
@@ -35,9 +35,9 @@ struct TimedWalkPlan {
         if (!IsA3BalanceHold(profile) || profile.required_fsm != 500 ||
             std::abs(profile.max_weight - 1.0) > 1e-9 ||
             std::abs(profile.weight_rate_per_s - 1.0 / 3.0) > 1e-9 ||
-            std::abs(profile.hold_s - 13.0) > 1e-9) {
+            std::abs(profile.hold_s - 15.0) > 1e-9) {
             throw std::runtime_error(
-                "timed walk requires A3 FSM-500 arm profile: weight 1, 3/13/3 seconds");
+                "timed walk requires A3 FSM-500 arm profile: weight 1, 3/15/3 seconds");
         }
     }
 };
