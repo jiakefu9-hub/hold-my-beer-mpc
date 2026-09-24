@@ -27,6 +27,8 @@ class ArmPIDPolicy:
         integral_limit=0.20,
         max_dq=2.0,
         de_g_alpha=0.2,
+        task_reference_dt=None,
+        derivative_filter_reference_dt=None,
     ):
         self.default_q = np.asarray(default_q, dtype=np.float64).copy()  # right arm only (5 DoF)
         self.n = self.default_q.shape[0]
@@ -45,6 +47,10 @@ class ArmPIDPolicy:
         self.integral_limit = float(integral_limit)
         self.max_dq = float(max_dq)
         self.de_g_alpha = float(de_g_alpha)
+        # Optional physical-time references for hardware period changes.
+        # None preserves the original simulation semantics exactly.
+        self.task_reference_dt = task_reference_dt
+        self.derivative_filter_reference_dt = derivative_filter_reference_dt
 
         self.integral_error = np.zeros(2, dtype=np.float64)
         self.prev_e_g = None
@@ -81,7 +87,17 @@ class ArmPIDPolicy:
         #    这里不在 arm_pid.py 里直接做正运动学，而是通过 helper 回调计算，
         #    这样主逻辑清楚，也方便你后面替换成真正的 MuJoCo / Pinocchio 实现。
         # ------------------------------------------------------------------
-        e_g = self._compute_gravity_error(q, W_R_I, helpers)
+        combined = helpers.get("compute_gravity_error_and_jacobian") if isinstance(helpers, dict) else None
+        J_g = None
+        if callable(combined):
+            e_g, J_g = combined(q, W_R_I)
+            e_g, J_g = np.asarray(e_g, dtype=float), np.asarray(J_g, dtype=float)
+            if e_g.shape != (2,) or J_g.shape != (2, self.n) or not (
+                np.isfinite(e_g).all() and np.isfinite(J_g).all()
+            ):
+                raise ValueError("invalid gravity error/Jacobian")
+        else:
+            e_g = self._compute_gravity_error(q, W_R_I, helpers)
 
         # e_g 的时间导数：先差分，再做一阶低通滤波，避免 walking 中差分噪声直接放大到 Kd 项
         if self.prev_e_g is None or dt <= 1e-9:
@@ -89,6 +105,8 @@ class ArmPIDPolicy:
         else:
             de_g_raw = (e_g - self.prev_e_g) / dt
         alpha = float(np.clip(self.de_g_alpha, 0.0, 1.0))
+        if self.derivative_filter_reference_dt is not None:
+            alpha = 1.0 - (1.0 - alpha) ** (dt / self.derivative_filter_reference_dt)
         self.filtered_de_g = alpha * de_g_raw + (1.0 - alpha) * self.filtered_de_g
         de_g = self.filtered_de_g.copy()
         self.prev_e_g = e_g.copy()
@@ -111,7 +129,8 @@ class ArmPIDPolicy:
         # 3) 在当前工作点，用中心差分构造 J_g = de_g / dq
         #    J_g(:, i) ≈ (e_g(q + eps e_i) - e_g(q - eps e_i)) / (2 eps)
         # ------------------------------------------------------------------
-        J_g = self._compute_gravity_error_jacobian(q, W_R_I, helpers)
+        if J_g is None:
+            J_g = self._compute_gravity_error_jacobian(q, W_R_I, helpers)
 
         # ------------------------------------------------------------------
         # 4) 用阻尼伪逆把任务空间修正映射到关节空间
@@ -120,7 +139,9 @@ class ArmPIDPolicy:
         # ------------------------------------------------------------------
         J_pinv = self._damped_pinv(J_g, self.damping)
         delta_q_task = J_pinv @ u_g
-        dq_task = delta_q_task / max(dt, 1e-6)
+        dq_task = delta_q_task / max(
+            dt if self.task_reference_dt is None else self.task_reference_dt, 1e-6
+        )
 
         # ------------------------------------------------------------------
         # 5) 关节空间姿态正则：拉回到 q_nom = default_q
@@ -147,6 +168,7 @@ class ArmPIDPolicy:
             "raw_dq_ref": dq_ref.copy(),
             "raw_q_ref": q_ref.copy(),
             "dt": dt,
+            "derivative_alpha": alpha,
         }
 
         return q_ref.astype(np.float32), dq_ref.astype(np.float32)

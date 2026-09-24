@@ -5,7 +5,8 @@
 故障后又发生了过快交还。随后完成了两轮 `0.08 rad/s` 修复复验和一轮 `0.07 rad/s` 单变量复验，
 现场均未见抖动、突变或突然放下；日志也显示正常三秒退权。位置边界减速、航向保持延续到 18 秒及
 当前 `0.07 rad/s` 上限都已有一次完整真机运行记录。分析结束后仍恢复 `FIELD_OUTPUT_LOCKED=True`，
-避免误重跑。
+避免误重跑。这些均为 **20 ms** 实机结果，保存于提交 `a1d0197cbe28849eeec69b19a9d41d19eb5818d5`。
+2026-09-24 当前代码已准备为 **6 ms**，通过离线回放和几何／时序测试；尚未进行 6 ms 实机复验。
 
 失败轮保存了逐周期目标角／目标速度、实测角度／速度、weight、IMU、LowState、PID 重力误差、
 DDS 与 RPC 时间和故障事件。原始记录位于
@@ -17,7 +18,7 @@ DDS 与 RPC 时间和故障事件。原始记录位于
   程序不切模式。
 - 左臂一直用关节 PD 保持已经实测过的非零 A3 姿态：肩 pitch −4°、肩 roll −1°、
   肘 pitch −8.1°，其余臂轴为 0°。
-- 右臂采用仿真中的 `ArmPIDPolicy`：每 20 ms 读取当前身体 IMU 和右臂关节角，使用与仿真相同的
+- 右臂采用仿真中的 `ArmPIDPolicy`：目标每 6 ms 读取最新身体 IMU 和右臂关节角，使用与仿真相同的
   MuJoCo XML、`right_grasp_site` 瓶身中点及重力方向误差，生成右臂五关节 `q_ref/dq_ref`。
   右臂的名义姿态不是全零，而是肩 pitch −4°、肩 roll +1°、肘 pitch −7.8°。
 - 单腰 yaw 固定为 0°。Arm SDK 有效槽继续使用现场已经验证过的 `kp=20、kd=1`。
@@ -25,7 +26,7 @@ DDS 与 RPC 时间和故障事件。原始记录位于
   瞬时关节速度就退出”的门槛。程序没有新增关节速度停止条件。
 - 仿真 PID 原始输出仍保留 `pid_max_dq=0.48 rad/s`，但真机输出前新增独立 governor：
   当前复验后采用 `hardware_pid_max_dq=0.07 rad/s`、`hardware_pid_max_ddq=0.20 rad/s²`。
-  前一轮完整复验使用的是 `0.08 rad/s`；这次只把最终速度上限降低 12.5%，其余 PID 增益不变。它同时限制速度和
+  20 ms 前两轮完整复验使用的是 `0.08 rad/s`；第三轮降低到 `0.07 rad/s`。它同时限制速度和
   相邻周期速度变化，并从进入 PID 时的实测关节角起步。逐帧同时记录原始 PID 输出和 governor
   之后真正准备发送的输出。
 
@@ -66,7 +67,8 @@ DDS 与 RPC 时间和故障事件。原始记录位于
 
 | 项目 | 仿真 | 这版真机程序 |
 | --- | --- | --- |
-| PID 更新周期 | 6 ms | 20 ms，先与已验证的 Arm SDK 频率一致 |
+| PID 更新周期 | 6 ms | 目标 6 ms；已实测版本为 20 ms，新版待实机验证 |
+| PID 时间语义 | 原任务修正除以 6 ms；滤波 alpha=0.07/周期 | 保留已验证 20 ms 控制强度与滤波时间常数，见下文；不是完全相同的增益／带宽 |
 | 身体／关节状态 | MuJoCo 真值 | `rt/secondary_imu` 与 `rt/lowstate` 实测值 |
 | 末端姿态 | MuJoCo 可直接读 site | 用同一 XML 对实测关节做 FK，再与身体 IMU 合成 |
 | 左臂／右臂名义角 | 仿真配置决定 | 使用当前实机 A3 非零持瓶姿态 |
@@ -76,7 +78,34 @@ DDS 与 RPC 时间和故障事件。原始记录位于
 
 所以这次结果可用于判断“真机 PID 是否改善持瓶”，但真机滤波后的加速度数值不能直接当作与 MuJoCo
 ground truth 完全相同的传感器。第一轮先验证闭环方向、是否平顺、是否经常触及 ±5° 参考范围，
-再决定是否调整增益或提高频率。
+不追求通过反复调参使 PID 达到 MPC 的效果。
+
+## 6 ms 版具体改了什么
+
+1. 每周期一次 `mj_kinematics + mj_comPos + mj_jacSite`，同时得到误差与解析雅可比，代替原来
+   多次扰动关节做中心差分。公式是 `J_g = (g_E × J_omega_E)[:2]`；120 个随机姿态与中心差分对照。
+   依据 [MuJoCo Jacobian API](https://mujoco.readthedocs.io/en/stable/APIreference/APIfunctions.html#mj-jacsite)。
+2. 保留普通任务空间 PID 结构，Ki 仍为 0。旧实现的任务修正量再除以 dt；真机现在固定除以
+   0.020 s，使改变刷新周期不会额外放大任务速度 3.33 倍。误差差分与积分使用实际循环间隔。
+3. `alpha(dt)=1-(1-0.07)^(dt/0.020)`，6 ms 时约 0.021535，保留原约 0.276 秒滤波时间常数。
+   仿真入口没有启用这两项时间换算，行为保持原样。相同 6 ms 只统一更新频率，不表示物理带宽完全一致。
+4. 使用单调时钟的固定时间槽；超时就跳过过期槽，不追赶补发。命令积分间隔至多为 6 ms，
+   卡顿后也不放大单帧位移。位置 ±5°、目标速度 0.07 rad/s、目标加速度 0.20 rad/s² 保留。
+5. 正常、Ctrl-C、可处理故障继续至少三秒退权。逐帧最大 weight 降幅改为 `0.006/3=0.002`，
+   卡顿只延长退权；失联等既有例外仍见下文。
+6. 数值库单线程，控制线程绑一个 CPU（`--cpu`；默认优先 7，否则可用列表首个），保持普通 Linux
+   调度，不修改系统实时策略。既有 DDS／日志线程独立运行。当前离线环境不允许 CPU 7，验证使用 CPU 2；
+   因此现场命令示例显式给出 `--cpu 2`。它与仿真的 CPU 7 不是同核测量，不冒充严格同环境性能对比。
+
+全程新增 `g1_pid_timing_v1`：实际间隔、唤醒延迟、含命令日志入队的循环耗时、deadline miss、
+跳过周期、状态／IMU 在写入结束时的接收年龄、两者时间差、重复使用测量的次数、DDS 写调用耗时。
+单独 timing 行入队不计入 work 指标，但实际相邻循环间隔会反映它；DDS write 返回不代表电机已执行。
+原始 LowState 完整电机记录仍约 20 ms 一条，躯干 IMU 约 5 ms 一条；每条 6 ms 控制命令额外保存
+所用双臂实测 q/dq、输入时间戳、目标和 PID 中间量。名义 6 ms 不保证每次都有新传感器包。
+
+下一步只需一轮 6 ms 实机复验：继续观察平顺性、停车和退权；离线看完整 `[5,18)` 指标、
+实际周期／漏周期、状态年龄和进程正常退出。若现场循环大部分时间仍超出 6 ms，才定位 DDS 回调等
+耗时并考虑 C++；当前不增加迁移、实时内核或新控制器。
 
 ## 现场运行
 
@@ -94,6 +123,7 @@ OUT="evaluation/hardware_shadow/commissioning/pid_$(date +%Y%m%d_%H%M%S)"
 
 /home/fjk/miniforge3/bin/conda run -n g1_mpc \
   python tools/g1_commissioning/g1_walk_pid.py "$NIC" \
+  --cpu 2 \
   --profile "$FIELD_PROFILE" \
   --controller-config configs/g1.yaml \
   --output-dir "$OUT" \
@@ -106,7 +136,7 @@ L2+B、FSM 离开 500、CRC／状态／IMU 失效、tick 真回退、DDS 写失�
 这仍是软件互锁，不是独立急停或安全认证。
 
 当前输出锁开启时，上述命令会在 DDS 初始化和 publisher 创建之前拒绝执行。以后解除锁之前，应先
-审核本文件所述 governor、三秒退权、位置边界减速和 18 秒航向保持测试。
+审核本文件的 6 ms 离线结果，并将下一轮作为 6 ms 首次实机复验。
 
 ## 停止与故障退权规则
 
@@ -161,6 +191,19 @@ L2+B、FSM 离开 500、CRC／状态／IMU 失效、tick 真回退、DDS 写失�
   python tools/g1_commissioning/tests/test_analyze_hardware_pid.py
 ```
 
-这些测试没有连接机器人。三轮修复版真机复验均完整运行且现场未见抖动和突然放下；右瓶竖直倾角
+这些测试没有连接机器人。三轮 20 ms 修复版真机复验均完整运行且现场未见抖动和突然放下；右瓶竖直倾角
 稳定优于左瓶，但动态指标只小幅改善。当前 `0.07 rad/s` 单变量候选已通过一轮真机复验，仍不能把
 单轮候选当作完整统计结论；继续比较 PID/MPC 时应保留原始记录并使用相同指标。
+
+6 ms 离线复现（不创建 DDS participant，不连接机器人，只用 IDL 构造和序列化包）：
+
+```bash
+/home/fjk/miniforge3/envs/g1_mpc/bin/python -m unittest discover \
+  -s tools/g1_commissioning/tests -p 'test_*pid*.py'
+
+/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/g1_commissioning/benchmark_hardware_pid.py \
+  evaluation/hardware_shadow/commissioning/g1_pid_tune_dq007_20260918_170950/raw.jsonl \
+  --cpu 2 --output-dir /tmp/g1-pid-6ms-new-replay
+```
+
+输出目录必须不存在；完整结果及限制见 [6 ms 离线记录](sessions/20260924_PID_6MS_OFFLINE.md)。

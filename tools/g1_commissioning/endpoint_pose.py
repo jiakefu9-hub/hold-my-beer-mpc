@@ -56,6 +56,31 @@ class EndpointModel:
         self.imu_id = self.model.site("imu_in_torso").id
         self.sites = {side: self.model.site(f"{side}_grasp_site").id
                       for side in ("left", "right")}
+        self.right_dofs = [self.model.joint(name).dofadr[0] for name in JOINTS[5:10]]
+        self._jac_rotation = np.zeros((3, self.model.nv))
+
+    def right_gravity_error_and_jacobian(self, arm_slots, world_from_body):
+        """One FK and analytic site Jacobian, with the measured torso fixed.
+
+        e = (R_WE.T g_W)[:2]; de/dq = (g_E cross J_omega_E)[:2].
+        A fixed H0 yaw rotation leaves gravity and this error unchanged.
+        """
+        q = np.asarray(arm_slots, dtype=float)
+        R_WB = np.asarray(world_from_body, dtype=float)
+        if q.shape != (13,) or not np.isfinite(q).all() or R_WB.shape != (3, 3) or not np.isfinite(R_WB).all():
+            raise ValueError("invalid arm slots or torso rotation")
+        mujoco.mj_resetData(self.model, self.data)
+        self.data.qpos[self.joint_addresses] = q[:11]
+        mujoco.mj_kinematics(self.model, self.data)
+        mujoco.mj_comPos(self.model, self.data)
+        mujoco.mj_jacSite(self.model, self.data, None, self._jac_rotation, self.sites["right"])
+        R_GB = self.data.site_xmat[self.imu_id].reshape(3, 3)
+        R_GE = self.data.site_xmat[self.sites["right"]].reshape(3, 3)
+        R_BE = R_GB.T @ R_GE
+        gravity_e = R_BE.T @ R_WB.T @ np.array([0.0, 0.0, -9.81])
+        axes_e = R_GE.T @ self._jac_rotation[:, self.right_dofs]
+        jacobian = np.cross(gravity_e, axes_e.T).T[:2]
+        return gravity_e[:2].copy(), jacobian
 
     def relative(self, arm_slots):
         q = np.asarray(arm_slots, dtype=float)

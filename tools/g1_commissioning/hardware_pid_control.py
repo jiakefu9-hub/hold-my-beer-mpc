@@ -33,7 +33,9 @@ RELEASE_START_S = 18.0
 END_S = 21.0
 FORWARD_SPEED_M_S = 0.5
 WEIGHT_RELEASE_DURATION_S = 3.0
-WEIGHT_RELEASE_NOMINAL_PERIOD_S = 0.020
+CONTROL_PERIOD_S = 0.006
+PID_REFERENCE_PERIOD_S = 0.020
+WEIGHT_RELEASE_NOMINAL_PERIOD_S = CONTROL_PERIOD_S
 
 
 def wrap_angle(value: float) -> float:
@@ -221,18 +223,26 @@ class RightArmGravityHelper:
         h0_from_endpoint = h0_from_world @ np.asarray(world_from_body) @ body_from_endpoint
         return (h0_from_endpoint.T @ self.gravity_h0)[:2]
 
+    def compute_gravity_error_and_jacobian(self, right_q, world_from_body):
+        slots = self.arm_slots.copy()
+        slots[5:10] = right_q
+        return self.model.right_gravity_error_and_jacobian(slots, world_from_body)
+
 
 class RightArmHardwarePid:
     """Simulation PID reused with hardware FK and a reviewed q-reference box."""
 
     def __init__(self, nominal_right_q, parameters: PidParameters,
-                 model: EndpointModel | None = None, control_dt: float = 0.02):
+                 model: EndpointModel | None = None, control_dt: float = CONTROL_PERIOD_S):
         from arm_pid import ArmPIDPolicy
 
         self.nominal = np.asarray(nominal_right_q, dtype=float).copy()
         if self.nominal.shape != (5,) or not np.isfinite(self.nominal).all():
             raise ValueError("nominal_right_q must be five finite angles")
         self.parameters = parameters
+        self.control_dt = float(control_dt)
+        if not math.isfinite(self.control_dt) or self.control_dt <= 0:
+            raise ValueError("control_dt must be positive and finite")
         self.model = EndpointModel() if model is None else model
         self.policy = ArmPIDPolicy(
             default_q=self.nominal,
@@ -246,6 +256,8 @@ class RightArmHardwarePid:
             integral_limit=parameters.integral_limit,
             max_dq=parameters.max_dq,
             de_g_alpha=parameters.de_g_alpha,
+            task_reference_dt=PID_REFERENCE_PERIOD_S,
+            derivative_filter_reference_dt=PID_REFERENCE_PERIOD_S,
         )
         self.minimum = self.nominal - parameters.q_offset_limit_rad
         self.maximum = self.nominal + parameters.q_offset_limit_rad
@@ -262,12 +274,14 @@ class RightArmHardwarePid:
         self._command_dq.fill(0.0)
 
     def step(self, arm_slots, imu_quaternion_wxyz, yaw0_rad: float, dt: float):
+        feedback_dt = float(dt)
+        if not math.isfinite(feedback_dt) or feedback_dt <= 0:
+            raise ValueError("PID feedback dt must be positive and finite")
         slots = np.asarray(arm_slots, dtype=float)
         if slots.shape != (13,) or not np.isfinite(slots).all():
             raise ValueError("arm feedback must be a finite 13-slot vector")
         world_from_body = rotation(imu_quaternion_wxyz)
         helper = RightArmGravityHelper(self.model, slots, yaw0_rad)
-        error_before = helper.compute_gravity_error(slots[5:10], world_from_body)
         raw_q_ref, raw_dq_ref = self.policy.compute_action(
             {
                 "current_q": slots[5:10],
@@ -275,7 +289,7 @@ class RightArmHardwarePid:
                 "torso_rotmat": world_from_body,
                 "dt": float(dt),
             },
-            {"compute_gravity_error": helper.compute_gravity_error},
+            {"compute_gravity_error_and_jacobian": helper.compute_gravity_error_and_jacobian},
         )
         policy_diagnostics = self.policy.get_last_diagnostics()
         raw_q_ref = np.asarray(raw_q_ref, dtype=float)
@@ -287,7 +301,8 @@ class RightArmHardwarePid:
             self._command_dq.fill(0.0)
 
         acceleration_limit = self.parameters.hardware_max_ddq
-        dt = float(dt)
+        # Missed deadlines do not authorize a larger command jump.
+        dt = min(feedback_dt, self.control_dt)
         # Limit speed early enough that the reference can decelerate to zero
         # before reaching either +/-5 degree position boundary.  Without this
         # viability limit, clipping q at the boundary would require dq to jump
@@ -334,7 +349,11 @@ class RightArmHardwarePid:
         # hardware-only governor even though the robot never received it.
         self.policy.q_ref_state = clipped.copy()
         return clipped, governed_dq, {
-            "gravity_error_before_m_s2": error_before.tolist(),
+            "gravity_error_before_m_s2": policy_diagnostics["error"].tolist(),
+            "feedback_dt_s": feedback_dt,
+            "command_integration_dt_s": dt,
+            "derivative_alpha": policy_diagnostics["derivative_alpha"],
+            "jacobian_method": "analytic_mujoco_site",
             "pid_error_m_s2": policy_diagnostics["error"].tolist(),
             "pid_error_derivative_raw_m_s3": policy_diagnostics[
                 "error_derivative_raw"
@@ -447,7 +466,7 @@ class WeightReleaseRamp:
 
     Wall-clock interpolation alone can jump straight to zero if the process is
     suspended during release.  This stateful limiter follows the same linear
-    schedule during normal 20 ms operation, but never reduces weight by more
+    schedule during normal operation, but never reduces weight by more
     than one nominal control-frame step.  A delayed loop therefore extends the
     hand-back instead of producing an abrupt ownership change.
     """
@@ -520,14 +539,14 @@ class HardwarePidPlan:
             if self._release_q is None:
                 self._release_q = self._last_q.copy()
                 self._release_q[11:] = 0.0
-                self._release_ramp = WeightReleaseRamp(1.0)
+                self._release_ramp = WeightReleaseRamp(1.0, self.controller.control_dt)
             q = self._release_q.copy()
             weight, terminal = self._release_ramp.sample(task_s - RELEASE_START_S)
         else:
             if self._release_q is None:
                 self._release_q = self._last_q.copy()
                 self._release_q[11:] = 0.0
-                self._release_ramp = WeightReleaseRamp(1.0)
+                self._release_ramp = WeightReleaseRamp(1.0, self.controller.control_dt)
             q = self._release_q.copy()
             weight, terminal = self._release_ramp.sample(task_s - RELEASE_START_S)
         q[11:] = 0.0

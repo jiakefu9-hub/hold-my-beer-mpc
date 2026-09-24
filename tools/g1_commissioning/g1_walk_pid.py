@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import queue
 import shutil
@@ -24,10 +25,17 @@ import sys
 import threading
 import time
 
+# This executable owns its numerical runtime. Set before importing NumPy:
+# tiny 2x2/5x5 operations do not benefit from a multi-thread BLAS pool.
+for _thread_variable in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ[_thread_variable] = "1"
+
 import numpy as np
 import yaml
 
 from hardware_pid_control import (
+    CONTROL_PERIOD_S,
+    PID_REFERENCE_PERIOD_S,
     ARM_MOTOR_INDICES,
     END_S,
     FixedH0Heading,
@@ -47,15 +55,13 @@ from hardware_pid_control import (
     yaw_from_quaternion,
 )
 from endpoint_pose import EndpointModel
+from pid_timing import PeriodicClock, pin_control_thread, timing_summary
 
 ROOT = Path(__file__).resolve().parents[2]
 PERMIT = "PID_WALK_H0_CAPTURE"
 SCHEMA = "g1_hardware_pid_walk_site_v1"
-# Relocked after the 0.07 rad/s single-variable PID field retest.  The run
-# completed without visible shaking or abrupt hand-back; evidence must be
-# reviewed before deliberately starting another hardware run.
+# 20 ms baseline is field-tested; 6 ms is offline-prepared, awaiting a field run.
 FIELD_OUTPUT_LOCKED = True
-CONTROL_PERIOD_S = 0.020
 STATE_TIMEOUT_NS = 100_000_000
 FSM_TIMEOUT_NS = 600_000_000
 FSM_RPC_TIMEOUT_S = 0.3
@@ -119,13 +125,34 @@ def close_sdk_endpoint(endpoint, endpoint_kind):
             f"Unitree SDK2 {endpoint_kind} layout changed; refusing unsafe close"
         ) from exc
     if entity is not None:
+        # Keep the Python callbacks alive until C has detached the listener.
+        old_listener = getattr(entity, "_listener", None)
         entity.set_listener(None)
+        del old_listener
     endpoint.Close()
     return "listener_detached_then_closed" if entity is not None else "already_closed"
 
 
 def monotonic_ns():
     return time.monotonic_ns()
+
+
+def make_arm_message(frame, state, constructor, crc):
+    """Shared packet/CRC construction for the live runner and offline timing."""
+    message = constructor()
+    message.mode_pr = int(state.mode_pr)
+    message.mode_machine = int(state.mode_machine)
+    for slot in VALID_ARM_SLOTS:
+        command = message.motor_cmd[ARM_MOTOR_INDICES[slot]]
+        command.mode = 1
+        command.q = float(frame["q_rad"][slot])
+        command.dq = float(frame["dq_rad_s"][slot])
+        command.tau = 0.0
+        command.kp = float(frame["kp"][slot])
+        command.kd = float(frame["kd"][slot])
+    message.motor_cmd[WEIGHT_MOTOR_INDEX].q = float(frame["weight"])
+    message.crc = crc.Crc(message)
+    return message
 
 
 def json_number(value):
@@ -670,6 +697,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
     last_frame = None
     last_state = None
     sequence = 0
+    original_affinity = set(os.sched_getaffinity(0))
+    cycle_timings = []
 
     def request_stop(_signal=None, _frame=None):
         stop_requested.set()
@@ -678,20 +707,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
     previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
 
     def make_message(frame, state):
-        message = unitree_hg_msg_dds__LowCmd_()
-        message.mode_pr = int(state.mode_pr)
-        message.mode_machine = int(state.mode_machine)
-        for slot in VALID_ARM_SLOTS:
-            command = message.motor_cmd[ARM_MOTOR_INDICES[slot]]
-            command.mode = 1
-            command.q = float(frame["q_rad"][slot])
-            command.dq = float(frame["dq_rad_s"][slot])
-            command.tau = 0.0
-            command.kp = float(frame["kp"][slot])
-            command.kd = float(frame["kd"][slot])
-        message.motor_cmd[WEIGHT_MOTOR_INDEX].q = float(frame["weight"])
-        message.crc = crc.Crc(message)
-        return message
+        return make_arm_message(frame, state, unitree_hg_msg_dds__LowCmd_, crc)
 
     def fallback_weight_release(reason):
         """Best-effort three-second release for catchable software faults.
@@ -931,7 +947,11 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
 
         velocity_thread = threading.Thread(target=velocity_worker, name="pid_velocity", daemon=True)
         velocity_thread.start()
-        last_iteration_ns = epoch_ns
+        runtime = pin_control_thread(args.cpu)
+        journal.record({"schema": "g1_pid_event_v1", "event": "control_runtime", **runtime})
+        clock = PeriodicClock(monotonic_ns(), CONTROL_PERIOD_S)
+        last_iteration_ns = None
+        previous_low_ns = previous_imu_ns = None
         abort_start_s = None
         abort_start_ns = None
         abort_release_start_s = None
@@ -943,7 +963,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
         normal_zero_acknowledged = False
         last_stage = None
         while True:
+            clock.wait()
             loop_begin_ns = monotonic_ns()
+            actual_dt = CONTROL_PERIOD_S if last_iteration_ns is None else (loop_begin_ns - last_iteration_ns) * 1e-9
             task_s = (loop_begin_ns - epoch_ns) * 1e-9
             failure = health(streams, interlock, journal, loop_begin_ns)
             if failure:
@@ -975,7 +997,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                 if task_s < RELEASE_START_S:
                     frame = plan.sample(
                         task_s, _arm_slots(low), _arm_dq(low), imu.quaternion,
-                        yaw0, CONTROL_PERIOD_S,
+                        yaw0, actual_dt,
                     )
                 else:
                     with last_zero_lock:
@@ -1029,7 +1051,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                         )
                         frame = plan.sample(
                             release_task_s, _arm_slots(low), _arm_dq(low),
-                            imu.quaternion, yaw0, CONTROL_PERIOD_S,
+                            imu.quaternion, yaw0, actual_dt,
                         )
                         frame["diagnostics"] = {
                             **frame["diagnostics"],
@@ -1097,6 +1119,10 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                 print(f"t={task_s:.3f} {frame['stage']}")
                 last_stage = frame["stage"]
             message = make_message(frame, low)
+            prewrite_check_ns = monotonic_ns()
+            failure = health(streams, interlock, journal, prewrite_check_ns)
+            if failure or prewrite_check_ns - min(low.received_ns, imu.received_ns) > STATE_TIMEOUT_NS:
+                raise RuntimeError(failure or "selected feedback stale before write")
             write_begin_ns = monotonic_ns()
             ok = bool(publisher.Write(message))
             write_end_ns = monotonic_ns()
@@ -1115,7 +1141,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                 "imu_received_monotonic_ns": imu.received_ns,
                 "yaw0_rad": yaw0, "heading_reference_frozen": heading["reference_frozen"],
                 "control_nominal_period_ms": CONTROL_PERIOD_S * 1000.0,
-                "control_actual_period_ms": (loop_begin_ns - last_iteration_ns) * 1e-6,
+                "control_actual_period_ms": None if last_iteration_ns is None else actual_dt * 1000,
                 "controller_compute_us": (controller_end_ns - controller_begin_ns) * 1e-3,
                 "control_prewrite_us": (write_begin_ns - loop_begin_ns) * 1e-3,
                 "write_begin_monotonic_ns": write_begin_ns,
@@ -1123,7 +1149,6 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                 "write_duration_us": (write_end_ns - write_begin_ns) * 1e-3,
                 **frame["diagnostics"],
             })
-            last_iteration_ns = loop_begin_ns
             if not ok:
                 raise RuntimeError("arm DDS write failed")
             last_frame = {
@@ -1134,11 +1159,34 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                 "weight": float(frame["weight"]),
             }
             last_state = low
+            work_end_ns = monotonic_ns()
+            scheduled_ns = clock.scheduled_ns
+            skipped_slots = clock.advance(work_end_ns)
+            cycle_timing = {
+                "schema": "g1_pid_timing_v1", "sequence": sequence,
+                "task_elapsed_s": task_s, "stage": frame["stage"],
+                "scheduled_monotonic_ns": scheduled_ns,
+                "loop_begin_monotonic_ns": loop_begin_ns,
+                "work_end_monotonic_ns": work_end_ns,
+                "nominal_period_ms": CONTROL_PERIOD_S * 1000,
+                "actual_period_ms": None if last_iteration_ns is None else actual_dt * 1000,
+                "wake_lateness_ms": (loop_begin_ns - scheduled_ns) * 1e-6,
+                "work_ms": (work_end_ns - loop_begin_ns) * 1e-6,
+                "deadline_missed": work_end_ns > scheduled_ns + clock.period_ns,
+                "skipped_slots": skipped_slots,
+                "state_age_at_write_ms": (write_end_ns - low.received_ns) * 1e-6,
+                "imu_age_at_write_ms": (write_end_ns - imu.received_ns) * 1e-6,
+                "state_imu_skew_ms": abs(low.received_ns - imu.received_ns) * 1e-6,
+                "reused_lowstate": low.received_ns == previous_low_ns,
+                "reused_imu": imu.received_ns == previous_imu_ns,
+                "write_ms": (write_end_ns - write_begin_ns) * 1e-6,
+            }
+            journal.record(cycle_timing)
+            cycle_timings.append(cycle_timing)
+            last_iteration_ns = loop_begin_ns
+            previous_low_ns, previous_imu_ns = low.received_ns, imu.received_ns
             if frame["terminal"]:
                 break
-            next_time = loop_begin_ns / 1e9 + CONTROL_PERIOD_S
-            # Do not replay missed updates as a back-to-back catch-up burst.
-            time.sleep(max(0.001, next_time - time.monotonic()))
 
         worker_stop.set()
         velocity_thread.join()
@@ -1169,6 +1217,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
     finally:
         worker_stop.set()
         fsm_thread.join()
+        os.sched_setaffinity(0, original_affinity)
+        journal.record({
+            "schema": "g1_pid_event_v1", "event": "control_timing_summary",
+            "all_normal_loop_stages": timing_summary(cycle_timings),
+            "primary_5_18": timing_summary([
+                row for row in cycle_timings if WALK_START_S <= row["task_elapsed_s"] < RELEASE_START_S
+            ]),
+        })
         shutdown = {}
         for name, endpoint, endpoint_kind in (
             ("low_subscriber", low_subscriber, "subscriber"),
@@ -1198,6 +1254,8 @@ def build_parser():
     parser.add_argument("--output-dir", required=True, type=Path,
                         help="new directory; raw.jsonl and exact inputs are stored here")
     parser.add_argument("--permit-real-output", required=True, choices=[PERMIT])
+    parser.add_argument("--cpu", type=int, default=None,
+                        help="control thread CPU (default CPU 7 if available, else first allowed)")
     return parser
 
 
@@ -1209,8 +1267,8 @@ def main(argv=None):
         pid_parameters, pid_mapping = load_pid_parameters(args.controller_config, profile)
         if FIELD_OUTPUT_LOCKED:
             raise RuntimeError(
-                "hardware PID output relocked after the 0.07 rad/s field retest; "
-                "review the saved evidence before another run"
+                "6 ms hardware PID output locked pending first field validation; "
+                "20 ms baseline is preserved in Git"
             )
         journal = Journal(args.output_dir)
         shutil.copy2(args.profile, args.output_dir / "arm_profile.conf")
@@ -1230,6 +1288,19 @@ def main(argv=None):
             "heading_hold_stop_s": RELEASE_START_S,
             "forward_walk_stop_s": WALK_STOP_S,
             "pid_parameters": pid_mapping,
+            "control_nominal_period_ms": CONTROL_PERIOD_S * 1000,
+            "pid_physical_reference_period_ms": PID_REFERENCE_PERIOD_S * 1000,
+            "derivative_alpha_at_nominal_period": 1 - (1 - pid_parameters.de_g_alpha) ** (CONTROL_PERIOD_S / PID_REFERENCE_PERIOD_S),
+            "jacobian_method": "analytic_mujoco_site",
+            "control_source_sha256": {
+                str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in (
+                    Path(__file__), ROOT / "arm_pid.py",
+                    Path(__file__).with_name("hardware_pid_control.py"),
+                    Path(__file__).with_name("endpoint_pose.py"),
+                    Path(__file__).with_name("pid_timing.py"),
+                )
+            },
             "profile_sha256": hashlib.sha256(args.profile.read_bytes()).hexdigest(),
             "controller_config_sha256": hashlib.sha256(args.controller_config.read_bytes()).hexdigest(),
         })

@@ -56,7 +56,13 @@ The separate [hardware PID guide](../../docs/g1_field_validation/HARDWARE_PID.md
 covers `g1_walk_pid.py`, its fail-closed field profile and
 `analyze_hardware_pid.py`. The left arm retains the established nonzero A3 pose;
 the right arm reuses `ArmPIDPolicy` with measured joints, torso IMU and the
-active XML's `right_grasp_site`. It updates at 20 ms, publishes only Arm SDK
+active XML's `right_grasp_site`. The 20 ms field baseline is preserved at
+`a1d0197`; the current offline-validated candidate targets 6 ms using an analytic
+site Jacobian, physical-time filter/gain semantics and absolute monotonic slots.
+`benchmark_hardware_pid.py` replays captured states with no DDS participant or
+publisher and measures local compute/packing/serialization/logging only. The
+runner records deadlines, skipped slots, feedback age/reuse and CPU settings;
+6 ms live DDS/robot operation is still unvalidated. It publishes only Arm SDK
 q/dq references with the existing kp=20/kd=1 device PD, and bounds generated
 right-arm q references to five degrees around the nominal pose. After the
 2026-09-18 failed first field run and three repaired retests, hardware q/dq generation uses

@@ -21,6 +21,7 @@ from scipy.spatial.transform import Rotation
 
 from endpoint_pose import EndpointModel, rotation
 from hardware_pid_control import RELEASE_START_S, WALK_START_S, WALK_STOP_S
+from pid_timing import timing_summary
 
 GRAVITY_H0 = np.array([0.0, 0.0, -9.81])
 ANALYSIS_MOTOR_INDICES = (15, 16, 17, 18, 19, 22, 23, 24, 25, 26, 12)
@@ -56,7 +57,7 @@ def read_records(path):
                     "gyroscope_rad_s": row["gyroscope_rad_s"],
                     "accelerometer_raw_m_s2": row["accelerometer_raw_m_s2"],
                 })
-            elif schema in {"g1_pid_session_v1", "g1_hardware_pid_command_v1"} or event in {
+            elif schema in {"g1_pid_session_v1", "g1_hardware_pid_command_v1", "g1_pid_timing_v1"} or event in {
                 "task_epoch", "heading_reference_frozen",
             }:
                 rows.append(row)
@@ -371,6 +372,10 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
         "q_reference_clip_fraction_per_joint": np.mean(clipped, axis=0).tolist(),
         "controller_compute_us": _scalar_stats(timing_compute),
         "dds_write_duration_us": _scalar_stats(timing_write),
+        "loop_timing": timing_summary([
+            row for row in rows if row.get("schema") == "g1_pid_timing_v1"
+            and WALK_START_S <= row["task_elapsed_s"] < RELEASE_START_S
+        ]),
     }
     governor_rows = [
         row for row in command_primary
