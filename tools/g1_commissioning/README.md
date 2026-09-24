@@ -46,7 +46,8 @@ run's fixed H0 +X before walking. It retains raw data throughout the 21-second
 session; no disturbance template, coordinate conversion, angular-acceleration
 derivation or MPC runs online. `derive_walk_h0.py` subsequently transforms every
 torso and pelvis IMU sample into that fixed H0 without overwriting `raw.jsonl`.
-The velocity command and heading correction are active only during seconds 5–15.
+Forward velocity is active during seconds 5–15; heading correction remains active
+during the 15–18 second stop-settle interval and is zeroed before arm release.
 Both tools' earlier versions have been run on hardware. The phase getter returned
 7301 on the target; the five earlier trajectories used the old world-yaw-zero
 target and are not mixed into the new H0 dataset. Template construction remains offline work.
@@ -57,7 +58,12 @@ covers `g1_walk_pid.py`, its fail-closed field profile and
 the right arm reuses `ArmPIDPolicy` with measured joints, torso IMU and the
 active XML's `right_grasp_site`. It updates at 20 ms, publishes only Arm SDK
 q/dq references with the existing kp=20/kd=1 device PD, and bounds generated
-right-arm q references to five degrees around the nominal pose. Its headline
+right-arm q references to five degrees around the nominal pose. After the
+2026-09-18 failed first field run and three repaired retests, hardware q/dq generation uses
+the current 0.07 rad/s velocity and 0.20 rad/s² acceleration limits, and every catchable
+software stop uses a frozen-q three-second weight release. The former one-frame
+weight-zero fault cleanup was removed. Hardware output remains explicitly
+locked pending a new field review; see the guide and session record. Its headline
 evaluation is the complete `[5,18)` interval from walk start through the
 stop-settle end. The DRAFT template and missing exact permit are rejected before
 DDS initialization. Offline tests do not constitute a hardware PID run.

@@ -129,17 +129,22 @@ private:
                     journal_->Text(gc::CaptureEvent("heading_reference_frozen", fields.str()));
                 }
                 if (imu && health.empty()) h = heading.Current();
-                const bool walking = !zero_requested_ && !stopped && gc::TimedWalkPlan::Walking(t);
+                const bool output_enabled = !zero_requested_ && !stopped;
+                const bool walking = output_enabled && gc::TimedWalkPlan::Walking(t);
+                const bool heading_hold = output_enabled && gc::TimedWalkPlan::HeadingHold(t);
                 if (Send(walking ? gc::TimedWalkPlan::kForwardSpeed : 0.0,
-                         walking ? h.correction : 0.0, gc::TimedWalkPlan::Lease(t), t, h) != 0) {
+                         heading_hold ? h.correction : 0.0,
+                         gc::TimedWalkPlan::Lease(t), t, h) != 0) {
                     failed_ = true; zero_requested_ = true;
                     break;
                 }
                 if (failed_) break;
                 auto next = iteration + std::chrono::milliseconds(50);
-                // Align nominal RPC dispatch to 5 s and 13 s even when the
+                // Align nominal RPC dispatch to every command boundary even when the
                 // periodic worker has acquired a small scheduling offset.
-                for (double boundary : {gc::TimedWalkPlan::kWalkStart, gc::TimedWalkPlan::kWalkStop}) {
+                for (double boundary : {gc::TimedWalkPlan::kWalkStart,
+                                        gc::TimedWalkPlan::kWalkStop,
+                                        gc::TimedWalkPlan::kReleaseStart}) {
                     if (t < boundary) {
                         const auto at = std::chrono::steady_clock::time_point(
                             std::chrono::nanoseconds(epoch_ + static_cast<std::uint64_t>(boundary * 1e9)));
@@ -220,6 +225,7 @@ int Execute(const std::string& nic, const gc::SiteProfile& profile,
         ",\"program\":\"g1_walk_capture\",\"publisher_created\":false,\"mode_setter_registered\":false"
         ",\"walk_start_s\":5,\"walk_stop_s\":15,\"release_start_s\":18,\"end_s\":21"
         ",\"speed_m_s\":0.5,\"heading_hold\":true,\"heading_filter_s\":1"
+        ",\"heading_hold_start_s\":5,\"heading_hold_stop_s\":18"
         ",\"heading_target\":\"fixed_run_h0_positive_x\""
         ",\"heading_reference_start_s\":3,\"heading_reference_end_s\":5"
         ",\"heading_kp\":1,\"heading_kd\":0.1,\"heading_max_rate_rad_s\":0.25"
@@ -234,7 +240,7 @@ int Execute(const std::string& nic, const gc::SiteProfile& profile,
     gc::CaptureGetters getters(journal, interlock);
     auto initial = Startup(*inbox, streams, *interlock, *journal, profile, 0);
     std::cout << "REAL WALK OUTPUT: 3 s arm entry, 2 s wait, 10 s at 0.5 m/s with heading hold,"
-        << " 3 s stop hold, 3 s release. Robot must already balance in FSM 500.\n"
+        << " 3 s zero-forward heading hold, 3 s release. Robot must already balance in FSM 500.\n"
         << "Type exactly: EXECUTE " << profile.robot_id << "\n> " << std::flush;
     std::string reply;
     if (!std::getline(std::cin, reply) || reply != "EXECUTE " + profile.robot_id || stopped)
@@ -317,17 +323,31 @@ int Execute(const std::string& nic, const gc::SiteProfile& profile,
                 std::cout << "t=" << t << " " << stage << '\n';
                 last_stage = stage;
             }
-            // A successful zero-speed RPC is required before normal arm release.
-            const double required_zero_after = abort_start >= 0 ? abort_start : gc::TimedWalkPlan::kWalkStop;
+            // Heading correction remains active during stop-settle. A successful
+            // zero-forward/zero-yaw RPC is required before normal arm release.
+            const double required_zero_after = abort_start >= 0 ? abort_start : gc::TimedWalkPlan::kReleaseStart;
             const bool releasing = abort_start >= 0 ? t >= abort_start + 3.0 : t >= gc::TimedWalkPlan::kReleaseStart;
-            if (releasing && velocity.LastZeroReply() < epoch + static_cast<std::uint64_t>(required_zero_after * 1e9))
+            if (releasing && velocity.LastZeroReply() < epoch + static_cast<std::uint64_t>(required_zero_after * 1e9)) {
+                // The 50 ms velocity worker is aligned to t=18, but the 20 ms
+                // arm loop may arrive first. Keep the last weight-one arm frame
+                // while allowing the zero command/reply to complete.
+                if (abort_start < 0 && t < gc::TimedWalkPlan::kReleaseStart + 0.25) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
                 throw std::runtime_error("no successful post-stop zero-speed reply before arm release");
+            }
             const auto state = inbox->Latest();
             if (!state) throw std::runtime_error("LowState vanished");
             publish(frame, *state, stage);
             if (frame.terminal) {
                 velocity.Stop();
                 getters.Stop();
+                // Stop the high-rate readers before destroying the writer.
+                // Leaving reader callbacks active while CloseChannel tears down
+                // another DDS entity can trip CycloneDDS-CXX prevent_callbacks()
+                // during otherwise successful process shutdown.
+                streams.Stop();
                 journal->Text(gc::CaptureEvent("session_end", ",\"outcome\":\"" +
                     std::string(abort_start >= 0 ? "operator_stop_release_completed" : "normal_release_completed") +
                     "\",\"final_weight\":0,\"velocity_final_rpc_ok\":" + (velocity.Failed() ? "false" : "true") +
@@ -356,6 +376,8 @@ int Execute(const std::string& nic, const gc::SiteProfile& profile,
             "\",\"final_arm_attempted\":" + (final_arm_attempted ? "true" : "false") +
             ",\"final_arm_write\":" + (final_arm_written ? "true" : "false") +
             ",\"physical_stop_verified\":false"));
+        getters.Stop();
+        streams.Stop();
         publisher.CloseChannel();
         std::cerr << "Capture stopped: " << e.what() << '\n';
         return 3;
@@ -370,7 +392,7 @@ int main(int argc, char** argv) {
             std::cout << "Usage: g1_walk_capture NIC --profile FIELD_PROFILE --output-dir NEW_DIR"
                 << " --permit-real-output " << kPermit << "\n"
                 << "Real arm AND walking output. 21 s timed plan; H0 heading is frozen from"
-                << " mean torso yaw during task seconds [3,5)."
+                << " mean torso yaw during task seconds [3,5) and held through t=18."
                 << " Operator must establish FSM 500; program never switches modes.\n";
             return 0;
         }

@@ -19,6 +19,9 @@ struct TimedWalkPlan {
     static bool Walking(double time) {
         return std::isfinite(time) && time >= kWalkStart && time < kWalkStop;
     }
+    static bool HeadingHold(double time) {
+        return std::isfinite(time) && time >= kWalkStart && time < kReleaseStart;
+    }
     static const char* Stage(double time) {
         if (time < 3.0) return "arm_ramp_in";
         if (time < kWalkStart) return "stationary_baseline";
@@ -28,8 +31,9 @@ struct TimedWalkPlan {
         return "complete";
     }
     static double Lease(double time) {
-        return Walking(time) ? std::min(kVelocityLease, kWalkStop - time)
-                             : kVelocityLease;
+        if (Walking(time)) return std::min(kVelocityLease, kWalkStop - time);
+        if (HeadingHold(time)) return std::min(kVelocityLease, kReleaseStart - time);
+        return kVelocityLease;
     }
     static void Validate(const SiteProfile& profile) {
         if (!IsA3BalanceHold(profile) || profile.required_fsm != 500 ||

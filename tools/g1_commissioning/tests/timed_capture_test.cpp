@@ -29,7 +29,14 @@ int main(int argc, char** argv) {
     CHECK(gc::TimedWalkPlan::Walking(14.999));
     CHECK(!gc::TimedWalkPlan::Walking(15));
     CHECK(!gc::TimedWalkPlan::Walking(std::numeric_limits<double>::quiet_NaN()));
+    CHECK(!gc::TimedWalkPlan::HeadingHold(4.999));
+    CHECK(gc::TimedWalkPlan::HeadingHold(5));
+    CHECK(gc::TimedWalkPlan::HeadingHold(15));
+    CHECK(gc::TimedWalkPlan::HeadingHold(17.999));
+    CHECK(!gc::TimedWalkPlan::HeadingHold(18));
+    CHECK(!gc::TimedWalkPlan::HeadingHold(std::numeric_limits<double>::quiet_NaN()));
     CHECK(std::abs(gc::TimedWalkPlan::Lease(14.99) - 0.01) < 1e-9);
+    CHECK(std::abs(gc::TimedWalkPlan::Lease(17.99) - 0.01) < 1e-9);
     int walk_frames = 0;
     for (int frame = 0; frame <= 1050; ++frame) {
         const double t = static_cast<double>(frame) / 50.0;

@@ -32,6 +32,8 @@ WALK_STOP_S = 15.0
 RELEASE_START_S = 18.0
 END_S = 21.0
 FORWARD_SPEED_M_S = 0.5
+WEIGHT_RELEASE_DURATION_S = 3.0
+WEIGHT_RELEASE_NOMINAL_PERIOD_S = 0.020
 
 
 def wrap_angle(value: float) -> float:
@@ -147,6 +149,8 @@ class PidParameters:
     max_dq: float
     de_g_alpha: float
     q_offset_limit_rad: np.ndarray
+    hardware_max_dq: float
+    hardware_max_ddq: float
 
     @classmethod
     def from_mapping(cls, values: Mapping):
@@ -167,6 +171,8 @@ class PidParameters:
             max_dq=float(values["pid_max_dq"]),
             de_g_alpha=float(values["pid_de_g_alpha"]),
             q_offset_limit_rad=np.deg2rad(vector("pid_q_offset_limit_deg", 5)),
+            hardware_max_dq=float(values["hardware_pid_max_dq"]),
+            hardware_max_ddq=float(values["hardware_pid_max_ddq"]),
         )
         scalars = (
             result.finite_diff_eps,
@@ -174,11 +180,17 @@ class PidParameters:
             result.integral_limit,
             result.max_dq,
             result.de_g_alpha,
+            result.hardware_max_dq,
+            result.hardware_max_ddq,
         )
         if not all(math.isfinite(value) and value >= 0.0 for value in scalars):
             raise ValueError("PID scalar parameters must be finite and non-negative")
         if result.finite_diff_eps <= 0.0 or result.damping <= 0.0 or result.max_dq <= 0.0:
             raise ValueError("PID finite-difference, damping and max_dq must be positive")
+        if result.hardware_max_dq <= 0.0 or result.hardware_max_ddq <= 0.0:
+            raise ValueError("hardware PID velocity and acceleration limits must be positive")
+        if result.hardware_max_dq > result.max_dq:
+            raise ValueError("hardware PID velocity limit cannot exceed raw PID max_dq")
         if not 0.0 <= result.de_g_alpha <= 1.0:
             raise ValueError("pid_de_g_alpha must be in [0,1]")
         if np.any(result.q_offset_limit_rad <= 0.0) or np.any(
@@ -238,12 +250,16 @@ class RightArmHardwarePid:
         self.minimum = self.nominal - parameters.q_offset_limit_rad
         self.maximum = self.nominal + parameters.q_offset_limit_rad
         self._last_dq = np.zeros(5, dtype=float)
+        self._command_q = None
+        self._command_dq = np.zeros(5, dtype=float)
 
     def reset(self):
         self.policy.integral_error.fill(0.0)
         self.policy.prev_e_g = None
         self.policy.filtered_de_g.fill(0.0)
         self.policy.q_ref_state = None
+        self._command_q = None
+        self._command_dq.fill(0.0)
 
     def step(self, arm_slots, imu_quaternion_wxyz, yaw0_rad: float, dt: float):
         slots = np.asarray(arm_slots, dtype=float)
@@ -252,7 +268,7 @@ class RightArmHardwarePid:
         world_from_body = rotation(imu_quaternion_wxyz)
         helper = RightArmGravityHelper(self.model, slots, yaw0_rad)
         error_before = helper.compute_gravity_error(slots[5:10], world_from_body)
-        q_ref, dq_ref = self.policy.compute_action(
+        raw_q_ref, raw_dq_ref = self.policy.compute_action(
             {
                 "current_q": slots[5:10],
                 "current_dq": np.asarray(self._last_dq, dtype=float),
@@ -261,18 +277,97 @@ class RightArmHardwarePid:
             },
             {"compute_gravity_error": helper.compute_gravity_error},
         )
-        unclipped = np.asarray(q_ref, dtype=float)
+        policy_diagnostics = self.policy.get_last_diagnostics()
+        raw_q_ref = np.asarray(raw_q_ref, dtype=float)
+        raw_dq_ref = np.asarray(raw_dq_ref, dtype=float)
+        if self._command_q is None:
+            # The first hardware PID reference starts from measured q, not from
+            # an internal simulation state that may differ from the robot.
+            self._command_q = np.clip(slots[5:10], self.minimum, self.maximum)
+            self._command_dq.fill(0.0)
+
+        acceleration_limit = self.parameters.hardware_max_ddq
+        dt = float(dt)
+        # Limit speed early enough that the reference can decelerate to zero
+        # before reaching either +/-5 degree position boundary.  Without this
+        # viability limit, clipping q at the boundary would require dq to jump
+        # abruptly to zero and violate the acceleration contract.
+        distance_to_min = np.maximum(self._command_q - self.minimum, 0.0)
+        distance_to_max = np.maximum(self.maximum - self._command_q, 0.0)
+        safe_speed_to_min = (
+            -acceleration_limit * dt
+            + np.sqrt(
+                (acceleration_limit * dt) ** 2
+                + 2.0 * acceleration_limit * distance_to_min
+            )
+        )
+        safe_speed_to_max = (
+            -acceleration_limit * dt
+            + np.sqrt(
+                (acceleration_limit * dt) ** 2
+                + 2.0 * acceleration_limit * distance_to_max
+            )
+        )
+        velocity_target = np.clip(
+            raw_dq_ref,
+            -np.minimum(self.parameters.hardware_max_dq, safe_speed_to_min),
+            np.minimum(self.parameters.hardware_max_dq, safe_speed_to_max),
+        )
+        previous_dq = self._command_dq.copy()
+        previous_q = self._command_q.copy()
+        max_delta_dq = acceleration_limit * dt
+        governed_dq = np.clip(
+            velocity_target,
+            previous_dq - max_delta_dq,
+            previous_dq + max_delta_dq,
+        )
+        unclipped = previous_q + governed_dq * dt
         clipped = np.clip(unclipped, self.minimum, self.maximum)
         was_clipped = np.abs(clipped - unclipped) > 1e-12
-        dq_ref = np.asarray(dq_ref, dtype=float)
-        dq_ref[(clipped <= self.minimum + 1e-12) & (dq_ref < 0.0)] = 0.0
-        dq_ref[(clipped >= self.maximum - 1e-12) & (dq_ref > 0.0)] = 0.0
-        if np.any(was_clipped):
-            self.policy.q_ref_state = clipped.copy()
-        return clipped, dq_ref, {
+        # Keep sent q and dq mutually consistent.  The stopping-distance limit
+        # above makes this final numerical projection acceleration-safe.
+        governed_dq = (clipped - previous_q) / max(dt, 1e-9)
+        self._command_q = clipped.copy()
+        self._command_dq = governed_dq.copy()
+        # Keep the reused simulation policy's integrator aligned with what was
+        # actually sent; otherwise its internal q_ref can drift behind the
+        # hardware-only governor even though the robot never received it.
+        self.policy.q_ref_state = clipped.copy()
+        return clipped, governed_dq, {
             "gravity_error_before_m_s2": error_before.tolist(),
+            "pid_error_m_s2": policy_diagnostics["error"].tolist(),
+            "pid_error_derivative_raw_m_s3": policy_diagnostics[
+                "error_derivative_raw"
+            ].tolist(),
+            "pid_error_derivative_filtered_m_s3": policy_diagnostics[
+                "error_derivative_filtered"
+            ].tolist(),
+            "pid_integral_error_m_s": policy_diagnostics[
+                "integral_error"
+            ].tolist(),
+            "pid_task_correction": policy_diagnostics[
+                "task_correction"
+            ].tolist(),
+            "pid_gravity_error_jacobian": policy_diagnostics[
+                "gravity_error_jacobian"
+            ].tolist(),
+            "pid_task_dq_rad_s": policy_diagnostics["task_dq"].tolist(),
+            "pid_posture_dq_rad_s": policy_diagnostics[
+                "posture_dq"
+            ].tolist(),
+            "raw_pid_q_ref_rad": raw_q_ref.tolist(),
+            "raw_pid_dq_ref_rad_s": raw_dq_ref.tolist(),
+            "governed_dq_ref_rad_s": governed_dq.tolist(),
+            "governed_ddq_ref_rad_s2": (
+                (governed_dq - previous_dq) / max(float(dt), 1e-9)
+            ).tolist(),
             "q_ref_unclipped_rad": unclipped.tolist(),
             "q_reference_clipped": was_clipped.tolist(),
+            "raw_velocity_limited": (
+                np.abs(raw_dq_ref) > self.parameters.hardware_max_dq + 1e-12
+            ).tolist(),
+            "position_safe_speed_to_min_rad_s": safe_speed_to_min.tolist(),
+            "position_safe_speed_to_max_rad_s": safe_speed_to_max.tolist(),
         }
 
     def set_measured_dq(self, right_dq):
@@ -296,6 +391,96 @@ def stage(task_s: float) -> str:
     return "complete"
 
 
+def locomotion_setpoint(task_s: float, heading_correction_rad_s: float,
+                        inhibited: bool = False) -> dict:
+    """Return the reviewed forward/yaw command schedule.
+
+    Forward motion ends at 15 s, while heading hold remains active through the
+    complete stop-settle window and ends at 18 s.  The RPC duration is clipped
+    at each boundary so an earlier command cannot remain active across it.
+    """
+    task_s = float(task_s)
+    correction = float(heading_correction_rad_s)
+    if not math.isfinite(task_s) or not math.isfinite(correction):
+        raise ValueError("locomotion setpoint inputs must be finite")
+    enabled = not bool(inhibited)
+    walking = enabled and WALK_START_S <= task_s < WALK_STOP_S
+    heading_hold = enabled and WALK_START_S <= task_s < RELEASE_START_S
+    vx = FORWARD_SPEED_M_S if walking else 0.0
+    wz = correction if heading_hold else 0.0
+    if walking:
+        boundary_s = WALK_STOP_S
+    elif heading_hold:
+        boundary_s = RELEASE_START_S
+    else:
+        boundary_s = task_s + 0.2
+    duration_s = min(0.2, max(0.001, boundary_s - task_s))
+    return {
+        "vx_m_s": vx,
+        "yaw_rate_rad_s": wz,
+        "duration_s": duration_s,
+        "walking_active": walking,
+        "heading_hold_active": heading_hold,
+    }
+
+
+def linear_weight_release(start_weight: float, elapsed_s: float) -> tuple[float, bool]:
+    """Return a monotone three-second Arm SDK hand-back.
+
+    The first sample preserves ``start_weight``.  Weight reaches zero only at
+    or after the full release duration; callers must never replace this with a
+    one-frame weight-zero cleanup.
+    """
+    start_weight = float(start_weight)
+    elapsed_s = float(elapsed_s)
+    if not math.isfinite(start_weight) or not 0.0 <= start_weight <= 1.0:
+        raise ValueError("release start_weight must be finite and in [0,1]")
+    if not math.isfinite(elapsed_s) or elapsed_s < 0.0:
+        raise ValueError("release elapsed_s must be finite and non-negative")
+    ratio = np.clip(elapsed_s / WEIGHT_RELEASE_DURATION_S, 0.0, 1.0)
+    weight = start_weight * float(1.0 - ratio)
+    return weight, elapsed_s >= WEIGHT_RELEASE_DURATION_S
+
+
+class WeightReleaseRamp:
+    """Three-second hand-back with a per-published-frame decrement limit.
+
+    Wall-clock interpolation alone can jump straight to zero if the process is
+    suspended during release.  This stateful limiter follows the same linear
+    schedule during normal 20 ms operation, but never reduces weight by more
+    than one nominal control-frame step.  A delayed loop therefore extends the
+    hand-back instead of producing an abrupt ownership change.
+    """
+
+    def __init__(self, start_weight: float,
+                 nominal_period_s: float = WEIGHT_RELEASE_NOMINAL_PERIOD_S):
+        start_weight = float(start_weight)
+        nominal_period_s = float(nominal_period_s)
+        if not math.isfinite(start_weight) or not 0.0 <= start_weight <= 1.0:
+            raise ValueError("release start_weight must be finite and in [0,1]")
+        if not math.isfinite(nominal_period_s) or nominal_period_s <= 0.0:
+            raise ValueError("release nominal period must be positive and finite")
+        self.start_weight = start_weight
+        self.current_weight = start_weight
+        self.max_step = (
+            start_weight * nominal_period_s / WEIGHT_RELEASE_DURATION_S
+        )
+        self._first_sample = True
+
+    def sample(self, elapsed_s: float) -> tuple[float, bool]:
+        desired, _ = linear_weight_release(self.start_weight, elapsed_s)
+        if self._first_sample:
+            self._first_sample = False
+        else:
+            self.current_weight = max(
+                desired,
+                self.current_weight - self.max_step,
+            )
+        if self.current_weight <= 1e-12:
+            self.current_weight = 0.0
+        return self.current_weight, self.current_weight == 0.0
+
+
 class HardwarePidPlan:
     """Arm plan: nonzero A3 left pose, right PID, then weight hand-back."""
 
@@ -309,6 +494,7 @@ class HardwarePidPlan:
             raise ValueError("plan arrays must have 13 slots")
         self.controller = controller
         self._release_q = None
+        self._release_ramp = None
         self._last_q = self.initial.copy()
 
     def sample(self, task_s, measured_slots, measured_dq, imu_quaternion, yaw0_rad, dt):
@@ -334,21 +520,29 @@ class HardwarePidPlan:
             if self._release_q is None:
                 self._release_q = self._last_q.copy()
                 self._release_q[11:] = 0.0
+                self._release_ramp = WeightReleaseRamp(1.0)
             q = self._release_q.copy()
-            weight = float(np.clip(1.0 - (task_s - RELEASE_START_S) / 3.0, 0.0, 1.0))
+            weight, terminal = self._release_ramp.sample(task_s - RELEASE_START_S)
         else:
-            q = self.target.copy()
-            weight = 0.0
+            if self._release_q is None:
+                self._release_q = self._last_q.copy()
+                self._release_q[11:] = 0.0
+                self._release_ramp = WeightReleaseRamp(1.0)
+            q = self._release_q.copy()
+            weight, terminal = self._release_ramp.sample(task_s - RELEASE_START_S)
         q[11:] = 0.0
         if task_s < RELEASE_START_S:
             self._last_q = q.copy()
+        stage_name = stage(task_s)
+        if stage_name == "complete" and not terminal:
+            stage_name = "arm_ramp_out"
         return {
-            "stage": stage(task_s),
+            "stage": stage_name,
             "q_rad": q,
             "dq_rad_s": dq,
             "kp": self.kp,
             "kd": self.kd,
             "weight": weight,
-            "terminal": task_s >= END_S,
+            "terminal": task_s >= END_S and terminal,
             "diagnostics": diagnostics,
         }

@@ -452,7 +452,7 @@ def audit_trial(directory, out, index):
     vr = {r["request_ns"]: r for r in replies}
     missing_reply = sum(r["request_ns"] not in vr for r in velocity)
     forward = v[v[:, 1] > 0]
-    zeros_after = v[(v[:, 0] >= 15) & (v[:, 1] == 0)]
+    zeros_after = v[(v[:, 0] >= 15) & (v[:, 1] == 0) & (v[:, 2] == 0)]
     arrays["command_t"] = np.array([(r["write_begin_monotonic_ns"] - epoch) / 1e9 for r in commands])
     arrays["command_weight"] = np.array([r["weight"] for r in commands])
     arrays["command_q"] = np.array([r["q_target"] for r in commands])

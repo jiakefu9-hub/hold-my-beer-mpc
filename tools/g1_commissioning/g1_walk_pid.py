@@ -39,7 +39,10 @@ from hardware_pid_control import (
     VALID_ARM_SLOTS,
     WALK_START_S,
     WALK_STOP_S,
+    WEIGHT_RELEASE_DURATION_S,
     WEIGHT_MOTOR_INDEX,
+    WeightReleaseRamp,
+    locomotion_setpoint,
     vertical_angular_rate,
     yaw_from_quaternion,
 )
@@ -48,9 +51,19 @@ from endpoint_pose import EndpointModel
 ROOT = Path(__file__).resolve().parents[2]
 PERMIT = "PID_WALK_H0_CAPTURE"
 SCHEMA = "g1_hardware_pid_walk_site_v1"
+# Relocked after the 0.07 rad/s single-variable PID field retest.  The run
+# completed without visible shaking or abrupt hand-back; evidence must be
+# reviewed before deliberately starting another hardware run.
+FIELD_OUTPUT_LOCKED = True
 CONTROL_PERIOD_S = 0.020
 STATE_TIMEOUT_NS = 100_000_000
-FSM_TIMEOUT_NS = 200_000_000
+FSM_TIMEOUT_NS = 600_000_000
+FSM_RPC_TIMEOUT_S = 0.3
+VELOCITY_RPC_TIMEOUT_S = 0.5
+STATE_SAMPLE_PERIOD_NS = 2_000_000
+LOWSTATE_JOURNAL_PERIOD_NS = 20_000_000
+IMU_JOURNAL_PERIOD_NS = 5_000_000
+ZERO_SPEED_ACK_WAIT_S = 1.0
 EXPECTED_TARGET_Q = np.deg2rad([
     -4.0, -1.0, 0.0, -8.1, 0.0,
     -4.0, 1.0, 0.0, -7.8, 0.0,
@@ -72,6 +85,43 @@ REQUIRED_CONFIRMATIONS = (
     "pid_parameters_confirmed",
     "h0_metric_window_confirmed",
 )
+
+
+def close_sdk_endpoint(endpoint, endpoint_kind):
+    """Detach the CycloneDDS listener before SDK2 Python deletes its entity.
+
+    The installed Unitree SDK2 Python ``Close`` methods directly delete the
+    DataReader/DataWriter. With the current CycloneDDS binding, an active
+    listener can then keep entering ``take(1)`` while the reader is being
+    destroyed, producing repeated ``[Reader] take sample error`` messages and
+    preventing this one-shot process from returning. These private attribute
+    names are intentionally checked rather than guessed: if the installed SDK
+    layout changes, fail the close explicitly instead of touching an unknown
+    object.
+    """
+    layout = {
+        "subscriber": (
+            "_ChannelSubscriber__channel", "_Channel__reader", "_Reader__reader"
+        ),
+        "publisher": (
+            "_ChannelPublisher__channel", "_Channel__writer", "_Writer__writer"
+        ),
+    }
+    if endpoint_kind not in layout:
+        raise ValueError(f"unsupported SDK endpoint kind: {endpoint_kind}")
+    channel_attr, holder_attr, entity_attr = layout[endpoint_kind]
+    try:
+        channel = getattr(endpoint, channel_attr)
+        holder = getattr(channel, holder_attr)
+        entity = getattr(holder, entity_attr)
+    except AttributeError as exc:
+        raise RuntimeError(
+            f"Unitree SDK2 {endpoint_kind} layout changed; refusing unsafe close"
+        ) from exc
+    if entity is not None:
+        entity.set_listener(None)
+    endpoint.Close()
+    return "listener_detached_then_closed" if entity is not None else "already_closed"
 
 
 def monotonic_ns():
@@ -203,7 +253,8 @@ def load_pid_parameters(config_path: Path, profile):
         for name in (
             "pid_kp_pose", "pid_kd_pose", "pid_ki_pose", "pid_posture_gain",
             "pid_finite_diff_eps", "pid_damping", "pid_integral_limit",
-            "pid_max_dq", "pid_de_g_alpha",
+            "pid_max_dq", "pid_de_g_alpha", "hardware_pid_max_dq",
+            "hardware_pid_max_ddq",
         )
     }
     selected["pid_q_offset_limit_deg"] = profile["pid_q_offset_limit_deg_array"].tolist()
@@ -286,7 +337,10 @@ class Interlock:
     def observe_fsm(self, rc, value, request_ns, reply_ns):
         with self._lock:
             if rc != 0:
-                self._fault = self._fault or f"FSM getter failed: rc={rc}"
+                # A single RPC packet may time out under host load.  Keep the
+                # last successful observation; check() still trips fail-closed
+                # if no fresh FSM=500 reply arrives within FSM_TIMEOUT_NS.
+                return
             elif value != 500:
                 self._fault = self._fault or f"left required FSM 500: FSM={value}"
             elif request_ns <= 0 or reply_ns < request_ns or reply_ns - request_ns > FSM_TIMEOUT_NS:
@@ -340,6 +394,10 @@ class Streams:
         self.imu = None
         self.low_sequence = 0
         self.imu_sequence = 0
+        self.low_sample_ns = 0
+        self.imu_sample_ns = 0
+        self.low_journal_ns = 0
+        self.imu_journal_ns = 0
         self.epoch_ns = None
         self.heading = FixedH0Heading()
 
@@ -355,6 +413,9 @@ class Streams:
 
     def low_callback(self, message):
         now = monotonic_ns()
+        if now - self.low_sample_ns < STATE_SAMPLE_PERIOD_NS:
+            return
+        self.low_sample_ns = now
         self.low_sequence += 1
         crc_valid = False
         try:
@@ -371,6 +432,9 @@ class Streams:
             self.interlock.observe_remote(remote)
         with self.lock:
             self.low = snapshot
+        if now - self.low_journal_ns < LOWSTATE_JOURNAL_PERIOD_NS:
+            return
+        self.low_journal_ns = now
         self.journal.record({
             "schema": "g1_lowstate_raw_v1", "topic": "rt/lowstate",
             "received_monotonic_ns": now,
@@ -394,6 +458,9 @@ class Streams:
 
     def imu_callback(self, message):
         now = monotonic_ns()
+        if now - self.imu_sample_ns < STATE_SAMPLE_PERIOD_NS:
+            return
+        self.imu_sample_ns = now
         self.imu_sequence += 1
         fields = self._imu_fields(message)
         snapshot = ImuSnapshot(
@@ -412,6 +479,9 @@ class Streams:
                     now, task_s, yaw_from_quaternion(snapshot.quaternion),
                     vertical_angular_rate(snapshot.rpy, snapshot.gyro),
                 )
+        if now - self.imu_journal_ns < IMU_JOURNAL_PERIOD_NS:
+            return
+        self.imu_journal_ns = now
         self.journal.record({
             "schema": "g1_torso_imu_raw_v1", "topic": "rt/secondary_imu",
             "received_monotonic_ns": now,
@@ -535,7 +605,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
     class FsmGetter(Client):
         def __init__(self):
             super().__init__(LOCO_SERVICE_NAME, False)
-            self.SetTimeout(0.1)
+            self.SetTimeout(FSM_RPC_TIMEOUT_S)
             self._SetApiVerson(LOCO_API_VERSION)
             self._RegistApi(ROBOT_API_ID_LOCO_GET_FSM_ID, 0)
 
@@ -549,7 +619,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
     class VelocitySetter(Client):
         def __init__(self):
             super().__init__(LOCO_SERVICE_NAME, False)
-            self.SetTimeout(0.1)
+            self.SetTimeout(VELOCITY_RPC_TIMEOUT_S)
             self._SetApiVerson(LOCO_API_VERSION)
             self._RegistApi(ROBOT_API_ID_LOCO_SET_VELOCITY, 0)
 
@@ -597,6 +667,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
     last_zero_reply_ns = 0
     last_zero_lock = threading.Lock()
     stop_requested = threading.Event()
+    last_frame = None
+    last_state = None
+    sequence = 0
 
     def request_stop(_signal=None, _frame=None):
         stop_requested.set()
@@ -620,13 +693,126 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
         message.crc = crc.Crc(message)
         return message
 
+    def fallback_weight_release(reason):
+        """Best-effort three-second release for catchable software faults.
+
+        It deliberately refuses to publish after an FSM/remote interlock, stale
+        or invalid LowState, or a DDS write failure.  In those cases continuing
+        to command the arm could fight the robot's own damping/mode transition.
+        No path in this helper sends a one-frame weight-zero command.
+        """
+        nonlocal sequence
+        if publisher is None or last_frame is None or last_state is None:
+            return {
+                "attempted": False,
+                "completed": False,
+                "reason": "no previously written arm frame",
+            }
+        start_weight = float(last_frame["weight"])
+        frozen = {
+            "q_rad": np.asarray(last_frame["q_rad"], dtype=float).copy(),
+            "dq_rad_s": np.zeros(13),
+            "kp": np.asarray(last_frame["kp"], dtype=float).copy(),
+            "kd": np.asarray(last_frame["kd"], dtype=float).copy(),
+        }
+        start_ns = monotonic_ns()
+        release_start_ns = None
+        release_ramp = None
+        attempted = False
+        while True:
+            loop_ns = monotonic_ns()
+            interlock_reason = interlock.check(loop_ns)
+            low, _ = streams.latest()
+            if interlock_reason:
+                return {
+                    "attempted": attempted,
+                    "completed": False,
+                    "reason": f"interlock during release: {interlock_reason}",
+                }
+            if (
+                low is None or not low.crc_valid or loop_ns < low.received_ns
+                or loop_ns - low.received_ns > STATE_TIMEOUT_NS
+            ):
+                return {
+                    "attempted": attempted,
+                    "completed": False,
+                    "reason": "fresh CRC-valid LowState unavailable during release",
+                }
+            with last_zero_lock:
+                zero_reply = last_zero_reply_ns
+            zero_acknowledged = zero_reply >= start_ns
+            zero_wait_s = (loop_ns - start_ns) * 1e-9
+            if (
+                release_start_ns is None
+                and (zero_acknowledged or zero_wait_s >= ZERO_SPEED_ACK_WAIT_S)
+            ):
+                release_start_ns = loop_ns
+                release_ramp = WeightReleaseRamp(start_weight, CONTROL_PERIOD_S)
+                journal.record({
+                    "schema": "g1_pid_event_v1",
+                    "event": "fault_weight_release_started",
+                    "reason": str(reason),
+                    "start_weight": start_weight,
+                    "duration_s": WEIGHT_RELEASE_DURATION_S,
+                    "zero_velocity_acknowledged": zero_acknowledged,
+                    "zero_velocity_ack_wait_s": zero_wait_s,
+                })
+            if release_start_ns is None:
+                elapsed_s = 0.0
+                weight, terminal = start_weight, False
+                release_stage = "fault_stop_wait"
+            else:
+                elapsed_s = (loop_ns - release_start_ns) * 1e-9
+                weight, terminal = release_ramp.sample(elapsed_s)
+                release_stage = "fault_arm_release"
+            frame = {**frozen, "weight": weight}
+            attempted = True
+            write_begin_ns = monotonic_ns()
+            ok = bool(publisher.Write(make_message(frame, low)))
+            write_end_ns = monotonic_ns()
+            sequence += 1
+            journal.record({
+                "schema": "g1_hardware_pid_command_v1",
+                "event": "dds_write" if ok else "dds_write_failed",
+                "sequence": sequence,
+                "task_elapsed_s": None,
+                "stage": release_stage,
+                "release_reason": str(reason),
+                "release_elapsed_s": elapsed_s,
+                "weight": weight,
+                "q_command_rad": frame["q_rad"].tolist(),
+                "dq_command_rad_s": frame["dq_rad_s"].tolist(),
+                "kp_command": frame["kp"].tolist(),
+                "kd_command": frame["kd"].tolist(),
+                "write_begin_monotonic_ns": write_begin_ns,
+                "write_end_monotonic_ns": write_end_ns,
+                "write_duration_us": (write_end_ns - write_begin_ns) * 1e-3,
+            })
+            if not ok:
+                return {
+                    "attempted": True,
+                    "completed": False,
+                    "reason": "DDS write failed during release",
+                }
+            if terminal:
+                return {
+                    "attempted": True,
+                    "completed": True,
+                    "reason": "three-second release completed",
+                    "duration_s": elapsed_s,
+                    "final_weight": weight,
+                }
+            next_time = loop_ns / 1e9 + CONTROL_PERIOD_S
+            time.sleep(max(0.001, next_time - time.monotonic()))
+
     try:
         initial = startup_gate(
             streams, interlock, journal, 0, profile["startup_valid_samples_int"]
         )
         print(
             "REAL PID WALK OUTPUT: 3 s arm entry, 2 s baseline, 10 s at 0.5 m/s, "
-            "3 s stop-settle, 3 s release. Robot must already be stationary in FSM 500."
+            "3 s stop-settle with heading hold, then >=3 s release after zero-speed ack. "
+            "Robot must already be stationary in FSM 500."
         )
         print(f"Type exactly: EXECUTE {profile['robot_id']}")
         reply = input("> ")
@@ -686,13 +872,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                             "h0_definition": "fixed_run_frame_x_along_pre_walk_mean_yaw_z_vertical",
                         })
                     heading = streams.heading_current()
-                    walking = (
-                        not stop_requested.is_set() and not failure_now
-                        and WALK_START_S <= task_s < WALK_STOP_S
+                    motion = locomotion_setpoint(
+                        task_s,
+                        heading["correction_rad_s"],
+                        inhibited=stop_requested.is_set() or bool(failure_now),
                     )
-                    vx = FORWARD_SPEED_M_S if walking else 0.0
-                    wz = heading["correction_rad_s"] if walking else 0.0
-                    duration = min(0.2, WALK_STOP_S - task_s) if walking else 0.2
+                    vx = motion["vx_m_s"]
+                    wz = motion["yaw_rate_rad_s"]
+                    duration = motion["duration_s"]
                     begin = monotonic_ns()
                     rc, raw = client.send(vx, wz, duration)
                     end = monotonic_ns()
@@ -702,6 +889,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                         "return_code": rc, "raw_reply": raw,
                         "vx_m_s": vx, "vy_m_s": 0.0, "yaw_rate_rad_s": wz,
                         "duration_s": duration, "zero_command": vx == 0.0 and wz == 0.0,
+                        "walking_active": motion["walking_active"],
+                        "heading_hold_active": motion["heading_hold_active"],
                         **heading,
                     })
                     if rc != 0:
@@ -744,42 +933,160 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
         velocity_thread.start()
         last_iteration_ns = epoch_ns
         abort_start_s = None
+        abort_start_ns = None
+        abort_release_start_s = None
+        abort_weight = None
+        abort_reason = None
         abort_q = None
+        abort_release_ramp = None
+        normal_release_start_s = None
+        normal_zero_acknowledged = False
         last_stage = None
-        sequence = 0
         while True:
             loop_begin_ns = monotonic_ns()
             task_s = (loop_begin_ns - epoch_ns) * 1e-9
             failure = health(streams, interlock, journal, loop_begin_ns)
             if failure:
                 raise RuntimeError(failure)
-            if velocity_failed.is_set():
-                raise RuntimeError("velocity RPC worker failed")
             low, imu = streams.latest()
             if stop_requested.is_set() and abort_start_s is None:
                 abort_start_s = task_s
-                abort_q = _arm_slots(low)
+                abort_start_ns = loop_begin_ns
+                abort_q = (
+                    np.asarray(last_frame["q_rad"], dtype=float).copy()
+                    if last_frame is not None else _arm_slots(low)
+                )
+                abort_weight = (
+                    float(last_frame["weight"]) if last_frame is not None else 0.0
+                )
+                abort_reason = (
+                    "velocity_rpc_failure" if velocity_failed.is_set()
+                    else "operator_stop"
+                )
                 journal.record({
                     "schema": "g1_pid_event_v1", "event": "operator_stop_requested",
-                    "task_elapsed_s": task_s,
+                    "task_elapsed_s": task_s, "reason": abort_reason,
+                    "release_start_weight": abort_weight,
                 })
             heading = streams.heading_current()
             yaw0 = heading["reference_rad"] if heading["reference_frozen"] else 0.0
             controller_begin_ns = monotonic_ns()
             if abort_start_s is None:
-                frame = plan.sample(
-                    task_s, _arm_slots(low), _arm_dq(low), imu.quaternion,
-                    yaw0, CONTROL_PERIOD_S,
-                )
+                if task_s < RELEASE_START_S:
+                    frame = plan.sample(
+                        task_s, _arm_slots(low), _arm_dq(low), imu.quaternion,
+                        yaw0, CONTROL_PERIOD_S,
+                    )
+                else:
+                    with last_zero_lock:
+                        zero_reply = last_zero_reply_ns
+                    zero_after_heading = zero_reply >= (
+                        epoch_ns + int(RELEASE_START_S * 1e9)
+                    )
+                    zero_ack_timed_out = (
+                        task_s - RELEASE_START_S >= ZERO_SPEED_ACK_WAIT_S
+                    )
+                    if (
+                        normal_release_start_s is None
+                        and (zero_after_heading or zero_ack_timed_out)
+                    ):
+                        normal_release_start_s = task_s
+                        normal_zero_acknowledged = zero_after_heading
+                        journal.record({
+                            "schema": "g1_pid_event_v1",
+                            "event": "normal_weight_release_started",
+                            "task_elapsed_s": task_s,
+                            "duration_s": WEIGHT_RELEASE_DURATION_S,
+                            "zero_velocity_reply_ns": zero_reply,
+                            "zero_velocity_acknowledged": zero_after_heading,
+                            "zero_velocity_ack_wait_s": task_s - RELEASE_START_S,
+                        })
+                    if normal_release_start_s is None:
+                        held_q = (
+                            np.asarray(last_frame["q_rad"], dtype=float).copy()
+                            if last_frame is not None else _arm_slots(low)
+                        )
+                        held_weight = (
+                            float(last_frame["weight"])
+                            if last_frame is not None else 1.0
+                        )
+                        frame = {
+                            "stage": "normal_stop_wait",
+                            "q_rad": held_q,
+                            "dq_rad_s": np.zeros(13),
+                            "kp": profile["kp_array"],
+                            "kd": profile["kd_array"],
+                            "weight": held_weight,
+                            "terminal": False,
+                            "diagnostics": {
+                                "pid_active": False,
+                                "zero_velocity_ack_wait": True,
+                            },
+                        }
+                    else:
+                        release_task_s = (
+                            RELEASE_START_S + task_s - normal_release_start_s
+                        )
+                        frame = plan.sample(
+                            release_task_s, _arm_slots(low), _arm_dq(low),
+                            imu.quaternion, yaw0, CONTROL_PERIOD_S,
+                        )
+                        frame["diagnostics"] = {
+                            **frame["diagnostics"],
+                            "normal_release_elapsed_s": (
+                                task_s - normal_release_start_s
+                            ),
+                            "zero_velocity_acknowledged": (
+                                normal_zero_acknowledged
+                            ),
+                        }
             else:
-                since = task_s - abort_start_s
+                with last_zero_lock:
+                    zero_reply = last_zero_reply_ns
+                zero_acknowledged = zero_reply >= abort_start_ns
+                zero_ack_timed_out = task_s - abort_start_s >= ZERO_SPEED_ACK_WAIT_S
+                if (
+                    abort_release_start_s is None
+                    and (zero_acknowledged or zero_ack_timed_out)
+                ):
+                    abort_release_start_s = task_s
+                    abort_release_ramp = WeightReleaseRamp(
+                        abort_weight, CONTROL_PERIOD_S
+                    )
+                    journal.record({
+                        "schema": "g1_pid_event_v1",
+                        "event": "abort_weight_release_started",
+                        "task_elapsed_s": task_s,
+                        "reason": abort_reason,
+                        "start_weight": abort_weight,
+                        "duration_s": WEIGHT_RELEASE_DURATION_S,
+                        "zero_velocity_reply_ns": zero_reply,
+                        "zero_velocity_acknowledged": zero_acknowledged,
+                        "zero_velocity_ack_wait_s": task_s - abort_start_s,
+                    })
+                if abort_release_start_s is None:
+                    release_weight = abort_weight
+                    terminal = False
+                    release_stage = "operator_stop_wait"
+                    release_elapsed_s = 0.0
+                else:
+                    release_elapsed_s = task_s - abort_release_start_s
+                    release_weight, terminal = abort_release_ramp.sample(
+                        release_elapsed_s
+                    )
+                    release_stage = "operator_arm_release"
                 frame = {
-                    "stage": "operator_stop_settle" if since < 3.0 else "operator_arm_release",
+                    "stage": release_stage,
                     "q_rad": abort_q.copy(), "dq_rad_s": np.zeros(13),
                     "kp": profile["kp_array"], "kd": profile["kd_array"],
-                    "weight": 1.0 if since < 3.0 else float(np.clip(1.0 - (since - 3.0) / 3.0, 0.0, 1.0)),
-                    "terminal": since >= 6.0,
-                    "diagnostics": {"pid_active": False, "operator_stop": True},
+                    "weight": release_weight,
+                    "terminal": terminal,
+                    "diagnostics": {
+                        "pid_active": False,
+                        "operator_stop": True,
+                        "release_reason": abort_reason,
+                        "release_elapsed_s": release_elapsed_s,
+                    },
                 }
             controller_end_ns = monotonic_ns()
             if frame["stage"] != last_stage:
@@ -789,12 +1096,6 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                 })
                 print(f"t={task_s:.3f} {frame['stage']}")
                 last_stage = frame["stage"]
-            releasing = frame["stage"] in {"arm_ramp_out", "operator_arm_release", "complete"}
-            required_zero_s = WALK_STOP_S if abort_start_s is None else abort_start_s
-            with last_zero_lock:
-                zero_reply = last_zero_reply_ns
-            if releasing and zero_reply < epoch_ns + int(required_zero_s * 1e9):
-                raise RuntimeError("no successful post-stop zero-speed reply before arm release")
             message = make_message(frame, low)
             write_begin_ns = monotonic_ns()
             ok = bool(publisher.Write(message))
@@ -825,6 +1126,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
             last_iteration_ns = loop_begin_ns
             if not ok:
                 raise RuntimeError("arm DDS write failed")
+            last_frame = {
+                "q_rad": np.asarray(frame["q_rad"], dtype=float).copy(),
+                "dq_rad_s": np.asarray(frame["dq_rad_s"], dtype=float).copy(),
+                "kp": np.asarray(frame["kp"], dtype=float).copy(),
+                "kd": np.asarray(frame["kd"], dtype=float).copy(),
+                "weight": float(frame["weight"]),
+            }
+            last_state = low
             if frame["terminal"]:
                 break
             next_time = loop_begin_ns / 1e9 + CONTROL_PERIOD_S
@@ -841,44 +1150,42 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
         })
         return 130 if abort_start_s is not None else 0
     except Exception as exc:
+        # First stop requesting motion. Keep the FSM observer alive while a
+        # catchable software fault attempts its full three-second hand-back.
+        stop_requested.set()
+        release_result = fallback_weight_release(str(exc))
         worker_stop.set()
         if velocity_thread is not None:
             velocity_thread.join()
-        final_attempted = False
-        final_written = False
-        # Respect the mode/remote latch: do not write another arm frame after it.
-        if publisher is not None and not interlock.check(monotonic_ns()):
-            low, _ = streams.latest()
-            if low is not None:
-                final_attempted = True
-                try:
-                    zero = {
-                        "q_rad": np.zeros(13), "dq_rad_s": np.zeros(13),
-                        "kp": np.zeros(13), "kd": np.zeros(13), "weight": 0.0,
-                    }
-                    final_written = bool(publisher.Write(make_message(zero, low)))
-                except Exception:
-                    pass
         journal.record({
             "schema": "g1_pid_event_v1", "event": "session_fault",
-            "reason": str(exc), "final_arm_attempted": final_attempted,
-            "final_arm_write": final_written, "physical_stop_verified": False,
+            "reason": str(exc),
+            "fault_release": release_result,
+            "single_frame_weight_zero_attempted": False,
+            "physical_stop_verified": False,
         })
         print(f"PID walk stopped: {exc}", file=sys.stderr)
         return 3
     finally:
         worker_stop.set()
         fsm_thread.join()
-        try:
-            low_subscriber.Close()
-            imu_subscriber.Close()
-        except Exception:
-            pass
-        if publisher is not None:
+        shutdown = {}
+        for name, endpoint, endpoint_kind in (
+            ("low_subscriber", low_subscriber, "subscriber"),
+            ("imu_subscriber", imu_subscriber, "subscriber"),
+            ("arm_publisher", publisher, "publisher"),
+        ):
+            if endpoint is None:
+                shutdown[name] = "not_created"
+                continue
             try:
-                publisher.Close()
-            except Exception:
-                pass
+                shutdown[name] = close_sdk_endpoint(endpoint, endpoint_kind)
+            except Exception as exc:
+                shutdown[name] = f"close_failed: {exc}"
+        journal.record({
+            "schema": "g1_pid_event_v1", "event": "sdk_shutdown",
+            "endpoints": shutdown,
+        })
         signal.signal(signal.SIGINT, previous_sigint)
         signal.signal(signal.SIGTERM, previous_sigterm)
 
@@ -900,6 +1207,11 @@ def main(argv=None):
     try:
         profile = load_profile(args.profile)
         pid_parameters, pid_mapping = load_pid_parameters(args.controller_config, profile)
+        if FIELD_OUTPUT_LOCKED:
+            raise RuntimeError(
+                "hardware PID output relocked after the 0.07 rad/s field retest; "
+                "review the saved evidence before another run"
+            )
         journal = Journal(args.output_dir)
         shutil.copy2(args.profile, args.output_dir / "arm_profile.conf")
         shutil.copy2(args.controller_config, args.output_dir / "controller_config.yaml")
@@ -914,6 +1226,9 @@ def main(argv=None):
             "primary_metric_scope": "walk_start_through_stop_settle_end",
             "forward_speed_m_s": FORWARD_SPEED_M_S,
             "heading_target": "fixed_run_h0_positive_x",
+            "heading_hold_start_s": WALK_START_S,
+            "heading_hold_stop_s": RELEASE_START_S,
+            "forward_walk_stop_s": WALK_STOP_S,
             "pid_parameters": pid_mapping,
             "profile_sha256": hashlib.sha256(args.profile.read_bytes()).hexdigest(),
             "controller_config_sha256": hashlib.sha256(args.controller_config.read_bytes()).hexdigest(),

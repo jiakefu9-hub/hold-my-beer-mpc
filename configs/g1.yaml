@@ -35,6 +35,11 @@ pid_damping: 0.15
 pid_integral_limit: 0.20
 pid_max_dq: 0.48
 pid_de_g_alpha: 0.07
+# Real Arm SDK output governor. The raw simulation PID may still reach
+# pid_max_dq; hardware commands are additionally limited in velocity and in
+# per-cycle velocity change to prevent the measured 20 ms sign-flip chatter.
+hardware_pid_max_dq: 0.07
+hardware_pid_max_ddq: 0.20
 
 # ==============================
 # LQR 参数

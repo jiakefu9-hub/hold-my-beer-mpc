@@ -51,6 +51,7 @@ class ArmPIDPolicy:
         self.filtered_de_g = np.zeros(2, dtype=np.float64)
         self.q_ref_state = None
         self._warned_missing_helper = False
+        self.last_diagnostics = {}
 
     def compute_action(self, arm_obs, helpers=None):
         """输入 ``arm_obs`` / ``helpers``，输出 ``(q_ref, dq_ref)``。
@@ -134,7 +135,27 @@ class ArmPIDPolicy:
         self.q_ref_state = self.q_ref_state + dq_ref * dt
         q_ref = self.q_ref_state.copy()
 
+        self.last_diagnostics = {
+            "error": e_g.copy(),
+            "error_derivative_raw": de_g_raw.copy(),
+            "error_derivative_filtered": de_g.copy(),
+            "integral_error": self.integral_error.copy(),
+            "task_correction": u_g.copy(),
+            "gravity_error_jacobian": J_g.copy(),
+            "task_dq": dq_task.copy(),
+            "posture_dq": dq_posture.copy(),
+            "raw_dq_ref": dq_ref.copy(),
+            "raw_q_ref": q_ref.copy(),
+            "dt": dt,
+        }
+
         return q_ref.astype(np.float32), dq_ref.astype(np.float32)
+
+    def get_last_diagnostics(self):
+        return {
+            key: value.copy() if isinstance(value, np.ndarray) else value
+            for key, value in self.last_diagnostics.items()
+        }
 
     def _compute_gravity_error(self, q, W_R_I, helpers):
         """通过 helper 计算 e_g。

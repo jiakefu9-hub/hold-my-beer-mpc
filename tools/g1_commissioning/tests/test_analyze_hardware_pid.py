@@ -72,6 +72,12 @@ class HardwarePidAnalysisTest(unittest.TestCase):
                 1e-7,
             )
             self.assertLess(
+                primary["metrics"][side][
+                    "endpoint_horizontal_linear_acceleration_h0_m_s2_norm"
+                ]["rms"],
+                1e-7,
+            )
+            self.assertLess(
                 primary["metrics"][side]["endpoint_angular_acceleration_h0_rad_s2_norm"]["rms"],
                 1e-7,
             )

@@ -157,6 +157,9 @@ def _window_metrics(data, mask):
             "linear_acceleration_h0_m_s2_norm": _norm_stats(
                 data["torso_linear_acceleration_h0_m_s2"][mask]
             ),
+            "horizontal_linear_acceleration_h0_m_s2_norm": _norm_stats(
+                data["torso_linear_acceleration_h0_m_s2"][mask, :2]
+            ),
             "angular_acceleration_h0_rad_s2_norm": _norm_stats(
                 data["torso_angular_acceleration_h0_rad_s2"][mask]
             ),
@@ -169,6 +172,9 @@ def _window_metrics(data, mask):
         result[side] = {
             "endpoint_linear_acceleration_h0_m_s2_norm": _norm_stats(
                 data[f"{side}_linear_acceleration_h0_m_s2"][mask]
+            ),
+            "endpoint_horizontal_linear_acceleration_h0_m_s2_norm": _norm_stats(
+                data[f"{side}_linear_acceleration_h0_m_s2"][mask, :2]
             ),
             "endpoint_angular_acceleration_h0_rad_s2_norm": _norm_stats(
                 data[f"{side}_angular_acceleration_h0_rad_s2"][mask]
@@ -366,6 +372,39 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
         "controller_compute_us": _scalar_stats(timing_compute),
         "dds_write_duration_us": _scalar_stats(timing_write),
     }
+    governor_rows = [
+        row for row in command_primary
+        if row.get("pid_active")
+        and "raw_pid_dq_ref_rad_s" in row
+        and "governed_dq_ref_rad_s" in row
+        and "governed_ddq_ref_rad_s2" in row
+    ]
+    if governor_rows:
+        raw_pid_dq = np.asarray([
+            row["raw_pid_dq_ref_rad_s"] for row in governor_rows
+        ], dtype=float)
+        governed_dq = np.asarray([
+            row["governed_dq_ref_rad_s"] for row in governor_rows
+        ], dtype=float)
+        governed_ddq = np.asarray([
+            row["governed_ddq_ref_rad_s2"] for row in governor_rows
+        ], dtype=float)
+        control["hardware_governor"] = {
+            "samples": len(governor_rows),
+            "raw_max_abs_dq_rad_s_per_joint": np.max(
+                np.abs(raw_pid_dq), axis=0
+            ).tolist(),
+            "sent_max_abs_dq_rad_s_per_joint": np.max(
+                np.abs(governed_dq), axis=0
+            ).tolist(),
+            "sent_max_abs_ddq_rad_s2_per_joint": np.max(
+                np.abs(governed_ddq), axis=0
+            ).tolist(),
+            "raw_velocity_limited_fraction_per_joint": np.mean(np.asarray([
+                row.get("raw_velocity_limited", [False] * 5)
+                for row in governor_rows
+            ], dtype=bool), axis=0).tolist(),
+        }
     summary = {
         "schema": "g1_hardware_pid_analysis_v1",
         "source_raw_jsonl": str(raw_path.resolve()),
