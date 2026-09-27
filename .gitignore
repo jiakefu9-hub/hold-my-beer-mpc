@@ -19,3 +19,5 @@ disturbance_template/artifacts/
 # 轻量、可复现的实验摘要放在 evaluation_summary/，允许正常提交。
 # evaluation_summary/ 不需要额外的反向忽略规则，因为它不在上述目录中。
 # === End local experiment outputs ===
+# Rebuildable native MPC kinematics library; never commit host-specific binaries.
+/build/

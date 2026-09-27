@@ -62,6 +62,30 @@ class HardwarePidAnalysisTest(unittest.TestCase):
             write_outputs(data, summary, output)
             for name in ("metrics.npz", "metrics.csv", "summary.json", "endpoint_metrics_h0.png"):
                 self.assertTrue((output / name).is_file())
+            # The MPC wrapper must preserve the same physical metrics while
+            # reporting its own controller/solver identities, not PID results.
+            mpc_rows = []
+            for row in rows:
+                row = dict(row)
+                row["schema"] = row["schema"].replace("pid", "mpc")
+                if "pid_active" in row:
+                    row["mpc_active"] = row.pop("pid_active")
+                    row["mpc"] = {"solved": True, "fallback_used": False}
+                mpc_rows.append(row)
+            with raw.open("w") as stream:
+                for row in mpc_rows:
+                    stream.write(json.dumps(row) + "\n")
+            _, mpc_summary = analyze(raw, sample_hz=100.0, filter_window_s=0.11)
+            self.assertEqual(mpc_summary["schema"], "g1_hardware_mpc_analysis_v1")
+            self.assertEqual(mpc_summary["windows"], summary["windows"])
+            # Fault-release rows with no task time are not normal control;
+            # removing half a second of commands must not be interpolated away.
+            with raw.open("w") as stream:
+                for row in mpc_rows:
+                    if not 6 < row.get("task_elapsed_s", 0) < 6.5:
+                        stream.write(json.dumps(row) + "\n")
+            with self.assertRaisesRegex(ValueError, "MPC commands.*gap"):
+                analyze(raw, sample_hz=100.0, filter_window_s=0.11)
         primary = summary["windows"]["primary_walk_start_through_stop_settle_end"]
         self.assertEqual(primary["interval_s"], [5.0, 18.0])
         self.assertEqual(primary["role"], "headline")

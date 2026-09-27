@@ -150,7 +150,7 @@ def main():
             "includes FK/PID, packet/CRC/IDL serialization and async file logging",
             "excludes live DDS deserialization/callback contention, RPC workers and actual command transport",
             "20ms LowState logging in source limits replay input resolution; reused samples are counted",
-            "ordinary Linux; measured timing is not a hard real-time guarantee",
+            "calling-process scheduling only; measured timing is not a hard real-time guarantee, even on PREEMPT_RT",
         ],
     }
     (args.output_dir / "summary.json").write_text(json.dumps(result, indent=2) + "\n")

@@ -38,6 +38,12 @@ def read_records(path):
             except Exception as exc:
                 raise ValueError(f"invalid JSON at line {line_number}") from exc
             schema = row.get("schema")
+            # Share identical physical endpoint metrics, not controller labels.
+            if schema in {"g1_mpc_session_v1", "g1_hardware_mpc_command_v1", "g1_mpc_timing_v1"}:
+                row["controller_kind"] = "mpc"
+                row["schema"] = schema = schema.replace("mpc", "pid")
+                if "mpc_active" in row:
+                    row["pid_active"] = row["mpc_active"]
             event = row.get("event")
             if schema == "g1_lowstate_raw_v1":
                 motors = {int(motor["index"]): motor for motor in row["motors"]}
@@ -57,7 +63,8 @@ def read_records(path):
                     "gyroscope_rad_s": row["gyroscope_rad_s"],
                     "accelerometer_raw_m_s2": row["accelerometer_raw_m_s2"],
                 })
-            elif schema in {"g1_pid_session_v1", "g1_hardware_pid_command_v1", "g1_pid_timing_v1"} or event in {
+            elif schema in {"g1_pid_session_v1", "g1_hardware_pid_command_v1", "g1_pid_timing_v1",
+                            "g1_mpc_cycle_complete_v1"} or event in {
                 "task_epoch", "heading_reference_frozen",
             }:
                 rows.append(row)
@@ -226,13 +233,22 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
     )
     commands = sorted(
         [row for row in rows if row.get("schema") == "g1_hardware_pid_command_v1"
-         and row.get("event") == "dds_write"],
+         and row.get("event") == "dds_write" and row.get("task_elapsed_s") is not None],
         key=lambda row: row["task_elapsed_s"],
     )
     if len(low) < 100 or len(imu) < 100 or len(commands) < 100:
         raise ValueError("capture is incomplete: requires LowState, torso IMU and command streams")
     low_t = np.asarray([(row["received_monotonic_ns"] - epoch) * 1e-9 for row in low])
     imu_t = np.asarray([(row["received_monotonic_ns"] - epoch) * 1e-9 for row in imu])
+    if session.get("controller_kind") == "mpc":
+        # Do not interpolate through a stopped controller or a long recording
+        # outage and present that as a complete primary-window MPC result.
+        for name, times in (("LowState", low_t), ("IMU", imu_t),
+                            ("commands", np.asarray([r["task_elapsed_s"] for r in commands]))):
+            overlap = (times[:-1] < RELEASE_START_S) & (times[1:] > WALK_START_S)
+            if (times[0] > WALK_START_S or times[-1] < RELEASE_START_S
+                or np.any(np.diff(times)[overlap] > .100)):
+                raise ValueError(f"MPC {name} has incomplete [5,18) coverage or a gap over 100 ms")
     start = max(float(low_t[0]), float(imu_t[0]))
     stop = min(float(low_t[-1]), float(imu_t[-1]))
     dt = 1.0 / float(sample_hz)
@@ -447,6 +463,24 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
             "the centered Savitzky-Golay derivative is offline/non-causal and is not an online controller input",
         ],
     }
+    if session.get("controller_kind") == "mpc":
+        summary["schema"] = "g1_hardware_mpc_analysis_v1"
+        summary["controller_kind"] = "mpc"
+        active = [row for row in command_primary if row.get("mpc_active") and "mpc" in row]
+        control["mpc"] = {
+            "active_samples": len(active),
+            "solved_samples": sum(bool(row["mpc"].get("solved")) for row in active),
+            "fallback_samples": sum(bool(row["mpc"].get("fallback_used")) for row in active),
+            "governor_changed_solution_samples": sum(bool(row.get("governor_changed_solution")) for row in active),
+            "prediction_mode": session.get("predictor_mode"),
+        }
+        from mpc_host import summarize_timing
+        complete_rows = [{**row, "full_work_ms": row["complete_work_ms"],
+                          "deadline_missed": row["complete_deadline_missed"]}
+                         for row in rows if row.get("schema") == "g1_mpc_cycle_complete_v1"
+                         and WALK_START_S <= row["task_elapsed_s"] < RELEASE_START_S]
+        control["complete_loop_timing"] = summarize_timing(complete_rows)
+        control["complete_loop_timing"]["scope"] = "through timing-row enqueue; final audit-row enqueue excluded"
     data["yaw0_rad"] = np.asarray(yaw0)
     return data, summary
 
@@ -533,7 +567,8 @@ def write_outputs(data, summary, output_dir):
         axis.axvline(WALK_STOP_S, color="black", linestyle="--", linewidth=0.8)
     axes[0].legend()
     axes[-1].set_xlabel("task time [s]")
-    fig.suptitle("Hardware PID bottle-center metrics in fixed H0")
+    label = "MPC" if summary.get("controller_kind") == "mpc" else "PID"
+    fig.suptitle(f"Hardware {label} bottle-center metrics in fixed H0")
     fig.tight_layout()
     fig.savefig(output_dir / "endpoint_metrics_h0.png", dpi=160)
     plt.close(fig)

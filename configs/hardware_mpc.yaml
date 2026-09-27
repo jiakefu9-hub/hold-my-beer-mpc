@@ -1,0 +1,38 @@
+# Hardware reference-servo MPC, not simulation inverse-dynamics deployment.
+# All disturbance vectors and rotations use the fixed run H0 inertial frame.
+schema: g1_hardware_mpc_config_v1
+control_period_s: 0.006
+horizon: 9
+prediction_backend: cpp_pinocchio
+solver_backend: daqp
+kinematics_library: build/right_arm_rnea/libright_arm_rnea.so
+
+# Same endpoint objectives as the simulation configuration; the state bounds
+# below apply to generated references, never to noisy measured joint velocity.
+q_ee_acc: 0.01
+q_ee_alpha: 0.0005
+q_ee_omega: 8.0
+q_gravity: [30.0, 30.0]
+q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
+q_vel: 0.08
+r_ddq: 0.0025
+terminal_scale: 2.0
+regularization: 0.000001
+reference_offset_limit_deg: [5.0, 5.0, 5.0, 5.0, 5.0]
+reference_max_dq_rad_s: 0.07
+reference_max_ddq_rad_s2: 0.20
+
+# OSQP settings retained solely for explicit offline solver comparisons.
+# Default DAQP uses primal_tol=1e-7, dual_tol=1e-10, eps_prox=0; every returned
+# full trajectory must satisfy the original physical QP within 1e-6.
+# Both backends share the iteration and time budget and final command governor.
+solver_eps_abs: 0.001
+solver_eps_rel: 0.00001
+solver_max_iter: 1000
+solver_check_termination: 10
+solver_time_limit_s: 0.0035
+solver_rho: 0.001
+solver_adaptive_rho: true
+# The time limit covers the native QP call, not assembly, DDS or the whole period.
+# Any rejected solution raises before returning a command; the runner owns
+# locomotion stop and controlled Arm SDK hand-back, not this offline core.

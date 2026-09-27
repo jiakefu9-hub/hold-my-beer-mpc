@@ -1,0 +1,64 @@
+{
+  "schema": "g1_hardware_mpc_frozen_predictor_v1",
+  "bank_sha256": "0e7b25f9a8ddb6dcb893891cee21cfbc216f9174f6efe2e7c1d3f400ce1705c7",
+  "bank_bytes": 6728216,
+  "fitting_performed": false,
+  "source_study": "walk_h0_refinement_20260925",
+  "source_sha256": {
+    "evaluation/hardware_shadow/commissioning/walk_h0_refinement_20260925/local/models/legs_current_imu_knn8.npz": "0cc98596d0528e774a3d299e326924a8973717efb2538cff41b605cda84a789d",
+    "evaluation/hardware_shadow/commissioning/walk_h0_refinement_20260925/local/models/legs_current_imu_delta_knn8.npz": "e9096dab443435783f8ac4310c8da1f51590829bc2777242b599d73b1fe99861",
+    "evaluation/hardware_shadow/commissioning/walk_h0_refinement_20260925/innovation/model.npz": "a6f63cdf7da34466944f7b6b45ce94b122219e6ea2384b47d61fb10dbb39a586"
+  },
+  "source_program_sha256": {
+    "tools/g1_commissioning/walk_h0_study/refine_local.py": "9dcc1ceee85f1490ee573e45310ec5e5388c28ad807b6141d5258fc4e4721ad6",
+    "tools/g1_commissioning/walk_h0_study/refine_innovation.py": "a27d76db6100a9965f467ed6620296c532951a2ee05a9788e6cb32c0e282655a",
+    "tools/g1_commissioning/walk_h0_study/methods.py": "0da3b71049fecd0b023109f8f6838253fe4ddd2b72b336c7ca35576af03b2879"
+  },
+  "development_runs": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8
+  ],
+  "excluded_run": 6,
+  "comparison_runs_not_in_bank": [
+    9,
+    10,
+    11,
+    12
+  ],
+  "old_five_runs_excluded": true,
+  "rows": 15099,
+  "feature_count": 33,
+  "neighbors": 8,
+  "features": "qf[0:12], dqf[0:12], H0 filtered acc/omega/alpha; standardize then IMU scale0.5",
+  "target_order": [
+    "acc3",
+    "omega3",
+    "alpha3",
+    "diagnostic_rpy3"
+  ],
+  "horizons_ms": [
+    6,
+    12,
+    18,
+    24,
+    30,
+    36,
+    42,
+    48,
+    54
+  ],
+  "grid_ms": 2,
+  "filter_hz": 15,
+  "target_contract": "acc/alpha left interval samples h-6,h-4,h-2ms; omega/rpy endpoint h",
+  "filter_caveat": "Future FILTERED estimates, not raw instantaneous acceleration. No fixed time advance or delay compensation.",
+  "alpha_contract": "15Hz causal lowpass of backward difference of 15Hz filtered omega on 2ms grid",
+  "innovation": "weighted historical future + decay[h,group]*(current - weighted historical current)",
+  "rotation_adapter": "Measured node0 R; world-left SO3 exponential integration of trapezoidal predicted omega. RPY forecasts diagnostic only.",
+  "frame": "fixed H0 yaw reference per run; torso IMU origin; gravity [0,0,-9.81]",
+  "status": "Offline-fitted candidate; no claim of hardware MPC or raw-impact validation."
+}

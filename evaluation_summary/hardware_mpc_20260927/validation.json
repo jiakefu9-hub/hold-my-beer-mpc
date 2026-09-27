@@ -1,0 +1,1193 @@
+{
+  "schema": "g1_hardware_mpc_offline_validation_summary_v1",
+  "date": "2026-09-27",
+  "hardware_output": false,
+  "runs": [
+    {
+      "trial": 9,
+      "repeat": 1,
+      "local_directory": "evaluation/hardware_shadow/commissioning/mpc_offline_20260927_final_daqp09/run1",
+      "source_npz_sha256": "3e3fc1ac27821cb4668b20203d260c04308f06d52700221522156f257272b31d",
+      "raw_jsonl_sha256": "d2c3e0d071b87132314e1083b877c69853be926128efbde6bad7e3c328a7d8cc",
+      "status": "complete",
+      "primary_5_18": {
+        "available": true,
+        "samples": 2165,
+        "actual_period_ms": {
+          "mean": 6.0027707852194,
+          "p50": 6.000059,
+          "p95": 6.007533200000001,
+          "p99": 6.01249024,
+          "max": 9.008481
+        },
+        "controller_ms": {
+          "mean": 2.077800820785219,
+          "p50": 2.060146,
+          "p95": 2.2431189999999996,
+          "p99": 2.420586920000002,
+          "max": 3.108994
+        },
+        "full_work_ms": {
+          "mean": 3.6437709528868356,
+          "p50": 3.6167089999999997,
+          "p95": 3.9145057999999997,
+          "p99": 4.21171352,
+          "max": 5.584172
+        },
+        "ingress_ms": {
+          "mean": 0.2717398397228637,
+          "p50": 0.253307,
+          "p95": 0.37043059999999994,
+          "p99": 0.42741772000000006,
+          "max": 0.541714
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3100429150115473,
+          "p50": 0.307628,
+          "p95": 0.3293326,
+          "p99": 0.35919112,
+          "max": 0.524173
+        },
+        "predictor_ms": {
+          "mean": 0.7940167644341801,
+          "p50": 0.780928,
+          "p95": 0.9630481999999998,
+          "p99": 1.1144375200000014,
+          "max": 1.4293909999999999
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06825439953810623,
+          "p50": 0.066161,
+          "p95": 0.07360699999999995,
+          "p99": 0.0793356,
+          "max": 3.076457
+        },
+        "deadline_misses": 1,
+        "skipped_slots": 1,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.00046189376443418013,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "all_stages": {
+        "available": true,
+        "samples": 3500,
+        "actual_period_ms": {
+          "mean": 6.001728206630466,
+          "p50": 6.000074000000001,
+          "p95": 6.008000200000001,
+          "p99": 6.01421444,
+          "max": 9.008481
+        },
+        "controller_ms": {
+          "mean": 1.5018683497142857,
+          "p50": 2.0327405,
+          "p95": 2.2552844999999997,
+          "p99": 2.4048383099999997,
+          "max": 3.108994
+        },
+        "full_work_ms": {
+          "mean": 2.8662045845714283,
+          "p50": 3.5218914999999997,
+          "p95": 3.860123549999999,
+          "p99": 4.09581123,
+          "max": 5.584172
+        },
+        "ingress_ms": {
+          "mean": 0.278678854,
+          "p50": 0.257973,
+          "p95": 0.3842308,
+          "p99": 0.4909250399999999,
+          "max": 2.673305
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.33196870171428566,
+          "p50": 0.31291349999999996,
+          "p95": 0.4106428,
+          "p99": 0.46884391999999914,
+          "max": 1.489369
+        },
+        "predictor_ms": {
+          "mean": 0.6078915342857143,
+          "p50": 0.7140394999999999,
+          "p95": 0.9353082499999998,
+          "p99": 1.0805667,
+          "max": 1.526258
+        },
+        "wake_lateness_ms": {
+          "mean": 0.067675572,
+          "p50": 0.066032,
+          "p95": 0.07454019999999999,
+          "p99": 0.08159875999999998,
+          "max": 3.076457
+        },
+        "deadline_misses": 1,
+        "skipped_slots": 1,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.00028571428571428574,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "final_weight": 0,
+      "journal_dropped": 0,
+      "journal_failed": false,
+      "reference_audit": {
+        "active_commands": 2499,
+        "max_full_constraint_violation": 4.003741782554471e-12,
+        "max_reference_offset_deg": 5,
+        "max_reference_speed_rad_s": 0.07000000000000224,
+        "max_reference_acceleration_rad_s2": 0.20000000000038515
+      }
+    },
+    {
+      "trial": 9,
+      "repeat": 2,
+      "local_directory": "evaluation/hardware_shadow/commissioning/mpc_offline_20260927_final_daqp09/run2",
+      "source_npz_sha256": "3e3fc1ac27821cb4668b20203d260c04308f06d52700221522156f257272b31d",
+      "raw_jsonl_sha256": "3fd757eb9cbd27a1ff37a2ca518d7617a25816dbe43704d4145266e8ae023ba2",
+      "status": "complete",
+      "primary_5_18": {
+        "available": true,
+        "samples": 2163,
+        "actual_period_ms": {
+          "mean": 6.0083241086454,
+          "p50": 6.000054,
+          "p95": 6.0087298,
+          "p99": 6.01331104,
+          "max": 12.006058
+        },
+        "controller_ms": {
+          "mean": 2.0982656680536294,
+          "p50": 2.076597,
+          "p95": 2.2985007,
+          "p99": 2.473147740000001,
+          "max": 3.603145
+        },
+        "full_work_ms": {
+          "mean": 3.67836449468331,
+          "p50": 3.6444039999999998,
+          "p95": 4.0036364,
+          "p99": 4.256178,
+          "max": 6.706904
+        },
+        "ingress_ms": {
+          "mean": 0.27153290106333794,
+          "p50": 0.252429,
+          "p95": 0.37850090000000003,
+          "p99": 0.43172656000000004,
+          "max": 1.0433839999999999
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3132226740638003,
+          "p50": 0.30933,
+          "p95": 0.3365122,
+          "p99": 0.3896122800000003,
+          "max": 1.346542
+        },
+        "predictor_ms": {
+          "mean": 0.8051577119741099,
+          "p50": 0.788539,
+          "p95": 0.9915982999999999,
+          "p99": 1.1948727000000003,
+          "max": 2.1229839999999998
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06269420943134535,
+          "p50": 0.061063,
+          "p95": 0.0697781,
+          "p99": 0.07487917999999999,
+          "max": 0.135847
+        },
+        "deadline_misses": 3,
+        "skipped_slots": 3,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.0013869625520110957,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "all_stages": {
+        "available": true,
+        "samples": 3498,
+        "actual_period_ms": {
+          "mean": 6.005160430368887,
+          "p50": 5.999988,
+          "p95": 6.0089394,
+          "p99": 6.014170480000001,
+          "max": 12.006058
+        },
+        "controller_ms": {
+          "mean": 1.5170438307604344,
+          "p50": 2.042277,
+          "p95": 2.3062976999999987,
+          "p99": 2.497408509999999,
+          "max": 3.603145
+        },
+        "full_work_ms": {
+          "mean": 2.8777759253859343,
+          "p50": 3.5350764999999997,
+          "p95": 3.93986895,
+          "p99": 4.189113329999998,
+          "max": 6.706904
+        },
+        "ingress_ms": {
+          "mean": 0.27343376986849627,
+          "p50": 0.254582,
+          "p95": 0.3828250999999998,
+          "p99": 0.44580754999999994,
+          "max": 1.0433839999999999
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3348960614636935,
+          "p50": 0.31442499999999995,
+          "p95": 0.42303389999999996,
+          "p99": 0.4744818799999996,
+          "max": 1.346542
+        },
+        "predictor_ms": {
+          "mean": 0.6064290743281875,
+          "p50": 0.715138,
+          "p95": 0.9512511499999997,
+          "p99": 1.1157579599999992,
+          "max": 2.1229839999999998
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06260403173241852,
+          "p50": 0.061050499999999994,
+          "p95": 0.06994199999999999,
+          "p99": 0.07531592999999996,
+          "max": 0.135847
+        },
+        "deadline_misses": 3,
+        "skipped_slots": 3,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.0008576329331046312,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "final_weight": 0,
+      "journal_dropped": 0,
+      "journal_failed": false,
+      "reference_audit": {
+        "active_commands": 2497,
+        "max_full_constraint_violation": 9.13585873618672e-12,
+        "max_reference_offset_deg": 5,
+        "max_reference_speed_rad_s": 0.07000000000000232,
+        "max_reference_acceleration_rad_s2": 0.20000000000038212
+      }
+    },
+    {
+      "trial": 9,
+      "repeat": 3,
+      "local_directory": "evaluation/hardware_shadow/commissioning/mpc_offline_20260927_final_daqp09/run3",
+      "source_npz_sha256": "3e3fc1ac27821cb4668b20203d260c04308f06d52700221522156f257272b31d",
+      "raw_jsonl_sha256": "1e10650661c6032942f56c90a97e64f97d6f1e65ca43c11463b06e637818e1f8",
+      "status": "complete",
+      "primary_5_18": {
+        "available": true,
+        "samples": 2165,
+        "actual_period_ms": {
+          "mean": 6.0027732877598154,
+          "p50": 5.999955000000001,
+          "p95": 6.0076156,
+          "p99": 6.0137054,
+          "max": 12.009860000000002
+        },
+        "controller_ms": {
+          "mean": 2.091478405542725,
+          "p50": 2.072265,
+          "p95": 2.2688043999999996,
+          "p99": 2.3959370000000004,
+          "max": 3.288621
+        },
+        "full_work_ms": {
+          "mean": 3.6730594129330254,
+          "p50": 3.649616,
+          "p95": 3.9523453999999996,
+          "p99": 4.2356812,
+          "max": 6.3071019999999995
+        },
+        "ingress_ms": {
+          "mean": 0.28627270484988454,
+          "p50": 0.264698,
+          "p95": 0.38885919999999996,
+          "p99": 0.4382302,
+          "max": 0.704417
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3147886217090069,
+          "p50": 0.312502,
+          "p95": 0.3337085999999999,
+          "p99": 0.37203604000000023,
+          "max": 0.515157
+        },
+        "predictor_ms": {
+          "mean": 0.7945714609699769,
+          "p50": 0.776056,
+          "p95": 0.9948751999999998,
+          "p99": 1.1515527200000004,
+          "max": 1.748769
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06727354688221708,
+          "p50": 0.06652899999999999,
+          "p95": 0.0731668,
+          "p99": 0.08141000000000001,
+          "max": 0.124232
+        },
+        "deadline_misses": 1,
+        "skipped_slots": 1,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.00046189376443418013,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "all_stages": {
+        "available": true,
+        "samples": 3500,
+        "actual_period_ms": {
+          "mean": 6.001727092597886,
+          "p50": 5.999932,
+          "p95": 6.0080361,
+          "p99": 6.015194780000001,
+          "max": 12.009860000000002
+        },
+        "controller_ms": {
+          "mean": 1.5102492185714285,
+          "p50": 2.0416584999999996,
+          "p95": 2.2734371499999995,
+          "p99": 2.3943794999999986,
+          "max": 3.288621
+        },
+        "full_work_ms": {
+          "mean": 2.878067086285714,
+          "p50": 3.5470809999999995,
+          "p95": 3.8930769499999998,
+          "p99": 4.125073269999999,
+          "max": 6.3071019999999995
+        },
+        "ingress_ms": {
+          "mean": 0.28956278742857144,
+          "p50": 0.2653665,
+          "p95": 0.39684994999999984,
+          "p99": 0.4835635099999999,
+          "max": 2.341903
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3350439405714285,
+          "p50": 0.318179,
+          "p95": 0.40960979999999997,
+          "p99": 0.4934042699999997,
+          "max": 2.214184
+        },
+        "predictor_ms": {
+          "mean": 0.5995276614285714,
+          "p50": 0.70061,
+          "p95": 0.9608548999999998,
+          "p99": 1.114760109999999,
+          "max": 1.748769
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06721825171428572,
+          "p50": 0.0662825,
+          "p95": 0.07432804999999999,
+          "p99": 0.08316634999999994,
+          "max": 0.29736999999999997
+        },
+        "deadline_misses": 1,
+        "skipped_slots": 1,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.00028571428571428574,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "final_weight": 0,
+      "journal_dropped": 0,
+      "journal_failed": false,
+      "reference_audit": {
+        "active_commands": 2499,
+        "max_full_constraint_violation": 5.947964343278045e-12,
+        "max_reference_offset_deg": 5,
+        "max_reference_speed_rad_s": 0.07000000000000232,
+        "max_reference_acceleration_rad_s2": 0.20000000000038476
+      }
+    },
+    {
+      "trial": 10,
+      "repeat": 1,
+      "local_directory": "evaluation/hardware_shadow/commissioning/mpc_offline_20260927_final_daqp10/run1",
+      "source_npz_sha256": "2b93b26071f8c4bb46fa52e30b3f8cf94901a49aeaba3efa7ff3b98a8ed101f9",
+      "raw_jsonl_sha256": "b7b9a8ae420afda13b8f6cfdfccd2208a57dff8e1ba0ca3a86bfd9c24f67b5c3",
+      "status": "complete",
+      "primary_5_18": {
+        "available": true,
+        "samples": 2166,
+        "actual_period_ms": {
+          "mean": 5.999997900738689,
+          "p50": 5.999995,
+          "p95": 6.0080160000000005,
+          "p99": 6.015810850000001,
+          "max": 6.076739
+        },
+        "controller_ms": {
+          "mean": 2.090305275161588,
+          "p50": 2.0712,
+          "p95": 2.2740925,
+          "p99": 2.476236649999999,
+          "max": 2.7307319999999997
+        },
+        "full_work_ms": {
+          "mean": 3.664198447368421,
+          "p50": 3.649223,
+          "p95": 3.94306175,
+          "p99": 4.1796130499999995,
+          "max": 4.710896
+        },
+        "ingress_ms": {
+          "mean": 0.2767618998153278,
+          "p50": 0.2557985,
+          "p95": 0.37872924999999996,
+          "p99": 0.43944814999999937,
+          "max": 0.663099
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3066584893813481,
+          "p50": 0.3032315,
+          "p95": 0.32924775,
+          "p99": 0.37918514999999975,
+          "max": 0.486614
+        },
+        "predictor_ms": {
+          "mean": 0.7971490900277007,
+          "p50": 0.7841039999999999,
+          "p95": 0.9786765,
+          "p99": 1.1158486499999987,
+          "max": 1.4808839999999999
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06710092197599261,
+          "p50": 0.06620999999999999,
+          "p95": 0.07397524999999999,
+          "p99": 0.08102224999999996,
+          "max": 0.149621
+        },
+        "deadline_misses": 0,
+        "skipped_slots": 0,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "all_stages": {
+        "available": true,
+        "samples": 3501,
+        "actual_period_ms": {
+          "mean": 6.000015193428572,
+          "p50": 5.999987000000001,
+          "p95": 6.007895100000001,
+          "p99": 6.01592787,
+          "max": 6.076739
+        },
+        "controller_ms": {
+          "mean": 1.5128634767209368,
+          "p50": 2.040351,
+          "p95": 2.302691,
+          "p99": 2.466007,
+          "max": 2.7307319999999997
+        },
+        "full_work_ms": {
+          "mean": 2.867602001713796,
+          "p50": 3.542486,
+          "p95": 3.8914489999999997,
+          "p99": 4.137224,
+          "max": 4.710896
+        },
+        "ingress_ms": {
+          "mean": 0.27729703056269633,
+          "p50": 0.25698899999999997,
+          "p95": 0.384108,
+          "p99": 0.444652,
+          "max": 0.663099
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3261416258211939,
+          "p50": 0.309702,
+          "p95": 0.41364,
+          "p99": 0.467869,
+          "max": 1.283388
+        },
+        "predictor_ms": {
+          "mean": 0.6037445061411025,
+          "p50": 0.713845,
+          "p95": 0.9455089999999999,
+          "p99": 1.063134,
+          "max": 1.4808839999999999
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06676271351042559,
+          "p50": 0.065901,
+          "p95": 0.073778,
+          "p99": 0.081331,
+          "max": 0.149621
+        },
+        "deadline_misses": 0,
+        "skipped_slots": 0,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "final_weight": 0,
+      "journal_dropped": 0,
+      "journal_failed": false,
+      "reference_audit": {
+        "active_commands": 2500,
+        "max_full_constraint_violation": 6.165373767075266e-12,
+        "max_reference_offset_deg": 5,
+        "max_reference_speed_rad_s": 0.07000000000000223,
+        "max_reference_acceleration_rad_s2": 0.20000000000037926
+      }
+    },
+    {
+      "trial": 11,
+      "repeat": 1,
+      "local_directory": "evaluation/hardware_shadow/commissioning/mpc_offline_20260927_final_daqp11/run1",
+      "source_npz_sha256": "9008f3a1cbf5b7f632418456e01924b622ef4f0d789f5df469d43328c154f167",
+      "raw_jsonl_sha256": "c235a623fa88a4f5be6a37b47208e418c9950ffa40452b2787cbea89d12233a7",
+      "status": "complete",
+      "primary_5_18": {
+        "available": true,
+        "samples": 2165,
+        "actual_period_ms": {
+          "mean": 6.002769490531178,
+          "p50": 6.0000290000000005,
+          "p95": 6.009087200000001,
+          "p99": 6.012604840000001,
+          "max": 11.996218
+        },
+        "controller_ms": {
+          "mean": 2.0807843736720555,
+          "p50": 2.061868,
+          "p95": 2.2610471999999993,
+          "p99": 2.4339764400000004,
+          "max": 3.540389
+        },
+        "full_work_ms": {
+          "mean": 3.627440858660508,
+          "p50": 3.5960319999999997,
+          "p95": 3.928815599999999,
+          "p99": 4.23913572,
+          "max": 6.109438
+        },
+        "ingress_ms": {
+          "mean": 0.2553298595842956,
+          "p50": 0.240942,
+          "p95": 0.35765939999999985,
+          "p99": 0.4099687200000004,
+          "max": 0.569561
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.30695702124711316,
+          "p50": 0.304602,
+          "p95": 0.3236125999999999,
+          "p99": 0.3642054800000002,
+          "max": 0.556591
+        },
+        "predictor_ms": {
+          "mean": 0.7980556355658198,
+          "p50": 0.7820739999999999,
+          "p95": 0.9751687999999998,
+          "p99": 1.1949863600000004,
+          "max": 1.622946
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06309595981524249,
+          "p50": 0.06136,
+          "p95": 0.07012239999999999,
+          "p99": 0.07479204000000002,
+          "max": 0.272844
+        },
+        "deadline_misses": 1,
+        "skipped_slots": 1,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.00046189376443418013,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "all_stages": {
+        "available": true,
+        "samples": 3500,
+        "actual_period_ms": {
+          "mean": 6.001726722206346,
+          "p50": 6.000034,
+          "p95": 6.0089952,
+          "p99": 6.01308308,
+          "max": 11.996218
+        },
+        "controller_ms": {
+          "mean": 1.5075262434285712,
+          "p50": 2.034194,
+          "p95": 2.28790925,
+          "p99": 2.4470732099999983,
+          "max": 3.540389
+        },
+        "full_work_ms": {
+          "mean": 2.840265494857143,
+          "p50": 3.497446,
+          "p95": 3.8603204499999997,
+          "p99": 4.167734979999999,
+          "max": 6.109438
+        },
+        "ingress_ms": {
+          "mean": 0.2576307037142857,
+          "p50": 0.24166749999999998,
+          "p95": 0.3617950499999999,
+          "p99": 0.43320316,
+          "max": 0.7310329999999999
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.328757062,
+          "p50": 0.310809,
+          "p95": 0.40906829999999994,
+          "p99": 0.47237233999999984,
+          "max": 1.419184
+        },
+        "predictor_ms": {
+          "mean": 0.6029891517142857,
+          "p50": 0.7154039999999999,
+          "p95": 0.93796885,
+          "p99": 1.1155150799999978,
+          "max": 1.622946
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06288894428571429,
+          "p50": 0.061352,
+          "p95": 0.0700351,
+          "p99": 0.07591871999999998,
+          "max": 0.272844
+        },
+        "deadline_misses": 1,
+        "skipped_slots": 1,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.00028571428571428574,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "final_weight": 0,
+      "journal_dropped": 0,
+      "journal_failed": false,
+      "reference_audit": {
+        "active_commands": 2499,
+        "max_full_constraint_violation": 5.0387749528368886e-12,
+        "max_reference_offset_deg": 5,
+        "max_reference_speed_rad_s": 0.07000000000000232,
+        "max_reference_acceleration_rad_s2": 0.20000000000037205
+      }
+    },
+    {
+      "trial": 12,
+      "repeat": 1,
+      "local_directory": "evaluation/hardware_shadow/commissioning/mpc_offline_20260927_final_daqp12/run1",
+      "source_npz_sha256": "3c493645a641be35860254e0b5315c1ee16d18845a5ae89810f3f47b0dc8a103",
+      "raw_jsonl_sha256": "a1d670f0856981145bd25bae869f2af896b17a2dbfd4b46034ea8c1a059d39e1",
+      "status": "complete",
+      "primary_5_18": {
+        "available": true,
+        "samples": 2163,
+        "actual_period_ms": {
+          "mean": 6.0083260235783635,
+          "p50": 5.999961000000001,
+          "p95": 6.008163400000001,
+          "p99": 6.01489752,
+          "max": 12.013614
+        },
+        "controller_ms": {
+          "mean": 2.1101154438280165,
+          "p50": 2.0845439999999997,
+          "p95": 2.3351807,
+          "p99": 2.58867572,
+          "max": 3.601158
+        },
+        "full_work_ms": {
+          "mean": 3.709589951456311,
+          "p50": 3.671497,
+          "p95": 4.0908103,
+          "p99": 4.3938975600000045,
+          "max": 7.067226
+        },
+        "ingress_ms": {
+          "mean": 0.3005107720758206,
+          "p50": 0.290576,
+          "p95": 0.40671969999999996,
+          "p99": 0.4905894200000007,
+          "max": 0.9710449999999999
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.3152972810910772,
+          "p50": 0.313034,
+          "p95": 0.3327171,
+          "p99": 0.3815208000000009,
+          "max": 0.588505
+        },
+        "predictor_ms": {
+          "mean": 0.797959145631068,
+          "p50": 0.779845,
+          "p95": 1.0162487,
+          "p99": 1.2222757200000007,
+          "max": 1.6329859999999998
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06825495376791492,
+          "p50": 0.06694499999999999,
+          "p95": 0.07750230000000001,
+          "p99": 0.08527890000000002,
+          "max": 0.353943
+        },
+        "deadline_misses": 3,
+        "skipped_slots": 3,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.0013869625520110957,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "all_stages": {
+        "available": true,
+        "samples": 3494,
+        "actual_period_ms": {
+          "mean": 6.0120368096192385,
+          "p50": 5.999974000000001,
+          "p95": 6.008493000000001,
+          "p99": 6.01560016,
+          "max": 12.047309
+        },
+        "controller_ms": {
+          "mean": 1.5286432427017744,
+          "p50": 2.0499715,
+          "p95": 2.3449363499999993,
+          "p99": 2.582044810000001,
+          "max": 4.397444
+        },
+        "full_work_ms": {
+          "mean": 2.9138578523182597,
+          "p50": 3.5680895,
+          "p95": 4.0024356999999995,
+          "p99": 4.3199567100000005,
+          "max": 7.706322999999999
+        },
+        "ingress_ms": {
+          "mean": 0.30114318460217515,
+          "p50": 0.288396,
+          "p95": 0.4215217,
+          "p99": 0.5108513700000002,
+          "max": 1.142008
+        },
+        "packet_crc_serialize_ms": {
+          "mean": 0.33677335603892383,
+          "p50": 0.319075,
+          "p95": 0.4195481,
+          "p99": 0.4768251900000003,
+          "max": 1.698648
+        },
+        "predictor_ms": {
+          "mean": 0.6039879075558099,
+          "p50": 0.7025895,
+          "p95": 0.9690851999999999,
+          "p99": 1.1445045900000004,
+          "max": 2.188574
+        },
+        "wake_lateness_ms": {
+          "mean": 0.0680631903262736,
+          "p50": 0.066541,
+          "p95": 0.07656294999999999,
+          "p99": 0.08523085000000001,
+          "max": 1.0256399999999999
+        },
+        "deadline_misses": 7,
+        "skipped_slots": 7,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.002003434459072696,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "final_weight": 0,
+      "journal_dropped": 0,
+      "journal_failed": false,
+      "reference_audit": {
+        "active_commands": 2493,
+        "max_full_constraint_violation": 4.0549230639896905e-12,
+        "max_reference_offset_deg": 5,
+        "max_reference_speed_rad_s": 0.07000000000000231,
+        "max_reference_acceleration_rad_s2": 0.2000000000003788
+      }
+    }
+  ],
+  "host": {
+    "schema": "g1_mpc_host_evidence_v1",
+    "kernel_release": "6.8.1-1057-realtime",
+    "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+    "kernel_realtime_raw": "1",
+    "preempt_rt_active": true,
+    "process_scheduler": "SCHED_OTHER",
+    "process_scheduler_priority": 0,
+    "allowed_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "selected_control_cpu": 2,
+    "selected_cpu_smt_siblings": "1-2",
+    "scaling_driver": "intel_pstate",
+    "scaling_governor": "powersave",
+    "energy_performance_preference": "balance_performance",
+    "frequency_khz_snapshot": "1704840",
+    "platform_profile": "performance",
+    "rt_priority_limits": [
+      0,
+      0
+    ],
+    "memlock_bytes_limits": [
+      4154826752,
+      4154826752
+    ],
+    "capabilities": {
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000"
+    },
+    "numerical_thread_environment": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": null
+    },
+    "system_settings_changed": false,
+    "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+    "limitations": [
+      "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+      "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+      "governor label alone does not specify current CPU frequency or performance",
+      "host compute and local DDS Write durations do not measure motor execution latency"
+    ]
+  },
+  "core": {
+    "schema": "g1_hardware_mpc_core_v1",
+    "model": "reference_servo_mpc",
+    "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+    "solver_package_version": "0.9.1",
+    "state": "persistent sent q_reference,dq_reference, not measured joint state",
+    "tracking_offset_model": "q_actual(k)=q_virtual(k)+q_error+k*dt*dq_error; dq_actual=dq_virtual+dq_error",
+    "actuation": "Arm SDK firmware PD; tau_ff=0; no inverse dynamics",
+    "frame": "fixed H0",
+    "config": {
+      "schema": "g1_hardware_mpc_config_v1",
+      "control_period_s": 0.006,
+      "horizon": 9,
+      "prediction_backend": "cpp_pinocchio",
+      "solver_backend": "daqp",
+      "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+      "q_ee_acc": 0.01,
+      "q_ee_alpha": 0.0005,
+      "q_ee_omega": 8,
+      "q_gravity": [
+        30,
+        30
+      ],
+      "q_posture": [
+        4,
+        4,
+        1.5,
+        0.2,
+        0.2
+      ],
+      "q_vel": 0.08,
+      "r_ddq": 0.0025,
+      "terminal_scale": 2,
+      "regularization": 0.000001,
+      "reference_offset_limit_deg": [
+        5,
+        5,
+        5,
+        5,
+        5
+      ],
+      "reference_max_dq_rad_s": 0.07,
+      "reference_max_ddq_rad_s2": 0.2,
+      "solver_eps_abs": 0.001,
+      "solver_eps_rel": 0.00001,
+      "solver_max_iter": 1000,
+      "solver_check_termination": 10,
+      "solver_time_limit_s": 0.0035,
+      "solver_rho": 0.001,
+      "solver_adaptive_rho": true
+    },
+    "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+    "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+    "xml_sha256": {
+      "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+      "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+    },
+    "cost": {
+      "term_names": [
+        "linear_acceleration",
+        "angular_acceleration",
+        "angular_velocity",
+        "gravity",
+        "posture",
+        "velocity",
+        "control"
+      ],
+      "Q_ee_acc": [
+        [
+          0.01,
+          0,
+          0
+        ],
+        [
+          0,
+          0.01,
+          0
+        ],
+        [
+          0,
+          0,
+          0.01
+        ]
+      ],
+      "Q_ee_alpha": [
+        [
+          0.0005,
+          0,
+          0
+        ],
+        [
+          0,
+          0.0005,
+          0
+        ],
+        [
+          0,
+          0,
+          0.0005
+        ]
+      ],
+      "Q_ee_omega": [
+        [
+          8,
+          0,
+          0
+        ],
+        [
+          0,
+          8,
+          0
+        ],
+        [
+          0,
+          0,
+          8
+        ]
+      ],
+      "Qg": [
+        [
+          30,
+          0
+        ],
+        [
+          0,
+          30
+        ]
+      ],
+      "Qq": [
+        [
+          4,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1.5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0.2,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0.2
+        ]
+      ],
+      "Qv": [
+        [
+          0.08,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0.08,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0.08,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0.08,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0.08
+        ]
+      ],
+      "R": [
+        [
+          0.0025,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0.0025,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0.0025,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0.0025,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0.0025
+        ]
+      ],
+      "posture_reference": [
+        -0.06981317007977318,
+        0.017453292519943295,
+        0,
+        -0.1361356816555577,
+        0
+      ],
+      "terminal_scale": 2
+    }
+  },
+  "source_sha256": {
+    "benchmark_hardware_mpc.py": "b61a4d2ea1353a2385b7f33e99946cff8ca9d44be7b82cfe2be77d42608c2e99",
+    "g1_walk_mpc.py": "f3c56e7f9c82a0da0438f9189d977cf6d5f7e546e59184e0969f6e3a87093b7f",
+    "g1_walk_pid.py": "1b225a29e596b2ddd189bfb88e1ba287608c7502a4ae9be04169a061d7a1c0fc",
+    "hardware_mpc_control.py": "2e20c4d77cb4600f803017f0045cbb3b73b4f82f922b95eb70f6ed228dc08738",
+    "hardware_mpc_solver.py": "8d3154bf9dbb6b9adb9a07b02d436f76d60bee7313e93dec34b4fad5fcb02411",
+    "hardware_mpc_predictor.py": "7470c0b06191e0e24c4fe6542b61e615be8391783b7c7200ee1ef089235f049b",
+    "hardware_pid_control.py": "6fac37cb52ea3fbaa41f30d5c9f7410a16cfd82d2f5cb8881781f1b14ef2938e"
+  },
+  "predictor_bank_sha256": "0e7b25f9a8ddb6dcb893891cee21cfbc216f9174f6efe2e7c1d3f400ce1705c7",
+  "timing_limitations": [
+    "replayed feedback is not a response to MPC; no physical effect claim",
+    "includes causal ingress, model, actual QP, packet CRC+serialization, async logging",
+    "excludes real DDS receive/deserialization, network Write and RPC worker contention",
+    "accepted replay ingress uses the same >=2ms sampling threshold as live Streams",
+    "full_work includes timing enqueue; final timestamp and clock bookkeeping excluded",
+    "measured host timing is not a hard real-time certificate"
+  ],
+  "predictor_verification": {
+    "schema": "g1_hardware_mpc_predictor_verification_v1",
+    "passed": true,
+    "bank_sha256": "0e7b25f9a8ddb6dcb893891cee21cfbc216f9174f6efe2e7c1d3f400ce1705c7",
+    "comparison": [
+      {
+        "trial": 9,
+        "anchors": 2157
+      },
+      {
+        "trial": 10,
+        "anchors": 2157
+      },
+      {
+        "trial": 11,
+        "anchors": 2157
+      },
+      {
+        "trial": 12,
+        "anchors": 2157
+      }
+    ],
+    "predicted_scalars_checked": 931824,
+    "max_prediction_absolute_error": 7.105427357601002e-15,
+    "max_causal_preprocessor_feature_absolute_error": 1.7763568394002505e-14,
+    "limitations": [
+      "same accepted samples for preprocessing parity; live callback downsampling may differ",
+      "filtered forecast parity, not SO3-rollout forecast accuracy or physical control validation",
+      "comparison episodes were previously inspected, not new blind evaluation"
+    ]
+  },
+  "primary_samples": 12987,
+  "primary_deadline_misses": 9,
+  "primary_deadline_miss_fraction": 0.000693000693000693,
+  "tests": {
+    "focused_unittests_passed": 30,
+    "cpp_parity_random_states": 30,
+    "cpp_parity_batch_nodes": 13,
+    "cpp_python_max_difference_reported": 0,
+    "offline_preflight_passed": true,
+    "preflight_serialized_bytes": 1004
+  }
+}

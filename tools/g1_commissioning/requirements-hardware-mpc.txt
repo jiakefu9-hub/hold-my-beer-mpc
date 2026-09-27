@@ -1,0 +1,3 @@
+# Added to the existing g1_mpc environment; do not reinstall the environment.
+# Numerical/SDK dependencies are already documented by the repository.
+daqp==0.9.1

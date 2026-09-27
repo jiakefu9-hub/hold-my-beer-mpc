@@ -192,7 +192,9 @@ def parse_vector(value, count, name):
     return result
 
 
-def load_profile(path: Path):
+def load_profile(path: Path, controller_kind="pid"):
+    if controller_kind not in {"pid", "mpc"}:
+        raise ValueError("unsupported controller profile")
     values = {}
     for line_number, raw in enumerate(path.read_text().splitlines(), 1):
         line = raw.strip()
@@ -208,11 +210,13 @@ def load_profile(path: Path):
         "schema", "robot_id", "model_name", "joint_layout", "confirmed_by",
         "loco_service", "profile_status",
     )
-    missing = [name for name in (*required_text, *REQUIRED_CONFIRMATIONS) if name not in values]
+    confirmations = tuple(name.replace("pid", controller_kind) for name in REQUIRED_CONFIRMATIONS)
+    schema = SCHEMA.replace("pid", controller_kind)
+    missing = [name for name in (*required_text, *confirmations) if name not in values]
     if missing:
         raise ValueError(f"profile missing keys: {', '.join(missing)}")
-    if values["schema"] != SCHEMA:
-        raise ValueError(f"profile schema must be {SCHEMA}")
+    if values["schema"] != schema:
+        raise ValueError(f"profile schema must be {schema}")
     if values["profile_status"] != "FIELD_REVIEWED":
         raise ValueError("profile_status must be FIELD_REVIEWED")
     if values["robot_id"] in {"", "UNSET"} or values["model_name"] in {"", "UNSET"}:
@@ -223,7 +227,7 @@ def load_profile(path: Path):
         raise ValueError("this field tool accepts only the reviewed sport service")
     if values["joint_layout"] != "g1_23_arm5":
         raise ValueError("only the confirmed G1 23DoF Arm5 mapping is accepted")
-    for name in REQUIRED_CONFIRMATIONS:
+    for name in confirmations:
         if not parse_bool(values[name]):
             raise ValueError(f"{name} must be true")
     if parse_bool(values.get("synthetic_fixture", "false")):
@@ -242,14 +246,19 @@ def load_profile(path: Path):
         raise ValueError("kp must be 20 on valid Arm5 slots and zero on invalid slots")
     if not np.array_equal(kd, np.r_[np.full(11, 1.0), 0.0, 0.0]):
         raise ValueError("kd must be 1 on valid Arm5 slots and zero on invalid slots")
-    q_limit = parse_vector(values.get("pid_q_offset_limit_deg", ""), 5,
-                           "pid_q_offset_limit_deg")
+    limit_key = f"{controller_kind}_q_offset_limit_deg"
+    q_limit = parse_vector(values.get(limit_key, ""), 5, limit_key)
     if np.any(q_limit <= 0.0) or np.any(q_limit > 5.0):
-        raise ValueError("PID q-reference offsets must be in (0,5] degrees")
+        raise ValueError("q-reference offsets must be in (0,5] degrees")
+    # Keep old reviewed PID profiles readable; the executable period is 6 ms,
+    # never the historical 20 ms profile value. New profiles explicitly say 6.
+    declared_period = float(values.get("control_period_ms", "nan"))
+    allowed_periods = {6.0, 20.0} if controller_kind == "pid" else {6.0}
+    if declared_period not in allowed_periods:
+        raise ValueError(f"control_period_ms must be one of {sorted(allowed_periods)}")
     expected = {
         "max_weight": 1.0,
         "weight_rate_per_s": 1.0 / 3.0,
-        "control_period_ms": 20.0,
         "state_timeout_ms": 100.0,
         "startup_wait_s": 5.0,
         "startup_valid_samples": 50.0,
@@ -269,6 +278,7 @@ def load_profile(path: Path):
         "kp_array": kp,
         "kd_array": kd,
         "pid_q_offset_limit_deg_array": q_limit,
+        "q_offset_limit_deg_array": q_limit,
         "startup_valid_samples_int": int(float(values["startup_valid_samples"])),
     }
 
@@ -412,10 +422,11 @@ class ImuSnapshot:
 
 
 class Streams:
-    def __init__(self, journal, interlock, crc):
+    def __init__(self, journal, interlock, crc, observer=None):
         self.journal = journal
         self.interlock = interlock
         self.crc = crc
+        self.observer = observer
         self.lock = threading.Lock()
         self.low = None
         self.imu = None
@@ -459,6 +470,11 @@ class Streams:
             self.interlock.observe_remote(remote)
         with self.lock:
             self.low = snapshot
+        if self.observer is not None and crc_valid:
+            try:
+                self.observer.observe_low(now, q, dq)
+            except Exception as exc:
+                self.interlock.trip(f"controller LowState observer: {exc}")
         if now - self.low_journal_ns < LOWSTATE_JOURNAL_PERIOD_NS:
             return
         self.low_journal_ns = now
@@ -506,6 +522,12 @@ class Streams:
                     now, task_s, yaw_from_quaternion(snapshot.quaternion),
                     vertical_angular_rate(snapshot.rpy, snapshot.gyro),
                 )
+        if self.observer is not None:
+            try:
+                self.observer.observe_imu(
+                    now, snapshot.quaternion, snapshot.gyro, snapshot.accelerometer)
+            except Exception as exc:
+                self.interlock.trip(f"controller IMU observer: {exc}")
         if now - self.imu_journal_ns < IMU_JOURNAL_PERIOD_NS:
             return
         self.imu_journal_ns = now
@@ -597,7 +619,13 @@ def _arm_dq(snapshot):
     return np.asarray([snapshot.dq[index] for index in ARM_MOTOR_INDICES], dtype=float)
 
 
-def run_device(args, profile, pid_parameters, pid_mapping, journal):
+def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None):
+    """Shared field transport/interlocks; MPC hooks own computation only.
+
+    The default PID path and robot mode/output boundaries stay unchanged.
+    Runtime loading/warm-up must finish before this function.
+    """
+    controller_label = "PID" if runtime is None else "MPC"
     # Delayed imports: reaching this point still has not initialized DDS.
     import unitree_sdk2py
     from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelPublisher, ChannelSubscriber
@@ -659,7 +687,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
     interlock = Interlock()
     crc = CRC()
     ChannelFactoryInitialize(0, args.nic)
-    streams = Streams(journal, interlock, crc)
+    streams = Streams(journal, interlock, crc, observer=runtime)
     low_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
     imu_subscriber = ChannelSubscriber("rt/secondary_imu", IMUState_)
     low_subscriber.Init(streams.low_callback, 0)
@@ -826,7 +854,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
             streams, interlock, journal, 0, profile["startup_valid_samples_int"]
         )
         print(
-            "REAL PID WALK OUTPUT: 3 s arm entry, 2 s baseline, 10 s at 0.5 m/s, "
+            f"REAL {controller_label} OUTPUT: 3 s arm entry, 2 s baseline, "
+            f"10 s at {0.0 if runtime is not None and runtime.stationary else 0.5} m/s, "
             "3 s stop-settle with heading hold, then >=3 s release after zero-speed ack. "
             "Robot must already be stationary in FSM 500."
         )
@@ -843,24 +872,30 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
         if failure:
             raise RuntimeError(f"pre-publisher: {failure}")
 
-        # Publisher creation occurs only after both state gates and the typed confirmation.
+        # Local construction precedes any command publisher.
+        if runtime is None:
+            controller = RightArmHardwarePid(
+                profile["target_q_array"][5:10], pid_parameters,
+                model=EndpointModel(args.controller_config),
+                control_dt=CONTROL_PERIOD_S,
+            )
+            plan = HardwarePidPlan(
+                _arm_slots(initial), profile["target_q_array"],
+                profile["kp_array"], profile["kd_array"], controller,
+            )
+        else:
+            plan = runtime.create_plan(_arm_slots(initial), profile)
+        # Publisher creation occurs only after both state gates and typed confirmation.
         publisher = ChannelPublisher("rt/arm_sdk", LowCmd_)
         publisher.Init()
         journal.record({
             "schema": "g1_pid_event_v1", "event": "arm_publisher_created",
             "topic": "rt/arm_sdk",
         })
-        controller = RightArmHardwarePid(
-            profile["target_q_array"][5:10], pid_parameters,
-            model=EndpointModel(args.controller_config),
-            control_dt=CONTROL_PERIOD_S,
-        )
-        plan = HardwarePidPlan(
-            _arm_slots(initial), profile["target_q_array"],
-            profile["kp_array"], profile["kd_array"], controller,
-        )
         epoch_ns = monotonic_ns()
         streams.set_epoch(epoch_ns)
+        if runtime is not None:
+            runtime.set_epoch(epoch_ns)
         journal.record({
             "schema": "g1_pid_event_v1", "event": "task_epoch",
             "task_epoch_monotonic_ns": epoch_ns,
@@ -893,6 +928,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                         heading["correction_rad_s"],
                         inhibited=stop_requested.is_set() or bool(failure_now),
                     )
+                    if runtime is not None and runtime.stationary:
+                        motion.update(vx_m_s=0.0, yaw_rate_rad_s=0.0,
+                                      walking_active=False, heading_hold_active=False)
                     vx = motion["vx_m_s"]
                     wz = motion["yaw_rate_rad_s"]
                     duration = motion["duration_s"]
@@ -947,8 +985,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
 
         velocity_thread = threading.Thread(target=velocity_worker, name="pid_velocity", daemon=True)
         velocity_thread.start()
-        runtime = pin_control_thread(args.cpu)
-        journal.record({"schema": "g1_pid_event_v1", "event": "control_runtime", **runtime})
+        scheduling = pin_control_thread(args.cpu)
+        journal.record({"schema": "g1_pid_event_v1", "event": "control_runtime", **scheduling})
         clock = PeriodicClock(monotonic_ns(), CONTROL_PERIOD_S)
         last_iteration_ns = None
         previous_low_ns = previous_imu_ns = None
@@ -993,6 +1031,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
             heading = streams.heading_current()
             yaw0 = heading["reference_rad"] if heading["reference_frozen"] else 0.0
             controller_begin_ns = monotonic_ns()
+            if runtime is not None and abort_start_s is None and task_s < RELEASE_START_S:
+                runtime.prepare(loop_begin_ns, low, imu, yaw0, task_s,
+                                heading_frozen=heading["reference_frozen"])
             if abort_start_s is None:
                 if task_s < RELEASE_START_S:
                     frame = plan.sample(
@@ -1182,6 +1223,21 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
                 "write_ms": (write_end_ns - write_begin_ns) * 1e-6,
             }
             journal.record(cycle_timing)
+            if runtime is not None:
+                complete_ns = monotonic_ns()
+                if complete_ns >= clock.scheduled_ns:
+                    extra_skipped = (complete_ns-clock.scheduled_ns)//clock.period_ns+1
+                    clock.scheduled_ns += extra_skipped*clock.period_ns
+                    clock.skipped_slots += extra_skipped
+                    cycle_timing["skipped_slots"] += extra_skipped
+                cycle_timing.update(
+                    complete_work_ms=(complete_ns - loop_begin_ns) * 1e-6,
+                    complete_deadline_missed=complete_ns > scheduled_ns + clock.period_ns,
+                )
+                journal.record({
+                    **cycle_timing, "schema": "g1_mpc_cycle_complete_v1",
+                    "scope": "through timing-row enqueue; excludes this final audit-row enqueue",
+                })
             cycle_timings.append(cycle_timing)
             last_iteration_ns = loop_begin_ns
             previous_low_ns, previous_imu_ns = low.received_ns, imu.received_ns
@@ -1201,6 +1257,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
         # First stop requesting motion. Keep the FSM observer alive while a
         # catchable software fault attempts its full three-second hand-back.
         stop_requested.set()
+        if runtime is not None:
+            journal.record({"schema": "g1_mpc_event_v1", "event": "controller_fault_detail",
+                            "reason": str(exc), "diagnostics": runtime.controller.last_diagnostics})
         release_result = fallback_weight_release(str(exc))
         worker_stop.set()
         if velocity_thread is not None:
@@ -1212,7 +1271,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal):
             "single_frame_weight_zero_attempted": False,
             "physical_stop_verified": False,
         })
-        print(f"PID walk stopped: {exc}", file=sys.stderr)
+        print(f"{controller_label} walk stopped: {exc}", file=sys.stderr)
         return 3
     finally:
         worker_stop.set()
@@ -1256,6 +1315,8 @@ def build_parser():
     parser.add_argument("--permit-real-output", required=True, choices=[PERMIT])
     parser.add_argument("--cpu", type=int, default=None,
                         help="control thread CPU (default CPU 7 if available, else first allowed)")
+    parser.add_argument("--allow-first-6ms-field-trial", action="store_true",
+                        help="explicit one-run opt-in; does not declare 6 ms field validation passed")
     return parser
 
 
@@ -1265,9 +1326,10 @@ def main(argv=None):
     try:
         profile = load_profile(args.profile)
         pid_parameters, pid_mapping = load_pid_parameters(args.controller_config, profile)
-        if FIELD_OUTPUT_LOCKED:
+        if FIELD_OUTPUT_LOCKED and not args.allow_first_6ms_field_trial:
             raise RuntimeError(
                 "6 ms hardware PID output locked pending first field validation; "
+                "use --allow-first-6ms-field-trial only for the supervised first trial; "
                 "20 ms baseline is preserved in Git"
             )
         journal = Journal(args.output_dir)
@@ -1289,6 +1351,8 @@ def main(argv=None):
             "forward_walk_stop_s": WALK_STOP_S,
             "pid_parameters": pid_mapping,
             "control_nominal_period_ms": CONTROL_PERIOD_S * 1000,
+            "profile_declared_period_ms": float(profile["control_period_ms"]),
+            "first_6ms_field_trial_opt_in": args.allow_first_6ms_field_trial,
             "pid_physical_reference_period_ms": PID_REFERENCE_PERIOD_S * 1000,
             "derivative_alpha_at_nominal_period": 1 - (1 - pid_parameters.de_g_alpha) ** (CONTROL_PERIOD_S / PID_REFERENCE_PERIOD_S),
             "jacobian_method": "analytic_mujoco_site",

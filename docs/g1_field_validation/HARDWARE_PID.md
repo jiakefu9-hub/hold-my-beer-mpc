@@ -94,7 +94,8 @@ ground truth 完全相同的传感器。第一轮先验证闭环方向、是否�
 5. 正常、Ctrl-C、可处理故障继续至少三秒退权。逐帧最大 weight 降幅改为 `0.006/3=0.002`，
    卡顿只延长退权；失联等既有例外仍见下文。
 6. 数值库单线程，控制线程绑一个 CPU（`--cpu`；默认优先 7，否则可用列表首个），保持普通 Linux
-   调度，不修改系统实时策略。既有 DDS／日志线程独立运行。当前离线环境不允许 CPU 7，验证使用 CPU 2；
+   `SCHED_OTHER` 调度，不修改系统策略；2026-09-27 已确认内核本身为 PREEMPT_RT，两者并不矛盾。
+   既有 DDS／日志线程独立运行。当前离线环境不允许 CPU 7，验证使用 CPU 2；
    因此现场命令示例显式给出 `--cpu 2`。它与仿真的 CPU 7 不是同核测量，不冒充严格同环境性能对比。
 
 全程新增 `g1_pid_timing_v1`：实际间隔、唤醒延迟、含命令日志入队的循环耗时、deadline miss、
@@ -127,7 +128,8 @@ OUT="evaluation/hardware_shadow/commissioning/pid_$(date +%Y%m%d_%H%M%S)"
   --profile "$FIELD_PROFILE" \
   --controller-config configs/g1.yaml \
   --output-dir "$OUT" \
-  --permit-real-output PID_WALK_H0_CAPTURE
+  --permit-real-output PID_WALK_H0_CAPTURE \
+  --allow-first-6ms-field-trial
 ```
 
 程序先只接收状态并连续检查 FSM 500；终端要求输入精确的 `EXECUTE <robot_id>` 后再次检查新鲜状态，
@@ -135,8 +137,10 @@ OUT="evaluation/hardware_shadow/commissioning/pid_$(date +%Y%m%d_%H%M%S)"
 L2+B、FSM 离开 500、CRC／状态／IMU 失效、tick 真回退、DDS 写失败或日志溢出都会停止正常流程。
 这仍是软件互锁，不是独立急停或安全认证。
 
-当前输出锁开启时，上述命令会在 DDS 初始化和 publisher 创建之前拒绝执行。以后解除锁之前，应先
-审核本文件的 6 ms 离线结果，并将下一轮作为 6 ms 首次实机复验。
+2026-09-27 增加单次显式入口 `--allow-first-6ms-field-trial`，不再要求现场编辑源码把锁改为 false。
+默认输出锁仍开启；缺少此参数会在 DDS 初始化前拒绝。该参数只允许首次受控复验，**不声明复验已经通过**。
+旧已审核 profile 的 `control_period_ms=20` 只作为历史值兼容并记录，实际周期始终为 6 ms；新模板已写 6。
+通过这轮后才进入 [真机 MPC](HARDWARE_MPC.md)。
 
 ## 停止与故障退权规则
 
