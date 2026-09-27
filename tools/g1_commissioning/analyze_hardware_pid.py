@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Offline H0 endpoint/control metrics for one ``g1_walk_pid.py`` run.
+"""Offline H0 endpoint/control metrics for one hardware PID or MPC run.
 
-The primary window is fixed to task seconds [5,18): from the first walking
-request through the end of the three-second stop-settle interval.  Startup,
-steady walking and stopping subwindows are diagnostics only.
+The primary window is fixed to task seconds [5,18). For walking tasks this is
+the first walking request through the end of the stop-settle interval; for
+stationary tasks it is the same control interval without walking requests.
+Subwindows are diagnostics only, and lifecycle evidence is reported separately.
 """
 
 from __future__ import annotations
@@ -64,7 +65,7 @@ def read_records(path):
                     "accelerometer_raw_m_s2": row["accelerometer_raw_m_s2"],
                 })
             elif schema in {"g1_pid_session_v1", "g1_hardware_pid_command_v1", "g1_pid_timing_v1",
-                            "g1_mpc_cycle_complete_v1"} or event in {
+                            "g1_mpc_cycle_complete_v1", "g1_pid_event_v1", "g1_mpc_event_v1"} or event in {
                 "task_epoch", "heading_reference_frozen",
             }:
                 rows.append(row)
@@ -204,6 +205,59 @@ def _window_metrics(data, mask):
     return result
 
 
+def _session_audit(rows):
+    """Report recorded lifecycle evidence; never certify physical trial success."""
+    ends = [row for row in rows if row.get("event") == "session_end"]
+    end = ends[-1] if ends else {}
+    faults = []
+    for row in rows:
+        event = row.get("event")
+        if event in {"session_fault", "local_failure", "controller_fault_detail",
+                     "velocity_exception", "velocity_final_zero_exception", "dds_write_failed"} or (
+            event in {"velocity_reply", "velocity_final_zero"}
+            and row.get("return_code", 0) != 0
+        ):
+            faults.append({key: row[key] for key in (
+                "event", "reason", "task_elapsed_s", "monotonic_ns", "return_code", "fault_release"
+            ) if key in row})
+    stopped = any(row.get("event") == "operator_stop_requested" for row in rows)
+    release = next((row["fault_release"] for row in reversed(rows)
+                    if row.get("event") == "session_fault" and "fault_release" in row), {})
+    final_weight = release.get("final_weight", end.get("final_weight"))
+    completed = bool(release.get("completed")) if release else (
+        end.get("outcome") in {"normal_release_completed", "operator_stop_release_completed"}
+        and final_weight == 0.0
+    )
+    if faults:
+        status = "fault_recorded"
+    elif stopped or end.get("outcome") == "operator_stop_release_completed":
+        status = "operator_stop_recorded"
+    elif len(ends) == 1 and end.get("outcome") == "normal_release_completed" and completed:
+        status = "normal_release_recorded"
+    else:
+        status = "completion_unknown"
+    return {
+        "status": status,
+        "session_end_records": len(ends),
+        "session_end_outcome": end.get("outcome"),
+        "release_completed": completed if ends or release else None,
+        "final_weight": final_weight,
+        "faults": faults,
+        "physical_stop_verified": end.get("physical_stop_verified", False),
+        "scope": "recorded software outcome only; not physical stop or field-validation certification",
+    }
+
+
+def _coverage(times):
+    overlap = (times[:-1] < RELEASE_START_S) & (times[1:] > WALK_START_S)
+    gaps = np.diff(times)[overlap]
+    return {
+        "first_task_s": float(times[0]), "last_task_s": float(times[-1]),
+        "max_primary_gap_ms": float(np.max(gaps) * 1000) if len(gaps) else None,
+        "covers_primary_window": bool(times[0] <= WALK_START_S and times[-1] >= RELEASE_START_S),
+    }
+
+
 def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
     rows, digest = read_records(raw_path)
     epoch = int(_single(rows, lambda row: row.get("event") == "task_epoch",
@@ -213,6 +267,10 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
     yaw0 = float(reference["yaw0_rad"])
     session = _single(rows, lambda row: row.get("schema") == "g1_pid_session_v1",
                       "PID session header")
+    task = session.get("task", "walk")
+    if task not in {"walk", "stationary"}:
+        raise ValueError(f"unknown session task: {task!r}")
+    session_audit = _session_audit(rows)
     if session.get("primary_metric_window_s") != [WALK_START_S, RELEASE_START_S]:
         raise ValueError("raw session does not declare the required [5,18) primary window")
     low_all = sorted(
@@ -240,15 +298,19 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
         raise ValueError("capture is incomplete: requires LowState, torso IMU and command streams")
     low_t = np.asarray([(row["received_monotonic_ns"] - epoch) * 1e-9 for row in low])
     imu_t = np.asarray([(row["received_monotonic_ns"] - epoch) * 1e-9 for row in imu])
+    command_t = np.asarray([row["task_elapsed_s"] for row in commands])
+    coverage = {name: _coverage(times) for name, times in (
+        ("LowState", low_t), ("IMU", imu_t), ("commands", command_t))}
     if session.get("controller_kind") == "mpc":
         # Do not interpolate through a stopped controller or a long recording
         # outage and present that as a complete primary-window MPC result.
-        for name, times in (("LowState", low_t), ("IMU", imu_t),
-                            ("commands", np.asarray([r["task_elapsed_s"] for r in commands]))):
-            overlap = (times[:-1] < RELEASE_START_S) & (times[1:] > WALK_START_S)
-            if (times[0] > WALK_START_S or times[-1] < RELEASE_START_S
-                or np.any(np.diff(times)[overlap] > .100)):
+        for name, stream in coverage.items():
+            if (not stream["covers_primary_window"] or stream["max_primary_gap_ms"] is None
+                    or stream["max_primary_gap_ms"] > 100.0):
                 raise ValueError(f"MPC {name} has incomplete [5,18) coverage or a gap over 100 ms")
+        if any(not row.get("mpc_active") or row.get("operator_stop")
+               for row in commands if WALK_START_S <= row["task_elapsed_s"] < RELEASE_START_S):
+            raise ValueError("MPC primary [5,18) contains inactive control or early-stop/release commands")
     start = max(float(low_t[0]), float(imu_t[0]))
     stop = min(float(low_t[-1]), float(imu_t[-1]))
     dt = 1.0 / float(sample_hz)
@@ -359,6 +421,15 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
             "metrics": _window_metrics(data, (grid >= WALK_STOP_S) & (grid < RELEASE_START_S)),
         },
     }
+    primary_window_key = "primary_walk_start_through_stop_settle_end"
+    if task == "stationary":
+        primary_window_key = "primary_stationary_control"
+        windows = {new: windows[old] for old, new in (
+            ("primary_walk_start_through_stop_settle_end", primary_window_key),
+            ("diagnostic_startup_walk", "diagnostic_stationary_5_7"),
+            ("diagnostic_later_walk", "diagnostic_stationary_7_15"),
+            ("diagnostic_stop_settle", "diagnostic_stationary_15_18"),
+        )}
 
     command_primary = [
         row for row in commands
@@ -428,10 +499,13 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
         }
     summary = {
         "schema": "g1_hardware_pid_analysis_v1",
+        "task": task,
+        "task_source": "session_header" if "task" in session else "legacy_walk_default",
+        "session_status": session_audit,
         "source_raw_jsonl": str(raw_path.resolve()),
         "source_sha256": digest,
         "yaw0_rad": yaw0,
-        "frame": "fixed H0: +X is pre-walk mean yaw, +Z is navigation-world vertical",
+        "frame": "fixed H0: +X is frozen reference mean yaw, +Z is navigation-world vertical",
         "quaternion_order": "wxyz",
         "endpoint_model_xml_sha256": model.xml_hashes(),
         "endpoint_model_config": str(model.config),
@@ -443,8 +517,12 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
             "lowstate_crc_invalid_primary_window": len(invalid_primary),
             "torso_imu_records_total": len(imu),
             "successful_command_records_total": len(commands),
+            "primary_stream_coverage": coverage,
         },
-        "primary_metric_rule": "all samples from first walk command through end of stop-settle; [5,18)",
+        "primary_window_key": primary_window_key,
+        "primary_metric_rule": ("all stationary-task samples in [5,18); no walking requested"
+                                if task == "stationary" else
+                                "all samples from first walk command through end of stop-settle; [5,18)"),
         "sample_hz": sample_hz,
         "derivative_filter": {
             "method": "uniform resampling plus cubic Savitzky-Golay",
@@ -481,6 +559,30 @@ def analyze(raw_path, sample_hz=200.0, filter_window_s=0.105):
                          and WALK_START_S <= row["task_elapsed_s"] < RELEASE_START_S]
         control["complete_loop_timing"] = summarize_timing(complete_rows)
         control["complete_loop_timing"]["scope"] = "through timing-row enqueue; final audit-row enqueue excluded"
+    drained = [row for row in rows if row.get("event") == "capture_drained"]
+    shutdown = [row for row in rows if row.get("event") == "sdk_shutdown"]
+    quality = summary["capture_quality"]
+    quality["capture_drain_marker_recorded"] = len(drained) == 1
+    quality["journal_queue_dropped"] = drained[-1].get("queue_dropped") if drained else None
+    quality["sdk_shutdown_endpoints"] = shutdown[-1].get("endpoints") if shutdown else None
+    warnings = []
+    if session_audit["status"] != "normal_release_recorded":
+        warnings.append(f"session outcome: {session_audit['status']}; primary metrics do not establish successful completion")
+    if not quality["capture_drain_marker_recorded"]:
+        warnings.append("missing or repeated capture-drain marker; recorder completion is unverified")
+    if quality["journal_queue_dropped"] not in (None, 0):
+        warnings.append("journal reports dropped records")
+    endpoints = quality["sdk_shutdown_endpoints"]
+    if not endpoints:
+        warnings.append("SDK shutdown evidence is missing")
+    elif any(value not in {"listener_detached_then_closed", "already_closed", "not_created"}
+             for value in endpoints.values()):
+        warnings.append("SDK endpoint shutdown failure recorded")
+    if session.get("controller_kind") == "mpc" and len(complete_rows) != len(command_primary):
+        warnings.append("complete-loop timing record count differs from primary command count")
+    quality["warnings"] = warnings
+    quality["status"] = "review_required" if warnings else "recorded_checks_passed"
+    quality["scope"] = "recorded coverage and lifecycle evidence; drain marker precedes journal close"
     data["yaw0_rad"] = np.asarray(yaw0)
     return data, summary
 
@@ -564,11 +666,13 @@ def write_outputs(data, summary, output_dir):
         axis.grid(True, alpha=0.25)
         axis.axvspan(WALK_START_S, RELEASE_START_S, color="green", alpha=0.06,
                      label="primary [5,18)" if axis is axes[0] else None)
-        axis.axvline(WALK_STOP_S, color="black", linestyle="--", linewidth=0.8)
+        if summary.get("task") != "stationary":
+            axis.axvline(WALK_STOP_S, color="black", linestyle="--", linewidth=0.8)
     axes[0].legend()
     axes[-1].set_xlabel("task time [s]")
     label = "MPC" if summary.get("controller_kind") == "mpc" else "PID"
-    fig.suptitle(f"Hardware {label} bottle-center metrics in fixed H0")
+    fig.suptitle(f"Hardware {label} {summary.get('task', 'walk')} bottle-center metrics in fixed H0"
+                 f"\n{summary['session_status']['status']}; capture: {summary['capture_quality']['status']}")
     fig.tight_layout()
     fig.savefig(output_dir / "endpoint_metrics_h0.png", dpi=160)
     plt.close(fig)
@@ -589,9 +693,12 @@ def main():
         parser.error("filter-window-s must be in [0.05,0.25]")
     data, summary = analyze(args.raw_jsonl, args.sample_hz, args.filter_window_s)
     write_outputs(data, summary, args.output_dir)
-    primary = summary["windows"]["primary_walk_start_through_stop_settle_end"]
+    primary = summary["windows"][summary["primary_window_key"]]
     print(json.dumps({
         "output_dir": str(args.output_dir),
+        "task": summary["task"],
+        "session_status": summary["session_status"],
+        "capture_quality": summary["capture_quality"],
         "primary_interval_s": primary["interval_s"],
         "primary_samples": primary["metrics"]["samples"],
         "left": primary["metrics"]["left"],

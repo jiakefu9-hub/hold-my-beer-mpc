@@ -18,7 +18,12 @@ NOMINAL_RIGHT = [math.radians(v) for v in (-4, 1, 0, -7.8, 0)]
 def audit_commands(path):
     audit = dict(active_commands=0, max_full_constraint_violation=0.,
                  max_reference_offset_deg=0., max_reference_speed_rad_s=0.,
-                 max_reference_acceleration_rad_s2=0.)
+                 max_reference_acceleration_rad_s2=0.,
+                 max_independent_acceleration_rad_s2=0.,
+                 max_position_integration_residual_rad=0.,
+                 max_logged_acceleration_residual_rad_s2=0.)
+    previous_q, previous_dq = NOMINAL_RIGHT, [0.]*5
+    previous_sequence = previous_time = None
     with Path(path).open() as stream:
         for line in stream:
             row = json.loads(line)
@@ -33,6 +38,29 @@ def audit_commands(path):
             if any(len(v) != 5 for v in (q, dq, ddq)) or not all(
                     math.isfinite(v) for v in (*q, *dq, *ddq, violation)):
                 raise ValueError("invalid replay command numbers")
+            dt = float(row["command_integration_dt_s"])
+            elapsed = float(row["task_elapsed_s"])
+            feedback_dt = float(row["feedback_dt_s"])
+            if (not all(map(math.isfinite, (dt, elapsed, feedback_dt)))
+                    or not 0 < dt <= .006+1e-12
+                    or abs(dt-min(feedback_dt,.006)) > 1e-12):
+                raise ValueError("invalid bounded command integration interval")
+            if previous_sequence is not None and (
+                row["sequence"] != previous_sequence+1 or elapsed <= previous_time
+                or abs(elapsed-previous_time-feedback_dt) > 1e-9
+            ):
+                raise ValueError("active command sequence/time gap")
+            independent_ddq = [(a-b)/dt for a,b in zip(dq,previous_dq)]
+            position_error = max(abs(a-b-v*dt) for a,b,v in zip(q,previous_q,dq))
+            acceleration_error = max(abs(a-b) for a,b in zip(ddq,independent_ddq))
+            audit["max_independent_acceleration_rad_s2"] = max(
+                audit["max_independent_acceleration_rad_s2"], *(abs(v) for v in independent_ddq))
+            audit["max_position_integration_residual_rad"] = max(
+                audit["max_position_integration_residual_rad"],position_error)
+            audit["max_logged_acceleration_residual_rad_s2"] = max(
+                audit["max_logged_acceleration_residual_rad_s2"],acceleration_error)
+            previous_q, previous_dq = q,dq
+            previous_sequence, previous_time = row["sequence"],elapsed
             audit["active_commands"] += 1
             audit["max_full_constraint_violation"] = max(audit["max_full_constraint_violation"], violation)
             audit["max_reference_offset_deg"] = max(audit["max_reference_offset_deg"],
@@ -45,7 +73,10 @@ def audit_commands(path):
     for key, limit in (("max_full_constraint_violation", 1e-6),
                        ("max_reference_offset_deg", 5. + 1e-8),
                        ("max_reference_speed_rad_s", .07 + 1e-8),
-                       ("max_reference_acceleration_rad_s2", .20 + 1e-8)):
+                       ("max_reference_acceleration_rad_s2", .20 + 1e-8),
+                       ("max_independent_acceleration_rad_s2", .20 + 1e-8),
+                       ("max_position_integration_residual_rad", 1e-10),
+                       ("max_logged_acceleration_residual_rad_s2", 1e-8)):
         if audit[key] > limit:
             raise ValueError(f"{key} exceeds the reference envelope")
     return audit

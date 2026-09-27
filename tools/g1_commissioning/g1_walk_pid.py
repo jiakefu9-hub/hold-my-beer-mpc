@@ -175,6 +175,8 @@ def json_safe(value):
         return json_number(value)
     if isinstance(value, np.integer):
         return int(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
     return value
 
 
@@ -308,40 +310,75 @@ class Journal:
         self.dropped = 0
         self.written = 0
         self._closed = False
-        self._stop = object()
+        self._closing = threading.Event()
+        self._state_lock = threading.Lock()
+        self.failure_reason = None
         self._thread = threading.Thread(target=self._run, name="pid_journal", daemon=True)
         self._thread.start()
 
     def record(self, row):
         row = json_safe(dict(row))
         row.setdefault("monotonic_ns", monotonic_ns())
-        try:
-            self._queue.put_nowait(row)
-        except queue.Full:
-            self.dropped += 1
-            self.failed.set()
+        with self._state_lock:
+            if self._closing.is_set():
+                self.dropped += 1
+                self._fail("record attempted after recorder shutdown began")
+                return
+            try:
+                self._queue.put_nowait(row)
+            except queue.Full:
+                self.dropped += 1
+                self._fail("recorder queue overflow")
+
+    def _fail(self, reason):
+        self.failure_reason = self.failure_reason or str(reason)
+        self.failed.set()
 
     def _run(self):
         try:
             while True:
-                row = self._queue.get()
-                if row is self._stop:
-                    break
-                self._stream.write(json.dumps(row, allow_nan=False, separators=(",", ":")) + "\n")
-                self.written += 1
-                self._queue.task_done()
-        except Exception:
-            self.failed.set()
+                try:
+                    row = self._queue.get(timeout=0.05)
+                except queue.Empty:
+                    # A producer may enqueue after get() timed out, just
+                    # before close() sets the flag. Recheck under the same
+                    # lock as record/close so that accepted tail is drained.
+                    with self._state_lock:
+                        if self._closing.is_set() and self._queue.empty():
+                            break
+                    continue
+                try:
+                    self._stream.write(json.dumps(row, allow_nan=False, separators=(",", ":")) + "\n")
+                    self.written += 1
+                finally:
+                    self._queue.task_done()
+        except Exception as exc:
+            self._fail(f"recorder write failed: {exc}")
+        finally:
+            # The writer owns flushing/closing. If disk I/O blocks, close()
+            # may time out, but must not close a stream beneath a live writer.
+            try:
+                self._stream.close()
+            except Exception as exc:
+                self._fail(f"recorder close failed: {exc}")
 
-    def close(self):
+    def close(self, timeout_s=5.0):
+        """Drain normally; never wait forever on a failed or blocked writer.
+
+        A timeout is an explicit failed capture, not a successful flush. The
+        daemon writer may still finish later; this is not durable-storage proof.
+        """
+        if not math.isfinite(timeout_s) or timeout_s < 0:
+            raise ValueError("recorder close timeout must be finite and nonnegative")
         if self._closed:
-            return
+            return not self.failed.is_set()
+        with self._state_lock:
+            self._closing.set()
+        self._thread.join(timeout_s)
         if self._thread.is_alive():
-            self._queue.put(self._stop)
-        self._thread.join()
-        self._stream.flush()
-        self._stream.close()
+            self._fail("recorder shutdown timed out; capture may be incomplete")
         self._closed = True
+        return not self.failed.is_set()
 
 
 class Interlock:
@@ -387,8 +424,12 @@ class Interlock:
             else:
                 self._fsm_request_ns = request_ns
 
-    def check(self, now_ns):
+    def check(self, now_ns=None):
         with self._lock:
+            # Sample the live clock while the FSM snapshot is locked. A newer
+            # worker reply must not be compared to a loop-entry timestamp from
+            # before it arrived. Explicit timestamps remain for offline tests.
+            now_ns = monotonic_ns() if now_ns is None else int(now_ns)
             if self._fault:
                 return self._fault
             if self._fsm_request_ns is None:
@@ -567,13 +608,15 @@ def finite_array(array):
 
 
 def health(streams, interlock, journal, now_ns=None):
-    now_ns = monotonic_ns() if now_ns is None else int(now_ns)
+    # Immutable snapshots first, then validation time: callbacks may advance
+    # streams between any two statements, without making data truly future.
+    low, imu = streams.latest()
     stop = interlock.check(now_ns)
+    now_ns = monotonic_ns() if now_ns is None else int(now_ns)
     if stop:
         return stop
     if journal.failed.is_set() or journal.dropped:
         return "raw recorder failure/queue overflow"
-    low, imu = streams.latest()
     if low is None or now_ns < low.received_ns or now_ns - low.received_ns > STATE_TIMEOUT_NS:
         return "LowState unavailable/stale/future"
     if not low.crc_valid:
@@ -686,14 +729,10 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
 
     interlock = Interlock()
     crc = CRC()
-    ChannelFactoryInitialize(0, args.nic)
     streams = Streams(journal, interlock, crc, observer=runtime)
-    low_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
-    imu_subscriber = ChannelSubscriber("rt/secondary_imu", IMUState_)
-    low_subscriber.Init(streams.low_callback, 0)
-    imu_subscriber.Init(streams.imu_callback, 0)
+    low_subscriber = imu_subscriber = None
     worker_stop = threading.Event()
-    fsm_client = FsmGetter()
+    fsm_client = fsm_thread = None
 
     def fsm_worker():
         try:
@@ -714,9 +753,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         except Exception as exc:
             interlock.trip(f"FSM worker exception: {exc}")
 
-    fsm_thread = threading.Thread(target=fsm_worker, name="pid_fsm", daemon=True)
-    fsm_thread.start()
     publisher = None
+    publisher_transport_failed = False
     velocity_thread = None
     velocity_failed = threading.Event()
     last_zero_reply_ns = 0
@@ -731,8 +769,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     def request_stop(_signal=None, _frame=None):
         stop_requested.set()
 
-    previous_sigint = signal.signal(signal.SIGINT, request_stop)
-    previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
+    previous_sigint = previous_sigterm = None
 
     def make_message(frame, state):
         return make_arm_message(frame, state, unitree_hg_msg_dds__LowCmd_, crc)
@@ -745,7 +782,13 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         to command the arm could fight the robot's own damping/mode transition.
         No path in this helper sends a one-frame weight-zero command.
         """
-        nonlocal sequence
+        nonlocal sequence, publisher_transport_failed
+        if publisher_transport_failed:
+            return {
+                "attempted": False,
+                "completed": False,
+                "reason": "arm DDS write failed; further arm output disabled",
+            }
         if publisher is None or last_frame is None or last_state is None:
             return {
                 "attempted": False,
@@ -764,9 +807,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         release_ramp = None
         attempted = False
         while True:
-            loop_ns = monotonic_ns()
-            interlock_reason = interlock.check(loop_ns)
             low, _ = streams.latest()
+            interlock_reason = interlock.check()
+            loop_ns = monotonic_ns()
             if interlock_reason:
                 return {
                     "attempted": attempted,
@@ -812,8 +855,18 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             frame = {**frozen, "weight": weight}
             attempted = True
             write_begin_ns = monotonic_ns()
-            ok = bool(publisher.Write(make_message(frame, low)))
+            try:
+                ok = bool(publisher.Write(make_message(frame, low)))
+            except Exception as exc:
+                publisher_transport_failed = True
+                return {
+                    "attempted": True,
+                    "completed": False,
+                    "reason": f"DDS write exception during release: {exc}",
+                }
             write_end_ns = monotonic_ns()
+            if not ok:
+                publisher_transport_failed = True
             sequence += 1
             journal.record({
                 "schema": "g1_hardware_pid_command_v1",
@@ -850,6 +903,16 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             time.sleep(max(0.001, next_time - time.monotonic()))
 
     try:
+        ChannelFactoryInitialize(0, args.nic)
+        low_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
+        imu_subscriber = ChannelSubscriber("rt/secondary_imu", IMUState_)
+        low_subscriber.Init(streams.low_callback, 0)
+        imu_subscriber.Init(streams.imu_callback, 0)
+        fsm_client = FsmGetter()
+        fsm_thread = threading.Thread(target=fsm_worker, name="pid_fsm", daemon=True)
+        fsm_thread.start()
+        previous_sigint = signal.signal(signal.SIGINT, request_stop)
+        previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
         initial = startup_gate(
             streams, interlock, journal, 0, profile["startup_valid_samples_int"]
         )
@@ -903,9 +966,10 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
 
         def velocity_worker():
             nonlocal last_zero_reply_ns
-            client = VelocitySetter()
+            client = None
             heading_frozen_logged = False
             try:
+                client = VelocitySetter()
                 while not worker_stop.is_set():
                     iteration = time.monotonic()
                     task_s = (monotonic_ns() - epoch_ns) * 1e-9
@@ -964,24 +1028,25 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     "reason": repr(exc),
                 })
             finally:
-                try:
-                    begin = monotonic_ns()
-                    rc, raw = client.send(0.0, 0.0, 0.2)
-                    end = monotonic_ns()
-                    if rc == 0:
-                        with last_zero_lock:
-                            last_zero_reply_ns = end
-                    journal.record({
-                        "schema": "g1_pid_event_v1", "event": "velocity_final_zero",
-                        "request_ns": begin, "reply_ns": end, "return_code": rc,
-                        "raw_reply": raw, "physical_stop_verified": False,
-                    })
-                except Exception as exc:
-                    velocity_failed.set()
-                    journal.record({
-                        "schema": "g1_pid_event_v1", "event": "velocity_final_zero_exception",
-                        "reason": repr(exc), "physical_stop_verified": False,
-                    })
+                if client is not None:
+                    try:
+                        begin = monotonic_ns()
+                        rc, raw = client.send(0.0, 0.0, 0.2)
+                        end = monotonic_ns()
+                        if rc == 0:
+                            with last_zero_lock:
+                                last_zero_reply_ns = end
+                        journal.record({
+                            "schema": "g1_pid_event_v1", "event": "velocity_final_zero",
+                            "request_ns": begin, "reply_ns": end, "return_code": rc,
+                            "raw_reply": raw, "physical_stop_verified": False,
+                        })
+                    except Exception as exc:
+                        velocity_failed.set()
+                        journal.record({
+                            "schema": "g1_pid_event_v1", "event": "velocity_final_zero_exception",
+                            "reason": repr(exc), "physical_stop_verified": False,
+                        })
 
         velocity_thread = threading.Thread(target=velocity_worker, name="pid_velocity", daemon=True)
         velocity_thread.start()
@@ -1005,7 +1070,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             loop_begin_ns = monotonic_ns()
             actual_dt = CONTROL_PERIOD_S if last_iteration_ns is None else (loop_begin_ns - last_iteration_ns) * 1e-9
             task_s = (loop_begin_ns - epoch_ns) * 1e-9
-            failure = health(streams, interlock, journal, loop_begin_ns)
+            failure = health(streams, interlock, journal)
             if failure:
                 raise RuntimeError(failure)
             low, imu = streams.latest()
@@ -1151,6 +1216,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                         "release_elapsed_s": release_elapsed_s,
                     },
                 }
+            if runtime is not None and runtime.stationary:
+                frame["stage"] = {"forward_walk": "stationary_hold",
+                                  "stop_settle": "stationary_hold_tail"}.get(frame["stage"], frame["stage"])
             controller_end_ns = monotonic_ns()
             if frame["stage"] != last_stage:
                 journal.record({
@@ -1160,13 +1228,19 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                 print(f"t={task_s:.3f} {frame['stage']}")
                 last_stage = frame["stage"]
             message = make_message(frame, low)
+            failure = health(streams, interlock, journal)
             prewrite_check_ns = monotonic_ns()
-            failure = health(streams, interlock, journal, prewrite_check_ns)
             if failure or prewrite_check_ns - min(low.received_ns, imu.received_ns) > STATE_TIMEOUT_NS:
                 raise RuntimeError(failure or "selected feedback stale before write")
             write_begin_ns = monotonic_ns()
-            ok = bool(publisher.Write(message))
+            try:
+                ok = bool(publisher.Write(message))
+            except Exception:
+                publisher_transport_failed = True
+                raise
             write_end_ns = monotonic_ns()
+            if not ok:
+                publisher_transport_failed = True
             sequence += 1
             journal.record({
                 "schema": "g1_hardware_pid_command_v1", "event": "dds_write" if ok else "dds_write_failed",
@@ -1262,7 +1336,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                             "reason": str(exc), "diagnostics": runtime.controller.last_diagnostics})
         release_result = fallback_weight_release(str(exc))
         worker_stop.set()
-        if velocity_thread is not None:
+        if velocity_thread is not None and velocity_thread.is_alive():
             velocity_thread.join()
         journal.record({
             "schema": "g1_pid_event_v1", "event": "session_fault",
@@ -1275,7 +1349,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         return 3
     finally:
         worker_stop.set()
-        fsm_thread.join()
+        for worker in (velocity_thread, fsm_thread):
+            if worker is not None and worker.is_alive():
+                worker.join()
         os.sched_setaffinity(0, original_affinity)
         journal.record({
             "schema": "g1_pid_event_v1", "event": "control_timing_summary",
@@ -1301,8 +1377,10 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             "schema": "g1_pid_event_v1", "event": "sdk_shutdown",
             "endpoints": shutdown,
         })
-        signal.signal(signal.SIGINT, previous_sigint)
-        signal.signal(signal.SIGTERM, previous_sigterm)
+        if previous_sigint is not None:
+            signal.signal(signal.SIGINT, previous_sigint)
+        if previous_sigterm is not None:
+            signal.signal(signal.SIGTERM, previous_sigterm)
 
 
 def build_parser():
@@ -1374,8 +1452,11 @@ def main(argv=None):
             "queue_dropped": journal.dropped,
         })
         journal.close()
+        if journal.failed.is_set():
+            print(f"PID capture incomplete: {journal.failure_reason}; inspect {args.output_dir}", file=sys.stderr)
+            return 3
         print(f"Saved PID raw capture: {args.output_dir / 'raw.jsonl'}; records={journal.written}")
-        return result if not journal.failed.is_set() else 3
+        return result
     except Exception as exc:
         print(f"PID walk refused/failed: {exc}", file=sys.stderr)
         return 1

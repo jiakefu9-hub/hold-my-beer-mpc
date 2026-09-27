@@ -201,8 +201,11 @@ def main(argv=None):
         journal.record({"schema": "g1_mpc_event_v1", "event": "capture_drained",
                         "queue_dropped": journal.dropped})
         journal.close()
+        if journal.failed.is_set():
+            print(f"MPC capture incomplete: {journal.failure_reason}; inspect {args.output_dir}", file=sys.stderr)
+            return 3
         print(f"Saved MPC capture: {args.output_dir / 'raw.jsonl'}")
-        return result if not journal.failed.is_set() else 3
+        return result
     except Exception as exc:
         if journal is not None:
             journal.record({"schema": "g1_mpc_event_v1", "event": "local_failure",
