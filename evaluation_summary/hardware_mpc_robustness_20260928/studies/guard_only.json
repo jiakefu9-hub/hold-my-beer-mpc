@@ -1,0 +1,3752 @@
+{
+  "schema": "g1_torque_robustness_study_v1",
+  "dds": false,
+  "hardware_output": false,
+  "torque_output_authorized": false,
+  "duration_s": 5.0,
+  "cpu": 4,
+  "method": "measured_mapper",
+  "torque_config": "configs/hardware_mpc_torque_recovery.yaml",
+  "scope": "offline conditional five-joint arm dynamics, analytically prescribed moving torso",
+  "forecast": "exact analytic forecast at the observed timestamp; no timestamp compensation",
+  "ordering": "record physical state, acquire delayed observation, solve if due, activate due commands, integrate 2ms",
+  "limits": "signed margins: positive inside, zero touching, negative outside; touches use 1e-10 tolerance",
+  "metrics": "historical 6ms request RMSE preserved; both named errors also scored at 2ms; active RMSE excludes seq=-1 hold",
+  "limitations": [
+    "not hardware or full locomotion evidence",
+    "2ms PD is a simulated assumption",
+    "sampled first boundary contact is resolved to 2ms, not interpolated",
+    "failed runs include their completed prefix and terminal observed physical state",
+    "loop timing excludes plant stepping, observation transport and packet writes"
+  ],
+  "source_sha256_before": {
+    "tools/g1_commissioning/study_torque_robustness.py": "c82b51c30cd7a787aa259b75b0eeb4c8ffa9606452e7bfa5faeef728ffd23f62",
+    "tools/g1_commissioning/validate_measured_torque_mpc.py": "5ae9bffb72b724f0ed01cfc1db43f1064ace80fe54357e793809152cf5531758",
+    "tools/g1_commissioning/hardware_mpc_torque_control.py": "4e55df3ae92e2dbf45d519a5b01250081017b747986c3ca720a7512e67fd845c",
+    "tools/g1_commissioning/hardware_torque_mapper.py": "6332c584498bccffb8f44cfd4229883f8591efce7c11c2eebb525ae246d10770",
+    "tools/g1_commissioning/hardware_arm_inverse_dynamics.py": "2c8e77063f3832bda76fa5fb698955488dc29094378e1ce415d0738b14057b51",
+    "tools/g1_commissioning/hardware_mpc_control.py": "f3469cada4bc9527a1d4eeef9cacdfbb676e8e9a67dd256592a07e64c36d6f57",
+    "tools/g1_commissioning/hardware_mpc_solver.py": "e3289a853cdcf81493c9864e6c11305fe8621b1e4c9d34c516cc143e469ee2f6",
+    "tools/g1_commissioning/endpoint_pose.py": "14262a6b0ef9d617b00bfa12cac3865750e2ccff9f17ebc50095c9fc3b894270",
+    "tools/g1_commissioning/hardware_mpc_recovery.py": "03f3f205ab141aa25bef942efa8c047c771c9620fc150708efa19eb8ed72b42b",
+    "arm_mpc.py": "60a7939eb9b995610b136fc4717ee62ee3be35a9a653689a9c013beb3c73c61e",
+    "kinematics_helper.py": "34b244c038301a79f6adb09bbc8b1e1bcebc56871cd67baadc0a1b1589a672f1",
+    "robot_model_backend/cpp_rnea_backend.py": "d371ad2dae4042445928963f7464893f531c36d9d9562b42ffa8cfdb57da0d36",
+    "configs/hardware_mpc.yaml": "759971863c55f28d3da7028a98d14b215ba05a3b608ea8070eca055b33e96058",
+    "configs/hardware_mpc_torque_preview.yaml": "54c119f97eadf1255610a47312d959d4fe156475b6a236df0d6821c941a811b4",
+    "configs/g1.yaml": "f1e9d049d25fe92fd8cc673a196acc22e7df9dec2d47bb2532415c3080432465",
+    "build/right_arm_rnea/libright_arm_rnea.so": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+    "configs/hardware_mpc_torque_recovery.yaml": "23d6ed65db6c865bcf2b57b4a4fd87765f380e4238aaed72771f90a088bbe04d",
+    "resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+    "resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+  },
+  "host": {
+    "schema": "g1_mpc_host_evidence_v1",
+    "kernel_release": "6.8.1-1057-realtime",
+    "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+    "kernel_realtime_raw": "1",
+    "preempt_rt_active": true,
+    "process_scheduler": "SCHED_OTHER",
+    "process_scheduler_priority": 0,
+    "allowed_cpus": [
+      4
+    ],
+    "selected_control_cpu": 4,
+    "selected_cpu_smt_siblings": "3-4",
+    "scaling_driver": "intel_pstate",
+    "scaling_governor": "powersave",
+    "energy_performance_preference": "balance_performance",
+    "frequency_khz_snapshot": "4300000",
+    "platform_profile": "performance",
+    "rt_priority_limits": [
+      0,
+      0
+    ],
+    "memlock_bytes_limits": [
+      4154826752,
+      4154826752
+    ],
+    "capabilities": {
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000"
+    },
+    "numerical_thread_environment": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1"
+    },
+    "system_settings_changed": false,
+    "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+    "limitations": [
+      "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+      "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+      "governor label alone does not specify current CPU frequency or performance",
+      "host compute and local DDS Write durations do not measure motor execution latency"
+    ]
+  },
+  "runs": {
+    "matched": {
+      "status": "complete",
+      "failure": null,
+      "failure_state": null,
+      "samples": 834,
+      "scored_until_s": 4.998,
+      "metrics_cover_requested_duration": true,
+      "acceleration_tracking_rmse": 0.007057094445919557,
+      "tilt_rms_deg": 1.5378662885980463,
+      "endpoint_acceleration_rms_m_s2": 1.0292598434183469,
+      "max_abs_qacc": 8.092107935960989,
+      "max_abs_qacc_at_2ms": 8.092107935960989,
+      "core_ms": {
+        "p50": 2.0600715,
+        "p95": 2.3202456999999996,
+        "p99": 2.4178624799999997,
+        "max": 3.131723
+      },
+      "controller_metadata": {
+        "schema": "g1_hardware_mpc_core_v1",
+        "model": "measured_state_acceleration_mpc",
+        "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+        "solver_package_version": "0.9.1",
+        "state": "measured q,dq; previous solution only warm-starts optimization",
+        "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+        "actuation": "measured_torque_preview",
+        "frame": "fixed H0",
+        "config": {
+          "schema": "g1_hardware_mpc_config_v1",
+          "control_period_s": 0.006,
+          "horizon": 9,
+          "prediction_backend": "cpp_pinocchio",
+          "solver_backend": "daqp",
+          "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+          "q_ee_acc": 0.01,
+          "q_ee_alpha": 0.0005,
+          "q_ee_omega": 8.0,
+          "q_gravity": [
+            30.0,
+            30.0
+          ],
+          "q_posture": [
+            4.0,
+            4.0,
+            1.5,
+            0.2,
+            0.2
+          ],
+          "q_vel": 0.08,
+          "r_ddq": 0.0025,
+          "terminal_scale": 2.0,
+          "regularization": 1e-06,
+          "reference_offset_limit_deg": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "reference_max_dq_rad_s": 0.07,
+          "reference_max_ddq_rad_s2": 0.2,
+          "solver_eps_abs": 0.001,
+          "solver_eps_rel": 1e-05,
+          "solver_max_iter": 1000,
+          "solver_check_termination": 10,
+          "solver_time_limit_s": 0.0035,
+          "solver_rho": 0.001,
+          "solver_adaptive_rho": true
+        },
+        "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+        "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+        "xml_sha256": {
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+        },
+        "cost": {
+          "term_names": [
+            "linear_acceleration",
+            "angular_acceleration",
+            "angular_velocity",
+            "gravity",
+            "posture",
+            "velocity",
+            "control"
+          ],
+          "Q_ee_acc": [
+            [
+              0.01,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.01,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.01
+            ]
+          ],
+          "Q_ee_alpha": [
+            [
+              0.0005,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0005,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0005
+            ]
+          ],
+          "Q_ee_omega": [
+            [
+              8.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              8.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              8.0
+            ]
+          ],
+          "Qg": [
+            [
+              30.0,
+              0.0
+            ],
+            [
+              0.0,
+              30.0
+            ]
+          ],
+          "Qq": [
+            [
+              4.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.2,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.2
+            ]
+          ],
+          "Qv": [
+            [
+              0.08,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.08,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.08,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.08,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.08
+            ]
+          ],
+          "R": [
+            [
+              0.0025,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0025,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0025,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0025,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0025
+            ]
+          ],
+          "posture_reference": [
+            -0.06981317007977318,
+            0.017453292519943295,
+            0.0,
+            -0.1361356816555577,
+            0.0
+          ],
+          "terminal_scale": 2.0
+        },
+        "offline_only": true,
+        "field_output_supported": false,
+        "torque_config": {
+          "schema": "g1_measured_torque_preview_v1",
+          "q_min_deg": [
+            -5.0,
+            -5.0,
+            -20.0,
+            -40.0,
+            -40.0
+          ],
+          "q_max_deg": [
+            5.0,
+            3.0,
+            5.0,
+            40.0,
+            40.0
+          ],
+          "q_margin_deg": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max_dq_rad_s": 1.0,
+          "max_ddq_rad_s2": 8.0,
+          "kp": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "kd": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "tau_abs_nm": [
+            25,
+            25,
+            25,
+            25,
+            25
+          ],
+          "perturbation_nm": 0.1,
+          "regularization": 5.0,
+          "candidate_scales": [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "max_joint_error_rad_s2": 4.0,
+          "max_abs_qacc_rad_s2": 10.0,
+          "second_pass_error_rad_s2": 5.0,
+          "rescue_passes": 2,
+          "transition_rate_nm_s": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            40.0
+          ],
+          "recovery_envelope_enabled": true,
+          "recovery_rate_s_inv": 6.0,
+          "recovery_guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "inverse_dynamics": {
+          "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+          "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+          "bottle_mass_kg_from_xml": 0.25,
+          "bottle_com_local_m": [
+            0.0,
+            0.0,
+            0.000212
+          ],
+          "bottle_diagonal_inertia_kg_m2": [
+            0.0009031911494166669,
+            0.0009031911494166669,
+            0.0001318234375
+          ],
+          "model_joint_armature_kg_m2": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "hardware_parameters_calibrated": false,
+          "friction_compensation": "none; do not transfer simulation friction",
+          "external_hand_wrench": "assumed_zero; no contact-force feedback",
+          "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+        },
+        "recovery_envelope": {
+          "enabled": true,
+          "rate_s_inv": 6.0,
+          "guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "semantics": "extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+          "physical_safety_certified": false
+        },
+        "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+        "unmodelled": [
+          "unknown ground/contact reactions",
+          "actuator delay and torque gain",
+          "physical friction and payload inertia error",
+          "future arm-to-base reaction"
+        ],
+        "output_semantics": "selected total torque minus current PD; device adds PD once"
+      },
+      "scenario": {
+        "name": "matched",
+        "payload_scale": 1.0,
+        "viscous_friction": 0.0,
+        "coulomb_friction": 0.0,
+        "observation_delay_s": 0.0,
+        "actuation_delay_s": 0.0
+      },
+      "clock": {
+        "physics_dt_s": 0.002,
+        "control_dt_s": 0.006,
+        "scheduling": "integer physics-step queue; observation includes current state before solve",
+        "startup": "oldest available observation until delay history fills; initial hold has active_seq=-1",
+        "integration": "explicit constant acceleration over each 2ms interval"
+      },
+      "acceleration_tracking_rmse_semantics": "historical: actual minus latest request at 6ms samples",
+      "tracking_2ms": {
+        "current_request_vs_actual_rmse": 0.14497691253384754,
+        "actually_active_command_desired_vs_actual_rmse": 0.14497691253384754,
+        "active_command_samples": 2500,
+        "initial_hold_samples": 0,
+        "active_metric_excludes_initial_hold": true
+      },
+      "first_contact_2ms": {
+        "q_inner_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": 0.0
+        },
+        "q_outer_margin": null,
+        "dq_margin": null,
+        "acceleration_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": -0.04110943432887204
+        },
+        "mapper_acceleration_margin": null,
+        "torque_margin": null
+      },
+      "minimum_margins_2ms": {
+        "q_inner_margin": 0.0,
+        "q_outer_margin": 0.017453292519943292,
+        "dq_margin": 0.3420827445889061,
+        "acceleration_margin": -0.0921079359609891,
+        "mapper_acceleration_margin": 1.907892064039011,
+        "torque_margin": 21.733557456952664
+      },
+      "saturated_2ms_intervals": 0,
+      "physical_state_scored_until_s": 5.0
+    },
+    "payload_only": {
+      "status": "complete",
+      "failure": null,
+      "failure_state": null,
+      "samples": 834,
+      "scored_until_s": 4.998,
+      "metrics_cover_requested_duration": true,
+      "acceleration_tracking_rmse": 1.1985628727046045,
+      "tilt_rms_deg": 1.5376566294788845,
+      "endpoint_acceleration_rms_m_s2": 1.1107570410400631,
+      "max_abs_qacc": 9.486645131082563,
+      "max_abs_qacc_at_2ms": 9.486645131082563,
+      "core_ms": {
+        "p50": 2.2923904999999998,
+        "p95": 2.4135328499999997,
+        "p99": 2.6486143799999993,
+        "max": 3.895791
+      },
+      "controller_metadata": {
+        "schema": "g1_hardware_mpc_core_v1",
+        "model": "measured_state_acceleration_mpc",
+        "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+        "solver_package_version": "0.9.1",
+        "state": "measured q,dq; previous solution only warm-starts optimization",
+        "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+        "actuation": "measured_torque_preview",
+        "frame": "fixed H0",
+        "config": {
+          "schema": "g1_hardware_mpc_config_v1",
+          "control_period_s": 0.006,
+          "horizon": 9,
+          "prediction_backend": "cpp_pinocchio",
+          "solver_backend": "daqp",
+          "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+          "q_ee_acc": 0.01,
+          "q_ee_alpha": 0.0005,
+          "q_ee_omega": 8.0,
+          "q_gravity": [
+            30.0,
+            30.0
+          ],
+          "q_posture": [
+            4.0,
+            4.0,
+            1.5,
+            0.2,
+            0.2
+          ],
+          "q_vel": 0.08,
+          "r_ddq": 0.0025,
+          "terminal_scale": 2.0,
+          "regularization": 1e-06,
+          "reference_offset_limit_deg": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "reference_max_dq_rad_s": 0.07,
+          "reference_max_ddq_rad_s2": 0.2,
+          "solver_eps_abs": 0.001,
+          "solver_eps_rel": 1e-05,
+          "solver_max_iter": 1000,
+          "solver_check_termination": 10,
+          "solver_time_limit_s": 0.0035,
+          "solver_rho": 0.001,
+          "solver_adaptive_rho": true
+        },
+        "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+        "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+        "xml_sha256": {
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+        },
+        "cost": {
+          "term_names": [
+            "linear_acceleration",
+            "angular_acceleration",
+            "angular_velocity",
+            "gravity",
+            "posture",
+            "velocity",
+            "control"
+          ],
+          "Q_ee_acc": [
+            [
+              0.01,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.01,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.01
+            ]
+          ],
+          "Q_ee_alpha": [
+            [
+              0.0005,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0005,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0005
+            ]
+          ],
+          "Q_ee_omega": [
+            [
+              8.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              8.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              8.0
+            ]
+          ],
+          "Qg": [
+            [
+              30.0,
+              0.0
+            ],
+            [
+              0.0,
+              30.0
+            ]
+          ],
+          "Qq": [
+            [
+              4.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.2,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.2
+            ]
+          ],
+          "Qv": [
+            [
+              0.08,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.08,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.08,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.08,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.08
+            ]
+          ],
+          "R": [
+            [
+              0.0025,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0025,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0025,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0025,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0025
+            ]
+          ],
+          "posture_reference": [
+            -0.06981317007977318,
+            0.017453292519943295,
+            0.0,
+            -0.1361356816555577,
+            0.0
+          ],
+          "terminal_scale": 2.0
+        },
+        "offline_only": true,
+        "field_output_supported": false,
+        "torque_config": {
+          "schema": "g1_measured_torque_preview_v1",
+          "q_min_deg": [
+            -5.0,
+            -5.0,
+            -20.0,
+            -40.0,
+            -40.0
+          ],
+          "q_max_deg": [
+            5.0,
+            3.0,
+            5.0,
+            40.0,
+            40.0
+          ],
+          "q_margin_deg": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max_dq_rad_s": 1.0,
+          "max_ddq_rad_s2": 8.0,
+          "kp": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "kd": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "tau_abs_nm": [
+            25,
+            25,
+            25,
+            25,
+            25
+          ],
+          "perturbation_nm": 0.1,
+          "regularization": 5.0,
+          "candidate_scales": [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "max_joint_error_rad_s2": 4.0,
+          "max_abs_qacc_rad_s2": 10.0,
+          "second_pass_error_rad_s2": 5.0,
+          "rescue_passes": 2,
+          "transition_rate_nm_s": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            40.0
+          ],
+          "recovery_envelope_enabled": true,
+          "recovery_rate_s_inv": 6.0,
+          "recovery_guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "inverse_dynamics": {
+          "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+          "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+          "bottle_mass_kg_from_xml": 0.25,
+          "bottle_com_local_m": [
+            0.0,
+            0.0,
+            0.000212
+          ],
+          "bottle_diagonal_inertia_kg_m2": [
+            0.0009031911494166669,
+            0.0009031911494166669,
+            0.0001318234375
+          ],
+          "model_joint_armature_kg_m2": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "hardware_parameters_calibrated": false,
+          "friction_compensation": "none; do not transfer simulation friction",
+          "external_hand_wrench": "assumed_zero; no contact-force feedback",
+          "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+        },
+        "recovery_envelope": {
+          "enabled": true,
+          "rate_s_inv": 6.0,
+          "guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "semantics": "extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+          "physical_safety_certified": false
+        },
+        "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+        "unmodelled": [
+          "unknown ground/contact reactions",
+          "actuator delay and torque gain",
+          "physical friction and payload inertia error",
+          "future arm-to-base reaction"
+        ],
+        "output_semantics": "selected total torque minus current PD; device adds PD once"
+      },
+      "scenario": {
+        "name": "payload_only",
+        "payload_scale": 1.2,
+        "viscous_friction": 0.0,
+        "coulomb_friction": 0.0,
+        "observation_delay_s": 0.0,
+        "actuation_delay_s": 0.0
+      },
+      "clock": {
+        "physics_dt_s": 0.002,
+        "control_dt_s": 0.006,
+        "scheduling": "integer physics-step queue; observation includes current state before solve",
+        "startup": "oldest available observation until delay history fills; initial hold has active_seq=-1",
+        "integration": "explicit constant acceleration over each 2ms interval"
+      },
+      "acceleration_tracking_rmse_semantics": "historical: actual minus latest request at 6ms samples",
+      "tracking_2ms": {
+        "current_request_vs_actual_rmse": 1.198796968786997,
+        "actually_active_command_desired_vs_actual_rmse": 1.198796968786997,
+        "active_command_samples": 2500,
+        "initial_hold_samples": 0,
+        "active_metric_excludes_initial_hold": true
+      },
+      "first_contact_2ms": {
+        "q_inner_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": 0.0
+        },
+        "q_outer_margin": null,
+        "dq_margin": null,
+        "acceleration_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": -0.14137371916029373
+        },
+        "mapper_acceleration_margin": null,
+        "torque_margin": null
+      },
+      "minimum_margins_2ms": {
+        "q_inner_margin": -0.014583621122053456,
+        "q_outer_margin": 0.0028696713978898364,
+        "dq_margin": 0.2820385912197514,
+        "acceleration_margin": -1.4866451310825628,
+        "mapper_acceleration_margin": 0.5133548689174372,
+        "torque_margin": 21.416302511066256
+      },
+      "saturated_2ms_intervals": 0,
+      "physical_state_scored_until_s": 5.0
+    },
+    "friction_only": {
+      "status": "complete",
+      "failure": null,
+      "failure_state": null,
+      "samples": 834,
+      "scored_until_s": 4.998,
+      "metrics_cover_requested_duration": true,
+      "acceleration_tracking_rmse": 0.3684681329106553,
+      "tilt_rms_deg": 1.5474518501465855,
+      "endpoint_acceleration_rms_m_s2": 1.0280536582491677,
+      "max_abs_qacc": 8.041109434328872,
+      "max_abs_qacc_at_2ms": 8.041109434328872,
+      "core_ms": {
+        "p50": 2.0544035,
+        "p95": 2.1165738999999997,
+        "p99": 2.2436068799999997,
+        "max": 2.734169
+      },
+      "controller_metadata": {
+        "schema": "g1_hardware_mpc_core_v1",
+        "model": "measured_state_acceleration_mpc",
+        "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+        "solver_package_version": "0.9.1",
+        "state": "measured q,dq; previous solution only warm-starts optimization",
+        "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+        "actuation": "measured_torque_preview",
+        "frame": "fixed H0",
+        "config": {
+          "schema": "g1_hardware_mpc_config_v1",
+          "control_period_s": 0.006,
+          "horizon": 9,
+          "prediction_backend": "cpp_pinocchio",
+          "solver_backend": "daqp",
+          "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+          "q_ee_acc": 0.01,
+          "q_ee_alpha": 0.0005,
+          "q_ee_omega": 8.0,
+          "q_gravity": [
+            30.0,
+            30.0
+          ],
+          "q_posture": [
+            4.0,
+            4.0,
+            1.5,
+            0.2,
+            0.2
+          ],
+          "q_vel": 0.08,
+          "r_ddq": 0.0025,
+          "terminal_scale": 2.0,
+          "regularization": 1e-06,
+          "reference_offset_limit_deg": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "reference_max_dq_rad_s": 0.07,
+          "reference_max_ddq_rad_s2": 0.2,
+          "solver_eps_abs": 0.001,
+          "solver_eps_rel": 1e-05,
+          "solver_max_iter": 1000,
+          "solver_check_termination": 10,
+          "solver_time_limit_s": 0.0035,
+          "solver_rho": 0.001,
+          "solver_adaptive_rho": true
+        },
+        "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+        "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+        "xml_sha256": {
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+        },
+        "cost": {
+          "term_names": [
+            "linear_acceleration",
+            "angular_acceleration",
+            "angular_velocity",
+            "gravity",
+            "posture",
+            "velocity",
+            "control"
+          ],
+          "Q_ee_acc": [
+            [
+              0.01,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.01,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.01
+            ]
+          ],
+          "Q_ee_alpha": [
+            [
+              0.0005,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0005,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0005
+            ]
+          ],
+          "Q_ee_omega": [
+            [
+              8.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              8.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              8.0
+            ]
+          ],
+          "Qg": [
+            [
+              30.0,
+              0.0
+            ],
+            [
+              0.0,
+              30.0
+            ]
+          ],
+          "Qq": [
+            [
+              4.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.2,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.2
+            ]
+          ],
+          "Qv": [
+            [
+              0.08,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.08,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.08,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.08,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.08
+            ]
+          ],
+          "R": [
+            [
+              0.0025,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0025,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0025,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0025,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0025
+            ]
+          ],
+          "posture_reference": [
+            -0.06981317007977318,
+            0.017453292519943295,
+            0.0,
+            -0.1361356816555577,
+            0.0
+          ],
+          "terminal_scale": 2.0
+        },
+        "offline_only": true,
+        "field_output_supported": false,
+        "torque_config": {
+          "schema": "g1_measured_torque_preview_v1",
+          "q_min_deg": [
+            -5.0,
+            -5.0,
+            -20.0,
+            -40.0,
+            -40.0
+          ],
+          "q_max_deg": [
+            5.0,
+            3.0,
+            5.0,
+            40.0,
+            40.0
+          ],
+          "q_margin_deg": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max_dq_rad_s": 1.0,
+          "max_ddq_rad_s2": 8.0,
+          "kp": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "kd": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "tau_abs_nm": [
+            25,
+            25,
+            25,
+            25,
+            25
+          ],
+          "perturbation_nm": 0.1,
+          "regularization": 5.0,
+          "candidate_scales": [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "max_joint_error_rad_s2": 4.0,
+          "max_abs_qacc_rad_s2": 10.0,
+          "second_pass_error_rad_s2": 5.0,
+          "rescue_passes": 2,
+          "transition_rate_nm_s": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            40.0
+          ],
+          "recovery_envelope_enabled": true,
+          "recovery_rate_s_inv": 6.0,
+          "recovery_guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "inverse_dynamics": {
+          "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+          "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+          "bottle_mass_kg_from_xml": 0.25,
+          "bottle_com_local_m": [
+            0.0,
+            0.0,
+            0.000212
+          ],
+          "bottle_diagonal_inertia_kg_m2": [
+            0.0009031911494166669,
+            0.0009031911494166669,
+            0.0001318234375
+          ],
+          "model_joint_armature_kg_m2": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "hardware_parameters_calibrated": false,
+          "friction_compensation": "none; do not transfer simulation friction",
+          "external_hand_wrench": "assumed_zero; no contact-force feedback",
+          "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+        },
+        "recovery_envelope": {
+          "enabled": true,
+          "rate_s_inv": 6.0,
+          "guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "semantics": "extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+          "physical_safety_certified": false
+        },
+        "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+        "unmodelled": [
+          "unknown ground/contact reactions",
+          "actuator delay and torque gain",
+          "physical friction and payload inertia error",
+          "future arm-to-base reaction"
+        ],
+        "output_semantics": "selected total torque minus current PD; device adds PD once"
+      },
+      "scenario": {
+        "name": "friction_only",
+        "payload_scale": 1.0,
+        "viscous_friction": 0.03,
+        "coulomb_friction": 0.015,
+        "observation_delay_s": 0.0,
+        "actuation_delay_s": 0.0
+      },
+      "clock": {
+        "physics_dt_s": 0.002,
+        "control_dt_s": 0.006,
+        "scheduling": "integer physics-step queue; observation includes current state before solve",
+        "startup": "oldest available observation until delay history fills; initial hold has active_seq=-1",
+        "integration": "explicit constant acceleration over each 2ms interval"
+      },
+      "acceleration_tracking_rmse_semantics": "historical: actual minus latest request at 6ms samples",
+      "tracking_2ms": {
+        "current_request_vs_actual_rmse": 0.43213278326166366,
+        "actually_active_command_desired_vs_actual_rmse": 0.43213278326166366,
+        "active_command_samples": 2500,
+        "initial_hold_samples": 0,
+        "active_metric_excludes_initial_hold": true
+      },
+      "first_contact_2ms": {
+        "q_inner_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": 0.0
+        },
+        "q_outer_margin": null,
+        "dq_margin": null,
+        "acceleration_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": -0.04110943432887204
+        },
+        "mapper_acceleration_margin": null,
+        "torque_margin": null
+      },
+      "minimum_margins_2ms": {
+        "q_inner_margin": 0.0,
+        "q_outer_margin": 0.017453292519943292,
+        "dq_margin": 0.34004124377978406,
+        "acceleration_margin": -0.04110943432887204,
+        "mapper_acceleration_margin": 1.958890565671128,
+        "torque_margin": 21.77696015129377
+      },
+      "saturated_2ms_intervals": 0,
+      "physical_state_scored_until_s": 5.0
+    },
+    "observation_only": {
+      "status": "complete",
+      "failure": null,
+      "failure_state": null,
+      "samples": 834,
+      "scored_until_s": 4.998,
+      "metrics_cover_requested_duration": true,
+      "acceleration_tracking_rmse": 0.17352454552419483,
+      "tilt_rms_deg": 1.5453076277601585,
+      "endpoint_acceleration_rms_m_s2": 1.0378210349344965,
+      "max_abs_qacc": 8.053940236441118,
+      "max_abs_qacc_at_2ms": 8.065128275846531,
+      "core_ms": {
+        "p50": 2.039065,
+        "p95": 2.1457599999999992,
+        "p99": 2.2931230399999993,
+        "max": 3.548552
+      },
+      "controller_metadata": {
+        "schema": "g1_hardware_mpc_core_v1",
+        "model": "measured_state_acceleration_mpc",
+        "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+        "solver_package_version": "0.9.1",
+        "state": "measured q,dq; previous solution only warm-starts optimization",
+        "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+        "actuation": "measured_torque_preview",
+        "frame": "fixed H0",
+        "config": {
+          "schema": "g1_hardware_mpc_config_v1",
+          "control_period_s": 0.006,
+          "horizon": 9,
+          "prediction_backend": "cpp_pinocchio",
+          "solver_backend": "daqp",
+          "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+          "q_ee_acc": 0.01,
+          "q_ee_alpha": 0.0005,
+          "q_ee_omega": 8.0,
+          "q_gravity": [
+            30.0,
+            30.0
+          ],
+          "q_posture": [
+            4.0,
+            4.0,
+            1.5,
+            0.2,
+            0.2
+          ],
+          "q_vel": 0.08,
+          "r_ddq": 0.0025,
+          "terminal_scale": 2.0,
+          "regularization": 1e-06,
+          "reference_offset_limit_deg": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "reference_max_dq_rad_s": 0.07,
+          "reference_max_ddq_rad_s2": 0.2,
+          "solver_eps_abs": 0.001,
+          "solver_eps_rel": 1e-05,
+          "solver_max_iter": 1000,
+          "solver_check_termination": 10,
+          "solver_time_limit_s": 0.0035,
+          "solver_rho": 0.001,
+          "solver_adaptive_rho": true
+        },
+        "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+        "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+        "xml_sha256": {
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+        },
+        "cost": {
+          "term_names": [
+            "linear_acceleration",
+            "angular_acceleration",
+            "angular_velocity",
+            "gravity",
+            "posture",
+            "velocity",
+            "control"
+          ],
+          "Q_ee_acc": [
+            [
+              0.01,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.01,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.01
+            ]
+          ],
+          "Q_ee_alpha": [
+            [
+              0.0005,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0005,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0005
+            ]
+          ],
+          "Q_ee_omega": [
+            [
+              8.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              8.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              8.0
+            ]
+          ],
+          "Qg": [
+            [
+              30.0,
+              0.0
+            ],
+            [
+              0.0,
+              30.0
+            ]
+          ],
+          "Qq": [
+            [
+              4.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.2,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.2
+            ]
+          ],
+          "Qv": [
+            [
+              0.08,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.08,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.08,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.08,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.08
+            ]
+          ],
+          "R": [
+            [
+              0.0025,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0025,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0025,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0025,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0025
+            ]
+          ],
+          "posture_reference": [
+            -0.06981317007977318,
+            0.017453292519943295,
+            0.0,
+            -0.1361356816555577,
+            0.0
+          ],
+          "terminal_scale": 2.0
+        },
+        "offline_only": true,
+        "field_output_supported": false,
+        "torque_config": {
+          "schema": "g1_measured_torque_preview_v1",
+          "q_min_deg": [
+            -5.0,
+            -5.0,
+            -20.0,
+            -40.0,
+            -40.0
+          ],
+          "q_max_deg": [
+            5.0,
+            3.0,
+            5.0,
+            40.0,
+            40.0
+          ],
+          "q_margin_deg": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max_dq_rad_s": 1.0,
+          "max_ddq_rad_s2": 8.0,
+          "kp": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "kd": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "tau_abs_nm": [
+            25,
+            25,
+            25,
+            25,
+            25
+          ],
+          "perturbation_nm": 0.1,
+          "regularization": 5.0,
+          "candidate_scales": [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "max_joint_error_rad_s2": 4.0,
+          "max_abs_qacc_rad_s2": 10.0,
+          "second_pass_error_rad_s2": 5.0,
+          "rescue_passes": 2,
+          "transition_rate_nm_s": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            40.0
+          ],
+          "recovery_envelope_enabled": true,
+          "recovery_rate_s_inv": 6.0,
+          "recovery_guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "inverse_dynamics": {
+          "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+          "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+          "bottle_mass_kg_from_xml": 0.25,
+          "bottle_com_local_m": [
+            0.0,
+            0.0,
+            0.000212
+          ],
+          "bottle_diagonal_inertia_kg_m2": [
+            0.0009031911494166669,
+            0.0009031911494166669,
+            0.0001318234375
+          ],
+          "model_joint_armature_kg_m2": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "hardware_parameters_calibrated": false,
+          "friction_compensation": "none; do not transfer simulation friction",
+          "external_hand_wrench": "assumed_zero; no contact-force feedback",
+          "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+        },
+        "recovery_envelope": {
+          "enabled": true,
+          "rate_s_inv": 6.0,
+          "guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "semantics": "extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+          "physical_safety_certified": false
+        },
+        "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+        "unmodelled": [
+          "unknown ground/contact reactions",
+          "actuator delay and torque gain",
+          "physical friction and payload inertia error",
+          "future arm-to-base reaction"
+        ],
+        "output_semantics": "selected total torque minus current PD; device adds PD once"
+      },
+      "scenario": {
+        "name": "observation_only",
+        "payload_scale": 1.0,
+        "viscous_friction": 0.0,
+        "coulomb_friction": 0.0,
+        "observation_delay_s": 0.004,
+        "actuation_delay_s": 0.0
+      },
+      "clock": {
+        "physics_dt_s": 0.002,
+        "control_dt_s": 0.006,
+        "scheduling": "integer physics-step queue; observation includes current state before solve",
+        "startup": "oldest available observation until delay history fills; initial hold has active_seq=-1",
+        "integration": "explicit constant acceleration over each 2ms interval"
+      },
+      "acceleration_tracking_rmse_semantics": "historical: actual minus latest request at 6ms samples",
+      "tracking_2ms": {
+        "current_request_vs_actual_rmse": 0.28215172244271675,
+        "actually_active_command_desired_vs_actual_rmse": 0.28215172244271675,
+        "active_command_samples": 2500,
+        "initial_hold_samples": 0,
+        "active_metric_excludes_initial_hold": true
+      },
+      "first_contact_2ms": {
+        "q_inner_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": 0.0
+        },
+        "q_outer_margin": null,
+        "dq_margin": null,
+        "acceleration_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": -0.04110943432887204
+        },
+        "mapper_acceleration_margin": null,
+        "torque_margin": null
+      },
+      "minimum_margins_2ms": {
+        "q_inner_margin": 0.0,
+        "q_outer_margin": 0.017453292519943292,
+        "dq_margin": 0.31145763712085894,
+        "acceleration_margin": -0.06512827584653103,
+        "mapper_acceleration_margin": 1.934871724153469,
+        "torque_margin": 21.654872547376947
+      },
+      "saturated_2ms_intervals": 0,
+      "physical_state_scored_until_s": 5.0
+    },
+    "actuation_only": {
+      "status": "complete",
+      "failure": null,
+      "failure_state": null,
+      "samples": 834,
+      "scored_until_s": 4.998,
+      "metrics_cover_requested_duration": true,
+      "acceleration_tracking_rmse": 0.3605130508310215,
+      "tilt_rms_deg": 1.594013669239741,
+      "endpoint_acceleration_rms_m_s2": 1.0349272786206556,
+      "max_abs_qacc": 8.235848506105345,
+      "max_abs_qacc_at_2ms": 8.235848506105345,
+      "core_ms": {
+        "p50": 2.074076,
+        "p95": 2.13620595,
+        "p99": 2.297519029999999,
+        "max": 2.856757
+      },
+      "controller_metadata": {
+        "schema": "g1_hardware_mpc_core_v1",
+        "model": "measured_state_acceleration_mpc",
+        "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+        "solver_package_version": "0.9.1",
+        "state": "measured q,dq; previous solution only warm-starts optimization",
+        "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+        "actuation": "measured_torque_preview",
+        "frame": "fixed H0",
+        "config": {
+          "schema": "g1_hardware_mpc_config_v1",
+          "control_period_s": 0.006,
+          "horizon": 9,
+          "prediction_backend": "cpp_pinocchio",
+          "solver_backend": "daqp",
+          "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+          "q_ee_acc": 0.01,
+          "q_ee_alpha": 0.0005,
+          "q_ee_omega": 8.0,
+          "q_gravity": [
+            30.0,
+            30.0
+          ],
+          "q_posture": [
+            4.0,
+            4.0,
+            1.5,
+            0.2,
+            0.2
+          ],
+          "q_vel": 0.08,
+          "r_ddq": 0.0025,
+          "terminal_scale": 2.0,
+          "regularization": 1e-06,
+          "reference_offset_limit_deg": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "reference_max_dq_rad_s": 0.07,
+          "reference_max_ddq_rad_s2": 0.2,
+          "solver_eps_abs": 0.001,
+          "solver_eps_rel": 1e-05,
+          "solver_max_iter": 1000,
+          "solver_check_termination": 10,
+          "solver_time_limit_s": 0.0035,
+          "solver_rho": 0.001,
+          "solver_adaptive_rho": true
+        },
+        "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+        "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+        "xml_sha256": {
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+        },
+        "cost": {
+          "term_names": [
+            "linear_acceleration",
+            "angular_acceleration",
+            "angular_velocity",
+            "gravity",
+            "posture",
+            "velocity",
+            "control"
+          ],
+          "Q_ee_acc": [
+            [
+              0.01,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.01,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.01
+            ]
+          ],
+          "Q_ee_alpha": [
+            [
+              0.0005,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0005,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0005
+            ]
+          ],
+          "Q_ee_omega": [
+            [
+              8.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              8.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              8.0
+            ]
+          ],
+          "Qg": [
+            [
+              30.0,
+              0.0
+            ],
+            [
+              0.0,
+              30.0
+            ]
+          ],
+          "Qq": [
+            [
+              4.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.2,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.2
+            ]
+          ],
+          "Qv": [
+            [
+              0.08,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.08,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.08,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.08,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.08
+            ]
+          ],
+          "R": [
+            [
+              0.0025,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0025,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0025,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0025,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0025
+            ]
+          ],
+          "posture_reference": [
+            -0.06981317007977318,
+            0.017453292519943295,
+            0.0,
+            -0.1361356816555577,
+            0.0
+          ],
+          "terminal_scale": 2.0
+        },
+        "offline_only": true,
+        "field_output_supported": false,
+        "torque_config": {
+          "schema": "g1_measured_torque_preview_v1",
+          "q_min_deg": [
+            -5.0,
+            -5.0,
+            -20.0,
+            -40.0,
+            -40.0
+          ],
+          "q_max_deg": [
+            5.0,
+            3.0,
+            5.0,
+            40.0,
+            40.0
+          ],
+          "q_margin_deg": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max_dq_rad_s": 1.0,
+          "max_ddq_rad_s2": 8.0,
+          "kp": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "kd": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "tau_abs_nm": [
+            25,
+            25,
+            25,
+            25,
+            25
+          ],
+          "perturbation_nm": 0.1,
+          "regularization": 5.0,
+          "candidate_scales": [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "max_joint_error_rad_s2": 4.0,
+          "max_abs_qacc_rad_s2": 10.0,
+          "second_pass_error_rad_s2": 5.0,
+          "rescue_passes": 2,
+          "transition_rate_nm_s": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            40.0
+          ],
+          "recovery_envelope_enabled": true,
+          "recovery_rate_s_inv": 6.0,
+          "recovery_guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "inverse_dynamics": {
+          "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+          "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+          "bottle_mass_kg_from_xml": 0.25,
+          "bottle_com_local_m": [
+            0.0,
+            0.0,
+            0.000212
+          ],
+          "bottle_diagonal_inertia_kg_m2": [
+            0.0009031911494166669,
+            0.0009031911494166669,
+            0.0001318234375
+          ],
+          "model_joint_armature_kg_m2": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "hardware_parameters_calibrated": false,
+          "friction_compensation": "none; do not transfer simulation friction",
+          "external_hand_wrench": "assumed_zero; no contact-force feedback",
+          "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+        },
+        "recovery_envelope": {
+          "enabled": true,
+          "rate_s_inv": 6.0,
+          "guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "semantics": "extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+          "physical_safety_certified": false
+        },
+        "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+        "unmodelled": [
+          "unknown ground/contact reactions",
+          "actuator delay and torque gain",
+          "physical friction and payload inertia error",
+          "future arm-to-base reaction"
+        ],
+        "output_semantics": "selected total torque minus current PD; device adds PD once"
+      },
+      "scenario": {
+        "name": "actuation_only",
+        "payload_scale": 1.0,
+        "viscous_friction": 0.0,
+        "coulomb_friction": 0.0,
+        "observation_delay_s": 0.0,
+        "actuation_delay_s": 0.006
+      },
+      "clock": {
+        "physics_dt_s": 0.002,
+        "control_dt_s": 0.006,
+        "scheduling": "integer physics-step queue; observation includes current state before solve",
+        "startup": "oldest available observation until delay history fills; initial hold has active_seq=-1",
+        "integration": "explicit constant acceleration over each 2ms interval"
+      },
+      "acceleration_tracking_rmse_semantics": "historical: actual minus latest request at 6ms samples",
+      "tracking_2ms": {
+        "current_request_vs_actual_rmse": 0.42472072679726675,
+        "actually_active_command_desired_vs_actual_rmse": 0.36085773165994506,
+        "active_command_samples": 2497,
+        "initial_hold_samples": 3,
+        "active_metric_excludes_initial_hold": true
+      },
+      "first_contact_2ms": {
+        "q_inner_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": 0.0
+        },
+        "q_outer_margin": null,
+        "dq_margin": null,
+        "acceleration_margin": {
+          "time_s": 0.006,
+          "joint_index": 0,
+          "signed_margin": -0.20543950385269838
+        },
+        "mapper_acceleration_margin": null,
+        "torque_margin": null
+      },
+      "minimum_margins_2ms": {
+        "q_inner_margin": 0.0,
+        "q_outer_margin": 0.017453292519943292,
+        "dq_margin": 0.29151397825917713,
+        "acceleration_margin": -0.23584850610534502,
+        "mapper_acceleration_margin": 1.764151493894655,
+        "torque_margin": 21.311373071869003
+      },
+      "saturated_2ms_intervals": 0,
+      "physical_state_scored_until_s": 5.0
+    },
+    "both_delays": {
+      "status": "failed",
+      "failure": "HardwareMpcError: measured-state MPC rejected: daqp_exitflag_-1",
+      "failure_state": {
+        "time_s": 0.114,
+        "true_q_deg": [
+          -1.4501761861949989,
+          -0.01216386570104241,
+          0.39207334279579475,
+          -5.541313572706263,
+          -0.4866924971712149
+        ],
+        "true_dq": [
+          0.7266796762123473,
+          -0.15074405138549524,
+          0.12239750538441983,
+          0.6304964297468212,
+          -0.05108024583825663
+        ],
+        "observed_q_deg": [
+          -1.6172604930268883,
+          0.02282456334229843,
+          0.36409053510719275,
+          -5.6866480730215,
+          -0.4747470851378143
+        ],
+        "observed_dq": [
+          0.731274990400211,
+          -0.15444863424276986,
+          0.12161454630079464,
+          0.6375091690512118,
+          -0.05318191114059293
+        ],
+        "outer_q_bounds_deg": [
+          [
+            -5.0,
+            5.0
+          ],
+          [
+            -5.0,
+            3.0000000000000004
+          ],
+          [
+            -20.0,
+            5.0
+          ],
+          [
+            -40.0,
+            40.0
+          ],
+          [
+            -40.0,
+            40.0
+          ]
+        ],
+        "independent_constraint_lp": {
+          "status": 2,
+          "success": false,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)"
+        },
+        "independent_true_state_constraint_lp": {
+          "status": 2,
+          "success": false,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)"
+        },
+        "lp_variable_bounds": "all variables unbounded; lower <= A @ z <= upper",
+        "diagnostics": {
+          "mpc_active": true,
+          "controller_kind": "measured_torque_preview",
+          "measured_q_rad": [
+            -0.028226520465745995,
+            0.0003983637806531091,
+            0.0063545786129685184,
+            -0.09925073227641609,
+            -0.008285899749900696
+          ],
+          "measured_dq_rad_s": [
+            0.731274990400211,
+            -0.15444863424276986,
+            0.12161454630079464,
+            0.6375091690512118,
+            -0.05318191114059293
+          ],
+          "mpc_initial_state": [
+            -0.028226520465745995,
+            0.0003983637806531091,
+            0.0063545786129685184,
+            -0.09925073227641609,
+            -0.008285899749900696,
+            0.731274990400211,
+            -0.15444863424276986,
+            0.12161454630079464,
+            0.6375091690512118,
+            -0.05318191114059293
+          ],
+          "raw_mpc_ddq_rad_s2": [
+            -3.0914466381073,
+            0.6860142350196838,
+            -0.5118765234947205,
+            -2.6975765228271484,
+            0.24587124586105347
+          ],
+          "one_step_q_reference_rad": [
+            -0.02389451675117016,
+            -0.0005159797728992999,
+            0.007075052242726088,
+            -0.0954742357134819,
+            -0.008600565604865551
+          ],
+          "one_step_dq_reference_rad_s": [
+            0.7127262949943542,
+            -0.15033255517482758,
+            0.11854328960180283,
+            0.6213237047195435,
+            -0.05170668289065361
+          ],
+          "predictor": {},
+          "gravity_error_before_m_s2": [
+            -1.0945715346352702,
+            -0.07821920808797064
+          ],
+          "feedback_dt_s": 0.006,
+          "command_integration_dt_s": 0.006,
+          "mpc": {
+            "solved": false,
+            "success": false,
+            "fallback_used": true,
+            "fallback_feasible": true,
+            "solver_status": "daqp_exitflag_-1",
+            "solver_status_val": -1,
+            "objective": 322.8282048405588,
+            "iterations": 3,
+            "primal_residual": 4.480079647814186,
+            "dual_residual": 5.677929073308678,
+            "prim_res": 4.480079647814186,
+            "dual_res": 5.677929073308678,
+            "max_constraint_violation": null,
+            "min_constraint_margins": {
+              "q": 0.0354225648081554,
+              "dq": 0.2872736889601307,
+              "ddq": 0.0
+            },
+            "assembly_time": 0.0007910249987617135,
+            "rollout_time": 3.0229999538278207e-05,
+            "terms_time": 0.0003951680009777192,
+            "cost_time": 0.000292914999590721,
+            "constraints_time": 7.193900091806427e-05,
+            "solver_wall_time": 0.0005684930001734756,
+            "solver_run_time": 0.0001884560006146785,
+            "solver_setup_time": 0.000172912,
+            "solver_update_time": 0.0,
+            "solver_solve_time": 3.352e-06,
+            "solve_time": 3.352e-06,
+            "ddq_raw": [
+              -3.0914465600569527,
+              0.6860142519282402,
+              -0.5118764996550527,
+              -2.697576473721414,
+              0.2458712435619745
+            ],
+            "ddq_des": [
+              -3.0914465600569527,
+              0.6860142519282402,
+              -0.5118764996550527,
+              -2.697576473721414,
+              0.2458712435619745
+            ],
+            "gravity_error": [
+              -1.0945715346352702,
+              -0.07821920808797064
+            ],
+            "current_q_violation": 0.0,
+            "current_q_safety_violation": 0.0,
+            "recovery_active": false,
+            "one_step_prediction": {
+              "q": [
+                -0.023894516561425754,
+                -0.0005159797682688017,
+                0.0070750521137794955,
+                -0.0954742336386358,
+                -0.008600565534360139
+              ],
+              "dq": [
+                0.7127263110398693,
+                -0.15033254873120042,
+                0.11854328730286433,
+                0.6213237102088833,
+                -0.051706683679221085
+              ],
+              "ee_lin_acc": [
+                0.32405158139539453,
+                0.5056680705075639,
+                3.33303796705418
+              ],
+              "ee_ang_acc": [
+                0.4751834401762054,
+                -7.940293860412895,
+                0.5046960598997071
+              ],
+              "ee_ang_vel": [
+                -0.09722363365432556,
+                1.3271925761208545,
+                -0.0627795161622718
+              ],
+              "gravity_error": [
+                -1.0154447724145266,
+                -0.07346570171000956
+              ],
+              "ee_lin_acc_offset": [
+                -0.1229294724619785,
+                0.31110854372375396,
+                1.5512472030539826
+              ],
+              "ee_lin_acc_ddq_map": [
+                [
+                  -0.1592633691254013,
+                  -0.0016664178342093872,
+                  -0.03762388680190892,
+                  0.02317989215843516,
+                  -0.003901253762673457
+                ],
+                [
+                  -0.08327217478158896,
+                  0.16373091737290693,
+                  0.31478463122137923,
+                  0.0051830908187583315,
+                  -0.0003296654886085821
+                ],
+                [
+                  -0.3062623083587903,
+                  0.03154264633128574,
+                  0.004694205095665498,
+                  -0.29923521239049444,
+                  0.03478033265719077
+                ]
+              ],
+              "ee_ang_acc_offset": [
+                -0.513222457596941,
+                -2.275283078630878,
+                0.2194739759837074
+              ],
+              "ee_ang_acc_ddq_map": [
+                [
+                  -0.004261269926964826,
+                  0.9998920374130811,
+                  -0.012340058469412768,
+                  -0.014330936056450656,
+                  0.9936779756526768
+                ],
+                [
+                  0.9655166849925508,
+                  0.007774592629357166,
+                  -0.016384213114163854,
+                  0.9997659522381491,
+                  0.012434921838217629
+                ],
+                [
+                  -0.2603063053012828,
+                  0.012468729982041297,
+                  0.9997896181285348,
+                  0.016206943483997642,
+                  0.11157711871919167
+                ]
+              ],
+              "cost_terms": {
+                "linear_acceleration": 0.11469851714760358,
+                "angular_acceleration": 0.03176439200220335,
+                "angular_velocity": 14.198670693606637,
+                "gravity": 31.095758854552013,
+                "posture": 0.010146219110111567,
+                "velocity": 0.07466783317007394,
+                "control": 0.04406761609605427
+              }
+            },
+            "postprocess_time": 0.00014061599722481333,
+            "policy_core_time": 0.0015006110006652307
+          }
+        },
+        "lp_artifact": "evaluation/hardware_shadow/commissioning/torque_ablation_recovery_20260928/both_delays/failure_constraints.npz"
+      },
+      "samples": 19,
+      "scored_until_s": 0.108,
+      "metrics_cover_requested_duration": false,
+      "acceleration_tracking_rmse": 2.103989779244195,
+      "tilt_rms_deg": 9.904813094292669,
+      "endpoint_acceleration_rms_m_s2": 3.5698855230605204,
+      "max_abs_qacc": 8.235848506105345,
+      "max_abs_qacc_at_2ms": 8.235848506105345,
+      "core_ms": {
+        "p50": 2.204692,
+        "p95": 2.5813732,
+        "p99": 2.67327544,
+        "max": 2.6962509999999997
+      },
+      "controller_metadata": {
+        "schema": "g1_hardware_mpc_core_v1",
+        "model": "measured_state_acceleration_mpc",
+        "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+        "solver_package_version": "0.9.1",
+        "state": "measured q,dq; previous solution only warm-starts optimization",
+        "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+        "actuation": "measured_torque_preview",
+        "frame": "fixed H0",
+        "config": {
+          "schema": "g1_hardware_mpc_config_v1",
+          "control_period_s": 0.006,
+          "horizon": 9,
+          "prediction_backend": "cpp_pinocchio",
+          "solver_backend": "daqp",
+          "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+          "q_ee_acc": 0.01,
+          "q_ee_alpha": 0.0005,
+          "q_ee_omega": 8.0,
+          "q_gravity": [
+            30.0,
+            30.0
+          ],
+          "q_posture": [
+            4.0,
+            4.0,
+            1.5,
+            0.2,
+            0.2
+          ],
+          "q_vel": 0.08,
+          "r_ddq": 0.0025,
+          "terminal_scale": 2.0,
+          "regularization": 1e-06,
+          "reference_offset_limit_deg": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "reference_max_dq_rad_s": 0.07,
+          "reference_max_ddq_rad_s2": 0.2,
+          "solver_eps_abs": 0.001,
+          "solver_eps_rel": 1e-05,
+          "solver_max_iter": 1000,
+          "solver_check_termination": 10,
+          "solver_time_limit_s": 0.0035,
+          "solver_rho": 0.001,
+          "solver_adaptive_rho": true
+        },
+        "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+        "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+        "xml_sha256": {
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+        },
+        "cost": {
+          "term_names": [
+            "linear_acceleration",
+            "angular_acceleration",
+            "angular_velocity",
+            "gravity",
+            "posture",
+            "velocity",
+            "control"
+          ],
+          "Q_ee_acc": [
+            [
+              0.01,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.01,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.01
+            ]
+          ],
+          "Q_ee_alpha": [
+            [
+              0.0005,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0005,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0005
+            ]
+          ],
+          "Q_ee_omega": [
+            [
+              8.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              8.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              8.0
+            ]
+          ],
+          "Qg": [
+            [
+              30.0,
+              0.0
+            ],
+            [
+              0.0,
+              30.0
+            ]
+          ],
+          "Qq": [
+            [
+              4.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.2,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.2
+            ]
+          ],
+          "Qv": [
+            [
+              0.08,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.08,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.08,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.08,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.08
+            ]
+          ],
+          "R": [
+            [
+              0.0025,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0025,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0025,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0025,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0025
+            ]
+          ],
+          "posture_reference": [
+            -0.06981317007977318,
+            0.017453292519943295,
+            0.0,
+            -0.1361356816555577,
+            0.0
+          ],
+          "terminal_scale": 2.0
+        },
+        "offline_only": true,
+        "field_output_supported": false,
+        "torque_config": {
+          "schema": "g1_measured_torque_preview_v1",
+          "q_min_deg": [
+            -5.0,
+            -5.0,
+            -20.0,
+            -40.0,
+            -40.0
+          ],
+          "q_max_deg": [
+            5.0,
+            3.0,
+            5.0,
+            40.0,
+            40.0
+          ],
+          "q_margin_deg": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max_dq_rad_s": 1.0,
+          "max_ddq_rad_s2": 8.0,
+          "kp": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "kd": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "tau_abs_nm": [
+            25,
+            25,
+            25,
+            25,
+            25
+          ],
+          "perturbation_nm": 0.1,
+          "regularization": 5.0,
+          "candidate_scales": [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "max_joint_error_rad_s2": 4.0,
+          "max_abs_qacc_rad_s2": 10.0,
+          "second_pass_error_rad_s2": 5.0,
+          "rescue_passes": 2,
+          "transition_rate_nm_s": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            40.0
+          ],
+          "recovery_envelope_enabled": true,
+          "recovery_rate_s_inv": 6.0,
+          "recovery_guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "inverse_dynamics": {
+          "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+          "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+          "bottle_mass_kg_from_xml": 0.25,
+          "bottle_com_local_m": [
+            0.0,
+            0.0,
+            0.000212
+          ],
+          "bottle_diagonal_inertia_kg_m2": [
+            0.0009031911494166669,
+            0.0009031911494166669,
+            0.0001318234375
+          ],
+          "model_joint_armature_kg_m2": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "hardware_parameters_calibrated": false,
+          "friction_compensation": "none; do not transfer simulation friction",
+          "external_hand_wrench": "assumed_zero; no contact-force feedback",
+          "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+        },
+        "recovery_envelope": {
+          "enabled": true,
+          "rate_s_inv": 6.0,
+          "guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "semantics": "extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+          "physical_safety_certified": false
+        },
+        "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+        "unmodelled": [
+          "unknown ground/contact reactions",
+          "actuator delay and torque gain",
+          "physical friction and payload inertia error",
+          "future arm-to-base reaction"
+        ],
+        "output_semantics": "selected total torque minus current PD; device adds PD once"
+      },
+      "scenario": {
+        "name": "both_delays",
+        "payload_scale": 1.0,
+        "viscous_friction": 0.0,
+        "coulomb_friction": 0.0,
+        "observation_delay_s": 0.004,
+        "actuation_delay_s": 0.006
+      },
+      "clock": {
+        "physics_dt_s": 0.002,
+        "control_dt_s": 0.006,
+        "scheduling": "integer physics-step queue; observation includes current state before solve",
+        "startup": "oldest available observation until delay history fills; initial hold has active_seq=-1",
+        "integration": "explicit constant acceleration over each 2ms interval"
+      },
+      "acceleration_tracking_rmse_semantics": "historical: actual minus latest request at 6ms samples",
+      "tracking_2ms": {
+        "current_request_vs_actual_rmse": 2.2216474773109636,
+        "actually_active_command_desired_vs_actual_rmse": 1.6139554841483472,
+        "active_command_samples": 54,
+        "initial_hold_samples": 3,
+        "active_metric_excludes_initial_hold": true
+      },
+      "first_contact_2ms": {
+        "q_inner_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": 0.0
+        },
+        "q_outer_margin": null,
+        "dq_margin": null,
+        "acceleration_margin": {
+          "time_s": 0.006,
+          "joint_index": 0,
+          "signed_margin": -0.20543950385269838
+        },
+        "mapper_acceleration_margin": null,
+        "torque_margin": null
+      },
+      "minimum_margins_2ms": {
+        "q_inner_margin": 0.0,
+        "q_outer_margin": 0.017453292519943292,
+        "dq_margin": 0.26681818480697195,
+        "acceleration_margin": -0.23584850610534502,
+        "mapper_acceleration_margin": 1.764151493894655,
+        "torque_margin": 22.216671586499224
+      },
+      "saturated_2ms_intervals": 0,
+      "physical_state_scored_until_s": 0.114
+    },
+    "combined": {
+      "status": "failed",
+      "failure": "HardwareMpcError: measured-state MPC rejected: daqp_exitflag_-1",
+      "failure_state": {
+        "time_s": 0.114,
+        "true_q_deg": [
+          -1.4256089392198323,
+          -0.006467526961035566,
+          0.342028533942066,
+          -5.2980016126977,
+          -0.4388554178327319
+        ],
+        "true_dq": [
+          0.6919324409286122,
+          -0.15687003546666142,
+          0.1033655572925553,
+          0.6741288581677896,
+          -0.04873271854267236
+        ],
+        "observed_q_deg": [
+          -1.585908690822715,
+          0.029808053980560873,
+          0.31831933341670726,
+          -5.45406933492832,
+          -0.42756846868626674
+        ],
+        "observed_dq": [
+          0.7068959035853342,
+          -0.15955512227792704,
+          0.10340014032168984,
+          0.6875358434125136,
+          -0.04974873288869213
+        ],
+        "outer_q_bounds_deg": [
+          [
+            -5.0,
+            5.0
+          ],
+          [
+            -5.0,
+            3.0000000000000004
+          ],
+          [
+            -20.0,
+            5.0
+          ],
+          [
+            -40.0,
+            40.0
+          ],
+          [
+            -40.0,
+            40.0
+          ]
+        ],
+        "independent_constraint_lp": {
+          "status": 2,
+          "success": false,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)"
+        },
+        "independent_true_state_constraint_lp": {
+          "status": 2,
+          "success": false,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)"
+        },
+        "lp_variable_bounds": "all variables unbounded; lower <= A @ z <= upper",
+        "diagnostics": {
+          "mpc_active": true,
+          "controller_kind": "measured_torque_preview",
+          "measured_q_rad": [
+            -0.027679328290849153,
+            0.0005202486855729891,
+            0.0055557204408751525,
+            -0.09519146752655655,
+            -0.007462477556285628
+          ],
+          "measured_dq_rad_s": [
+            0.7068959035853342,
+            -0.15955512227792704,
+            0.10340014032168984,
+            0.6875358434125136,
+            -0.04974873288869213
+          ],
+          "mpc_initial_state": [
+            -0.027679328290849153,
+            0.0005202486855729891,
+            0.0055557204408751525,
+            -0.09519146752655655,
+            -0.007462477556285628,
+            0.7068959035853342,
+            -0.15955512227792704,
+            0.10340014032168984,
+            0.6875358434125136,
+            -0.04974873288869213
+          ],
+          "raw_mpc_ddq_rad_s2": [
+            -2.9961190223693848,
+            0.7059526443481445,
+            -0.4358234405517578,
+            -2.9139201641082764,
+            0.22884483635425568
+          ],
+          "one_step_q_reference_rad": [
+            -0.023491883650422096,
+            -0.00042437491356395185,
+            0.006168276537209749,
+            -0.0911187008023262,
+            -0.007756850682199001
+          ],
+          "one_step_dq_reference_rad_s": [
+            0.688919186592102,
+            -0.15531940758228302,
+            0.10078520327806473,
+            0.6700523495674133,
+            -0.04837566241621971
+          ],
+          "predictor": {},
+          "gravity_error_before_m_s2": [
+            -1.049720574053496,
+            -0.08755035196256934
+          ],
+          "feedback_dt_s": 0.006,
+          "command_integration_dt_s": 0.006,
+          "mpc": {
+            "solved": false,
+            "success": false,
+            "fallback_used": true,
+            "fallback_feasible": true,
+            "solver_status": "daqp_exitflag_-1",
+            "solver_status_val": -1,
+            "objective": 313.14268897431464,
+            "iterations": 14,
+            "primal_residual": 4.633950768753792,
+            "dual_residual": 6.658559535350865,
+            "prim_res": 4.633950768753792,
+            "dual_res": 6.658559535350865,
+            "max_constraint_violation": null,
+            "min_constraint_margins": {
+              "q": 0.035330959940021084,
+              "dq": 0.311080810303648,
+              "ddq": 0.0
+            },
+            "assembly_time": 0.0008158099990396295,
+            "rollout_time": 3.1289000617107376e-05,
+            "terms_time": 0.0004150099994149059,
+            "cost_time": 0.0002957520009658765,
+            "constraints_time": 7.276600081240758e-05,
+            "solver_wall_time": 0.0006136730007710867,
+            "solver_run_time": 0.00021149600070202723,
+            "solver_setup_time": 0.000176696,
+            "solver_update_time": 0.0,
+            "solver_solve_time": 2.2019e-05,
+            "solve_time": 2.2019e-05,
+            "ddq_raw": [
+              -2.9961189814970326,
+              0.7059526644491894,
+              -0.43582344305026,
+              -2.913920230166059,
+              0.22884484177991105
+            ],
+            "ddq_des": [
+              -2.9961189814970326,
+              0.7059526644491894,
+              -0.43582344305026,
+              -2.913920230166059,
+              0.22884484177991105
+            ],
+            "gravity_error": [
+              -1.049720574053496,
+              -0.08755035196256934
+            ],
+            "current_q_violation": 0.0,
+            "current_q_safety_violation": 0.0,
+            "recovery_active": false,
+            "one_step_prediction": {
+              "q": [
+                -0.023491883011004095,
+                -0.0004243749001344877,
+                0.006168276460830387,
+                -0.09111870303022446,
+                -0.0077568507464657425
+              ],
+              "dq": [
+                0.688919189696352,
+                -0.1553194062912319,
+                0.10078519966338828,
+                0.6700523220315172,
+                -0.048375663838012666
+              ],
+              "ee_lin_acc": [
+                0.29022350238319794,
+                0.5169420592125442,
+                3.363388761741903
+              ],
+              "ee_ang_acc": [
+                0.47434237725650996,
+                -8.066623550607025,
+                0.5371894646688314
+              ],
+              "ee_ang_vel": [
+                -0.09864443052855133,
+                1.3532726085099813,
+                -0.0729223880740274
+              ],
+              "gravity_error": [
+                -0.9690090420090106,
+                -0.08266512107562364
+              ],
+              "ee_lin_acc_offset": [
+                -0.14169476263583675,
+                0.3034129765787905,
+                1.5454577942625733
+              ],
+              "ee_lin_acc_ddq_map": [
+                [
+                  -0.16063717055238527,
+                  -0.0016329686778483968,
+                  -0.03732673882318511,
+                  0.021836130728628493,
+                  -0.0037411241793872093
+                ],
+                [
+                  -0.08328586535063587,
+                  0.16491871905266817,
+                  0.31489310978524865,
+                  0.00518560378370969,
+                  -0.00035768119327605314
+                ],
+                [
+                  -0.3062905993912603,
+                  0.0313315256683644,
+                  0.0047564049200675505,
+                  -0.29933523817158614,
+                  0.03479764437484792
+                ]
+              ],
+              "ee_ang_acc_offset": [
+                -0.5159667596770919,
+                -2.2757757196581614,
+                0.20772151775141995
+              ],
+              "ee_ang_acc_ddq_map": [
+                [
+                  -0.004261269926964826,
+                  0.999899582632343,
+                  -0.011813224187741934,
+                  -0.013382681145152831,
+                  0.9941912762720979
+                ],
+                [
+                  0.9655166849925508,
+                  0.007632198350879481,
+                  -0.016502026508093567,
+                  0.9997768701067891,
+                  0.011558672564524943
+                ],
+                [
+                  -0.2603063053012828,
+                  0.011940443877813239,
+                  0.9997940442188166,
+                  0.016343617862664566,
+                  0.10700515535713517
+                ]
+              ],
+              "cost_terms": {
+                "linear_acceleration": 0.11663842736530206,
+                "angular_acceleration": 0.03279199435951022,
+                "angular_velocity": 14.771161210401043,
+                "gravity": 28.37436137213004,
+                "posture": 0.010335501383718085,
+                "velocity": 0.07681613947882596,
+                "control": 0.045520853146555504
+              }
+            },
+            "postprocess_time": 0.00014803400335949846,
+            "policy_core_time": 0.001578043000336038
+          }
+        },
+        "lp_artifact": "evaluation/hardware_shadow/commissioning/torque_ablation_recovery_20260928/combined/failure_constraints.npz"
+      },
+      "samples": 19,
+      "scored_until_s": 0.108,
+      "metrics_cover_requested_duration": false,
+      "acceleration_tracking_rmse": 2.2559328850298406,
+      "tilt_rms_deg": 9.83339295956664,
+      "endpoint_acceleration_rms_m_s2": 3.8357025377916085,
+      "max_abs_qacc": 9.244221163855629,
+      "max_abs_qacc_at_2ms": 9.244221163855629,
+      "core_ms": {
+        "p50": 2.2933879999999998,
+        "p95": 2.556021799999999,
+        "p99": 2.74420676,
+        "max": 2.7912529999999998
+      },
+      "controller_metadata": {
+        "schema": "g1_hardware_mpc_core_v1",
+        "model": "measured_state_acceleration_mpc",
+        "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+        "solver_package_version": "0.9.1",
+        "state": "measured q,dq; previous solution only warm-starts optimization",
+        "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+        "actuation": "measured_torque_preview",
+        "frame": "fixed H0",
+        "config": {
+          "schema": "g1_hardware_mpc_config_v1",
+          "control_period_s": 0.006,
+          "horizon": 9,
+          "prediction_backend": "cpp_pinocchio",
+          "solver_backend": "daqp",
+          "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+          "q_ee_acc": 0.01,
+          "q_ee_alpha": 0.0005,
+          "q_ee_omega": 8.0,
+          "q_gravity": [
+            30.0,
+            30.0
+          ],
+          "q_posture": [
+            4.0,
+            4.0,
+            1.5,
+            0.2,
+            0.2
+          ],
+          "q_vel": 0.08,
+          "r_ddq": 0.0025,
+          "terminal_scale": 2.0,
+          "regularization": 1e-06,
+          "reference_offset_limit_deg": [
+            5.0,
+            5.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "reference_max_dq_rad_s": 0.07,
+          "reference_max_ddq_rad_s2": 0.2,
+          "solver_eps_abs": 0.001,
+          "solver_eps_rel": 1e-05,
+          "solver_max_iter": 1000,
+          "solver_check_termination": 10,
+          "solver_time_limit_s": 0.0035,
+          "solver_rho": 0.001,
+          "solver_adaptive_rho": true
+        },
+        "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+        "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+        "xml_sha256": {
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+          "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+        },
+        "cost": {
+          "term_names": [
+            "linear_acceleration",
+            "angular_acceleration",
+            "angular_velocity",
+            "gravity",
+            "posture",
+            "velocity",
+            "control"
+          ],
+          "Q_ee_acc": [
+            [
+              0.01,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.01,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.01
+            ]
+          ],
+          "Q_ee_alpha": [
+            [
+              0.0005,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0005,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0005
+            ]
+          ],
+          "Q_ee_omega": [
+            [
+              8.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              8.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              8.0
+            ]
+          ],
+          "Qg": [
+            [
+              30.0,
+              0.0
+            ],
+            [
+              0.0,
+              30.0
+            ]
+          ],
+          "Qq": [
+            [
+              4.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.2,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.2
+            ]
+          ],
+          "Qv": [
+            [
+              0.08,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.08,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.08,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.08,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.08
+            ]
+          ],
+          "R": [
+            [
+              0.0025,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0025,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0025,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0025,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0025
+            ]
+          ],
+          "posture_reference": [
+            -0.06981317007977318,
+            0.017453292519943295,
+            0.0,
+            -0.1361356816555577,
+            0.0
+          ],
+          "terminal_scale": 2.0
+        },
+        "offline_only": true,
+        "field_output_supported": false,
+        "torque_config": {
+          "schema": "g1_measured_torque_preview_v1",
+          "q_min_deg": [
+            -5.0,
+            -5.0,
+            -20.0,
+            -40.0,
+            -40.0
+          ],
+          "q_max_deg": [
+            5.0,
+            3.0,
+            5.0,
+            40.0,
+            40.0
+          ],
+          "q_margin_deg": [
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "max_dq_rad_s": 1.0,
+          "max_ddq_rad_s2": 8.0,
+          "kp": [
+            20.0,
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ],
+          "kd": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "tau_abs_nm": [
+            25,
+            25,
+            25,
+            25,
+            25
+          ],
+          "perturbation_nm": 0.1,
+          "regularization": 5.0,
+          "candidate_scales": [
+            1.0,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "max_joint_error_rad_s2": 4.0,
+          "max_abs_qacc_rad_s2": 10.0,
+          "second_pass_error_rad_s2": 5.0,
+          "rescue_passes": 2,
+          "transition_rate_nm_s": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            40.0
+          ],
+          "recovery_envelope_enabled": true,
+          "recovery_rate_s_inv": 6.0,
+          "recovery_guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "inverse_dynamics": {
+          "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+          "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+          "bottle_mass_kg_from_xml": 0.25,
+          "bottle_com_local_m": [
+            0.0,
+            0.0,
+            0.000212
+          ],
+          "bottle_diagonal_inertia_kg_m2": [
+            0.0009031911494166669,
+            0.0009031911494166669,
+            0.0001318234375
+          ],
+          "model_joint_armature_kg_m2": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+          ],
+          "hardware_parameters_calibrated": false,
+          "friction_compensation": "none; do not transfer simulation friction",
+          "external_hand_wrench": "assumed_zero; no contact-force feedback",
+          "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+        },
+        "recovery_envelope": {
+          "enabled": true,
+          "rate_s_inv": 6.0,
+          "guard_deg": [
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+            0.15
+          ],
+          "semantics": "extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+          "physical_safety_certified": false
+        },
+        "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+        "unmodelled": [
+          "unknown ground/contact reactions",
+          "actuator delay and torque gain",
+          "physical friction and payload inertia error",
+          "future arm-to-base reaction"
+        ],
+        "output_semantics": "selected total torque minus current PD; device adds PD once"
+      },
+      "scenario": {
+        "name": "combined",
+        "payload_scale": 1.2,
+        "viscous_friction": 0.03,
+        "coulomb_friction": 0.015,
+        "observation_delay_s": 0.004,
+        "actuation_delay_s": 0.006
+      },
+      "clock": {
+        "physics_dt_s": 0.002,
+        "control_dt_s": 0.006,
+        "scheduling": "integer physics-step queue; observation includes current state before solve",
+        "startup": "oldest available observation until delay history fills; initial hold has active_seq=-1",
+        "integration": "explicit constant acceleration over each 2ms interval"
+      },
+      "acceleration_tracking_rmse_semantics": "historical: actual minus latest request at 6ms samples",
+      "tracking_2ms": {
+        "current_request_vs_actual_rmse": 2.3487727157698255,
+        "actually_active_command_desired_vs_actual_rmse": 1.7015045595985752,
+        "active_command_samples": 54,
+        "initial_hold_samples": 3,
+        "active_metric_excludes_initial_hold": true
+      },
+      "first_contact_2ms": {
+        "q_inner_margin": {
+          "time_s": 0.0,
+          "joint_index": 0,
+          "signed_margin": 0.0
+        },
+        "q_outer_margin": null,
+        "dq_margin": null,
+        "acceleration_margin": {
+          "time_s": 0.006,
+          "joint_index": 0,
+          "signed_margin": -0.30584715471395896
+        },
+        "mapper_acceleration_margin": null,
+        "torque_margin": null
+      },
+      "minimum_margins_2ms": {
+        "q_inner_margin": 0.0,
+        "q_outer_margin": 0.017453292519943292,
+        "dq_margin": 0.28440785398528534,
+        "acceleration_margin": -1.244221163855629,
+        "mapper_acceleration_margin": 0.7557788361443709,
+        "torque_margin": 21.638147943958195
+      },
+      "saturated_2ms_intervals": 0,
+      "physical_state_scored_until_s": 0.114
+    }
+  },
+  "source_sha256_after": {
+    "tools/g1_commissioning/study_torque_robustness.py": "c82b51c30cd7a787aa259b75b0eeb4c8ffa9606452e7bfa5faeef728ffd23f62",
+    "tools/g1_commissioning/validate_measured_torque_mpc.py": "5ae9bffb72b724f0ed01cfc1db43f1064ace80fe54357e793809152cf5531758",
+    "tools/g1_commissioning/hardware_mpc_torque_control.py": "4e55df3ae92e2dbf45d519a5b01250081017b747986c3ca720a7512e67fd845c",
+    "tools/g1_commissioning/hardware_torque_mapper.py": "6332c584498bccffb8f44cfd4229883f8591efce7c11c2eebb525ae246d10770",
+    "tools/g1_commissioning/hardware_arm_inverse_dynamics.py": "2c8e77063f3832bda76fa5fb698955488dc29094378e1ce415d0738b14057b51",
+    "tools/g1_commissioning/hardware_mpc_control.py": "f3469cada4bc9527a1d4eeef9cacdfbb676e8e9a67dd256592a07e64c36d6f57",
+    "tools/g1_commissioning/hardware_mpc_solver.py": "e3289a853cdcf81493c9864e6c11305fe8621b1e4c9d34c516cc143e469ee2f6",
+    "tools/g1_commissioning/endpoint_pose.py": "14262a6b0ef9d617b00bfa12cac3865750e2ccff9f17ebc50095c9fc3b894270",
+    "tools/g1_commissioning/hardware_mpc_recovery.py": "03f3f205ab141aa25bef942efa8c047c771c9620fc150708efa19eb8ed72b42b",
+    "arm_mpc.py": "60a7939eb9b995610b136fc4717ee62ee3be35a9a653689a9c013beb3c73c61e",
+    "kinematics_helper.py": "34b244c038301a79f6adb09bbc8b1e1bcebc56871cd67baadc0a1b1589a672f1",
+    "robot_model_backend/cpp_rnea_backend.py": "d371ad2dae4042445928963f7464893f531c36d9d9562b42ffa8cfdb57da0d36",
+    "configs/hardware_mpc.yaml": "759971863c55f28d3da7028a98d14b215ba05a3b608ea8070eca055b33e96058",
+    "configs/hardware_mpc_torque_preview.yaml": "54c119f97eadf1255610a47312d959d4fe156475b6a236df0d6821c941a811b4",
+    "configs/g1.yaml": "f1e9d049d25fe92fd8cc673a196acc22e7df9dec2d47bb2532415c3080432465",
+    "build/right_arm_rnea/libright_arm_rnea.so": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+    "configs/hardware_mpc_torque_recovery.yaml": "23d6ed65db6c865bcf2b57b4a4fd87765f380e4238aaed72771f90a088bbe04d",
+    "resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+    "resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+  },
+  "source_unchanged_during_run": true
+}

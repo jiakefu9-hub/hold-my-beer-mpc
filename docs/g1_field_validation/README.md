@@ -19,6 +19,7 @@
 | 做“左臂固定、右臂 PID”的首次真机持瓶实验 | [HARDWARE_PID.md](HARDWARE_PID.md)：程序、完整 `[5,18)` 指标与仿真差异 |
 | 6 ms PID 复验后做右臂 MPC | [HARDWARE_MPC.md](HARDWARE_MPC.md)：预测模型、程序对应关系、时间验证和现场命令 |
 | 看 MPC 按仿真迁移了哪些、还缺哪些 | [HARDWARE_MPC_TORQUE_MIGRATION.md](HARDWARE_MPC_TORQUE_MIGRATION.md)：实测状态、候选筛选、闭环对照与当前阻碍 |
+| 看 MPC 延迟／负载偏差和提前制动的离线研究 | [HARDWARE_MPC_ROBUSTNESS.md](HARDWARE_MPC_ROBUSTNESS.md)：失败归因、20 秒模型闭环、因果状态预测及尚未通过的时间条件 |
 | 看五条轨迹是否可用、如何对齐及能否预测扰动 | [WALK_DATASET_AUDIT.md](WALK_DATASET_AUDIT.md)：离线审计与世界系模板建议 |
 | 比较相位模板、多关节和 IMU 历史预测方法 | [WALK_PREDICTOR_METHOD_STUDY.md](WALK_PREDICTOR_METHOD_STUDY.md)：论文依据与五条实测数据比较 |
 | 看五条腿部／身体 IMU 曲线 | [WALK_SIGNAL_GALLERY.md](WALK_SIGNAL_GALLERY.md)：22 张图、HTML 与 PDF |

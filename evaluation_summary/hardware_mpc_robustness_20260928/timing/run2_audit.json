@@ -1,0 +1,8 @@
+{
+  "commands": 3501,
+  "active_commands": 2500,
+  "final_weight": 0.0,
+  "checks": "measured state, one-step references, single PD, total torque, slew, final zero",
+  "physical_model_accuracy_certified": false,
+  "raw_jsonl_sha256": "52390b5c9d18107cf4660b7b026e3a74056a2f2776bbe57717ee45f53b124a34"
+}

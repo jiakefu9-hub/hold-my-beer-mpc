@@ -1,0 +1,393 @@
+{
+  "schema": "g1_torque_robustness_report_v1",
+  "scenario": "combined",
+  "dds": false,
+  "hardware_output": false,
+  "summary_npz_consistency_verified": true,
+  "semantics": {
+    "rmse": "sqrt(mean(error**2)) over active 2ms intervals and all five joints; initial seq=-1 excluded",
+    "timing": "whole controller step wall time saved by study; excludes plant stepping, transport and packet writes",
+    "windows": "interval starts in [0,end); physical-state margins include end; failed prefix is not full duration",
+    "safety": "offline model only; no hardware safety or real-time certification"
+  },
+  "source_sha256": {
+    "/home/fjk/g1_ws/hold-my-beer-mpc/tools/g1_commissioning/report_torque_robustness.py": "6f535dd5607dfb19c5fdc1128dc48dfb5b3022cf6d6d1e901f99a2d2f9d1dc52"
+  },
+  "inputs": {
+    "baseline": {
+      "directory": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_ablation_baseline_20260928",
+      "sha256": {
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_ablation_baseline_20260928/summary.json": "b13b48dc9251b839c7ec0c368e97e7a56b9ebeea6ce8d6c2ab77fc7dd1a00d4b",
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_ablation_baseline_20260928/combined.npz": "3c91b932e0775d7cd6d3184e9cde0cb4804dbdb34739c987ef83a313a65bd50c"
+      },
+      "original_study_source_unchanged": true
+    },
+    "guard_only": {
+      "directory": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_ablation_recovery_20260928",
+      "sha256": {
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_ablation_recovery_20260928/summary.json": "9b4eeaa1e0ac9f56b495d8d42cab6601d58276776c4c308bfe7e37d8b2be59dc",
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_ablation_recovery_20260928/combined.npz": "b724ae89af506c2a54e62057d0c962abd4e16e99603f5b3e35405dbc95ff3a6c"
+      },
+      "original_study_source_unchanged": true
+    },
+    "compensated": {
+      "directory": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_recovery_vectorized_20260928",
+      "sha256": {
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_recovery_vectorized_20260928/summary.json": "890ea2208493627231e5e2da6922753a8f6d569996509ec3d8a92307e08e5eb3",
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_recovery_vectorized_20260928/combined.npz": "b1d78e44fa9abc55f453f5c4804f00bbf8843eacad9fa088eee16b83ce1bedda"
+      },
+      "original_study_source_unchanged": true
+    },
+    "delay_only": {
+      "directory": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_only_20260928",
+      "sha256": {
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_only_20260928/summary.json": "42596942ef26533e4ba118830ad15a22d328f53198e59b5515bbec81ba32406a",
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_only_20260928/combined.npz": "2d3d11075e1fc13e532c14c19d58ea41458c43cef10eedc54b46747c932ccee2"
+      },
+      "original_study_source_unchanged": true
+    },
+    "assumed4": {
+      "directory": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_assumed4_20260928",
+      "sha256": {
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_assumed4_20260928/summary.json": "4b5ba0020ca7bc26c5b10ea14108b4a249a85e32aea2947655cbc1e4260f91ef",
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_assumed4_20260928/combined.npz": "d364beae184800edc8c03ab15908741deadd0328b5a281bc0cd5b75c1d08b209"
+      },
+      "original_study_source_unchanged": true
+    },
+    "assumed8": {
+      "directory": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_assumed8_20260928",
+      "sha256": {
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_assumed8_20260928/summary.json": "7dccb98fdd4fe67099d64803d40420652a73a16873e58589454e6e19b450422a",
+        "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/torque_delay_assumed8_20260928/combined.npz": "e2c034ac3acfab7466682a1bb2bde6d5327ed1d5695b90df373d43ed4a875499"
+      },
+      "original_study_source_unchanged": true
+    }
+  },
+  "runs": {
+    "baseline": {
+      "status": "failed",
+      "failure": "HardwareMpcError: measured-state MPC rejected: daqp_exitflag_-1",
+      "requested_duration_s": 5.0,
+      "observed_until_s": 2.484,
+      "observed_prefix_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 2.484,
+        "active_command_rmse_rad_s2": 1.1642720160769646,
+        "active_intervals": 1239,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": -0.005224573948477578,
+        "max_abs_actual_acceleration_rad_s2": 9.244221163855629,
+        "controller_core_p99_ms": 2.32737012,
+        "controller_core_max_ms": 2.6092429999999998,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 414
+      },
+      "full_duration_metrics": null
+    },
+    "guard_only": {
+      "status": "failed",
+      "failure": "HardwareMpcError: measured-state MPC rejected: daqp_exitflag_-1",
+      "requested_duration_s": 5.0,
+      "observed_until_s": 0.114,
+      "observed_prefix_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 0.114,
+        "active_command_rmse_rad_s2": 1.7015045595985752,
+        "active_intervals": 54,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.9999999999999998,
+        "max_abs_actual_acceleration_rad_s2": 9.244221163855629,
+        "controller_core_p99_ms": 2.74420676,
+        "controller_core_max_ms": 2.7912529999999998,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 19
+      },
+      "full_duration_metrics": null
+    },
+    "compensated": {
+      "status": "complete",
+      "failure": null,
+      "requested_duration_s": 20.0,
+      "observed_until_s": 20.0,
+      "observed_prefix_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 20.0,
+        "active_command_rmse_rad_s2": 0.9280597775478988,
+        "active_intervals": 9997,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.2642177686021168,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 4.35030176,
+        "controller_core_max_ms": 6.477710999999999,
+        "controller_core_over_6ms": 3,
+        "controller_samples": 3334
+      },
+      "full_duration_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 20.0,
+        "active_command_rmse_rad_s2": 0.9280597775478988,
+        "active_intervals": 9997,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.2642177686021168,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 4.35030176,
+        "controller_core_max_ms": 6.477710999999999,
+        "controller_core_over_6ms": 3,
+        "controller_samples": 3334
+      }
+    },
+    "delay_only": {
+      "status": "complete",
+      "failure": null,
+      "requested_duration_s": 5.0,
+      "observed_until_s": 5.0,
+      "observed_prefix_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 5.0,
+        "active_command_rmse_rad_s2": 0.9005249030912414,
+        "active_intervals": 2497,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.0015130011286235883,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 4.549667669999999,
+        "controller_core_max_ms": 5.318804999999999,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 834
+      },
+      "full_duration_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 5.0,
+        "active_command_rmse_rad_s2": 0.9005249030912414,
+        "active_intervals": 2497,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.0015130011286235883,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 4.549667669999999,
+        "controller_core_max_ms": 5.318804999999999,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 834
+      }
+    },
+    "assumed4": {
+      "status": "complete",
+      "failure": null,
+      "requested_duration_s": 5.0,
+      "observed_until_s": 5.0,
+      "observed_prefix_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 5.0,
+        "active_command_rmse_rad_s2": 0.9691242695028438,
+        "active_intervals": 2497,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.2502633754115003,
+        "max_abs_actual_acceleration_rad_s2": 9.116060349853703,
+        "controller_core_p99_ms": 6.4749979699999995,
+        "controller_core_max_ms": 7.805873,
+        "controller_core_over_6ms": 702,
+        "controller_samples": 834
+      },
+      "full_duration_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 5.0,
+        "active_command_rmse_rad_s2": 0.9691242695028438,
+        "active_intervals": 2497,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.2502633754115003,
+        "max_abs_actual_acceleration_rad_s2": 9.116060349853703,
+        "controller_core_p99_ms": 6.4749979699999995,
+        "controller_core_max_ms": 7.805873,
+        "controller_core_over_6ms": 702,
+        "controller_samples": 834
+      }
+    },
+    "assumed8": {
+      "status": "complete",
+      "failure": null,
+      "requested_duration_s": 5.0,
+      "observed_until_s": 5.0,
+      "observed_prefix_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 5.0,
+        "active_command_rmse_rad_s2": 0.8348047335893476,
+        "active_intervals": 2497,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.2837283647870451,
+        "max_abs_actual_acceleration_rad_s2": 9.175656578072203,
+        "controller_core_p99_ms": 6.564144209999999,
+        "controller_core_max_ms": 11.612026,
+        "controller_core_over_6ms": 623,
+        "controller_samples": 834
+      },
+      "full_duration_metrics": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 5.0,
+        "active_command_rmse_rad_s2": 0.8348047335893476,
+        "active_intervals": 2497,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.2837283647870451,
+        "max_abs_actual_acceleration_rad_s2": 9.175656578072203,
+        "controller_core_p99_ms": 6.564144209999999,
+        "controller_core_max_ms": 11.612026,
+        "controller_core_over_6ms": 623,
+        "controller_samples": 834
+      }
+    }
+  },
+  "common_prefix_all": {
+    "until_s": 0.114,
+    "excluded": {},
+    "runs": {
+      "baseline": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 0.114,
+        "active_command_rmse_rad_s2": 1.7015045595985752,
+        "active_intervals": 54,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.9999999999999998,
+        "max_abs_actual_acceleration_rad_s2": 9.244221163855629,
+        "controller_core_p99_ms": 2.5529697799999997,
+        "controller_core_max_ms": 2.6092429999999998,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 19
+      },
+      "guard_only": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 0.114,
+        "active_command_rmse_rad_s2": 1.7015045595985752,
+        "active_intervals": 54,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.9999999999999998,
+        "max_abs_actual_acceleration_rad_s2": 9.244221163855629,
+        "controller_core_p99_ms": 2.74420676,
+        "controller_core_max_ms": 2.7912529999999998,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 19
+      },
+      "compensated": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 0.114,
+        "active_command_rmse_rad_s2": 0.7128633291347903,
+        "active_intervals": 54,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.9999999999999998,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 4.26133768,
+        "controller_core_max_ms": 4.266112,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 19
+      },
+      "delay_only": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 0.114,
+        "active_command_rmse_rad_s2": 0.7128633291347903,
+        "active_intervals": 54,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.9999999999999998,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 5.2332266999999995,
+        "controller_core_max_ms": 5.318804999999999,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 19
+      },
+      "assumed4": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 0.114,
+        "active_command_rmse_rad_s2": 0.7819796194135721,
+        "active_intervals": 54,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.9999999999999998,
+        "max_abs_actual_acceleration_rad_s2": 9.116060349853703,
+        "controller_core_p99_ms": 6.4641566599999996,
+        "controller_core_max_ms": 6.477767,
+        "controller_core_over_6ms": 19,
+        "controller_samples": 19
+      },
+      "assumed8": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 0.114,
+        "active_command_rmse_rad_s2": 0.7158055122420417,
+        "active_intervals": 54,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.9999999999999998,
+        "max_abs_actual_acceleration_rad_s2": 9.175656578072203,
+        "controller_core_p99_ms": 6.46662548,
+        "controller_core_max_ms": 6.491369,
+        "controller_core_over_6ms": 19,
+        "controller_samples": 19
+      }
+    }
+  },
+  "requested_window": {
+    "until_s": 2.4,
+    "excluded": {
+      "guard_only": "observed only 0.114s; shorter than requested window"
+    },
+    "runs": {
+      "baseline": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 2.4,
+        "active_command_rmse_rad_s2": 1.128782550148935,
+        "active_intervals": 1197,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.08661092185268086,
+        "max_abs_actual_acceleration_rad_s2": 9.244221163855629,
+        "controller_core_p99_ms": 2.3290221499999997,
+        "controller_core_max_ms": 2.6092429999999998,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 400
+      },
+      "compensated": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 2.4,
+        "active_command_rmse_rad_s2": 0.8420742804004158,
+        "active_intervals": 1197,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.30491733711648816,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 4.9481639999999985,
+        "controller_core_max_ms": 6.477710999999999,
+        "controller_core_over_6ms": 2,
+        "controller_samples": 400
+      },
+      "delay_only": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 2.4,
+        "active_command_rmse_rad_s2": 0.8420052673513594,
+        "active_intervals": 1197,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.002721217670498959,
+        "max_abs_actual_acceleration_rad_s2": 9.05582220697931,
+        "controller_core_p99_ms": 4.6402516899999995,
+        "controller_core_max_ms": 5.318804999999999,
+        "controller_core_over_6ms": 0,
+        "controller_samples": 400
+      },
+      "assumed4": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 2.4,
+        "active_command_rmse_rad_s2": 0.889780387890882,
+        "active_intervals": 1197,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.31538144790510125,
+        "max_abs_actual_acceleration_rad_s2": 9.116060349853703,
+        "controller_core_p99_ms": 6.4021665,
+        "controller_core_max_ms": 6.542706,
+        "controller_core_over_6ms": 276,
+        "controller_samples": 400
+      },
+      "assumed8": {
+        "interval_start_s": 0.0,
+        "interval_end_exclusive_s": 2.4,
+        "active_command_rmse_rad_s2": 0.8025325990360299,
+        "active_intervals": 1197,
+        "initial_hold_intervals": 3,
+        "min_outer_margin_deg": 0.3734564816316004,
+        "max_abs_actual_acceleration_rad_s2": 9.175656578072203,
+        "controller_core_p99_ms": 6.33392119,
+        "controller_core_max_ms": 6.491369,
+        "controller_core_over_6ms": 207,
+        "controller_samples": 400
+      }
+    }
+  }
+}
