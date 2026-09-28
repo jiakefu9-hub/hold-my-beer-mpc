@@ -4,9 +4,23 @@
 它是**左臂固定 PD、右臂 MPC、单腰 yaw 固定、腿部使用内置运控**的独立实验程序，
 不是整机底层控制，不使用 `rt/lowcmd`，也不切模式或进入 debug。
 
-这是首次上机候选，不是已经通过真机验证的控制器。先完成当前 6 ms PID 复验，再进行 MPC。
+**2026-09-28 当前开发主线已经改为“实测状态 MPC → 逆动力学 → 局部修正 → 多候选前向模型筛选”。**
+对应[迁移说明与验证结果](HARDWARE_MPC_TORQUE_MIGRATION.md)。这是离线候选，尚不能用于真机输出；
+延迟／负载偏差压力测试和完整 6 ms 截止时间尚未通过。
+
+| `--actuation` | 含义 | 真实输出 |
+| --- | --- | --- |
+| `measured_torque_preview`（CLI 默认） | 实测 q/dq 起点、一拍参考、逆动力学＋局部力矩候选评估 | 禁止 |
+| `inverse_dynamics_preview` | 早期参考轨迹＋名义逆动力学对照 | 禁止 |
+| `reference_servo` | 旧版持续参考轨迹＋固件 PD，tau_ff=0 | 保留显式入口，尚无 MPC 真机验证 |
+
+**下文第 1–7 节专门说明旧 `reference_servo` 基线，不是新迁移版的控制说明或运行授权。**
+当前开发按迁移文档推进；不能把旧版时间成绩套到新版上。6 ms PID 仍需单独实机复验。
 09-28 补充了并发时间检查、初始化／通信故障清理、日志关闭和结果标记，
 见[可靠性补充记录](sessions/20260928_MPC_ROBUSTNESS.md)。控制参数、动作范围和现场步骤不变。
+09-28 又新增[逆动力学力矩前馈离线候选](HARDWARE_MPC_INVERSE_DYNAMICS.md)：
+`--actuation inverse_dynamics_preview` 只计算／回放，不允许真实发送。
+本文后续真实输出命令显式选择原来的 `reference_servo`；不是力矩前馈版。
 不需要先专门再采一批走路数据；新的 MPC 运行会同时保留预测输入、预测输出和真实反馈供检验。
 但是 MPC 改变了手臂运动，不能事先保证旧固定手臂数据训练的预测器在新闭环下仍有同样精度。
 
@@ -48,7 +62,7 @@
 时间窗不能单独证明物理上已经完全静止，要同时看腿部反馈和现场观察。
 H0 是走前平均 yaw 定义的**固定**坐标系；不是每周期随身体旋转的坐标系，Z 仍是导航系竖直方向。
 
-## 3. 这是真正的 MPC，但不冒充仿真力矩执行器
+## 3. 旧参考轨迹 MPC 的实现（只供基线对照）
 
 复用 [`arm_mpc.py`](../../arm_mpc.py) 的九段、每段 6 ms、共 54 ms 的 MPC，
 保留末端线加速度、角加速度、角速度、竖直、关节姿态、关节速度、控制量七项代价。
@@ -66,7 +80,7 @@ H0 是走前平均 yaw 定义的**固定**坐标系；不是每周期随身体�
 速度采用同样的当前误差修正。几何／重力项的仿射常数也做对应变换，当前真实瓶子姿态会影响优化。
 这是未标定固件伺服响应时的首版近似，**不是已辨识的真实动力学模型**。
 软件保存真实跟踪误差，后续根据 PID／MPC 实测决定是否需要标定伺服动态或调整参数。
-不在本次开发中擅自改成力矩控制或放开全身输出。
+新迁移版已经取消这个持续参考状态假设；上述描述只适用于旧基线。全身输出仍未开放。
 
 参考约束：名义姿态各轴 ±5°、速度 ≤0.07 rad/s、加速度 ≤0.20 rad/s²。
 额外参考 governor 按实际间隔与 6 ms 的较小者推进，预留离散制动距离；延迟不能放大单拍动作。
@@ -76,7 +90,8 @@ H0 是走前平均 yaw 定义的**固定**坐标系；不是每周期随身体�
 ### 求解器与仿真程序怎样对应
 
 `hardware_mpc_solver.py` 对原 QP 做**代数等价的状态消元**：
-将每一步 `q/dq` 写成初始参考状态和未来加速度的函数，从 155 个变量减到 45 个。
+将每一步 `q/dq` 写成初始状态和未来加速度的函数，从 145 个变量减到 45 个。
+旧版初始状态是参考，新迁移版初始状态是实测；状态消元本身不决定取哪一种。
 按物理边界做数值缩放，批量计算相同代价，求解后还原完整轨迹并检查原约束。
 随机代价矩阵、积分动态、完整约束和原仿真代价的对照测试保留在 `test_hardware_mpc.py`。
 这不是换成 PID，也不是删掉 MPC 约束。
@@ -141,7 +156,7 @@ DAQP 的算法和参数依据：[官方实现](https://github.com/darnstrom/daqp
 ```bash
 cd /home/fjk/g1_ws/hold-my-beer-mpc
 conda activate g1_mpc
-python tools/g1_commissioning/g1_walk_mpc.py --preflight --cpu 2
+python tools/g1_commissioning/g1_walk_mpc.py --preflight --actuation reference_servo --cpu 2
 ```
 
 preflight 只检查本地模型、库、实际 QP、SDK 数据包／CRC；不创建 DDS participant 或 publisher。
@@ -158,7 +173,7 @@ preflight 只检查本地模型、库、实际 QP、SDK 数据包／CRC；不创
 ```bash
 # 只有实际完成 6 ms PID 复验后，才使用 --pid-6ms-validated。
 python tools/g1_commissioning/g1_walk_mpc.py enx6c1ff701509c \
-  --execute --task stationary --cpu 2 \
+  --execute --actuation reference_servo --task stationary --cpu 2 \
   --profile /path/to/reviewed_mpc_profile.conf \
   --output-dir "evaluation/hardware_shadow/commissioning/mpc_static_$(date +%Y%m%d_%H%M%S)" \
   --pid-6ms-validated --permit-real-output MPC_WALK_H0_CAPTURE
@@ -198,7 +213,7 @@ BLAS 单线程、控制线程绑定 CPU 2；其他线程不被整个进程的 ta
 离线回放还不包括真实 DDS 解包、网络和 RPC 并发，不能保证明天现场每次都满足 6 ms。
 `DDS Write` 返回耗时也不是“电脑到电机执行再返回”的延迟。
 
-最终六轮实测输入回放：完整工作 P99 **4.18–4.39 ms**，预测全流程 P99 **1.11–1.22 ms**；
+旧 `reference_servo` 六轮实测输入回放：完整工作 P99 **4.18–4.39 ms**，预测全流程 P99 **1.11–1.22 ms**；
 主窗口共 12,987 周期，9 次 deadline miss（约 0.069%），最长循环间隔 12.014 ms。
 全部正常结束／退权、无求解失败或日志丢失。查表开销已计入，但这仍不是现场实时性保证。
 

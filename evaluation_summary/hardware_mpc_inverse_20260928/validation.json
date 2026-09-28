@@ -1,0 +1,610 @@
+{
+  "schema": "g1_mpc_inverse_preview_validation_v1",
+  "date": "2026-09-28",
+  "baseline_commit": "3e63977a763ea3f905d67359e7d523ead6119f63",
+  "tests": {
+    "count": 62,
+    "passed": true,
+    "elapsed_s": 56.455,
+    "new_tests": 10,
+    "random_inverse_cases": 50,
+    "independent_torque_atol_nm": 1e-10,
+    "prescribed_base_acceleration_atol_rad_s2": 1e-9
+  },
+  "preflight": {
+    "passed": true,
+    "dds_initialized": false,
+    "publisher_created": false,
+    "robot_connected": false,
+    "actuation": "inverse_dynamics_preview",
+    "offline_packet_right_tau_nm": [
+      -2.2486997891790144,
+      -0.06339406420577018,
+      0.009192474083379698,
+      -1.8104568011229947,
+      0.07485030766255246
+    ],
+    "field_output_supported": false,
+    "solver_status": "solved",
+    "serialized_bytes": 1004
+  },
+  "core": {
+    "schema": "g1_hardware_mpc_core_v1",
+    "model": "reference_trajectory_mpc_with_inverse_dynamics_preview",
+    "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+    "solver_package_version": "0.9.1",
+    "state": "persistent sent q_reference,dq_reference, not measured joint state",
+    "tracking_offset_model": "q_actual(k)=q_virtual(k)+q_error+k*dt*dq_error; dq_actual=dq_virtual+dq_error",
+    "actuation": "OFFLINE tau_ff=RNEA(measured q,dq,governed ddq,torso motion); firmware PD once",
+    "frame": "fixed H0",
+    "config": {
+      "schema": "g1_hardware_mpc_config_v1",
+      "control_period_s": 0.006,
+      "horizon": 9,
+      "prediction_backend": "cpp_pinocchio",
+      "solver_backend": "daqp",
+      "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+      "q_ee_acc": 0.01,
+      "q_ee_alpha": 0.0005,
+      "q_ee_omega": 8,
+      "q_gravity": [
+        30,
+        30
+      ],
+      "q_posture": [
+        4,
+        4,
+        1.5,
+        0.2,
+        0.2
+      ],
+      "q_vel": 0.08,
+      "r_ddq": 0.0025,
+      "terminal_scale": 2,
+      "regularization": 0.000001,
+      "reference_offset_limit_deg": [
+        5,
+        5,
+        5,
+        5,
+        5
+      ],
+      "reference_max_dq_rad_s": 0.07,
+      "reference_max_ddq_rad_s2": 0.2,
+      "solver_eps_abs": 0.001,
+      "solver_eps_rel": 0.00001,
+      "solver_max_iter": 1000,
+      "solver_check_termination": 10,
+      "solver_time_limit_s": 0.0035,
+      "solver_rho": 0.001,
+      "solver_adaptive_rho": true
+    },
+    "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+    "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+    "xml_sha256": {
+      "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+      "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+    },
+    "cost": {
+      "term_names": [
+        "linear_acceleration",
+        "angular_acceleration",
+        "angular_velocity",
+        "gravity",
+        "posture",
+        "velocity",
+        "control"
+      ],
+      "Q_ee_acc": [
+        [
+          0.01,
+          0,
+          0
+        ],
+        [
+          0,
+          0.01,
+          0
+        ],
+        [
+          0,
+          0,
+          0.01
+        ]
+      ],
+      "Q_ee_alpha": [
+        [
+          0.0005,
+          0,
+          0
+        ],
+        [
+          0,
+          0.0005,
+          0
+        ],
+        [
+          0,
+          0,
+          0.0005
+        ]
+      ],
+      "Q_ee_omega": [
+        [
+          8,
+          0,
+          0
+        ],
+        [
+          0,
+          8,
+          0
+        ],
+        [
+          0,
+          0,
+          8
+        ]
+      ],
+      "Qg": [
+        [
+          30,
+          0
+        ],
+        [
+          0,
+          30
+        ]
+      ],
+      "Qq": [
+        [
+          4,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1.5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0.2,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0.2
+        ]
+      ],
+      "Qv": [
+        [
+          0.08,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0.08,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0.08,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0.08,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0.08
+        ]
+      ],
+      "R": [
+        [
+          0.0025,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0.0025,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0.0025,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0.0025,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0.0025
+        ]
+      ],
+      "posture_reference": [
+        -0.06981317007977318,
+        0.017453292519943295,
+        0,
+        -0.1361356816555577,
+        0
+      ],
+      "terminal_scale": 2
+    },
+    "offline_only": true,
+    "inverse_dynamics": {
+      "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+      "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+      "bottle_mass_kg_from_xml": 0.25,
+      "bottle_com_local_m": [
+        0,
+        0,
+        0.000212
+      ],
+      "bottle_diagonal_inertia_kg_m2": [
+        0.0009031911494166669,
+        0.0009031911494166669,
+        0.0001318234375
+      ],
+      "model_joint_armature_kg_m2": [
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01
+      ],
+      "hardware_parameters_calibrated": false,
+      "friction_compensation": "none; do not transfer simulation friction",
+      "external_hand_wrench": "assumed_zero; no contact-force feedback",
+      "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+    },
+    "field_blockers": [
+      "payload/inertia and torque estimate not independently calibrated",
+      "no verified tau sign/response or acceleration tracking on this robot",
+      "torque entry/release/fault envelopes not yet commissioned"
+    ]
+  },
+  "host": {
+    "schema": "g1_mpc_host_evidence_v1",
+    "kernel_release": "6.8.1-1057-realtime",
+    "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+    "kernel_realtime_raw": "1",
+    "preempt_rt_active": true,
+    "process_scheduler": "SCHED_OTHER",
+    "process_scheduler_priority": 0,
+    "allowed_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "selected_control_cpu": 2,
+    "selected_cpu_smt_siblings": "1-2",
+    "scaling_driver": "intel_pstate",
+    "scaling_governor": "powersave",
+    "energy_performance_preference": "balance_performance",
+    "frequency_khz_snapshot": "1908570",
+    "platform_profile": "performance",
+    "rt_priority_limits": [
+      0,
+      0
+    ],
+    "memlock_bytes_limits": [
+      4154822656,
+      4154822656
+    ],
+    "capabilities": {
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000"
+    },
+    "numerical_thread_environment": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": null
+    },
+    "system_settings_changed": false,
+    "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+    "limitations": [
+      "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+      "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+      "governor label alone does not specify current CPU frequency or performance",
+      "host compute and local DDS Write durations do not measure motor execution latency"
+    ]
+  },
+  "source_npz": "evaluation/hardware_shadow/commissioning/walk_h0_predictor_study_20260925/data/trial10.npz",
+  "source_npz_sha256": "2b93b26071f8c4bb46fa52e30b3f8cf94901a49aeaba3efa7ff3b98a8ed101f9",
+  "source_sha256": {
+    "benchmark_hardware_mpc.py": "db810aec019d10bc68ab2fb2048ca457c4ab2b42d0c4645d12b2bbb9d3104ae3",
+    "g1_walk_mpc.py": "89b48809065bbcf94e0c1f530699a531671483abc9995b5cea52bce555f515c1",
+    "g1_walk_pid.py": "3553227cf295dc62eeb92344f66a30e9850fc30fa28625d079482b5594c71373",
+    "hardware_mpc_control.py": "2e20c4d77cb4600f803017f0045cbb3b73b4f82f922b95eb70f6ed228dc08738",
+    "hardware_mpc_solver.py": "8d3154bf9dbb6b9adb9a07b02d436f76d60bee7313e93dec34b4fad5fcb02411",
+    "hardware_mpc_predictor.py": "7470c0b06191e0e24c4fe6542b61e615be8391783b7c7200ee1ef089235f049b",
+    "hardware_pid_control.py": "6fac37cb52ea3fbaa41f30d5c9f7410a16cfd82d2f5cb8881781f1b14ef2938e",
+    "hardware_mpc_inverse_preview.py": "f7c38df1948bbfc1791bb92640f38c6758d425bf4a5388b532615a423046b917",
+    "hardware_arm_inverse_dynamics.py": "361fd94b239f117aa176b9acf2330c1b910cc39f0cf7503690bf1f26d6d92477"
+  },
+  "predictor_bank_sha256": "0e7b25f9a8ddb6dcb893891cee21cfbc216f9174f6efe2e7c1d3f400ce1705c7",
+  "replay_statuses": [
+    {
+      "status": "complete",
+      "failure": null,
+      "journal_failed": false,
+      "journal_dropped": 0,
+      "hardware_output": false,
+      "final_weight": 0
+    },
+    {
+      "status": "complete",
+      "failure": null,
+      "journal_failed": false,
+      "journal_dropped": 0,
+      "hardware_output": false,
+      "final_weight": 0
+    }
+  ],
+  "audit": {
+    "runs": [
+      {
+        "local_directory": "evaluation/hardware_shadow/commissioning/mpc_inverse_dynamics_20260928/replay/run1",
+        "raw_jsonl_sha256": "94ebd36cdadc01ee836c2b193c87351b889df8d8e175efd0721355b9186714ee",
+        "reference_audit": {
+          "active_commands": 2495,
+          "max_full_constraint_violation": 5.073774733688197e-12,
+          "max_reference_offset_deg": 5,
+          "max_reference_speed_rad_s": 0.07000000000000216,
+          "max_reference_acceleration_rad_s2": 0.20000000000038454,
+          "max_independent_acceleration_rad_s2": 0.20000000000038454,
+          "max_position_integration_residual_rad": 5.421010862427522e-20,
+          "max_logged_acceleration_residual_rad_s2": 0
+        },
+        "primary_5_18": {
+          "available": true,
+          "samples": 2163,
+          "actual_period_ms": {
+            "mean": 6.008321952843273,
+            "p50": 6.000052,
+            "p95": 6.006169400000001,
+            "p99": 6.01270278,
+            "max": 12.021343
+          },
+          "controller_ms": {
+            "mean": 2.3122046301433192,
+            "p50": 2.2864999999999998,
+            "p95": 2.5329181000000003,
+            "p99": 2.73366942,
+            "max": 3.5047859999999997
+          },
+          "full_work_ms": {
+            "mean": 4.021740582524272,
+            "p50": 3.968797,
+            "p95": 4.4674948,
+            "p99": 4.86589906,
+            "max": 7.821339999999999
+          },
+          "ingress_ms": {
+            "mean": 0.2831660832177531,
+            "p50": 0.265017,
+            "p95": 0.3894001,
+            "p99": 0.47474364000000013,
+            "max": 3.517804
+          },
+          "packet_crc_serialize_ms": {
+            "mean": 0.4045808021266759,
+            "p50": 0.401072,
+            "p95": 0.428315,
+            "p99": 0.49305768000000116,
+            "max": 0.755751
+          },
+          "predictor_ms": {
+            "mean": 0.8095730480813684,
+            "p50": 0.786446,
+            "p95": 1.0416214000000001,
+            "p99": 1.2673551400000007,
+            "max": 2.324055
+          },
+          "wake_lateness_ms": {
+            "mean": 0.06727435090152566,
+            "p50": 0.066282,
+            "p95": 0.0731588,
+            "p99": 0.0836799,
+            "max": 0.308807
+          },
+          "deadline_misses": 3,
+          "skipped_slots": 3,
+          "reused_lowstate": 0,
+          "reused_imu": 0,
+          "deadline_miss_fraction": 0.0013869625520110957,
+          "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+        },
+        "inverse_dynamics_ms": {
+          "p50": 0.19144799999999998,
+          "p95": 0.2177419,
+          "p99": 0.25062090000000015,
+          "max": 0.35465399999999997
+        },
+        "max_abs_candidate_ff_nm": [
+          4.029326831985754,
+          3.4854714595286818,
+          1.7981474980432124,
+          3.790712363744061,
+          0.1472984209379387
+        ],
+        "max_abs_total_at_feedback_nm": [
+          8.232051872486501,
+          5.6629516092651375,
+          2.9775130525901825,
+          8.929711722516577,
+          2.342057532784356
+        ]
+      },
+      {
+        "local_directory": "evaluation/hardware_shadow/commissioning/mpc_inverse_dynamics_20260928/replay/run2",
+        "raw_jsonl_sha256": "cea3f94ea39a4699ad92e5d22edfb0dee27111b60d3e7a7d831161fa1346a865",
+        "reference_audit": {
+          "active_commands": 2491,
+          "max_full_constraint_violation": 5.4133642013454164e-12,
+          "max_reference_offset_deg": 5,
+          "max_reference_speed_rad_s": 0.07000000000000231,
+          "max_reference_acceleration_rad_s2": 0.20000000000038512,
+          "max_independent_acceleration_rad_s2": 0.20000000000038512,
+          "max_position_integration_residual_rad": 5.421010862427522e-20,
+          "max_logged_acceleration_residual_rad_s2": 0
+        },
+        "primary_5_18": {
+          "available": true,
+          "samples": 2161,
+          "actual_period_ms": {
+            "mean": 6.01388480379454,
+            "p50": 5.999931,
+            "p95": 6.006664,
+            "p99": 6.0141986,
+            "max": 13.241459
+          },
+          "controller_ms": {
+            "mean": 2.3168645104118464,
+            "p50": 2.292353,
+            "p95": 2.514658,
+            "p99": 2.7256166000000004,
+            "max": 5.043216
+          },
+          "full_work_ms": {
+            "mean": 4.0218241078204535,
+            "p50": 3.981903,
+            "p95": 4.353248,
+            "p99": 4.647324800000002,
+            "max": 11.807727
+          },
+          "ingress_ms": {
+            "mean": 0.2891640337806571,
+            "p50": 0.268663,
+            "p95": 0.395593,
+            "p99": 0.4685038000000001,
+            "max": 2.479942
+          },
+          "packet_crc_serialize_ms": {
+            "mean": 0.40072544655252196,
+            "p50": 0.396652,
+            "p95": 0.41648799999999997,
+            "p99": 0.45589000000000035,
+            "max": 2.779512
+          },
+          "predictor_ms": {
+            "mean": 0.8022984928273946,
+            "p50": 0.784855,
+            "p95": 0.9932719999999999,
+            "p99": 1.1787214000000008,
+            "max": 2.040601
+          },
+          "wake_lateness_ms": {
+            "mean": 0.06909470291531698,
+            "p50": 0.066421,
+            "p95": 0.072512,
+            "p99": 0.08035440000000003,
+            "max": 1.311965
+          },
+          "deadline_misses": 5,
+          "skipped_slots": 5,
+          "reused_lowstate": 0,
+          "reused_imu": 0,
+          "deadline_miss_fraction": 0.0023137436372049976,
+          "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+        },
+        "inverse_dynamics_ms": {
+          "p50": 0.197843,
+          "p95": 0.21376099999999998,
+          "p99": 0.23018460000000004,
+          "max": 0.403688
+        },
+        "max_abs_candidate_ff_nm": [
+          4.029183244018924,
+          3.4854530367728973,
+          1.7981296349155105,
+          3.7907085201666146,
+          0.14729823045547394
+        ],
+        "max_abs_total_at_feedback_nm": [
+          8.231908285668041,
+          5.672469002184842,
+          2.9868840526854754,
+          8.929707799560862,
+          2.342059649447125
+        ]
+      }
+    ],
+    "primary_samples": 4324,
+    "primary_deadline_misses": 8,
+    "primary_deadline_miss_fraction": 0.0018501387604070306
+  },
+  "limitations": [
+    "replayed feedback is not a response to MPC; no physical effect claim",
+    "includes causal ingress, model, actual QP, packet CRC+serialization, async logging",
+    "excludes real DDS receive/deserialization, network Write and RPC worker contention",
+    "accepted replay ingress uses the same >=2ms sampling threshold as live Streams",
+    "full_work includes timing enqueue; final timestamp and clock bookkeeping excluded",
+    "inverse_dynamics_preview, if selected, has no commissioned field torque transition/envelope",
+    "measured host timing is not a hard real-time certificate",
+    "PD correction is not cancelled from the feedforward; nominal references and bumpless torque transitions require further work before field use",
+    "measured tau_est is not used as torque truth or an adaptive control gain",
+    "same-model inverse/forward agreement is not hardware model identification"
+  ]
+}
