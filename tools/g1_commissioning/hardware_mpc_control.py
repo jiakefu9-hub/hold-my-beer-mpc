@@ -38,11 +38,23 @@ class HardwareMpcError(RuntimeError):
 
 def json_values(value):
     """Keep failure diagnostics valid JSON without hiding solver failures."""
+    value_type = type(value)
+    if value_type is float:
+        return value if math.isfinite(value) else None
+    if value_type in (int, bool, str, type(None)):
+        return value
     if isinstance(value, dict):
         return {key: json_values(item) for key, item in value.items()}
     if isinstance(value, (tuple, list)):
         return [json_values(item) for item in value]
     if isinstance(value, np.ndarray):
+        # These dtypes produce only native JSON scalars. Check floating values
+        # once in NumPy instead of recursively inspecting every list element.
+        # Extended floats and object arrays still need scalar conversion below.
+        if (value.dtype.kind in "biu" or
+                (value.dtype.kind == "f" and value.dtype.itemsize <= 8
+                 and np.isfinite(value).all())):
+            return value.tolist()
         return json_values(value.tolist())
     if isinstance(value, (np.floating, float)):
         return float(value) if math.isfinite(value) else None

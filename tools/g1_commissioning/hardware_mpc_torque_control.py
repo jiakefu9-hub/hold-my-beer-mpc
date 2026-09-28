@@ -41,6 +41,15 @@ def load_torque_config(config=None):
     for key in ("max_dq_rad_s", "max_ddq_rad_s2"):
         if not math.isfinite(float(values[key])) or float(values[key]) <= 0:
             raise ValueError(f"invalid {key}")
+    enabled = values.setdefault("recovery_envelope_enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError("recovery_envelope_enabled must be boolean")
+    if enabled:
+        values["recovery_guard_deg"] = finite_vector(values["recovery_guard_deg"], 5, "recovery guard")
+        rate = float(values["recovery_rate_s_inv"])
+        if (not math.isfinite(rate) or rate <= 0 or np.any(values["recovery_guard_deg"] < 0)
+                or np.any(2*values["recovery_guard_deg"] >= values["q_max_deg"]-values["q_min_deg"])):
+            raise ValueError("invalid recovery envelope")
     return values
 
 
@@ -57,13 +66,20 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         keys = ("q_ee_acc", "q_ee_alpha", "q_ee_omega", "q_gravity", "q_posture",
                 "q_vel", "r_ddq", "terminal_scale", "solver_eps_abs", "solver_eps_rel",
                 "solver_max_iter", "solver_check_termination", "solver_rho", "solver_adaptive_rho")
-        self.policy = CondensedArmMPCPolicy(
+        policy_type = CondensedArmMPCPolicy
+        recovery_options = {}
+        if c["recovery_envelope_enabled"]:
+            from hardware_mpc_recovery import RecoveryEnvelopeMpcPolicy
+            policy_type = RecoveryEnvelopeMpcPolicy
+            recovery_options = dict(recovery_rate_s_inv=c["recovery_rate_s_inv"],
+                                    recovery_guard_rad=np.deg2rad(c["recovery_guard_deg"]))
+        self.policy = policy_type(
             self.nominal, control_dt=.006, horizon=9, solver_backend=self.config["solver_backend"],
             joint_limits=np.column_stack((self.minimum, self.maximum)),
             joint_limit_margin=np.deg2rad(c["q_margin_deg"]),
             max_dq=self.max_dq, max_ddq=self.max_ddq, reg=float(self.config["regularization"]),
             solver_time_limit=float(self.config["solver_time_limit_s"]),
-            **{key: self.config[key] for key in keys})
+            **{key: self.config[key] for key in keys}, **recovery_options)
         self.inverse = RightArmInverseDynamics(self.model, self.backend)
         self.mapper = mapper
         self._prepared_forward = None
@@ -72,6 +88,10 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
             tracking_offset_model="none; measured initial state, no persistent-reference governor",
             actuation=ACTUATION, offline_only=True, field_output_supported=False,
             torque_config=json_values(c), inverse_dynamics=self.inverse.metadata,
+            recovery_envelope=(dict(enabled=True, rate_s_inv=c["recovery_rate_s_inv"],
+                guard_deg=c["recovery_guard_deg"].tolist(),
+                semantics="extra predicted q+dq/rate bounds inside unchanged outer joint limits",
+                physical_safety_certified=False) if c["recovery_envelope_enabled"] else dict(enabled=False)),
             forward_model="MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
             unmodelled=["unknown ground/contact reactions", "actuator delay and torque gain",
                         "physical friction and payload inertia error", "future arm-to-base reaction"],

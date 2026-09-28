@@ -46,11 +46,13 @@ class MpcJournal(Journal):
 class MpcRuntime:
     def __init__(self, config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                  predictor_mode="learned_filtered", bank_path=DEFAULT_BANK,
-                 stationary=False, journal=None, actuation="reference_servo"):
+                 stationary=False, journal=None, actuation="reference_servo", torque_config=None):
         from endpoint_pose import EndpointModel
         if actuation not in {"reference_servo", "inverse_dynamics_preview", "measured_torque_preview"}:
             raise ValueError("unsupported MPC actuation")
         self.actuation = actuation
+        if torque_config is not None and actuation != "measured_torque_preview":
+            raise ValueError("--torque-config requires measured_torque_preview")
         self.stationary, self.journal = bool(stationary), journal
         self.predictor = HardwareMpcPredictor(predictor_mode, bank_path)
         controller_type = RightArmHardwareMpc
@@ -60,8 +62,9 @@ class MpcRuntime:
         elif actuation == "measured_torque_preview":
             from hardware_mpc_torque_control import RightArmMeasuredTorqueMpc
             controller_type = RightArmMeasuredTorqueMpc
+        torque_options = {} if torque_config is None else dict(torque_config=torque_config)
         self.controller = controller_type(EXPECTED_TARGET_Q[5:10], config,
-                                          model=EndpointModel(model_config))
+                                          model=EndpointModel(model_config), **torque_options)
         try:
             self.warmup = self.controller.warmup(EXPECTED_TARGET_Q, [1, 0, 0, 0])
         except Exception:
@@ -117,12 +120,13 @@ class MpcRuntime:
 
 def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
               mode="learned_filtered", bank=DEFAULT_BANK, cpu=None,
-              actuation="reference_servo"):
+              actuation="reference_servo", torque_config=None):
     """Local libraries/model/real QP/IDL/CRC only; no DDS factory or endpoint."""
     from types import SimpleNamespace
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
-    runtime = MpcRuntime(config, model_config, mode, bank, stationary=True, actuation=actuation)
+    runtime = MpcRuntime(config, model_config, mode, bank, stationary=True, actuation=actuation,
+                         torque_config=torque_config)
     try:
         q = np.zeros(35)
         from hardware_pid_control import ARM_MOTOR_INDICES
@@ -170,6 +174,7 @@ def build_parser():
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--mpc-config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--controller-config", type=Path, default=ROOT / "configs/g1.yaml")
+    parser.add_argument("--torque-config", type=Path, help="explicit offline torque/recovery config overlay")
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK)
     parser.add_argument("--predictor", choices=("learned_filtered", "hold_current"), default="learned_filtered")
     parser.add_argument("--actuation", choices=("reference_servo", "inverse_dynamics_preview", "measured_torque_preview"),
@@ -191,9 +196,12 @@ def main(argv=None):
             raise ValueError("--preflight and --execute are mutually exclusive")
         if args.execute and args.actuation != "reference_servo":
             raise ValueError(f"{args.actuation} is offline-only; torque field output is not commissioned")
+        if args.execute and args.torque_config is not None:
+            raise ValueError("torque configuration is offline-only")
         if not args.execute:
             print(json.dumps(preflight(args.mpc_config, args.controller_config,
-                                      args.predictor, args.bank, args.cpu, args.actuation), indent=2))
+                                      args.predictor, args.bank, args.cpu, args.actuation,
+                                      args.torque_config), indent=2))
             return 0
         if not (args.nic and args.profile and args.output_dir and
                 args.permit_real_output == PERMIT and args.pid_6ms_validated):

@@ -1,0 +1,10 @@
+# Explicit offline comparison overlay; does not unlock any hardware output.
+# Inherit all physical bounds, task costs, PD and torque limits from the preview.
+schema: g1_measured_torque_preview_v1
+recovery_envelope_enabled: true
+# 6/s: required max boundary braking at 1 rad/s is 6/(1+.5*6*.006)
+# = 5.894 rad/s², below 80% of the model's 8 rad/s² acceleration authority.
+recovery_rate_s_inv: 6.0
+# Inner reserve at the existing outer limits, NOT an enlarged joint range.
+# This is an offline design assumption, not a measured uncertainty bound.
+recovery_guard_deg: [0.15, 0.15, 0.15, 0.15, 0.15]

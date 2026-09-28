@@ -46,10 +46,10 @@ def source_data(path):
                 low=np.zeros((len(t), 5))), None
 
 
-def run_once(source, output, cpu, predictor, actuation="reference_servo"):
+def run_once(source, output, cpu, predictor, actuation="reference_servo", torque_config=None):
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
-    runtime = MpcRuntime(predictor_mode=predictor, actuation=actuation)
+    runtime = MpcRuntime(predictor_mode=predictor, actuation=actuation, torque_config=torque_config)
     packet_builder = make_arm_message
     if actuation == "inverse_dynamics_preview":
         from hardware_mpc_inverse_preview import make_offline_preview_message
@@ -64,7 +64,8 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo"):
                                   "hardware_mpc_control.py", "hardware_mpc_solver.py",
                                   "hardware_mpc_predictor.py", "hardware_pid_control.py",
                                   "hardware_mpc_inverse_preview.py", "hardware_arm_inverse_dynamics.py",
-                                  "hardware_mpc_torque_control.py", "hardware_torque_mapper.py")}
+                                  "hardware_mpc_torque_control.py", "hardware_torque_mapper.py",
+                                  "hardware_mpc_recovery.py")}
     core_metadata = json_values(runtime.controller.metadata)
     model_hash = None if runtime.predictor.bank is None else runtime.predictor.bank.manifest["bank_sha256"]
     affinity = set(os.sched_getaffinity(0))
@@ -173,6 +174,7 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo"):
         dds_initialized=False, publisher_created=False, hardware_output=False,
         host=host, warmup=runtime.warmup, predictor=predictor, actuation=actuation,
         source_sha256=source_hashes, core=core_metadata, predictor_bank_sha256=model_hash,
+        torque_config_sha256=None if torque_config is None else hashlib.sha256(Path(torque_config).read_bytes()).hexdigest(),
         primary_5_18=summarize_timing([r for r in rows if 5 <= r["task_elapsed_s"] < 18]),
         all_stages=summarize_timing(rows), journal_dropped=journal.dropped,
         journal_failed=journal.failed.is_set(),
@@ -193,6 +195,7 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-npz", type=Path)
+    parser.add_argument("--torque-config", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--cpu", type=int, default=2)
@@ -206,7 +209,8 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=False)
     results = []
     for index in range(args.runs):
-        result = run_once(data, args.output_dir / f"run{index+1}", args.cpu, args.predictor, args.actuation)
+        result = run_once(data, args.output_dir / f"run{index+1}", args.cpu, args.predictor, args.actuation,
+                          args.torque_config)
         results.append(result)
         print(json.dumps({k: result[k] for k in ("status", "failure", "primary_5_18", "final_weight")}), flush=True)
         if result["status"] != "complete":
