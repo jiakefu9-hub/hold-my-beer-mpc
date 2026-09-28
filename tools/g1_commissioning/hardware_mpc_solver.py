@@ -1,6 +1,6 @@
 """Exact state elimination of the existing MPC QP; hardware-only solve adapter.
 
-For nine intervals, optimize 45 acceleration variables rather than 155 state+
+For nine intervals, optimize 45 acceleration variables rather than 145 state+
 input variables. z=E*x0+T*u enforces the integrator equalities algebraically.
 Cost terms and inequality bounds are unchanged, then the full trajectory is
 reconstructed and checked by ArmMPCPolicy. No relaxed safety constraints.

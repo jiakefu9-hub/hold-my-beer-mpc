@@ -46,16 +46,25 @@ def source_data(path):
                 low=np.zeros((len(t), 5))), None
 
 
-def run_once(source, output, cpu, predictor):
+def run_once(source, output, cpu, predictor, actuation="reference_servo"):
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
-    runtime = MpcRuntime(predictor_mode=predictor)
+    runtime = MpcRuntime(predictor_mode=predictor, actuation=actuation)
+    packet_builder = make_arm_message
+    if actuation == "inverse_dynamics_preview":
+        from hardware_mpc_inverse_preview import make_offline_preview_message
+        packet_builder = make_offline_preview_message
+    elif actuation == "measured_torque_preview":
+        from hardware_mpc_torque_control import make_torque_preview_message
+        packet_builder = make_torque_preview_message
     journal = MpcJournal(output)
     runtime.journal = journal
     source_hashes = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
                      for name in ("benchmark_hardware_mpc.py", "g1_walk_mpc.py", "g1_walk_pid.py",
                                   "hardware_mpc_control.py", "hardware_mpc_solver.py",
-                                  "hardware_mpc_predictor.py", "hardware_pid_control.py")}
+                                  "hardware_mpc_predictor.py", "hardware_pid_control.py",
+                                  "hardware_mpc_inverse_preview.py", "hardware_arm_inverse_dynamics.py",
+                                  "hardware_mpc_torque_control.py", "hardware_torque_mapper.py")}
     core_metadata = json_values(runtime.controller.metadata)
     model_hash = None if runtime.predictor.bank is None else runtime.predictor.bank.manifest["bank_sha256"]
     affinity = set(os.sched_getaffinity(0))
@@ -111,21 +120,23 @@ def run_once(source, output, cpu, predictor):
             if task_s >= 5 and not heading.current()["reference_frozen"]:
                 yaw0 = heading.freeze()
             dt = .006 if previous is None else (begin - previous) * 1e-9
-            if task_s < 18:
+            if task_s < 18 or actuation == "measured_torque_preview":
                 runtime.prepare(source_ns + begin - begin_epoch, None, None, yaw0, task_s)
             after_predict = time.monotonic_ns()
             low, imu = source["q"][selected_low], source["imu"][selected_imu]
             frame = plan.sample(task_s, low[list(ARM_MOTOR_INDICES)],
                 source["dq"][selected_low, list(ARM_MOTOR_INDICES)], imu[2:6], yaw0, dt)
             after_control = time.monotonic_ns()
-            packet = make_arm_message(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
-                                      unitree_hg_msg_dds__LowCmd_, crc)
+            packet = packet_builder(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
+                                    unitree_hg_msg_dds__LowCmd_, crc)
             packet.serialize()
             after_packet = time.monotonic_ns()
             journal.record({"schema": "g1_mpc_offline_command_v1", "sequence": sequence,
                 "task_elapsed_s": task_s, "stage": frame["stage"], "weight": frame["weight"],
                 "q_command_rad": frame["q_rad"], "dq_command_rad_s": frame["dq_rad_s"],
                 "q_measured_rad": low[list(ARM_MOTOR_INDICES)],
+                "dq_measured_rad_s": source["dq"][selected_low, list(ARM_MOTOR_INDICES)],
+                "offline_packet_right_tau_nm": [packet.motor_cmd[i].tau for i in range(22,27)],
                 "packet_crc": int(packet.crc), **frame["diagnostics"]})
             row = dict(sequence=sequence, task_elapsed_s=task_s, stage=frame["stage"],
                 actual_period_ms=None if previous is None else dt * 1000,
@@ -160,7 +171,7 @@ def run_once(source, output, cpu, predictor):
             gc.enable()
     result = dict(schema="g1_hardware_mpc_benchmark_v1", status=status, failure=reason,
         dds_initialized=False, publisher_created=False, hardware_output=False,
-        host=host, warmup=runtime.warmup, predictor=predictor,
+        host=host, warmup=runtime.warmup, predictor=predictor, actuation=actuation,
         source_sha256=source_hashes, core=core_metadata, predictor_bank_sha256=model_hash,
         primary_5_18=summarize_timing([r for r in rows if 5 <= r["task_elapsed_s"] < 18]),
         all_stages=summarize_timing(rows), journal_dropped=journal.dropped,
@@ -171,6 +182,8 @@ def run_once(source, output, cpu, predictor):
                      "excludes real DDS receive/deserialization, network Write and RPC worker contention",
                      "accepted replay ingress uses the same >=2ms sampling threshold as live Streams",
                      "full_work includes timing enqueue; final timestamp and clock bookkeeping excluded",
+                     "inverse_dynamics_preview, if selected, has no commissioned field torque transition/envelope",
+                     "measured_torque_preview uses a conditional arm model; weight blending and torque limits are uncommissioned",
                      "measured host timing is not a hard real-time certificate"])
     (output / "summary.json").write_text(json.dumps(result, indent=2)+"\n")
     (output / "timing.json").write_text(json.dumps(rows)+"\n")
@@ -184,6 +197,8 @@ def main():
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--cpu", type=int, default=2)
     parser.add_argument("--predictor", choices=("learned_filtered", "hold_current"), default="learned_filtered")
+    parser.add_argument("--actuation", choices=("reference_servo", "inverse_dynamics_preview", "measured_torque_preview"),
+                        default="reference_servo")
     args = parser.parse_args()
     if not 1 <= args.runs <= 10:
         parser.error("runs must be 1..10")
@@ -191,7 +206,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=False)
     results = []
     for index in range(args.runs):
-        result = run_once(data, args.output_dir / f"run{index+1}", args.cpu, args.predictor)
+        result = run_once(data, args.output_dir / f"run{index+1}", args.cpu, args.predictor, args.actuation)
         results.append(result)
         print(json.dumps({k: result[k] for k in ("status", "failure", "primary_5_18", "final_weight")}), flush=True)
         if result["status"] != "complete":

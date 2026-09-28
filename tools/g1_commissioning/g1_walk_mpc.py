@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in 6 ms Arm SDK reference-servo MPC. No robot access without --execute.
+"""Offline measured-state torque MPC; explicit opt-in legacy reference servo.
 
 See docs/g1_field_validation/HARDWARE_MPC.md. The default command performs a
 local preflight only. Neither mode changes nor rt/lowcmd are implemented.
@@ -46,12 +46,22 @@ class MpcJournal(Journal):
 class MpcRuntime:
     def __init__(self, config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                  predictor_mode="learned_filtered", bank_path=DEFAULT_BANK,
-                 stationary=False, journal=None):
+                 stationary=False, journal=None, actuation="reference_servo"):
         from endpoint_pose import EndpointModel
+        if actuation not in {"reference_servo", "inverse_dynamics_preview", "measured_torque_preview"}:
+            raise ValueError("unsupported MPC actuation")
+        self.actuation = actuation
         self.stationary, self.journal = bool(stationary), journal
         self.predictor = HardwareMpcPredictor(predictor_mode, bank_path)
-        self.controller = RightArmHardwareMpc(EXPECTED_TARGET_Q[5:10], config,
-                                             model=EndpointModel(model_config))
+        controller_type = RightArmHardwareMpc
+        if actuation == "inverse_dynamics_preview":
+            from hardware_mpc_inverse_preview import RightArmInversePreviewMpc
+            controller_type = RightArmInversePreviewMpc
+        elif actuation == "measured_torque_preview":
+            from hardware_mpc_torque_control import RightArmMeasuredTorqueMpc
+            controller_type = RightArmMeasuredTorqueMpc
+        self.controller = controller_type(EXPECTED_TARGET_Q[5:10], config,
+                                          model=EndpointModel(model_config))
         try:
             self.warmup = self.controller.warmup(EXPECTED_TARGET_Q, [1, 0, 0, 0])
         except Exception:
@@ -88,10 +98,14 @@ class MpcRuntime:
 
     def create_plan(self, initial, profile):
         limits = np.asarray(self.controller.config["reference_offset_limit_deg"])
-        if np.any(limits > profile["q_offset_limit_deg_array"]):
+        if self.actuation != "measured_torque_preview" and np.any(limits > profile["q_offset_limit_deg_array"]):
             raise ValueError("MPC config exceeds reviewed profile reference bounds")
         self.controller.reset()
-        return HardwarePidPlan(initial, profile["target_q_array"],
+        plan_type = HardwarePidPlan
+        if self.actuation == "measured_torque_preview":
+            from hardware_mpc_torque_control import HardwareTorquePreviewPlan
+            plan_type = HardwareTorquePreviewPlan
+        return plan_type(initial, profile["target_q_array"],
                                profile["kp_array"], profile["kd_array"], self.controller)
 
     def prepare(self, now_ns, low, imu, yaw0, task_s, heading_frozen=True):
@@ -102,12 +116,13 @@ class MpcRuntime:
 
 
 def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
-              mode="learned_filtered", bank=DEFAULT_BANK, cpu=None):
+              mode="learned_filtered", bank=DEFAULT_BANK, cpu=None,
+              actuation="reference_servo"):
     """Local libraries/model/real QP/IDL/CRC only; no DDS factory or endpoint."""
     from types import SimpleNamespace
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
-    runtime = MpcRuntime(config, model_config, mode, bank, stationary=True)
+    runtime = MpcRuntime(config, model_config, mode, bank, stationary=True, actuation=actuation)
     try:
         q = np.zeros(35)
         from hardware_pid_control import ARM_MOTOR_INDICES
@@ -118,15 +133,26 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
         runtime.prepare(500_000_000, None, None, 0., .5)
         qr, dqr, diag = runtime.controller.step(EXPECTED_TARGET_Q, [1, 0, 0, 0], 0, .006)
         frame = dict(q_rad=EXPECTED_TARGET_Q.copy(), dq_rad_s=np.zeros(13),
-                     kp=np.r_[np.full(11, 20), 0, 0], kd=np.r_[np.ones(11), 0, 0], weight=1.)
+                     kp=np.r_[np.full(11, 20), 0, 0], kd=np.r_[np.ones(11), 0, 0], weight=1.,
+                     diagnostics=diag)
         frame["q_rad"][5:10], frame["dq_rad_s"][5:10] = qr, dqr
-        packet = make_arm_message(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
-                                  unitree_hg_msg_dds__LowCmd_, CRC())
+        packet_builder = make_arm_message
+        if actuation == "inverse_dynamics_preview":
+            from hardware_mpc_inverse_preview import make_offline_preview_message
+            packet_builder = make_offline_preview_message
+        elif actuation == "measured_torque_preview":
+            from hardware_mpc_torque_control import make_torque_preview_message
+            packet_builder = make_torque_preview_message
+        packet = packet_builder(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
+                                unitree_hg_msg_dds__LowCmd_, CRC())
         serialized = packet.serialize()
         return json_values({"schema": "g1_hardware_mpc_preflight_v1", "passed": True,
             "dds_initialized": False, "publisher_created": False, "robot_connected": False,
             "host": host_evidence(cpu), "warmup": runtime.warmup,
             "solver_status": diag["mpc"]["solver_status"], "serialized_bytes": len(serialized),
+            "actuation": actuation,
+            "offline_packet_right_tau_nm": [packet.motor_cmd[i].tau for i in range(22,27)],
+            "field_output_supported": actuation == "reference_servo",
             "core": runtime.controller.metadata,
             "predictor_manifest": None if runtime.predictor.bank is None else runtime.predictor.bank.manifest,
             "limitations": "offline compatibility only; not a 6 ms field or closed-loop performance certificate"})
@@ -146,6 +172,9 @@ def build_parser():
     parser.add_argument("--controller-config", type=Path, default=ROOT / "configs/g1.yaml")
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK)
     parser.add_argument("--predictor", choices=("learned_filtered", "hold_current"), default="learned_filtered")
+    parser.add_argument("--actuation", choices=("reference_servo", "inverse_dynamics_preview", "measured_torque_preview"),
+                        default="measured_torque_preview",
+                        help="default: measured-state torque migration, offline only; reference_servo is legacy")
     parser.add_argument("--cpu", type=int, default=2)
     parser.add_argument("--permit-real-output", choices=(PERMIT,))
     parser.add_argument("--pid-6ms-validated", action="store_true",
@@ -160,9 +189,11 @@ def main(argv=None):
         select_cpu(args.cpu)  # fail before subscribers/threads if CPU unavailable
         if args.preflight and args.execute:
             raise ValueError("--preflight and --execute are mutually exclusive")
+        if args.execute and args.actuation != "reference_servo":
+            raise ValueError(f"{args.actuation} is offline-only; torque field output is not commissioned")
         if not args.execute:
             print(json.dumps(preflight(args.mpc_config, args.controller_config,
-                                      args.predictor, args.bank, args.cpu), indent=2))
+                                      args.predictor, args.bank, args.cpu, args.actuation), indent=2))
             return 0
         if not (args.nic and args.profile and args.output_dir and
                 args.permit_real_output == PERMIT and args.pid_6ms_validated):

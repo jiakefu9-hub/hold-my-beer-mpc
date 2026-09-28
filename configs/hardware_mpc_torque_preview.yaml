@@ -1,0 +1,23 @@
+# Offline migration parameters, NOT commissioned actuator limits.
+schema: g1_measured_torque_preview_v1
+# Physical-state bounds follow the existing simulation; not the legacy
+# +/-5 deg, .07 rad/s, .20 rad/s² persistent-reference governor.
+q_min_deg: [-5, -5, -20, -40, -40]
+q_max_deg: [5, 3, 5, 40, 40]
+q_margin_deg: [1, 1, 0, 0, 0]
+max_dq_rad_s: 1.0
+max_ddq_rad_s2: 8.0
+# Current field PD values, explicitly different from simulation's gains.
+kp: [20, 20, 20, 20, 20]
+kd: [1, 1, 1, 1, 1]
+# +/-25 is the simulation executor limit, NOT an identified G1 safety limit.
+tau_abs_nm: [25, 25, 25, 25, 25]
+perturbation_nm: 0.1
+regularization: 5.0
+candidate_scales: [1.0, 0.5, 0.25, 0.125]
+max_joint_error_rad_s2: 4.0
+max_abs_qacc_rad_s2: 10.0
+second_pass_error_rad_s2: 5.0
+rescue_passes: 2
+# Offline transition design value; must be reviewed with real response.
+transition_rate_nm_s: [100, 100, 100, 100, 40]

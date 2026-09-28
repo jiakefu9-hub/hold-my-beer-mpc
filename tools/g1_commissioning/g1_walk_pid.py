@@ -137,7 +137,7 @@ def monotonic_ns():
     return time.monotonic_ns()
 
 
-def make_arm_message(frame, state, constructor, crc):
+def make_arm_message(frame, state, constructor, crc, *, finalize_crc=True):
     """Shared packet/CRC construction for the live runner and offline timing."""
     message = constructor()
     message.mode_pr = int(state.mode_pr)
@@ -151,7 +151,8 @@ def make_arm_message(frame, state, constructor, crc):
         command.kp = float(frame["kp"][slot])
         command.kd = float(frame["kd"][slot])
     message.motor_cmd[WEIGHT_MOTOR_INDEX].q = float(frame["weight"])
-    message.crc = crc.Crc(message)
+    if finalize_crc:
+        message.crc = crc.Crc(message)
     return message
 
 
@@ -668,6 +669,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     The default PID path and robot mode/output boundaries stay unchanged.
     Runtime loading/warm-up must finish before this function.
     """
+    if runtime is not None and (getattr(runtime, "actuation", "reference_servo") != "reference_servo"
+                                or getattr(runtime.controller, "offline_only", False)):
+        raise ValueError("offline-only torque candidate cannot enter run_device")
     controller_label = "PID" if runtime is None else "MPC"
     # Delayed imports: reaching this point still has not initialized DDS.
     import unitree_sdk2py
