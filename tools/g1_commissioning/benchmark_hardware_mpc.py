@@ -46,10 +46,14 @@ def source_data(path):
                 low=np.zeros((len(t), 5))), None
 
 
-def run_once(source, output, cpu, predictor, actuation="reference_servo", torque_config=None):
+def run_once(source, output, cpu, predictor, actuation="reference_servo", torque_config=None,
+             assumed_command_delay_s=None, observation_delay_s=0.):
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
-    runtime = MpcRuntime(predictor_mode=predictor, actuation=actuation, torque_config=torque_config)
+    if not np.isfinite(observation_delay_s) or not 0 <= observation_delay_s <= .020:
+        raise ValueError('offline observation delay must be 0..20ms')
+    runtime = MpcRuntime(predictor_mode=predictor, actuation=actuation, torque_config=torque_config,
+                         assumed_command_delay_s=assumed_command_delay_s)
     packet_builder = make_arm_message
     if actuation == "inverse_dynamics_preview":
         from hardware_mpc_inverse_preview import make_offline_preview_message
@@ -65,8 +69,8 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
                                   "hardware_mpc_predictor.py", "hardware_pid_control.py",
                                   "hardware_mpc_inverse_preview.py", "hardware_arm_inverse_dynamics.py",
                                   "hardware_mpc_torque_control.py", "hardware_torque_mapper.py",
-                                  "hardware_mpc_recovery.py")}
-    core_metadata = json_values(runtime.controller.metadata)
+                                  "hardware_mpc_recovery.py","hardware_mpc_delay_preview.py",
+                                  "hardware_mpc_delay_plan.py")}
     model_hash = None if runtime.predictor.bank is None else runtime.predictor.bank.manifest["bank_sha256"]
     affinity = set(os.sched_getaffinity(0))
     heading, yaw0 = FixedH0Heading(), 0.
@@ -80,6 +84,7 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
         kp_array=np.r_[np.full(11, 20.), 0, 0], kd_array=np.r_[np.ones(11), 0, 0],
         q_offset_limit_deg_array=np.full(5, 5.))
     plan = runtime.create_plan(source["q"][0, list(ARM_MOTOR_INDICES)], profile)
+    core_metadata = json_values(runtime.controller.metadata)
     crc = CRC()
     status, reason = "complete", None
     gc_was_enabled = gc.isenabled()
@@ -106,7 +111,7 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
         # Limit startup to the same bounded history as live ingress.
         li = max(0, int(np.searchsorted(source["low_t"], -.5, side="right")) - 1)
         ii = max(0, int(np.searchsorted(source["imu_t"], -.5, side="right")) - 1)
-        feed(0.)
+        feed(-observation_delay_s)
         runtime.prepare(source_ns, None, None, 0., 0.)
         gc.collect()
         gc.disable()  # bounded one-shot loop; restore after recorder drainage
@@ -116,7 +121,7 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
             clock.wait()
             begin = time.monotonic_ns()
             task_s = (begin - begin_epoch) * 1e-9
-            feed(task_s)
+            feed(task_s-observation_delay_s)
             after_feed = time.monotonic_ns()
             if task_s >= 5 and not heading.current()["reference_frozen"]:
                 yaw0 = heading.freeze()
@@ -130,7 +135,12 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
             after_control = time.monotonic_ns()
             packet = packet_builder(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
                                     unitree_hg_msg_dds__LowCmd_, crc)
-            packet.serialize()
+            serialized=packet.serialize()
+            if assumed_command_delay_s is not None:
+                # Record the float32 values carried by the actual local CDR,
+                # not the higher precision pre-serialization candidate.
+                packet=type(packet).deserialize(serialized)
+                plan.commit_packet(frame,packet)
             after_packet = time.monotonic_ns()
             journal.record({"schema": "g1_mpc_offline_command_v1", "sequence": sequence,
                 "task_elapsed_s": task_s, "stage": frame["stage"], "weight": frame["weight"],
@@ -138,6 +148,9 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
                 "q_measured_rad": low[list(ARM_MOTOR_INDICES)],
                 "dq_measured_rad_s": source["dq"][selected_low, list(ARM_MOTOR_INDICES)],
                 "offline_packet_right_tau_nm": [packet.motor_cmd[i].tau for i in range(22,27)],
+                "offline_packet_right_q_rad": [packet.motor_cmd[i].q for i in range(22,27)],
+                "offline_packet_right_dq_rad_s": [packet.motor_cmd[i].dq for i in range(22,27)],
+                "offline_packet_weight": float(packet.motor_cmd[29].q),
                 "packet_crc": int(packet.crc), **frame["diagnostics"]})
             row = dict(sequence=sequence, task_elapsed_s=task_s, stage=frame["stage"],
                 actual_period_ms=None if previous is None else dt * 1000,
@@ -173,7 +186,11 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
     result = dict(schema="g1_hardware_mpc_benchmark_v1", status=status, failure=reason,
         dds_initialized=False, publisher_created=False, hardware_output=False,
         host=host, warmup=runtime.warmup, predictor=predictor, actuation=actuation,
+        assumed_command_delay_s=assumed_command_delay_s, observation_delay_s=observation_delay_s,
+        delay_history_committed_packets=getattr(plan,'committed_packets',None),
         source_sha256=source_hashes, core=core_metadata, predictor_bank_sha256=model_hash,
+        source_unchanged_during_run=all(hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()==digest
+                                        for name,digest in source_hashes.items()),
         torque_config_sha256=None if torque_config is None else hashlib.sha256(Path(torque_config).read_bytes()).hexdigest(),
         primary_5_18=summarize_timing([r for r in rows if 5 <= r["task_elapsed_s"] < 18]),
         all_stages=summarize_timing(rows), journal_dropped=journal.dropped,
@@ -186,6 +203,7 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
                      "full_work includes timing enqueue; final timestamp and clock bookkeeping excluded",
                      "inverse_dynamics_preview, if selected, has no commissioned field torque transition/envelope",
                      "measured_torque_preview uses a conditional arm model; weight blending and torque limits are uncommissioned",
+                     "delay lifecycle, if enabled, assumes explicit observation/command delays; does not identify real DDS or firmware latency",
                      "measured host timing is not a hard real-time certificate"])
     (output / "summary.json").write_text(json.dumps(result, indent=2)+"\n")
     (output / "timing.json").write_text(json.dumps(rows)+"\n")
@@ -196,6 +214,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-npz", type=Path)
     parser.add_argument("--torque-config", type=Path)
+    parser.add_argument("--assumed-command-delay-ms",type=float,
+                        help="offline full-lifecycle state prediction; NOT an identified device delay")
+    parser.add_argument("--observation-delay-ms",type=float,default=0.,
+                        help="delay replay ingress only; timestamps remain original")
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--cpu", type=int, default=2)
@@ -210,7 +232,9 @@ def main():
     results = []
     for index in range(args.runs):
         result = run_once(data, args.output_dir / f"run{index+1}", args.cpu, args.predictor, args.actuation,
-                          args.torque_config)
+                          args.torque_config,
+                          None if args.assumed_command_delay_ms is None else args.assumed_command_delay_ms*.001,
+                          args.observation_delay_ms*.001)
         results.append(result)
         print(json.dumps({k: result[k] for k in ("status", "failure", "primary_5_18", "final_weight")}), flush=True)
         if result["status"] != "complete":

@@ -46,13 +46,21 @@ class MpcJournal(Journal):
 class MpcRuntime:
     def __init__(self, config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                  predictor_mode="learned_filtered", bank_path=DEFAULT_BANK,
-                 stationary=False, journal=None, actuation="reference_servo", torque_config=None):
+                 stationary=False, journal=None, actuation="reference_servo", torque_config=None,
+                 assumed_command_delay_s=None):
         from endpoint_pose import EndpointModel
         if actuation not in {"reference_servo", "inverse_dynamics_preview", "measured_torque_preview"}:
             raise ValueError("unsupported MPC actuation")
         self.actuation = actuation
         if torque_config is not None and actuation != "measured_torque_preview":
             raise ValueError("--torque-config requires measured_torque_preview")
+        if assumed_command_delay_s is not None and (actuation != "measured_torque_preview"
+                or not np.isfinite(assumed_command_delay_s) or not 0 <= assumed_command_delay_s <= .020):
+            raise ValueError("delay lifecycle is offline measured_torque_preview only; delay must be 0..20ms")
+        self.assumed_command_delay_s=assumed_command_delay_s
+        self._latest_low_ns=self._latest_imu_ns=None
+        self._delay_origin_ns=None
+        self._plan=None
         self.stationary, self.journal = bool(stationary), journal
         self.predictor = HardwareMpcPredictor(predictor_mode, bank_path)
         controller_type = RightArmHardwareMpc
@@ -80,12 +88,16 @@ class MpcRuntime:
 
     def observe_low(self, stamp, q, dq):
         accepted = self.predictor.observe_low(stamp, q, dq)
+        if accepted:
+            self._latest_low_ns=int(stamp)
         if accepted and self.journal is not None:
             self.journal.record({"schema": "g1_mpc_predictor_low_v1",
                 "received_monotonic_ns": stamp, "q_rad": q, "dq_rad_s": dq})
 
     def observe_imu(self, stamp, quat, gyro, accel):
         accepted = self.predictor.observe_imu(stamp, quat, gyro, accel)
+        if accepted:
+            self._latest_imu_ns=int(stamp)
         if accepted and self.journal is not None:
             self.journal.record({"schema": "g1_mpc_predictor_imu_v1",
                 "received_monotonic_ns": stamp, "quaternion_wxyz": quat,
@@ -108,14 +120,35 @@ class MpcRuntime:
         if self.actuation == "measured_torque_preview":
             from hardware_mpc_torque_control import HardwareTorquePreviewPlan
             plan_type = HardwareTorquePreviewPlan
-        return plan_type(initial, profile["target_q_array"],
-                               profile["kp_array"], profile["kd_array"], self.controller)
+        options={}
+        if self.assumed_command_delay_s is not None:
+            from hardware_mpc_delay_plan import HardwareDelayTorquePreviewPlan
+            plan_type=HardwareDelayTorquePreviewPlan
+            options=dict(assumed_command_delay_s=self.assumed_command_delay_s)
+        self._plan=plan_type(initial, profile["target_q_array"],
+                            profile["kp_array"], profile["kd_array"], self.controller,**options)
+        return self._plan
 
     def prepare(self, now_ns, low, imu, yaw0, task_s, heading_frozen=True):
         # Advance causal filters from the first cycle, including the arm ramp.
-        result = self.predictor.query(now_ns, yaw0,
+        query_ns=now_ns
+        if self.assumed_command_delay_s is not None:
+            if self._latest_low_ns is None or self._latest_imu_ns is None:
+                raise ValueError('delay lifecycle requires timestamped lowstate and IMU')
+            if max(now_ns-self._latest_low_ns,now_ns-self._latest_imu_ns)>self.predictor.max_stale_ns:
+                raise ValueError('delay lifecycle observation stale at current time')
+            # Anchor at common available past data, not at the query clock.
+            # Raw arm observation and filtered forecast may have different times.
+            query_ns=min(now_ns,self._latest_low_ns,self._latest_imu_ns)
+        result = self.predictor.query(query_ns, yaw0,
                                       use_learned=not self.stationary and task_s >= 5. and heading_frozen)
         self.controller.set_disturbance_horizon(result.horizon, result.diagnostics)
+        if self.assumed_command_delay_s is not None and self._plan is not None:
+            if self._delay_origin_ns is None:
+                self._delay_origin_ns=int(now_ns)
+            self._plan.set_context((now_ns-self._delay_origin_ns)*1e-9,
+                (self._latest_low_ns-self._delay_origin_ns)*1e-9,
+                (result.diagnostics['anchor_monotonic_ns']-self._delay_origin_ns)*1e-9)
 
 
 def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",

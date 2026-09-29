@@ -57,6 +57,10 @@ class HorizonClock:
         fields=self._vectors([float(offset)])[0]
         return DisturbanceInput(*fields,self._orientations([float(offset)])[0])
 
+    def at_many(self, offsets):
+        fields=self._vectors(offsets);rotations=self._orientations(offsets)
+        return tuple(DisturbanceInput(*f,r) for f,r in zip(fields,rotations))
+
     def shifted(self, offset):
         if abs(offset)<1e-12:
             return self.horizon
@@ -77,9 +81,75 @@ class IssuedCommand:
     ff: np.ndarray
     qref: np.ndarray
     dqref: np.ndarray
+    weight: float = 1.
 
 
-class RightArmDelayPreviewMpc(RightArmMeasuredTorqueMpc):
+class CommandHistory:
+    """Shared nominal propagation; full lifecycle records only final packets."""
+    def reset_history(self):
+        self._issued=deque()
+        self._delay_context=None
+        self._last_now=None
+        self._last_observed=None
+
+    def set_delay_context(self,now_s,observed_s):
+        now_s,observed_s=float(now_s),float(observed_s)
+        if (not np.isfinite([now_s,observed_s]).all() or observed_s>now_s+1e-10
+                or now_s-observed_s+self.assumed_command_delay_s>.04+1e-10
+                or (self._last_now is not None and now_s<self._last_now-1e-10)
+                or (self._last_observed is not None and observed_s<self._last_observed-1e-10)):
+            raise ValueError('invalid or too-old timestamp for delay preview')
+        self._delay_context=(now_s,observed_s)
+
+    def _predict(self,q,dq,clock,now,observed,forecast_s=None):
+        forecast_s=observed if forecast_s is None else float(forecast_s)
+        if not math.isfinite(forecast_s) or forecast_s>observed+1e-10:
+            raise ValueError('forecast must start at or before observation')
+        target=now+self.assumed_command_delay_s
+        while len(self._issued)>1 and self._issued[1].apply_s<=observed+1e-10:
+            self._issued.popleft()
+        initial_q,initial_dq=q.copy(),dq.copy()
+        current=observed;timeline=[]
+        while current<target-1e-12:
+            active=None;next_change=target
+            for packet in self._issued:
+                if packet.apply_s<=current+1e-10:active=packet
+                else:
+                    next_change=min(next_change,packet.apply_s)
+                    break
+            dt=min(.002,target-current,next_change-current)
+            if dt<=1e-12:raise HardwareMpcError('invalid command-time integration interval')
+            timeline.append((current,dt,active));current+=dt
+            if len(timeline)>40:raise HardwareMpcError('delay prediction too long')
+        bases=clock.at_many([row[0]-forecast_s for row in timeline]) if timeline else ()
+        initial=None;initial_dynamics=None
+        if timeline and timeline[0][2] is None:
+            # Only reconstruct startup hold when it is actually used. Reuse
+            # its first M/h evaluation; subsequent substeps still recompute
+            # full nonlinear dynamics at their own q/dq and moving base.
+            initial_dynamics=self.inverse.linear_dynamics(q,dq,bases[0])
+            initial=IssuedCommand(-math.inf,initial_dynamics[1],initial_q,initial_dq)
+        for index,((current,dt,active),base) in enumerate(zip(timeline,bases)):
+            active=initial if active is None else active
+            mass,bias=(initial_dynamics if index==0 and initial_dynamics is not None
+                       else self.inverse.linear_dynamics(q,dq,base))
+            total=active.ff+self.torque_config['kp']*(active.qref-q)+self.torque_config['kd']*(active.dqref-dq)
+            # Offline transition assumption only. Built-in controller torque
+            # and firmware weight semantics have NOT been measured.
+            if active.weight != 1.:
+                total=active.weight*total+(1.-active.weight)*bias
+            total=np.clip(total,-self.mapper.limit,self.mapper.limit)
+            ddq=np.linalg.solve(mass,total-bias)
+            q=q+dq*dt+.5*ddq*dt**2;dq=dq+ddq*dt
+            if not np.isfinite(np.r_[q,dq]).all():
+                raise HardwareMpcError('delay prediction failed')
+        return q,dq,dict(prediction_steps=len(timeline),observation_age_s=now-observed,
+            target_minus_observation_s=target-observed,command_time_s=target,
+            observed_s=observed,now_s=now,forecast_s=forecast_s,
+            issued_history_size=len(self._issued))
+
+
+class RightArmDelayPreviewMpc(CommandHistory, RightArmMeasuredTorqueMpc):
     offline_only = True
 
     def __init__(self,*args,assumed_command_delay_s=0.,**kwargs):
@@ -99,51 +169,7 @@ class RightArmDelayPreviewMpc(RightArmMeasuredTorqueMpc):
 
     def reset(self):
         super().reset()
-        self._issued=deque()
-        self._delay_context=None
-        self._last_now=None
-        self._last_observed=None
-
-    def set_delay_context(self,now_s,observed_s):
-        now_s,observed_s=float(now_s),float(observed_s)
-        if (not np.isfinite([now_s,observed_s]).all() or observed_s>now_s+1e-10
-                or now_s-observed_s+self.assumed_command_delay_s>.04+1e-10
-                or (self._last_now is not None and now_s<self._last_now-1e-10)
-                or (self._last_observed is not None and observed_s<self._last_observed-1e-10)):
-            raise ValueError('invalid or too-old timestamp for delay preview')
-        self._delay_context=(now_s,observed_s)
-
-    def _predict(self,q,dq,clock,now,observed):
-        target=now+self.assumed_command_delay_s
-        while len(self._issued)>1 and self._issued[1].apply_s<=observed+1e-10:
-            self._issued.popleft()
-        initial_q,initial_dq=q.copy(),dq.copy()
-        initial=None
-        if target>observed+1e-12:
-            _,initial_bias=self.inverse.linear_dynamics(q,dq,clock.at(0.))
-            initial=IssuedCommand(-math.inf,initial_bias,initial_q,initial_dq)
-        current=observed;steps=0
-        while current<target-1e-12:
-            active=initial;next_change=target
-            for packet in self._issued:
-                if packet.apply_s<=current+1e-10:active=packet
-                else:
-                    next_change=min(next_change,packet.apply_s)
-                    break
-            dt=min(.002,target-current,next_change-current)
-            if dt<=1e-12:raise HardwareMpcError('invalid command-time integration interval')
-            base=clock.at(current-observed)
-            mass,bias=self.inverse.linear_dynamics(q,dq,base)
-            total=active.ff+self.torque_config['kp']*(active.qref-q)+self.torque_config['kd']*(active.dqref-dq)
-            total=np.clip(total,-self.mapper.limit,self.mapper.limit)
-            ddq=np.linalg.solve(mass,total-bias)
-            q=q+dq*dt+.5*ddq*dt**2;dq=dq+ddq*dt
-            current+=dt;steps+=1
-            if steps>40 or not np.isfinite(np.r_[q,dq]).all():
-                raise HardwareMpcError('delay prediction failed')
-        return q,dq,dict(prediction_steps=steps,observation_age_s=now-observed,
-            target_minus_observation_s=target-observed,command_time_s=target,
-            observed_s=observed,now_s=now,issued_history_size=len(self._issued))
+        self.reset_history()
 
     def step(self,arm_slots,imu_quaternion_wxyz,yaw0_rad,dt):
         start=time.perf_counter_ns()
