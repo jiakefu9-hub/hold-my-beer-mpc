@@ -1,0 +1,52 @@
+{
+  "schema": "g1_hardware_mpc_delay_lifecycle_verification_v1",
+  "hardware_output": false,
+  "dds_initialized": false,
+  "tests": {
+    "passed": true,
+    "count": 113,
+    "elapsed_s": 61.619,
+    "new_focus": "six delay-lifecycle tests plus the previous 107-test suite"
+  },
+  "runs": {
+    "run1": {
+      "status": "complete",
+      "source_unchanged_during_run": true,
+      "committed_packets": 2247,
+      "audit_commands": 2247,
+      "active_window_samples": 1083,
+      "deadline_misses": 1083,
+      "packet_ready_later_than_assumed_6ms": 1083,
+      "final_weight": 0.0,
+      "journal_dropped": 0,
+      "local_timing_json_sha256": "867a1083c59834fba363db5c5df16cd0f19c9578bd9caa9a495749669fe4e6a3",
+      "local_raw_jsonl_sha256": "0757f2ded81c97c08419476546a293e794180f4a8921650e635a5521483a8522"
+    },
+    "run2": {
+      "status": "complete",
+      "source_unchanged_during_run": true,
+      "committed_packets": 2250,
+      "audit_commands": 2250,
+      "active_window_samples": 1082,
+      "deadline_misses": 1082,
+      "packet_ready_later_than_assumed_6ms": 1082,
+      "final_weight": 0.0,
+      "journal_dropped": 0,
+      "local_timing_json_sha256": "21d4f1d9506f71891fa0802f27a5ab7d44851c4e57d9c1e7c51df6eb0a826c45",
+      "local_raw_jsonl_sha256": "075e4dbac6ee18e104a82ed40a962cb838bc796b7b328c01434505a568cde731"
+    }
+  },
+  "published_evidence_sha256": {
+    "final_summary.json": "c7c673594fc00ae9b5f3e81373d367be4cbc9b593c24295228d57e63f936551c",
+    "preoptimization_summary.json": "746414e971a2277bf6223c178d04de5b4b083ab8109ce5112006fa6693e9ee58",
+    "run1_audit.json": "32b8cba12207542553396ef9159f2d9f6f59a68eaadf568bd7370ca952637779",
+    "run2_audit.json": "8606d89909855ce779cde106fe7e5d12a599df2e42fe70a954be077afbc910e8"
+  },
+  "limitations": [
+    "all active-window packets were prepared later than the assumed cycle-start plus 6ms application time",
+    "static replay feedback does not respond to commands",
+    "4ms observation and 6ms command delays are test assumptions, not hardware measurements",
+    "weight blending is an uncalibrated offline transition model",
+    "real DDS, firmware scheduling, actuator torque gain and physical hand-back remain unverified"
+  ]
+}

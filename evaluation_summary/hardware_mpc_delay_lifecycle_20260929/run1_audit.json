@@ -1,0 +1,10 @@
+{
+  "commands": 2247,
+  "active_commands": 1249,
+  "final_weight": 0.0,
+  "checks": "measured state, one-step references, single PD, total torque, slew, final zero",
+  "delay_prediction_enabled": true,
+  "initial_state_semantics": "causal command-time prediction",
+  "physical_model_accuracy_certified": false,
+  "raw_jsonl_sha256": "0757f2ded81c97c08419476546a293e794180f4a8921650e635a5521483a8522"
+}
