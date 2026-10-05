@@ -20,19 +20,27 @@ for _name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ[_name] = "1"
 
 import numpy as np
+import orjson
 
 from g1_walk_pid import (ROOT, EXPECTED_TARGET_Q, Journal, load_profile,
                          run_device, make_arm_message)
 from hardware_pid_control import HardwarePidPlan, CONTROL_PERIOD_S
 from hardware_mpc_control import RightArmHardwareMpc, DEFAULT_CONFIG, json_values
 from hardware_mpc_predictor import HardwareMpcPredictor, DEFAULT_BANK
-from mpc_host import host_evidence, select_cpu
+from mpc_host import host_evidence, select_cpu, ControlThreadScope
 
 PERMIT = "MPC_WALK_H0_CAPTURE"
+FIELD_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_field.yaml'
 
 
 class MpcJournal(Journal):
     """Same transport audit as PID, with explicit MPC record identities."""
+    # Native encoding makes an immutable bytes snapshot before enqueue, so
+    # later frame mutation cannot alter evidence. The writer only performs IO.
+    snapshot = staticmethod(lambda row: orjson.dumps(
+        row, option=orjson.OPT_SERIALIZE_NUMPY, default=json_values))
+    format_row = staticmethod(lambda row: row.decode("utf-8") + "\n")
+
     def record(self, row):
         row = dict(row)
         schema = row.get("schema", "")
@@ -44,19 +52,28 @@ class MpcJournal(Journal):
 
 
 class MpcRuntime:
+    field_trial = False
     def __init__(self, config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                  predictor_mode="learned_filtered", bank_path=DEFAULT_BANK,
                  stationary=False, journal=None, actuation="measured_torque_preview", torque_config=None,
-                 assumed_command_delay_s=None):
+                 assumed_command_delay_s=None, field_trial=False):
         from endpoint_pose import EndpointModel
         if actuation not in {"reference_servo", "inverse_dynamics_preview", "measured_torque_preview"}:
             raise ValueError("unsupported MPC actuation")
         self.actuation = actuation
+        self.field_trial = bool(field_trial)
+        self.host_scope = None
+        self.handback = None
+        if self.field_trial:
+            if actuation != 'measured_torque_preview' or Path(torque_config or '') != FIELD_TORQUE_CONFIG:
+                raise ValueError('field trial requires the bounded measured-torque field configuration')
+            from hardware_mpc_field import TorqueHandback
+            self.handback = TorqueHandback()
         if torque_config is not None and actuation != "measured_torque_preview":
             raise ValueError("--torque-config requires measured_torque_preview")
         if assumed_command_delay_s is not None and (actuation != "measured_torque_preview"
                 or not np.isfinite(assumed_command_delay_s) or not 0 <= assumed_command_delay_s <= .020):
-            raise ValueError("delay lifecycle is offline measured_torque_preview only; delay must be 0..20ms")
+            raise ValueError("delay lifecycle requires measured_torque_preview; assumption must be 0..20ms")
         self.assumed_command_delay_s=assumed_command_delay_s
         self._latest_low_ns=self._latest_imu_ns=None
         self._delay_origin_ns=None
@@ -73,6 +90,10 @@ class MpcRuntime:
         torque_options = {} if torque_config is None else dict(torque_config=torque_config)
         self.controller = controller_type(EXPECTED_TARGET_Q[5:10], config,
                                           model=EndpointModel(model_config), **torque_options)
+        if self.field_trial:
+            self.controller.metadata.update(field_output_supported=True,
+                field_scope='explicit controlled first trial, not hardware-validated performance',
+                field_torque_limits_calibrated=False, first_trial_task='stationary_before_walk')
         try:
             self.warmup = self.controller.warmup(EXPECTED_TARGET_Q, [1, 0, 0, 0])
         except Exception:
@@ -81,8 +102,44 @@ class MpcRuntime:
         self.epoch_ns = None
         self._gc_was_enabled = None
 
+    def validate_field_entry(self):
+        if not self.field_trial or self.actuation != 'measured_torque_preview':
+            raise ValueError('explicit torque field-trial authorization required')
+
+    def enter_control_thread(self, cpu):
+        if self.host_scope is None:
+            raise RuntimeError('MPC requires explicit control/worker CPU placement')
+        return self.host_scope.activate()
+
+    def release_frame(self, elapsed_s):
+        return self.handback.normal_release(elapsed_s)
+
+    def accept_packet(self, frame, packet):
+        # Called only AFTER Write succeeded; latch before any optional audit
+        # can fail, so hand-back never loses the last actually issued packet.
+        if self.handback is not None:
+            self.handback.accept(packet)
+        if self._plan is not None and getattr(self._plan, '_pending', None) is frame:
+            self._plan.commit_packet(frame, packet)
+
+    def check_before_write(self, frame, low, imu, begin_ns, now_ns):
+        if not self.field_trial:
+            return
+        if now_ns - min(low.received_ns, imu.received_ns) > 25_000_000:
+            raise RuntimeError('selected torque feedback older than 25 ms; hand back')
+        if now_ns - begin_ns > 10_000_000:
+            raise RuntimeError('torque computation older than 10 ms; hand back')
+        # Geometry/torque values were checked by make_message; transport health
+        # and selected-snapshot age are checked again immediately before Write.
+
     def close(self):
+        if self._plan is not None:
+            native = getattr(getattr(self._plan,'history',None),'native',None)
+            if native is not None:
+                native.close()
         self.controller.close()
+        if self.host_scope is not None:
+            self.host_scope.restore()
         if self._gc_was_enabled:
             gc.enable()
 
@@ -94,6 +151,11 @@ class MpcRuntime:
         """
         if self.actuation == "measured_torque_preview":
             from hardware_mpc_torque_control import make_torque_preview_message
+            if self.field_trial and frame.get('diagnostics',{}).get('controller_kind') != self.actuation:
+                self.handback.apply(frame)
+            if self.field_trial:
+                from hardware_mpc_field import check_field_packet
+                check_field_packet(frame, state, self.controller.torque_config)
             return make_torque_preview_message(frame, state, constructor, crc)
         if self.actuation == "inverse_dynamics_preview":
             from hardware_mpc_inverse_preview import make_offline_preview_message
@@ -143,19 +205,33 @@ class MpcRuntime:
             options=dict(assumed_command_delay_s=self.assumed_command_delay_s)
         self._plan=plan_type(initial, profile["target_q_array"],
                             profile["kp_array"], profile["kd_array"], self.controller,**options)
+        if self.assumed_command_delay_s is not None:
+            from native_arm_delay import NativeArmDelay, LIBRARY
+            if LIBRARY.is_file():
+                native=NativeArmDelay(self.controller.inverse)
+                self._plan.history.native=native
+                self.controller.metadata['delay_lifecycle']['propagation']=native.metadata
+            elif self.field_trial:
+                raise ValueError('build cpp/g1_arm_delay before field execution; no silent slower fallback')
+            if self.field_trial:
+                self.controller.metadata['delay_lifecycle'].update(field_output_supported=True,
+                    history='only successful Write packets; host receive stamps and nominal application delay',
+                    timing='host stamps plus explicit delay assumption; sensor/internal actuation latency unknown')
         return self._plan
 
     def prepare(self, now_ns, low, imu, yaw0, task_s, heading_frozen=True):
         # Advance causal filters from the first cycle, including the arm ramp.
         query_ns=now_ns
         if self.assumed_command_delay_s is not None:
-            if self._latest_low_ns is None or self._latest_imu_ns is None:
+            low_ns = self._latest_low_ns if low is None else low.received_ns
+            imu_ns = self._latest_imu_ns if imu is None else imu.received_ns
+            if low_ns is None or imu_ns is None:
                 raise ValueError('delay lifecycle requires timestamped lowstate and IMU')
-            if max(now_ns-self._latest_low_ns,now_ns-self._latest_imu_ns)>self.predictor.max_stale_ns:
+            if max(now_ns-low_ns,now_ns-imu_ns)>self.predictor.max_stale_ns:
                 raise ValueError('delay lifecycle observation stale at current time')
             # Anchor at common available past data, not at the query clock.
             # Raw arm observation and filtered forecast may have different times.
-            query_ns=min(now_ns,self._latest_low_ns,self._latest_imu_ns)
+            query_ns=min(now_ns,low_ns,imu_ns)
         result = self.predictor.query(query_ns, yaw0,
                                       use_learned=not self.stationary and task_s >= 5. and heading_frozen)
         self.controller.set_disturbance_horizon(result.horizon, result.diagnostics)
@@ -163,7 +239,7 @@ class MpcRuntime:
             if self._delay_origin_ns is None:
                 self._delay_origin_ns=int(now_ns)
             self._plan.set_context((now_ns-self._delay_origin_ns)*1e-9,
-                (self._latest_low_ns-self._delay_origin_ns)*1e-9,
+                (low_ns-self._delay_origin_ns)*1e-9,
                 (result.diagnostics['anchor_monotonic_ns']-self._delay_origin_ns)*1e-9)
 
 
@@ -176,7 +252,16 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
     from unitree_sdk2py.utils.crc import CRC
     runtime = MpcRuntime(config, model_config, mode, bank, stationary=True, actuation=actuation,
                          torque_config=torque_config)
+    native = None
     try:
+        native_metadata = None
+        if actuation == 'measured_torque_preview':
+            from native_arm_delay import NativeArmDelay, LIBRARY
+            if LIBRARY.is_file():
+                native = NativeArmDelay(runtime.controller.inverse)
+                native_metadata = native.metadata
+            elif torque_config is not None and Path(torque_config).resolve() == FIELD_TORQUE_CONFIG:
+                raise ValueError('field preflight requires building cpp/g1_arm_delay')
         q = np.zeros(35)
         from hardware_pid_control import ARM_MOTOR_INDICES
         q[list(ARM_MOTOR_INDICES)] = EXPECTED_TARGET_Q
@@ -197,12 +282,15 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
             "host": host_evidence(cpu), "warmup": runtime.warmup,
             "solver_status": diag["mpc"]["solver_status"], "serialized_bytes": len(serialized),
             "actuation": actuation,
+            "native_delay": native_metadata,
             "offline_packet_right_tau_nm": [packet.motor_cmd[i].tau for i in range(22,27)],
             "field_output_supported": False,
             "core": runtime.controller.metadata,
             "predictor_manifest": None if runtime.predictor.bank is None else runtime.predictor.bank.manifest,
             "limitations": "offline compatibility only; not a 6 ms field or closed-loop performance certificate"})
     finally:
+        if native is not None:
+            native.close()
         runtime.close()
 
 
@@ -216,13 +304,20 @@ def build_parser():
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--mpc-config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--controller-config", type=Path, default=ROOT / "configs/g1.yaml")
-    parser.add_argument("--torque-config", type=Path, help="explicit offline torque/recovery config overlay")
+    parser.add_argument("--torque-config", type=Path, help="offline overlay; field uses fixed bounded trial config")
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK)
     parser.add_argument("--predictor", choices=("learned_filtered", "hold_current"), default="learned_filtered")
     parser.add_argument("--actuation", choices=("reference_servo", "inverse_dynamics_preview", "measured_torque_preview"),
                         default="measured_torque_preview",
-                        help="default: measured-state torque migration; all modes currently offline only")
+                        help="measured torque: explicit controlled field trial; other modes offline only")
     parser.add_argument("--cpu", type=int, default=2)
+    parser.add_argument('--rt-priority', type=int, default=0, help='0=ordinary; 1..40=control-thread FIFO, requires permission')
+    parser.add_argument('--assumed-command-delay-ms', type=float, default=6.,
+                        help='explicit nominal computation+application delay, not a measured DDS RTT')
+    parser.add_argument('--allow-first-torque-field-trial', action='store_true',
+                        help='explicit stationary nonzero-torque commissioning trial')
+    parser.add_argument('--torque-stationary-validated', action='store_true',
+                        help='operator confirms an actual stationary torque trial before requesting walk')
     parser.add_argument("--permit-real-output", choices=(PERMIT,))
     parser.add_argument("--pid-6ms-validated", action="store_true",
                         help="operator confirms current 6 ms PID trial passed; not software-generated evidence")
@@ -231,18 +326,21 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    journal = runtime = None
+    journal = runtime = scope = None
     try:
         select_cpu(args.cpu)  # fail before subscribers/threads if CPU unavailable
         if args.preflight and args.execute:
             raise ValueError("--preflight and --execute are mutually exclusive")
         if args.execute and args.actuation == "reference_servo":
             raise ValueError("reference_servo is retired from field use; first hardware MPC must use "
-                             "the torque path, whose timing and fault release are not yet commissioned")
-        if args.execute and args.actuation != "reference_servo":
-            raise ValueError(f"{args.actuation} is offline-only; torque field output is not commissioned")
-        if args.execute and args.torque_config is not None:
-            raise ValueError("torque configuration is offline-only")
+                             "the explicit measured-torque trial path")
+        if args.execute and (args.actuation != 'measured_torque_preview' or
+                             not args.allow_first_torque_field_trial):
+            raise ValueError('offline-only unless measured torque and --allow-first-torque-field-trial are explicit')
+        if args.execute and args.task == 'walk' and not args.torque_stationary_validated:
+            raise ValueError('first torque trial is stationary; walk requires an actual stationary trial result')
+        if args.execute and args.torque_config is not None and args.torque_config.resolve() != FIELD_TORQUE_CONFIG:
+            raise ValueError('field execution accepts only configs/hardware_mpc_torque_field.yaml')
         if not args.execute:
             print(json.dumps(preflight(args.mpc_config, args.controller_config,
                                       args.predictor, args.bank, args.cpu, args.actuation,
@@ -252,27 +350,44 @@ def main(argv=None):
                 args.permit_real_output == PERMIT and args.pid_6ms_validated):
             raise ValueError("real output requires NIC, reviewed --profile, new --output-dir, exact permit, "
                              "and --pid-6ms-validated after the actual successful PID trial")
-        profile = load_profile(args.profile, "mpc")
+        # Reuse established robot/transport facts from the validated PID profile,
+        # without inventing MPC-specific reviewed flags in a copied profile.
+        profile_kind = 'pid' if 'schema=g1_hardware_pid_walk_site_v1' in args.profile.read_text() else 'mpc'
+        profile = load_profile(args.profile, profile_kind)
+        scope = ControlThreadScope(args.cpu, args.rt_priority)
+        scope.prepare_workers()
         # Load/tree/build QP and warm all local math before any DDS initialization.
         runtime = MpcRuntime(args.mpc_config, args.controller_config, args.predictor,
-                             args.bank, stationary=args.task == "stationary")
+                             args.bank, stationary=args.task == "stationary", field_trial=True,
+                             torque_config=FIELD_TORQUE_CONFIG,
+                             assumed_command_delay_s=args.assumed_command_delay_ms*.001)
+        runtime.host_scope = scope
         journal = MpcJournal(args.output_dir)
         runtime.journal = journal
         for src, name in ((args.profile, "arm_profile.conf"),
                           (args.controller_config, "controller_config.yaml"),
-                          (args.mpc_config, "mpc_config.yaml")):
+                          (args.mpc_config, "mpc_config.yaml"),
+                          (FIELD_TORQUE_CONFIG, 'torque_config.yaml')):
             shutil.copy2(src, args.output_dir / name)
         source_paths = [Path(__file__), Path(__file__).with_name("g1_walk_pid.py"),
             Path(__file__).with_name("hardware_mpc_control.py"),
             Path(__file__).with_name("hardware_mpc_solver.py"),
             Path(__file__).with_name("hardware_mpc_predictor.py"),
+            *[Path(__file__).with_name(name) for name in ('hardware_mpc_field.py',
+                'hardware_mpc_torque_control.py','hardware_arm_inverse_dynamics.py',
+                'hardware_torque_mapper.py','hardware_mpc_delay_plan.py',
+                'hardware_mpc_delay_preview.py','mpc_host.py','arm_execution_record.py','native_arm_delay.py')],
+            ROOT/'cpp/g1_arm_delay/delay.cpp', ROOT/'cpp/g1_arm_delay/CMakeLists.txt',
             ROOT / "arm_mpc.py", ROOT / "kinematics_helper.py"]
         journal.record({"schema": "g1_mpc_session_v1", "event": "session_start",
             "program": Path(__file__).name, "task": args.task, "required_fsm": 500,
             "publisher_created": False, "mode_setter_registered": False, "lowcmd_topic_created": False,
             "network_interface": args.nic, "control_nominal_period_ms": 6.,
             "primary_metric_window_s": [5., 18.], "forward_speed_m_s": .5 if args.task == "walk" else 0.,
-            "heading_target": "fixed_run_h0_positive_x", "host": host_evidence(args.cpu),
+            "heading_target": "fixed_run_h0_positive_x", "host_before_control": host_evidence(),
+            "requested_control_cpu": args.cpu, "requested_fifo_priority": args.rt_priority,
+            "assumed_command_delay_ms": args.assumed_command_delay_ms,
+            "hardware_delay_identified": False, "profile_kind": profile_kind,
             "pid_6ms_validation": "operator_attestation_not_automatically_certified",
             "core": runtime.controller.metadata, "warmup": runtime.warmup,
             "predictor_mode": args.predictor,
@@ -280,7 +395,8 @@ def main(argv=None):
             "control_source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                                        for p in source_paths},
             "profile_sha256": hashlib.sha256(args.profile.read_bytes()).hexdigest(),
-            "controller_config_sha256": hashlib.sha256(args.controller_config.read_bytes()).hexdigest()})
+            "controller_config_sha256": hashlib.sha256(args.controller_config.read_bytes()).hexdigest(),
+            "torque_config_sha256": hashlib.sha256(FIELD_TORQUE_CONFIG.read_bytes()).hexdigest()})
         result = run_device(args, profile, None, {}, journal, runtime=runtime)
         journal.record({"schema": "g1_mpc_event_v1", "event": "capture_drained",
                         "queue_dropped": journal.dropped})
@@ -301,6 +417,8 @@ def main(argv=None):
             journal.close()
         if runtime is not None:
             runtime.close()
+        elif scope is not None:
+            scope.restore()
 
 
 if __name__ == "__main__":

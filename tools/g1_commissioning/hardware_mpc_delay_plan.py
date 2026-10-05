@@ -133,19 +133,22 @@ class HardwareDelayTorquePreviewPlan(HardwareTorquePreviewPlan):
         if frame is not self._pending:
             raise HardwareMpcError('packet does not correspond to pending lifecycle frame')
         motors=[packet.motor_cmd[i] for i in range(22,27)]
-        q=finite_vector([m.q for m in motors],5,'packet q').copy()
-        dq=finite_vector([m.dq for m in motors],5,'packet dq').copy()
-        tau=finite_vector([m.tau for m in motors],5,'packet torque').copy()
-        weight=float(packet.motor_cmd[29].q)
+        # Same float32 rounding as the actual IDL wire fields. No costly full
+        # deserialize is needed in the live loop after a successful Write.
+        q=finite_vector(np.asarray([m.q for m in motors],dtype=np.float32),5,'packet q').copy()
+        dq=finite_vector(np.asarray([m.dq for m in motors],dtype=np.float32),5,'packet dq').copy()
+        tau=finite_vector(np.asarray([m.tau for m in motors],dtype=np.float32),5,'packet torque').copy()
+        weight=float(np.float32(packet.motor_cmd[29].q))
         if not math.isfinite(weight) or not 0<=weight<=1:
             raise ValueError('invalid packet ownership weight')
         expected=frame['diagnostics']
-        for actual,wanted in ((q,frame['q_rad'][5:10]),(dq,frame['dq_rad_s'][5:10]),
-                              (tau,expected['tau_ff_candidate_nm']),
-                              ([m.kp for m in motors],frame['kp'][5:10]),
-                              ([m.kd for m in motors],frame['kd'][5:10]),(weight,frame['weight'])):
-            if not np.allclose(actual,wanted,rtol=1e-6,atol=1e-7):
-                raise ValueError('final packet differs from the checked lifecycle frame')
+        actual=np.concatenate((q,dq,tau,[m.kp for m in motors],[m.kd for m in motors],[weight]))
+        wanted=np.concatenate((frame['q_rad'][5:10],frame['dq_rad_s'][5:10],
+            expected['tau_ff_candidate_nm'],frame['kp'][5:10],frame['kd'][5:10],[frame['weight']]))
+        # Same elementwise tolerances; one vector check instead of six tiny
+        # NumPy dispatches. Do not omit PD or ownership from packet validation.
+        if not np.allclose(actual,wanted,rtol=1e-6,atol=1e-7):
+            raise ValueError('final packet differs from the checked lifecycle frame')
         when=expected['delay_preview']['command_time_s']
         if self.history._issued and when<=self.history._issued[-1].apply_s:
             raise ValueError('packet application time must increase')

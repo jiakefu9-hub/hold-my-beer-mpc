@@ -15,6 +15,12 @@ import numpy as np
 from disturbance_types import DisturbanceInput
 
 
+def _cross3(a, b):
+    """Fixed 3-vector cross product; avoids NumPy's general broadcasting path."""
+    return np.array((a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2],
+                     a[0]*b[1]-a[1]*b[0]))
+
+
 def finite_vector(value, size, name):
     value = np.asarray(value, dtype=float)
     if value.shape != (size,) or not np.isfinite(value).all():
@@ -53,6 +59,7 @@ class RightArmInverseDynamics:
         self.armature = m.dof_armature[self.v_indices].copy()
         self.zeros = np.zeros(5)
         self._mass = np.empty((m.nv, m.nv))
+        self._arm_block = np.ix_(self.v_indices, self.v_indices)
         bottle = m.body("right_bottle")
         self.metadata = {
             "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
@@ -78,15 +85,15 @@ class RightArmInverseDynamics:
         alpha = finite_vector(disturbance.alpha_world, 3, "angular acceleration")
         R = np.asarray(disturbance.rot_world_body, dtype=float)
         if (R.shape != (3, 3) or not np.isfinite(R).all()
-                or not np.allclose(R.T @ R, np.eye(3), atol=1e-7, rtol=0.)
+                or np.max(np.abs(R.T @ R-np.eye(3))) > 1e-7
                 or abs(np.linalg.det(R)-1.) > 1e-7):
             raise ValueError("IMU attitude must be a proper H0-from-IMU rotation")
         root_R = R @ self.root_from_imu.T
         r = root_R @ self.root_to_imu
         # Galilean translation velocity is arbitrary. Set IMU velocity zero
         # instantaneously; root velocity then follows the rigid lever arm.
-        root_v = -np.cross(omega, r)
-        root_a = acc - np.cross(alpha, r) - np.cross(omega, np.cross(omega, r))
+        root_v = -_cross3(omega, r)
+        root_a = acc - _cross3(alpha, r) + _cross3(omega, root_v)
         d = self.data
         d.qpos[:] = self.model.model.qpos0
         d.qpos[:3] = 0.
@@ -125,7 +132,7 @@ class RightArmInverseDynamics:
             mujoco.mj_fwdPosition(m, d)
             mujoco.mj_fwdVelocity(m, d)
         mujoco.mj_fullM(m, self._mass, d.qM)
-        mass = self._mass[np.ix_(self.v_indices, self.v_indices)].copy()
+        mass = self._mass[self._arm_block].copy()
         nonarm_qacc = d.qacc.copy()
         nonarm_qacc[self.v_indices] = 0.
         bias = (self._mass @ nonarm_qacc + d.qfrc_bias)[self.v_indices].copy()

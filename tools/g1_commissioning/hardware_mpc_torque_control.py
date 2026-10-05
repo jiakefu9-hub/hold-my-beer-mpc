@@ -11,6 +11,7 @@ import math
 import time
 from pathlib import Path
 import numpy as np
+import orjson
 import yaml
 
 from endpoint_pose import ROOT, rotation
@@ -113,7 +114,9 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         try:
             total, mapping = self.mapper.compute(forward, ddq, inverse["tau_model_nm"]+pd,
                                                 safe_hold=bias-self.torque_config["kd"]*dq,
-                                                previous=self._previous_total, bounds=bounds)
+                                                previous=self._previous_total, bounds=bounds,
+                                                affine_gain=gain,
+                                                forward_batch=lambda taus: (taus-bias)@gain.T)
         except NoModelTorque as exc:
             self.last_diagnostics.update(mapper=exc.trace, torque_output_authorized=False)
             self.last_diagnostics = json_values(self.last_diagnostics)
@@ -158,7 +161,11 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         bounds, self._next_total_bounds = self._next_total_bounds, None
         self.last_diagnostics.update(self._torque(q, dq, qref, dqref, ddq, self._current_base, bounds))
         self.last_diagnostics["controller_core_ms"] = (time.perf_counter_ns()-start)*1e-6
-        self.last_diagnostics = json_values(self.last_diagnostics)
+        # Immutable JSON-native audit snapshot, including every candidate.
+        # Native encoding avoids a Python recursive walk on the 6 ms thread;
+        # nonfinite diagnostics remain null, exactly as in json_values.
+        self.last_diagnostics = orjson.loads(orjson.dumps(self.last_diagnostics,
+            option=orjson.OPT_SERIALIZE_NUMPY, default=json_values))
         return qref.copy(), dqref.copy(), self.last_diagnostics
 
 

@@ -39,6 +39,11 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
                 state_t[:, control] += self.B * self.max_ddq[None, :]
         self._ineq_start = (self.horizon + 1)*self.nx
         self._constraint = self._A_cons[self._ineq_start:]
+        self._constraint_e = self._constraint @ self._E
+        self._stage_t = self._T[:self.horizon*self.stage_dim].reshape(self.horizon,self.stage_dim,n)
+        self._stage_tt = self._stage_t.transpose(0,2,1)
+        self._terminal_t = self._T[self.horizon*self.stage_dim:]
+        self._cost_blocks = None
         ac = self._constraint @ self._T
         # Normalize each inequality's coefficient magnitude, including the
         # microradian position increments near a reference boundary. Otherwise
@@ -87,6 +92,7 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         blocks[:,self.nx:,self.nx:]=quu
         blocks=blocks+transpose(blocks)+self.reg*np.eye(self.stage_dim)[None]
         linear=np.r_[2*np.concatenate((fx,fu),axis=1).reshape(-1),terminal_f]
+        self._cost_blocks = (blocks, terminal_h)
         return [*blocks,terminal_h],linear
 
     def reset(self):
@@ -95,21 +101,34 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
             self._condensed_solver.warm_start(x=np.zeros(self.horizon*self.nu),
                                               y=np.zeros(self._ac.shape[0]))
 
-    def condense(self, P, linear, lower, upper):
+    def condense(self, P, linear, lower, upper, *, cost_blocks=None):
         upper_triangle = P.toarray()
         full_p = upper_triangle + upper_triangle.T - np.diag(np.diag(upper_triangle))
         offset = self._E @ lower[:self.nx]
-        pc = self._T.T @ full_p @ self._T
+        if cost_blocks is None:
+            pc = self._T.T @ full_p @ self._T
+            qc = self._T.T @ (full_p @ offset + linear)
+        else:
+            blocks, terminal = cost_blocks
+            # Same block-diagonal Hessian; do not multiply its large zero
+            # off-diagonal regions every 6 ms. Full trajectory checks remain.
+            ht = blocks @ self._stage_t
+            pc = np.sum(self._stage_tt @ ht, axis=0) + self._terminal_t.T @ terminal @ self._terminal_t
+            stage_end = self.horizon*self.stage_dim
+            sx = offset[:stage_end].reshape(self.horizon,self.stage_dim,1)
+            sf = linear[:stage_end].reshape(self.horizon,self.stage_dim,1)
+            qc = np.sum(self._stage_tt @ (blocks@sx+sf),axis=0)[:,0]
+            qc += self._terminal_t.T @ (terminal@offset[stage_end:]+linear[stage_end:])
         pc = .5*(pc+pc.T)
-        qc = self._T.T @ (full_p @ offset + linear)
-        constraint_offset = self._constraint @ offset
+        constraint_offset = self._constraint_e @ lower[:self.nx]
         lc = (lower[self._ineq_start:]-constraint_offset)*self._row_scale
         uc = (upper[self._ineq_start:]-constraint_offset)*self._row_scale
         return pc, qc, lc, uc, offset, full_p
 
     def _solve_qp(self, P, p_values, linear, lower, upper, warm_start):
         try:
-            pc, qc, lc, uc, offset, full_p = self.condense(P, linear, lower, upper)
+            pc, qc, lc, uc, offset, full_p = self.condense(P, linear, lower, upper,
+                                                        cost_blocks=self._cost_blocks)
             if self.solver_backend == "daqp":
                 begin = time.perf_counter()
                 u, _, flag, details = self._daqp.solve(

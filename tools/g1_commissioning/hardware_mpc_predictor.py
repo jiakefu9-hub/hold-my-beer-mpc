@@ -18,6 +18,7 @@ import time
 
 import numpy as np
 from scipy.spatial import cKDTree
+from scipy.spatial.distance import cdist
 from scipy.spatial.transform import Rotation
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,12 +77,20 @@ class FrozenInnovationBank:
         self.tree = cKDTree(self.train_z)
         # Warm query avoids a first-command initialization surprise.
         self.tree.query(self.train_z[0], k=8, workers=1)
+        self._distance_buffer = np.empty((1, n))
 
     def predict(self, feature, current_y):
         feature = _finite(feature, (33,), "feature")
         current_y = _finite(current_y, (12,), "current_y")
         z = (feature - self.mean) / self.std * self.feature_scale
-        distances, indices = self.tree.query(z, k=8, workers=1)
+        # Exact Euclidean neighbors, not approximate lookup or a new model.
+        # In 33 dimensions a tree can visit almost every row for OOD input;
+        # one contiguous native distance pass gives more predictable cost.
+        cdist(z[None, :], self.train_z, metric="sqeuclidean", out=self._distance_buffer)
+        squared = self._distance_buffer[0]
+        indices = np.argpartition(squared, 7)[:8]
+        indices = indices[np.lexsort((indices, squared[indices]))]
+        distances = np.sqrt(squared[indices])
         weights = 1. / np.maximum(distances, .001)
         weights /= weights.sum()
         absolute = np.einsum("k,kho->ho", weights, self.future[indices])

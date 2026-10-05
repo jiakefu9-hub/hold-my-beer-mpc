@@ -1,0 +1,13 @@
+# First controlled torque trial. Not manufacturer's torque ratings or a calibration.
+# Keep simulation position/acceleration envelope; do not widen it to hide faults.
+schema: g1_measured_torque_preview_v1
+tau_abs_nm: [5, 3, 2, 5, 1.5]
+tau_ff_abs_nm: [5, 3, 2, 5, 1.5]
+transition_rate_nm_s: [50, 40, 30, 50, 20]
+recovery_envelope_enabled: true
+recovery_rate_s_inv: 6.0
+recovery_guard_deg: [0.15, 0.15, 0.15, 0.15, 0.15]
+# Defaults are inherited from hardware_mpc_torque_preview.yaml, including the
+# full measured-state QP and candidate search. 250 g bottle per arm in the XML.
+# PID observed |tau_est| maxima [2.6875,.8125,.8125,3.3125,.8125] Nm inform scale,
+# but estimates do NOT certify these bounds or identify torque gain.

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Read-only host evidence and complete-loop timing for G1 field MPC.
 
-This module never initializes DDS, changes scheduler/governor settings, or
-contacts a robot. ``--check`` reports the *calling process* and kernel, not an
-unobservable robot process or the scheduler policy of another terminal.
+This module never initializes DDS or contacts a robot. ``--check`` is read-only
+and reports the calling process. ControlThreadScope is an explicit opt-in
+thread affinity/scheduler scope; it never changes system governors or boot
+settings and restores the caller's original thread settings.
 """
 
 from __future__ import annotations
@@ -16,6 +17,55 @@ from pathlib import Path
 import platform
 import resource
 import statistics
+
+
+class ControlThreadScope:
+    """Separate worker affinity from control; opt-in FIFO on control only.
+
+    Does not change governors, IRQs or boot configuration. No root/privilege
+    escalation: an unavailable requested RT priority fails before output.
+    """
+    def __init__(self, cpu, rt_priority=0):
+        self.cpu = select_cpu(cpu)
+        self.priority = int(rt_priority)
+        if not 0 <= self.priority <= 40:
+            raise ValueError('RT priority must be 0 (ordinary) or 1..40')
+        self.affinity = set(os.sched_getaffinity(0))
+        self.policy = os.sched_getscheduler(0)
+        self.param = os.sched_getparam(0)
+        self.prepared = False
+
+    def prepare_workers(self):
+        if self.priority:
+            # Probe and immediately restore on this thread BEFORE workers or
+            # DDS exist, so they never accidentally inherit FIFO priority.
+            try:
+                os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(self.priority))
+            except PermissionError as exc:
+                raise RuntimeError('FIFO permission unavailable; in the launching terminal run '
+                                   '`sudo prlimit --pid $$ --rtprio=40:40` first') from exc
+            finally:
+                os.sched_setscheduler(0, self.policy, self.param)
+        from realtime_environment import parse_cpu_list
+        siblings = parse_cpu_list(_read(f'/sys/devices/system/cpu/cpu{self.cpu}/topology/thread_siblings_list'))
+        housekeeping = self.affinity - siblings - {self.cpu}
+        if not housekeeping:
+            raise ValueError('need housekeeping CPUs too; do not taskset the whole process to one CPU')
+        os.sched_setaffinity(0, housekeeping)
+        self.prepared = True
+        return sorted(housekeeping)
+
+    def activate(self):
+        if not self.prepared:
+            raise RuntimeError('prepare worker affinity before starting control')
+        os.sched_setaffinity(0, {self.cpu})
+        if self.priority:
+            os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(self.priority))
+        return host_evidence(self.cpu)
+
+    def restore(self):
+        os.sched_setscheduler(0, self.policy, self.param)
+        os.sched_setaffinity(0, self.affinity)
 
 
 def _read(path):
@@ -65,6 +115,8 @@ def host_evidence(cpu=None):
         "energy_performance_preference": _read(base / "cpufreq/energy_performance_preference"),
         "frequency_khz_snapshot": _read(base / "cpufreq/scaling_cur_freq"),
         "platform_profile": _read("/sys/firmware/acpi/platform_profile"),
+        "isolated_cpus": _read("/sys/devices/system/cpu/isolated"),
+        "nohz_full_cpus": _read("/sys/devices/system/cpu/nohz_full"),
         "rt_priority_limits": list(resource.getrlimit(resource.RLIMIT_RTPRIO)),
         "memlock_bytes_limits": list(resource.getrlimit(resource.RLIMIT_MEMLOCK)),
         "capabilities": capabilities,

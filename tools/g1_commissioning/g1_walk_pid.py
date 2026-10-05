@@ -303,6 +303,9 @@ def load_pid_parameters(config_path: Path, profile):
 
 
 class Journal:
+    snapshot = staticmethod(json_safe)
+    format_row = staticmethod(lambda row: json.dumps(row, allow_nan=False, separators=(",", ":")) + "\n")
+
     def __init__(self, output_dir: Path):
         output_dir.mkdir(parents=True, exist_ok=False)
         self.output_dir = output_dir
@@ -319,8 +322,9 @@ class Journal:
         self._thread.start()
 
     def record(self, row):
-        row = json_safe(dict(row))
+        row = dict(row)
         row.setdefault("monotonic_ns", monotonic_ns())
+        row = self.snapshot(row)
         with self._state_lock:
             if self._closing.is_set():
                 self.dropped += 1
@@ -350,7 +354,7 @@ class Journal:
                             break
                     continue
                 try:
-                    self._stream.write(json.dumps(row, allow_nan=False, separators=(",", ":")) + "\n")
+                    self._stream.write(self.format_row(row))
                     self.written += 1
                 finally:
                     self._queue.task_done()
@@ -677,7 +681,10 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     """
     if runtime is not None and (getattr(runtime, "actuation", "reference_servo") != "reference_servo"
                                 or getattr(runtime.controller, "offline_only", False)):
-        raise ValueError("offline-only torque candidate cannot enter run_device")
+        authorize = getattr(runtime, 'validate_field_entry', None)
+        if authorize is None:
+            raise ValueError("offline-only torque candidate cannot enter run_device")
+        authorize()
     controller_label = "PID" if runtime is None else "MPC"
     # Delayed imports: reaching this point still has not initialized DDS.
     import unitree_sdk2py
@@ -782,7 +789,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     previous_sigint = previous_sigterm = None
 
     def make_message(frame, state):
-        if runtime is not None:
+        if runtime is not None and hasattr(runtime, 'make_message'):
             return runtime.make_message(frame, state, unitree_hg_msg_dds__LowCmd_, crc)
         return make_arm_message(frame, state, unitree_hg_msg_dds__LowCmd_, crc)
 
@@ -908,6 +915,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     "completed": False,
                     "reason": "DDS write failed during release",
                 }
+            if runtime is not None and hasattr(runtime, 'accept_packet'):
+                runtime.accept_packet(frame, message)
             if terminal:
                 return {
                     "attempted": True,
@@ -965,6 +974,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             )
         else:
             plan = runtime.create_plan(_arm_slots(initial), profile)
+            journal.record({'schema':'g1_mpc_event_v1','event':'prepared_field_plan',
+                            'core':getattr(runtime.controller,'metadata',{})})
         # Publisher creation occurs only after both state gates and typed confirmation.
         publisher = ChannelPublisher("rt/arm_sdk", LowCmd_)
         publisher.Init()
@@ -1067,7 +1078,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
 
         velocity_thread = threading.Thread(target=velocity_worker, name="pid_velocity", daemon=True)
         velocity_thread.start()
-        scheduling = pin_control_thread(args.cpu)
+        scheduling = (runtime.enter_control_thread(args.cpu)
+                      if runtime is not None and hasattr(runtime, 'enter_control_thread')
+                      else pin_control_thread(args.cpu))
         journal.record({"schema": "g1_pid_event_v1", "event": "control_runtime", **scheduling})
         clock = PeriodicClock(monotonic_ns(), CONTROL_PERIOD_S)
         last_iteration_ns = None
@@ -1114,7 +1127,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             yaw0 = heading["reference_rad"] if heading["reference_frozen"] else 0.0
             controller_begin_ns = monotonic_ns()
             if runtime is not None and abort_start_s is None and task_s < RELEASE_START_S:
-                runtime.prepare(loop_begin_ns, low, imu, yaw0, task_s,
+                runtime.prepare(monotonic_ns(), low, imu, yaw0, task_s,
                                 heading_frozen=heading["reference_frozen"])
             if abort_start_s is None:
                 if task_s < RELEASE_START_S:
@@ -1172,10 +1185,13 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                         release_task_s = (
                             RELEASE_START_S + task_s - normal_release_start_s
                         )
-                        frame = plan.sample(
-                            release_task_s, _arm_slots(low), _arm_dq(low),
-                            imu.quaternion, yaw0, actual_dt,
-                        )
+                        if runtime is not None and getattr(runtime, 'field_trial', False):
+                            frame = runtime.release_frame(task_s-normal_release_start_s)
+                        else:
+                            frame = plan.sample(
+                                release_task_s, _arm_slots(low), _arm_dq(low),
+                                imu.quaternion, yaw0, actual_dt,
+                            )
                         frame["diagnostics"] = {
                             **frame["diagnostics"],
                             "normal_release_elapsed_s": (
@@ -1249,6 +1265,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             prewrite_check_ns = monotonic_ns()
             if failure or prewrite_check_ns - min(low.received_ns, imu.received_ns) > STATE_TIMEOUT_NS:
                 raise RuntimeError(failure or "selected feedback stale before write")
+            if runtime is not None and hasattr(runtime, 'check_before_write'):
+                runtime.check_before_write(frame, low, imu, loop_begin_ns, prewrite_check_ns)
             write_begin_ns = monotonic_ns()
             try:
                 ok = bool(publisher.Write(message))
@@ -1258,6 +1276,20 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             write_end_ns = monotonic_ns()
             if not ok:
                 publisher_transport_failed = True
+            else:
+                # Latch the successfully sent command BEFORE logging or other
+                # fallible bookkeeping. A logging error must not hand back from
+                # a stale command after a newer one has already left the host.
+                last_frame = {
+                    'q_rad':np.asarray(frame['q_rad'],dtype=float).copy(),
+                    'dq_rad_s':np.asarray(frame['dq_rad_s'],dtype=float).copy(),
+                    'kp':np.asarray(frame['kp'],dtype=float).copy(),
+                    'kd':np.asarray(frame['kd'],dtype=float).copy(),
+                    'weight':float(frame['weight']),
+                }
+                last_state = low
+                if runtime is not None and hasattr(runtime,'accept_packet'):
+                    runtime.accept_packet(frame,message)
             sequence += 1
             journal.record({
                 "schema": "g1_hardware_pid_command_v1", "event": "dds_write" if ok else "dds_write_failed",
@@ -1284,14 +1316,6 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             })
             if not ok:
                 raise RuntimeError("arm DDS write failed")
-            last_frame = {
-                "q_rad": np.asarray(frame["q_rad"], dtype=float).copy(),
-                "dq_rad_s": np.asarray(frame["dq_rad_s"], dtype=float).copy(),
-                "kp": np.asarray(frame["kp"], dtype=float).copy(),
-                "kd": np.asarray(frame["kd"], dtype=float).copy(),
-                "weight": float(frame["weight"]),
-            }
-            last_state = low
             work_end_ns = monotonic_ns()
             scheduled_ns = clock.scheduled_ns
             skipped_slots = clock.advance(work_end_ns)

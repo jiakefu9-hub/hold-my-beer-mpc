@@ -46,8 +46,9 @@ class Clock:
 
 
 class Harness:
-    def __init__(self, failure=None, stationary=False):
+    def __init__(self, failure=None, stationary=False, torque=False):
         self.clock, self.failure, self.stationary = Clock(), failure, stationary
+        self.torque = torque
         self.rows, self.writes, self.velocities, self.closed, self.registrations = [], [], [], [], []
         self.factory_calls = self.publisher_count = 0
         self.epoch = None
@@ -99,6 +100,40 @@ class Harness:
         class Runtime:
             stationary = harness.stationary
             controller = Controller()
+            actuation = 'measured_torque_preview' if harness.torque else 'reference_servo'
+            field_trial = harness.torque
+
+            def __init__(self):
+                from hardware_mpc_field import TorqueHandback
+                self.handback = TorqueHandback()
+
+            def validate_field_entry(self):
+                assert harness.torque
+
+            def release_frame(self, elapsed_s):
+                return self.handback.normal_release(elapsed_s)
+
+            def accept_packet(self, frame, packet):
+                if harness.torque:
+                    self.handback.accept(packet)
+
+            def make_message(self, frame, low, constructor, crc):
+                if not harness.torque:
+                    return runner.make_arm_message(frame,low,constructor,crc)
+                if ('stage' not in frame or frame['stage'] in
+                        {'normal_stop_wait','operator_stop_wait','operator_arm_release'}):
+                    self.handback.apply(frame)
+                elif not frame.get('diagnostics',{}).get('torque_handover'):
+                    frame['diagnostics'].update(controller_kind=self.actuation,
+                        tau_ff_candidate_nm=[-1.]*5 if frame['weight']>0 else [0.]*5)
+                motors=[SimpleNamespace(q=0.,dq=0.,kp=0.,kd=0.,tau=0.) for _ in range(35)]
+                for slot,i in enumerate(ARM_MOTOR_INDICES):
+                    for attr,key in (('q','q_rad'),('dq','dq_rad_s'),('kp','kp'),('kd','kd')):
+                        setattr(motors[i],attr,float(frame[key][slot]))
+                for j,i in enumerate(range(22,27)):
+                    motors[i].tau=frame['diagnostics']['tau_ff_candidate_nm'][j]
+                motors[29].q=frame['weight']
+                return SimpleNamespace(frame=frame,motor_cmd=motors,mode_pr=0,mode_machine=4,crc=0)
 
             def create_plan(self, initial, profile):
                 return HardwarePidPlan(initial, profile["target_q_array"],
@@ -268,6 +303,7 @@ class Harness:
                 mock.patch.object(runner, "Streams", self.stream_class()),
                 mock.patch.object(runner, "PeriodicClock", FastPeriodicClock),
                 mock.patch.object(runner, "make_arm_message", packet),
+                mock.patch.object(runner, "execution_evidence", return_value={}),
                 mock.patch.object(runner, "pin_control_thread", return_value={"test_fake_affinity": True}),
                 mock.patch.object(runner.os, "sched_setaffinity"),
                 mock.patch.object(runner, "close_sdk_endpoint", side_effect=lambda e,k: self.closed.append(e.topic) or "already_closed"),
@@ -312,6 +348,21 @@ class FieldRunnerTest(unittest.TestCase):
                     self.assertTrue(any(5 <= t < 15 and v[0] == .5 for t,v in h.velocities))
                     self.assertTrue(all(v[0] == 0 for t,v in h.velocities if t >= 15))
                 self.assertEqual(h.velocities[-1][1], [0.,0.,0.])
+
+    def test_nonzero_torque_normal_fault_operator_and_remote_handover(self):
+        for failure, code in ((None,0),('compute',3),('operator',130),('remote',3)):
+            with self.subTest(failure=failure):
+                h=Harness(failure,stationary=True,torque=True)
+                self.assertEqual(h.run(),code)
+                if failure=='remote':
+                    self.assertLess(h.writes[-1]['stamp'],h.injected_at)
+                    continue
+                self.assert_gradual_release(h)
+                release=[r for r in h.writes if r.get('diagnostics',{}).get('torque_handover')]
+                self.assertGreater(len(release),400)
+                for r in release:
+                    expected=-1. if r['weight']>0 else 0.
+                    np.testing.assert_allclose(r['diagnostics']['tau_ff_candidate_nm'],expected)
 
     def test_mpc_compute_failure_and_operator_stop_release(self):
         for failure, code in (("compute",3),("operator",130)):

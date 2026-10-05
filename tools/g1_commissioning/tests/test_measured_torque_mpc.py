@@ -25,6 +25,38 @@ def horizon():
 
 
 class MapperTest(unittest.TestCase):
+    def test_exact_affine_gain_preserves_selection_and_forward_checks(self):
+        mapper = LocalTorqueMapper(load_torque_config())
+        rng = np.random.default_rng(51026)
+        for k in range(60):
+            a = rng.normal(size=(5,5))
+            mass = a@a.T*.05 + np.eye(5)*.02
+            gain = np.linalg.inv(mass)
+            bias = rng.normal(size=5)
+            forward = lambda tau: gain@(tau-bias)
+            desired = rng.uniform(-8,8,5)
+            nominal = mass@desired+bias+rng.normal(size=5)*.1
+            bounds = (-np.ones(5)*4, np.ones(5)*4)
+            if k % 3 == 0:
+                bounds[0][4] = bounds[1][4] = bias[4]
+            options = dict(previous=bias, bounds=bounds)
+            try:
+                expected, old = mapper.compute(forward,desired,nominal,bias,**options)
+            except NoModelTorque:
+                with self.assertRaises(NoModelTorque):
+                    mapper.compute(forward,desired,nominal,bias,affine_gain=gain,**options)
+                continue
+            result,new = mapper.compute(forward,desired,nominal,bias,affine_gain=gain,**options)
+            np.testing.assert_allclose(result,expected,atol=1e-10,rtol=0)
+            self.assertEqual(old['fallback'],new['fallback'])
+            self.assertEqual(len(old['passes']),len(new['passes']))
+            np.testing.assert_allclose(new['checked_ddq_rad_s2'],forward(result),atol=1e-10)
+            self.assertLess(new['forward_calls'],old['forward_calls'])
+            batched, trace = mapper.compute(forward,desired,nominal,bias,affine_gain=gain,
+                forward_batch=lambda taus:(taus-bias)@gain.T,**options)
+            np.testing.assert_allclose(batched,expected,atol=1e-10,rtol=0)
+            self.assertEqual(trace['fallback'],old['fallback'])
+
     def test_original_simulation_mapper_agrees_on_same_mujoco_forward_model(self):
         import mujoco
         from endpoint_pose import EndpointModel

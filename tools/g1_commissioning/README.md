@@ -20,7 +20,7 @@ the detailed staged procedure is in [RUNBOOK.md](../../docs/g1_field_validation/
 | `g1_phase_probe` | no | torso IMU + LowState + FSM/phase getters | 30-second raw observer; no motion/mode output |
 | `g1_walk_capture` | no | raw subscribers + getters + arm publisher + velocity RPC | separate opt-in 21-second arm/forward-walk capture; no mode setter |
 | `g1_walk_pid.py` | separate Python entry | raw subscribers + FSM getter + arm publisher + velocity RPC | fixed-left/right-PID 21-second H0 experiment; no mode setter or `rt/lowcmd` |
-| `g1_walk_mpc.py` | separate Python entry; measured-state torque preflight by default | torque previews have no network; legacy servo requires explicit `--actuation reference_servo --execute` | fixed-left/right-MPC; no mode setter or `rt/lowcmd` |
+| `g1_walk_mpc.py` | separate Python entry; measured-state torque preflight by default | explicit bounded first-torque trial; stationary before walk; legacy servo has no field entry | fixed-left/right-MPC; no mode setter or `rt/lowcmd` |
 
 All networked C++ targets are opt-in at CMake configure time. Merely running the
 A2 executable without its complete arguments exits before DDS initialization.
@@ -33,13 +33,17 @@ The [hardware MPC guide](../../docs/g1_field_validation/HARDWARE_MPC.md) maps th
 Its 45-input QP is an exact condensation of the simulation objective. The current
 [measured-state torque migration](../../docs/g1_field_validation/HARDWARE_MPC_TORQUE_MIGRATION.md)
 adds inverse dynamics and locally corrected, forward-checked torque candidates.
-It remains offline-only: mismatch/delay stress and full 6 ms timing are not passed.
-The old persistent-reference servo and nominal inverse preview remain explicit comparisons.
+Current evidence is still offline: an explicit controlled first-torque entry is
+implemented, not a claim of hardware performance or hard real-time acceptance.
+The old persistent-reference servo and nominal inverse preview remain offline comparisons.
 The hardware candidate uses DAQP 0.9.1 (pinned in `requirements-hardware-mpc.txt`);
 the simulation's OSQP implementation is unchanged. Runtime forecasts use a tracked
 6.7 MB frozen bank, not ignored research recordings or online model training.
 `build_hardware_mpc.sh` only builds local kinematics; `--preflight` initializes no DDS.
-The 6 ms PID must be field-revalidated first. PID now supports explicit one-run
+The bounded native delay loop is built separately in
+[`cpp/g1_arm_delay`](../../cpp/g1_arm_delay/README.md); the field path rejects a missing/stale library.
+The 6 ms PID passed a functional field trial on 2026-10-05, with 0.934% missed
+deadlines, and is frozen as the baseline. PID supports explicit one-run
 `--allow-first-6ms-field-trial` without source editing; missing opt-in remains locked.
 
 The query uses small `Client` subclasses which register only getter IDs. It does

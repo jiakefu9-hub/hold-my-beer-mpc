@@ -37,7 +37,8 @@ class LocalTorqueMapper:
                 or not 0 <= self.rescue_passes <= 2):
             raise ValueError("invalid bounded mapper configuration")
 
-    def compute(self, forward, desired, nominal, safe_hold, previous=None, bounds=None):
+    def compute(self, forward, desired, nominal, safe_hold, previous=None, bounds=None,
+                *, affine_gain=None, forward_batch=None):
         started = time.perf_counter_ns()
         desired = finite_vector(desired, 5, "desired acceleration")
         lower, upper = -self.limit, self.limit
@@ -46,9 +47,14 @@ class LocalTorqueMapper:
             upper = np.minimum(upper, finite_vector(bounds[1], 5, "torque upper"))
         if np.any(lower > upper):
             raise ValueError("empty torque envelope")
+        if affine_gain is not None:
+            affine_gain = np.asarray(affine_gain, dtype=float)
+            if affine_gain.shape != (5, 5) or not np.isfinite(affine_gain).all():
+                raise ValueError("invalid exact affine forward gain")
         clip = lambda value: np.clip(finite_vector(value, 5, "torque"), lower, upper)
         trace = {"acceptance": "forward_model_only", "hardware_certified": False,
-                 "passes": [], "fallback": None, "forward_calls": 0}
+                 "passes": [], "fallback": None, "forward_calls": 0,
+                 "gain_source": "finite_difference" if affine_gain is None else "exact_conditional_mass_inverse"}
 
         def evaluate(torque):
             trace["forward_calls"] += 1
@@ -64,6 +70,12 @@ class LocalTorqueMapper:
         trace["nominal_tau_nm"] = best_tau.tolist()
         trace["nominal_ddq_rad_s2"] = best_acc.tolist()
         trace["nominal_error_norm"] = best_error
+        affine_dls = None
+        if affine_gain is not None:
+            affine_gain = affine_gain.copy()
+            affine_gain[:, upper-lower <= 1e-12] = 0.
+            u, singular, vt = np.linalg.svd(affine_gain)
+            affine_dls = (vt.T*(singular/(singular**2+self.reg)))@u.T
         # First pass; optional second pass; bounded acceleration-limit rescue.
         for pass_index in range(2+self.rescue_passes):
             if pass_index == 1 and safe(best_acc) and best_max <= self.error_limit and best_error <= self.second_threshold:
@@ -71,34 +83,52 @@ class LocalTorqueMapper:
             if pass_index >= 2 and safe(best_acc):
                 break
             base_tau, base_acc = best_tau.copy(), best_acc.copy()
-            gain = np.zeros((5, 5))
-            for j in range(5):
-                delta = min(self.epsilon, upper[j]-base_tau[j])
-                if delta <= 1e-12:
-                    delta = -min(self.epsilon, base_tau[j]-lower[j])
-                if abs(delta) > 1e-12:
-                    perturbed = base_tau.copy(); perturbed[j] += delta
-                    gain[:, j] = (evaluate(perturbed)[0]-base_acc)/delta
-            u, singular, vt = np.linalg.svd(gain)
-            # Same lambda convention as the simulation mapper: s/(s²+lambda).
-            correction = vt.T @ ((singular/(singular**2+self.reg)) * (u.T @ (desired-base_acc)))
+            if affine_gain is not None:
+                # This shortcut is valid ONLY for the caller's exact affine
+                # conditional arm model. Candidates still run through forward.
+                gain = affine_gain.copy()
+                gain[:, upper-lower <= 1e-12] = 0.
+            else:
+                gain = np.zeros((5, 5))
+                for j in range(5):
+                    delta = min(self.epsilon, upper[j]-base_tau[j])
+                    if delta <= 1e-12:
+                        delta = -min(self.epsilon, base_tau[j]-lower[j])
+                    if abs(delta) > 1e-12:
+                        perturbed = base_tau.copy(); perturbed[j] += delta
+                        gain[:, j] = (evaluate(perturbed)[0]-base_acc)/delta
+            if affine_dls is not None:
+                correction = affine_dls@(desired-base_acc)
+            else:
+                u, singular, vt = np.linalg.svd(gain)
+                # Same lambda convention as the simulation mapper: s/(s²+lambda).
+                correction = vt.T @ ((singular/(singular**2+self.reg)) * (u.T @ (desired-base_acc)))
             candidates = []
-            for scale in self.scales:
-                torque = clip(base_tau+scale*correction)
-                prediction = base_acc+gain@(torque-base_tau)
-                error = prediction-desired
-                candidates.append({"scale": float(scale), "tau_nm": torque,
-                    "predicted_ddq_rad_s2": prediction,
-                    "rank": (not (safe(prediction) and np.max(np.abs(error)) <= self.error_limit),
-                             float(np.linalg.norm(error)))})
-            candidates.sort(key=lambda row: row["rank"])
+            taus = np.clip(base_tau+self.scales[:,None]*correction, lower, upper)
+            predictions = base_acc+(taus-base_tau)@gain.T
+            predicted_errors = predictions-desired
+            ranks = np.linalg.norm(predicted_errors,axis=1)
+            not_safe = ((np.max(np.abs(predictions),axis=1)>self.acc_limit+1e-9)
+                        | (np.max(np.abs(predicted_errors),axis=1)>self.error_limit))
+            order = np.lexsort((np.arange(len(self.scales)),ranks,not_safe))
+            for index in order:
+                candidates.append({'scale':float(self.scales[index]),'tau_nm':taus[index],
+                                   'predicted_ddq_rad_s2':predictions[index]})
             record = {"gain_rad_s2_per_nm": gain.tolist(), "candidates": [], "selected_scale": 0.}
             # Include an already-good nominal in the selection; never worsen it
             # simply to claim that a nonzero correction was applied.
             evaluated = [(best_tau, best_acc, best_error, best_max, 0.)]
             strict_count = 0
-            for candidate in candidates:
-                acc, error, maximum = evaluate(candidate["tau_nm"])
+            if forward_batch is not None:
+                batch = np.asarray(forward_batch(np.asarray([x['tau_nm'] for x in candidates])),dtype=float)
+                if batch.shape != (len(candidates),5) or not np.isfinite(batch).all():
+                    raise ValueError('invalid batch forward-model accelerations')
+                trace['forward_calls'] += len(candidates)
+                errors = np.linalg.norm(batch-desired,axis=1)
+                maxima = np.max(np.abs(batch-desired),axis=1)
+            for index, candidate in enumerate(candidates):
+                acc, error, maximum = (evaluate(candidate["tau_nm"]) if forward_batch is None
+                                       else (batch[index],float(errors[index]),float(maxima[index])))
                 improves = error < best_error-1e-12
                 strict = improves and safe(acc) and maximum <= self.error_limit
                 strict_count += int(strict)

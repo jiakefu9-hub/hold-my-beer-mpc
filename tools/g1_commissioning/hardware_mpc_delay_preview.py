@@ -122,6 +122,13 @@ class CommandHistory:
             timeline.append((current,dt,active));current+=dt
             if len(timeline)>40:raise HardwareMpcError('delay prediction too long')
         bases=clock.at_many([row[0]-forecast_s for row in timeline]) if timeline else ()
+        native = getattr(self,'native',None)
+        if native is not None and timeline:
+            q,dq=native.predict(q,dq,timeline,bases,self.torque_config,self.mapper.limit)
+            return q,dq,dict(prediction_steps=len(timeline),observation_age_s=now-observed,
+                target_minus_observation_s=target-observed,command_time_s=target,
+                observed_s=observed,now_s=now,forecast_s=forecast_s,
+                issued_history_size=len(self._issued),propagation_backend='native_mujoco')
         initial=None;initial_dynamics=None
         if timeline and timeline[0][2] is None:
             # Only reconstruct startup hold when it is actually used. Reuse
