@@ -20,11 +20,12 @@ for name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
 
 import numpy as np
 from g1_walk_mpc import MpcRuntime, MpcJournal
-from g1_walk_pid import EXPECTED_TARGET_Q, make_arm_message
+from g1_walk_pid import EXPECTED_TARGET_Q
 from hardware_pid_control import ARM_MOTOR_INDICES, FixedH0Heading, vertical_angular_rate, yaw_from_quaternion
 from pid_timing import PeriodicClock, pin_control_thread
 from mpc_host import host_evidence, summarize_timing
 from hardware_mpc_control import json_values
+from arm_execution_record import command_evidence
 
 
 def source_data(path):
@@ -46,7 +47,7 @@ def source_data(path):
                 low=np.zeros((len(t), 5))), None
 
 
-def run_once(source, output, cpu, predictor, actuation="reference_servo", torque_config=None,
+def run_once(source, output, cpu, predictor, actuation="measured_torque_preview", torque_config=None,
              assumed_command_delay_s=None, observation_delay_s=0.):
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
@@ -54,13 +55,6 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
         raise ValueError('offline observation delay must be 0..20ms')
     runtime = MpcRuntime(predictor_mode=predictor, actuation=actuation, torque_config=torque_config,
                          assumed_command_delay_s=assumed_command_delay_s)
-    packet_builder = make_arm_message
-    if actuation == "inverse_dynamics_preview":
-        from hardware_mpc_inverse_preview import make_offline_preview_message
-        packet_builder = make_offline_preview_message
-    elif actuation == "measured_torque_preview":
-        from hardware_mpc_torque_control import make_torque_preview_message
-        packet_builder = make_torque_preview_message
     journal = MpcJournal(output)
     runtime.journal = journal
     source_hashes = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
@@ -70,7 +64,7 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
                                   "hardware_mpc_inverse_preview.py", "hardware_arm_inverse_dynamics.py",
                                   "hardware_mpc_torque_control.py", "hardware_torque_mapper.py",
                                   "hardware_mpc_recovery.py","hardware_mpc_delay_preview.py",
-                                  "hardware_mpc_delay_plan.py")}
+                                  "hardware_mpc_delay_plan.py", "arm_execution_record.py")}
     model_hash = None if runtime.predictor.bank is None else runtime.predictor.bank.manifest["bank_sha256"]
     affinity = set(os.sched_getaffinity(0))
     heading, yaw0 = FixedH0Heading(), 0.
@@ -133,8 +127,8 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
             frame = plan.sample(task_s, low[list(ARM_MOTOR_INDICES)],
                 source["dq"][selected_low, list(ARM_MOTOR_INDICES)], imu[2:6], yaw0, dt)
             after_control = time.monotonic_ns()
-            packet = packet_builder(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
-                                    unitree_hg_msg_dds__LowCmd_, crc)
+            packet = runtime.make_message(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
+                                          unitree_hg_msg_dds__LowCmd_, crc)
             serialized=packet.serialize()
             if assumed_command_delay_s is not None:
                 # Record the float32 values carried by the actual local CDR,
@@ -151,7 +145,9 @@ def run_once(source, output, cpu, predictor, actuation="reference_servo", torque
                 "offline_packet_right_q_rad": [packet.motor_cmd[i].q for i in range(22,27)],
                 "offline_packet_right_dq_rad_s": [packet.motor_cmd[i].dq for i in range(22,27)],
                 "offline_packet_weight": float(packet.motor_cmd[29].q),
-                "packet_crc": int(packet.crc), **frame["diagnostics"]})
+                "packet_crc": int(packet.crc), **frame["diagnostics"],
+                **command_evidence(packet, SimpleNamespace(crc_valid=True)),
+                "physical_feedback_available": False})
             row = dict(sequence=sequence, task_elapsed_s=task_s, stage=frame["stage"],
                 actual_period_ms=None if previous is None else dt * 1000,
                 wake_lateness_ms=(begin-clock.scheduled_ns)*1e-6,
@@ -223,7 +219,7 @@ def main():
     parser.add_argument("--cpu", type=int, default=2)
     parser.add_argument("--predictor", choices=("learned_filtered", "hold_current"), default="learned_filtered")
     parser.add_argument("--actuation", choices=("reference_servo", "inverse_dynamics_preview", "measured_torque_preview"),
-                        default="reference_servo")
+                        default="measured_torque_preview")
     args = parser.parse_args()
     if not 1 <= args.runs <= 10:
         parser.error("runs must be 1..10")

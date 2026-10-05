@@ -10,11 +10,15 @@
 后续已接入[完整离线任务与计时](HARDWARE_MPC_ROBUSTNESS.md#6-09-29完整离线任务集成)：整链平均约 8.5–8.7 ms，
 6 ms 截止时间仍未通过，不能直接上机。真实执行时延和力矩响应留待现场辨识，不用离线假设代替。
 
+**2026-10-05：按用户要求，首次真实 MPC 只采用力矩路线。旧位置参考版的 `--execute`
+已关闭，不再作为现场替代方案。** 补齐了命令包／反馈记录及[力矩和加速度执行效果分析](HARDWARE_MPC_EXECUTION.md)。
+这不表示新力矩版已经放行：6 ms 整链时间、非零前馈下故障退权、现场力矩边界仍未完成。
+
 | `--actuation` | 含义 | 真实输出 |
 | --- | --- | --- |
 | `measured_torque_preview`（CLI 默认） | 实测 q/dq 起点、一拍参考、逆动力学＋局部力矩候选评估 | 禁止 |
 | `inverse_dynamics_preview` | 早期参考轨迹＋名义逆动力学对照 | 禁止 |
-| `reference_servo` | 旧版持续参考轨迹＋固件 PD，tau_ff=0 | 保留显式入口，尚无 MPC 真机验证 |
+| `reference_servo` | 旧版持续参考轨迹＋固件 PD，tau_ff=0 | 禁止；只保留离线对照 |
 
 **下文第 1–7 节专门说明旧 `reference_servo` 基线，不是新迁移版的控制说明或运行授权。**
 当前开发按迁移文档推进；不能把旧版时间成绩套到新版上。6 ms PID 仍需单独实机复验。
@@ -22,11 +26,13 @@
 见[可靠性补充记录](sessions/20260928_MPC_ROBUSTNESS.md)。控制参数、动作范围和现场步骤不变。
 09-28 又新增[逆动力学力矩前馈离线候选](HARDWARE_MPC_INVERSE_DYNAMICS.md)：
 `--actuation inverse_dynamics_preview` 只计算／回放，不允许真实发送。
-本文后续真实输出命令显式选择原来的 `reference_servo`；不是力矩前馈版。
+旧真实输出命令现已撤下；不能绕到 `reference_servo` 代替力矩版试验。
 不需要先专门再采一批走路数据；新的 MPC 运行会同时保留预测输入、预测输出和真实反馈供检验。
 但是 MPC 改变了手臂运动，不能事先保证旧固定手臂数据训练的预测器在新闭环下仍有同样精度。
 
 ## 1. 到现场最重要的几件事
+
+以下是后续放行后的顺序，不是当前执行授权。当前 CLI 所有 MPC 路径均拒绝 `--execute`。
 
 1. 机器人已经双脚着地、在 FSM 500 自主平衡，当前没有其他用户程序控制手臂。
    网线和状态连接正常后，先按 [PID 文档](HARDWARE_PID.md) 完成一轮 6 ms PID 复验。
@@ -158,7 +164,7 @@ DAQP 的算法和参数依据：[官方实现](https://github.com/darnstrom/daqp
 ```bash
 cd /home/fjk/g1_ws/hold-my-beer-mpc
 conda activate g1_mpc
-python tools/g1_commissioning/g1_walk_mpc.py --preflight --actuation reference_servo --cpu 2
+python tools/g1_commissioning/g1_walk_mpc.py --preflight --cpu 2
 ```
 
 preflight 只检查本地模型、库、实际 QP、SDK 数据包／CRC；不创建 DDS participant 或 publisher。
@@ -172,21 +178,11 @@ preflight 只检查本地模型、库、实际 QP、SDK 数据包／CRC；不创
 保存为本地实验 profile；已有机型、映射、姿态信息可以引用之前记录，不需要重做 A0。
 但不能把未知项目批量填 true。MPC 参数／现场确认应是本轮真实确认。
 
-```bash
-# 只有实际完成 6 ms PID 复验后，才使用 --pid-6ms-validated。
-python tools/g1_commissioning/g1_walk_mpc.py enx6c1ff701509c \
-  --execute --actuation reference_servo --task stationary --cpu 2 \
-  --profile /path/to/reviewed_mpc_profile.conf \
-  --output-dir "evaluation/hardware_shadow/commissioning/mpc_static_$(date +%Y%m%d_%H%M%S)" \
-  --pid-6ms-validated --permit-real-output MPC_WALK_H0_CAPTURE
-```
-
-成功后，把 `--task stationary` 改成 `--task walk`，换一个新的输出目录，才是行走实验。
-`--pid-6ms-validated` 是操作者声明，不是程序伪造的验收证明。
+**目前不提供 MPC 真机执行命令。** 首次实验应是力矩版静止任务，不能把旧位置参考命令
+改几个参数就视为力矩版。6 ms PID 复验通过也不自动证明新力矩路径的时间和退出逻辑通过。
 默认不带 `--execute` 时始终只做离线检查；即使提供网卡也不会自动控制机器人。
-真实运行仍在新鲜状态检查后要求键入 `EXECUTE <robot_id>`，再次复查后才创建 publisher。
 
-结束后：
+后续取得实际执行记录后，瓶子指标仍使用下列分析；力矩／加速度对照另见执行分析文档：
 
 ```bash
 python tools/g1_commissioning/analyze_hardware_mpc.py /path/to/run/raw.jsonl \

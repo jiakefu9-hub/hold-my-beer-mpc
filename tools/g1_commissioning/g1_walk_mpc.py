@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline measured-state torque MPC; explicit opt-in legacy reference servo.
+"""Measured-state torque MPC development; legacy servo is offline comparison only.
 
 See docs/g1_field_validation/HARDWARE_MPC.md. The default command performs a
 local preflight only. Neither mode changes nor rt/lowcmd are implemented.
@@ -46,7 +46,7 @@ class MpcJournal(Journal):
 class MpcRuntime:
     def __init__(self, config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                  predictor_mode="learned_filtered", bank_path=DEFAULT_BANK,
-                 stationary=False, journal=None, actuation="reference_servo", torque_config=None,
+                 stationary=False, journal=None, actuation="measured_torque_preview", torque_config=None,
                  assumed_command_delay_s=None):
         from endpoint_pose import EndpointModel
         if actuation not in {"reference_servo", "inverse_dynamics_preview", "measured_torque_preview"}:
@@ -85,6 +85,22 @@ class MpcRuntime:
         self.controller.close()
         if self._gc_was_enabled:
             gc.enable()
+
+    def make_message(self, frame, state, constructor, crc):
+        """One packet path for preflight/replay/transport; no output authority.
+
+        Keeping transport behind its separate gate is essential: constructing
+        nonzero tau does not commission timing, torque bounds or fault release.
+        """
+        if self.actuation == "measured_torque_preview":
+            from hardware_mpc_torque_control import make_torque_preview_message
+            return make_torque_preview_message(frame, state, constructor, crc)
+        if self.actuation == "inverse_dynamics_preview":
+            from hardware_mpc_inverse_preview import make_offline_preview_message
+            return make_offline_preview_message(frame, state, constructor, crc)
+        if self.actuation == "reference_servo":
+            return make_arm_message(frame, state, constructor, crc)
+        raise ValueError("unknown MPC packet actuation")
 
     def observe_low(self, stamp, q, dq):
         accepted = self.predictor.observe_low(stamp, q, dq)
@@ -153,7 +169,7 @@ class MpcRuntime:
 
 def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
               mode="learned_filtered", bank=DEFAULT_BANK, cpu=None,
-              actuation="reference_servo", torque_config=None):
+              actuation="measured_torque_preview", torque_config=None):
     """Local libraries/model/real QP/IDL/CRC only; no DDS factory or endpoint."""
     from types import SimpleNamespace
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
@@ -173,15 +189,8 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                      kp=np.r_[np.full(11, 20), 0, 0], kd=np.r_[np.ones(11), 0, 0], weight=1.,
                      diagnostics=diag)
         frame["q_rad"][5:10], frame["dq_rad_s"][5:10] = qr, dqr
-        packet_builder = make_arm_message
-        if actuation == "inverse_dynamics_preview":
-            from hardware_mpc_inverse_preview import make_offline_preview_message
-            packet_builder = make_offline_preview_message
-        elif actuation == "measured_torque_preview":
-            from hardware_mpc_torque_control import make_torque_preview_message
-            packet_builder = make_torque_preview_message
-        packet = packet_builder(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
-                                unitree_hg_msg_dds__LowCmd_, CRC())
+        packet = runtime.make_message(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
+                                      unitree_hg_msg_dds__LowCmd_, CRC())
         serialized = packet.serialize()
         return json_values({"schema": "g1_hardware_mpc_preflight_v1", "passed": True,
             "dds_initialized": False, "publisher_created": False, "robot_connected": False,
@@ -189,7 +198,7 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
             "solver_status": diag["mpc"]["solver_status"], "serialized_bytes": len(serialized),
             "actuation": actuation,
             "offline_packet_right_tau_nm": [packet.motor_cmd[i].tau for i in range(22,27)],
-            "field_output_supported": actuation == "reference_servo",
+            "field_output_supported": False,
             "core": runtime.controller.metadata,
             "predictor_manifest": None if runtime.predictor.bank is None else runtime.predictor.bank.manifest,
             "limitations": "offline compatibility only; not a 6 ms field or closed-loop performance certificate"})
@@ -212,7 +221,7 @@ def build_parser():
     parser.add_argument("--predictor", choices=("learned_filtered", "hold_current"), default="learned_filtered")
     parser.add_argument("--actuation", choices=("reference_servo", "inverse_dynamics_preview", "measured_torque_preview"),
                         default="measured_torque_preview",
-                        help="default: measured-state torque migration, offline only; reference_servo is legacy")
+                        help="default: measured-state torque migration; all modes currently offline only")
     parser.add_argument("--cpu", type=int, default=2)
     parser.add_argument("--permit-real-output", choices=(PERMIT,))
     parser.add_argument("--pid-6ms-validated", action="store_true",
@@ -227,6 +236,9 @@ def main(argv=None):
         select_cpu(args.cpu)  # fail before subscribers/threads if CPU unavailable
         if args.preflight and args.execute:
             raise ValueError("--preflight and --execute are mutually exclusive")
+        if args.execute and args.actuation == "reference_servo":
+            raise ValueError("reference_servo is retired from field use; first hardware MPC must use "
+                             "the torque path, whose timing and fault release are not yet commissioned")
         if args.execute and args.actuation != "reference_servo":
             raise ValueError(f"{args.actuation} is offline-only; torque field output is not commissioned")
         if args.execute and args.torque_config is not None:

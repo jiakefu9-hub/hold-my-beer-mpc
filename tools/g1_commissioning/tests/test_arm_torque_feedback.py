@@ -50,5 +50,10 @@ class TorqueFeedbackTest(unittest.TestCase):
         for rows in fixtures:
             with self.assertRaisesRegex(ValueError,'no aligned'):self.read(rows)
 
+    def test_torque_candidate_without_sent_feedforward_is_not_zero(self):
+        rows=records(modern=True)
+        rows[2].update(controller_kind='measured_torque_preview', tau_ff_candidate_nm=[2.]*5)
+        with self.assertRaisesRegex(ValueError,'no aligned'):self.read(rows)
+
 
 if __name__=='__main__':unittest.main()

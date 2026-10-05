@@ -56,6 +56,7 @@ from hardware_pid_control import (
 )
 from endpoint_pose import EndpointModel
 from pid_timing import PeriodicClock, pin_control_thread, timing_summary
+from arm_execution_record import command_evidence as execution_evidence
 
 ROOT = Path(__file__).resolve().parents[2]
 PERMIT = "PID_WALK_H0_CAPTURE"
@@ -451,6 +452,8 @@ class LowSnapshot:
     q: np.ndarray
     dq: np.ndarray
     crc_valid: bool
+    tau_est: np.ndarray | None = None
+    ddq_raw: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -504,9 +507,12 @@ class Streams:
             pass
         q = np.asarray([float(motor.q) for motor in message.motor_state], dtype=float)
         dq = np.asarray([float(motor.dq) for motor in message.motor_state], dtype=float)
+        tau_est = np.asarray([float(motor.tau_est) for motor in message.motor_state], dtype=float)
+        ddq_raw = np.asarray([float(motor.ddq) for motor in message.motor_state], dtype=float)
         remote = [int(value) for value in message.wireless_remote]
         snapshot = LowSnapshot(now, self.low_sequence, int(message.tick),
-                               int(message.mode_pr), int(message.mode_machine), q, dq, crc_valid)
+                               int(message.mode_pr), int(message.mode_machine), q, dq, crc_valid,
+                               tau_est, ddq_raw)
         if crc_valid:
             self.interlock.observe_tick(message.tick)
             self.interlock.observe_remote(remote)
@@ -776,6 +782,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     previous_sigint = previous_sigterm = None
 
     def make_message(frame, state):
+        if runtime is not None:
+            return runtime.make_message(frame, state, unitree_hg_msg_dds__LowCmd_, crc)
         return make_arm_message(frame, state, unitree_hg_msg_dds__LowCmd_, crc)
 
     def fallback_weight_release(reason):
@@ -860,7 +868,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             attempted = True
             write_begin_ns = monotonic_ns()
             try:
-                ok = bool(publisher.Write(make_message(frame, low)))
+                message = make_message(frame, low)
+                ok = bool(publisher.Write(message))
             except Exception as exc:
                 publisher_transport_failed = True
                 return {
@@ -885,9 +894,13 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                 "dq_command_rad_s": frame["dq_rad_s"].tolist(),
                 "kp_command": frame["kp"].tolist(),
                 "kd_command": frame["kd"].tolist(),
+                "state_received_monotonic_ns": low.received_ns,
+                "q_measured_rad": _arm_slots(low).tolist(),
+                "dq_measured_rad_s": _arm_dq(low).tolist(),
                 "write_begin_monotonic_ns": write_begin_ns,
                 "write_end_monotonic_ns": write_end_ns,
                 "write_duration_us": (write_end_ns - write_begin_ns) * 1e-3,
+                **execution_evidence(message, low),
             })
             if not ok:
                 return {
@@ -1267,6 +1280,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                 "write_end_monotonic_ns": write_end_ns,
                 "write_duration_us": (write_end_ns - write_begin_ns) * 1e-3,
                 **frame["diagnostics"],
+                **execution_evidence(message, low),
             })
             if not ok:
                 raise RuntimeError("arm DDS write failed")

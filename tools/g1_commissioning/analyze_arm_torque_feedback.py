@@ -65,15 +65,17 @@ def read_samples(raw, stride=100):
                 q = np.array([motors[i]['q_rad'] for i in range(22,27)])
                 dq = np.array([motors[i]['dq_rad_s'] for i in range(22,27)])
                 tau = np.array([motors[i]['tau_est_nm'] for i in range(22,27)])
-                qref = np.array(command.get('q_target',command.get('q_command_rad')))[5:10]
-                dqref = np.array(command.get('dq_target',command.get('dq_command_rad_s')))[5:10]
-                kp = np.array(command.get('kp',command.get('kp_command')))[5:10]
-                kd = np.array(command.get('kd',command.get('kd_command')))[5:10]
-                # Current field PID/MPC schemas send tau=0; old A3/capture
-                # records include tau_ff explicitly. Do not assume unknowns.
+                qref = np.array(command.get('packet_q_rad',command.get('q_target',command.get('q_command_rad'))))[5:10]
+                dqref = np.array(command.get('packet_dq_rad_s',command.get('dq_target',command.get('dq_command_rad_s'))))[5:10]
+                kp = np.array(command.get('packet_kp',command.get('kp',command.get('kp_command'))))[5:10]
+                kd = np.array(command.get('packet_kd',command.get('kd',command.get('kd_command'))))[5:10]
+                # New commands carry packet tau explicitly. Only identified
+                # historical reference-servo schemas used implicit tau=0.
                 if 'tau_ff' in command:
                     ff=np.array(command['tau_ff'])[5:10]
-                elif command.get('schema') in {'g1_hardware_pid_command_v1','g1_hardware_mpc_command_v1'}:
+                elif (command.get('schema') in {'g1_hardware_pid_command_v1','g1_hardware_mpc_command_v1'}
+                      and command.get('controller_kind') in (None, 'pid', 'reference_servo')
+                      and 'tau_ff_candidate_nm' not in command):
                     ff=np.zeros(5)
                 else:
                     skipped += 1; continue
