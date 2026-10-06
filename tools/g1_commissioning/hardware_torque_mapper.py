@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 import numpy as np
+from scipy.optimize import lsq_linear
 
 from hardware_arm_inverse_dynamics import finite_vector
 
@@ -163,18 +164,48 @@ class LocalTorqueMapper:
                 hold_tau = clip(safe_hold)
                 acceleration, error, maximum = evaluate(hold_tau)
                 if not safe(acceleration):
-                    trace["model_accepted"] = False
-                    trace["elapsed_ms"] = (time.perf_counter_ns()-started)*1e-6
-                    raise NoModelTorque(trace)
-                selected = (hold_tau, acceleration, error, maximum)
-                trace["fallback"] = "hold_rechecked"
-                for scale in (.8, .6, .4, .2):
-                    torque = clip(hold_tau+scale*(best_tau-hold_tau))
-                    acceleration, error, maximum = evaluate(torque)
-                    if safe(acceleration):
-                        selected = torque, acceleration, error, maximum
-                        trace["fallback"] = "line_search_to_hold"
-                        break
+                    # Clipping an unconstrained correction can get stuck at a
+                    # box corner with coupled joints. Solve the bounded linear
+                    # problem only for the caller's exact affine model, after
+                    # the original candidates/previous/hold all fail. This is
+                    # still only a candidate; the supplied forward model must
+                    # independently accept it under the unchanged envelope.
+                    selected = None
+                    free = upper-lower > 1e-12
+                    if affine_gain is not None and np.any(free):
+                        rescue = {'attempted': True, 'max_iterations': 20}
+                        trace['bounded_affine_rescue'] = rescue
+                        try:
+                            result = lsq_linear(affine_gain[:,free], desired-best_acc,
+                                bounds=(lower[free]-best_tau[free],upper[free]-best_tau[free]),
+                                method='bvls',tol=1e-10,max_iter=20)
+                            rescue.update(solver_status=int(result.status),iterations=int(result.nit))
+                            if result.success and np.isfinite(result.x).all():
+                                torque=best_tau.copy();torque[free]+=result.x
+                                torque=clip(torque)
+                                acceleration,error,maximum=evaluate(torque)
+                                rescue.update(tau_nm=torque.tolist(),
+                                    checked_ddq_rad_s2=acceleration.tolist(),error_norm=error,
+                                    model_acceleration_within_limit=safe(acceleration))
+                                if safe(acceleration):
+                                    selected=torque,acceleration,error,maximum
+                                    trace['fallback']='bounded_affine_rechecked'
+                        except (ValueError,np.linalg.LinAlgError) as exc:
+                            rescue['failure']=str(exc)
+                    if selected is None:
+                        trace["model_accepted"] = False
+                        trace["elapsed_ms"] = (time.perf_counter_ns()-started)*1e-6
+                        raise NoModelTorque(trace)
+                else:
+                    selected = (hold_tau, acceleration, error, maximum)
+                    trace["fallback"] = "hold_rechecked"
+                    for scale in (.8, .6, .4, .2):
+                        torque = clip(hold_tau+scale*(best_tau-hold_tau))
+                        acceleration, error, maximum = evaluate(torque)
+                        if safe(acceleration):
+                            selected = torque, acceleration, error, maximum
+                            trace["fallback"] = "line_search_to_hold"
+                            break
                 best_tau, best_acc, best_error, best_max = selected
         trace.update(tau_total_nm=best_tau.tolist(), checked_ddq_rad_s2=best_acc.tolist(),
                      error_norm=best_error, max_joint_error=best_max,

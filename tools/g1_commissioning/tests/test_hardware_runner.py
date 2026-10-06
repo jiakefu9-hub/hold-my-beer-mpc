@@ -106,6 +106,21 @@ class Harness:
             def __init__(self):
                 from hardware_mpc_field import TorqueHandback
                 self.handback = TorqueHandback()
+                self.predictor = None
+                if harness.failure == 'startup_delay':
+                    from hardware_mpc_predictor import HardwareMpcPredictor
+                    self.predictor = HardwareMpcPredictor('hold_current')
+
+            def prepare_startup(self):
+                if self.predictor is not None:
+                    harness.clock.sleep(.120)  # slow pre-task GC
+                    assert harness.epoch is None
+
+            def enter_control_thread(self, cpu):
+                if self.predictor is not None:
+                    harness.clock.sleep(.120)  # affinity / host evidence
+                    harness.clock.monotonic_ns()  # refresh fake subscriber clock
+                return {'test_fake_affinity': True}
 
             def validate_field_entry(self):
                 assert harness.torque
@@ -141,8 +156,22 @@ class Harness:
 
             def set_epoch(self, epoch):
                 harness.epoch = epoch
+                if self.predictor is not None:
+                    self.predictor.set_grid_origin(epoch)
+                    for t in range(epoch-500_000_000,epoch+1,2_000_000):
+                        self.predictor.observe_low(t,np.zeros(35),np.zeros(35))
+                        self.predictor.observe_imu(t,[1,0,0,0],[0,0,0],[0,0,9.81])
+                    self.predictor.query(epoch,0.,use_learned=False)
 
             def prepare(self, now, low, imu, yaw0, task_s, **kwargs):
+                if self.predictor is not None:
+                    self.predictor.observe_low(low.received_ns,low.q,low.dq)
+                    self.predictor.observe_imu(imu.received_ns,imu.quaternion,
+                                              imu.gyro,imu.accelerometer)
+                    self.predictor.query(min(low.received_ns,imu.received_ns),0.,use_learned=False)
+                    if task_s >= .1 and harness.injected_at is None:
+                        harness.injected_at = now
+                        harness.handlers[signal.SIGINT](None,None)
                 if task_s >= 6 and harness.injected_at is None:
                     harness.injected_at = now
                     if harness.failure == "compute":
@@ -231,6 +260,8 @@ class Harness:
 
             def _RegistApi(self, api, priority):
                 harness.registrations.append(api)
+                if api == 7105 and harness.failure == 'startup_delay':
+                    harness.clock.sleep(.120)  # slow RPC construction
                 if api == 7105 and harness.failure == "velocity_init":
                     raise RuntimeError("injected velocity client init failure")
 
@@ -322,6 +353,23 @@ class Harness:
 
 
 class FieldRunnerTest(unittest.TestCase):
+    def test_slow_startup_uses_fresh_predictor_epoch_before_first_write(self):
+        h=Harness('startup_delay',stationary=True,torque=True)
+        self.assertEqual(h.run(),130)
+        self.assertTrue(h.writes)
+        first_write=next(r for r in h.rows if r.get('event')=='dds_write')
+        # The three injected 120 ms pre-task stalls must not enter task time.
+        # Exact first-loop scheduling is intentionally not a wall-clock test:
+        # assert ramp semantics and a broad fresh-epoch bound instead.
+        self.assertLess(first_write['task_elapsed_s'],.1)
+        self.assertAlmostEqual(h.writes[0]['weight'],
+                               first_write['task_elapsed_s']/3.,places=10)
+        self.assertEqual(h.writes[-1]['weight'],0.)
+        self.assertFalse(any(r.get('event')=='session_fault' for r in h.rows))
+        self.assertTrue(all(v==[0.,0.,0.] for _,v in h.velocities))
+        events=[r.get('event') for r in h.rows]
+        self.assertLess(events.index('control_runtime'),events.index('task_epoch'))
+
     def assert_gradual_release(self, h):
         frames = [r for r in h.rows if r.get("event") == "dds_write" and (
             "release" in r.get("stage", "") or r.get("stage") in {"arm_ramp_out", "complete"})]

@@ -25,6 +25,47 @@ def horizon():
 
 
 class MapperTest(unittest.TestCase):
+    def test_recorded_first_field_handoff_coupled_box_corner(self):
+        # 20261005_171958/raw.jsonl controller_fault_detail, SHA256
+        # 07d880fa9cb43db31dc8455ce16a3cfdd701f440ea3582e85b04ffd384451500.
+        # Small numerical fixture so the regression does not need private logs.
+        gain=np.array([
+            [10.543992296355917,.5070436354703894,1.8102747667561967,-8.906744321431395,.25660562108964324],
+            [.5070436354703892,18.523630793167854,-12.06383147240341,-.2170879623557312,-2.036694183251021],
+            [1.810274766756197,-12.06383147240341,24.930405590151967,-1.6410050591366279,1.51755453823904],
+            [-8.906744321431393,-.2170879623557312,-1.6410050591366274,26.270813514391495,3.8742305409601565],
+            [.2566056210896436,-2.0366941832510213,1.5175545382390405,3.8742305409601556,88.79495488173727]])
+        nominal=np.array([-2.45057494213625,-.13748570620471284,-.18866198982861598,-2.538244571443085,.17137621777230855])
+        acceleration=np.array([-.9696111520868819,2.6110485877606733,-4.160839385592694,-11.767868318391157,4.855252472760707])
+        previous=np.array([-2.7505749421362498,.10251429379528715,-.008661989828615997,-2.838244571443085,.29137621777230854])
+        desired=np.array([8.,-4.156055927276611,-2.1577835083007812,8.,-6.163973808288574])
+        velocity=np.array([-.26217772845364296,.21905833180063275,-.013687679375657956,-.8224065821581662,.2948926231193477])
+        bias=nominal-np.linalg.solve(gain,acceleration)
+        forward=lambda tau:gain@(tau-bias)
+        config=load_torque_config(Path(__file__).resolve().parents[3]/'configs/hardware_mpc_torque_field.yaml')
+        mapper=LocalTorqueMapper(config)
+        delta=config['transition_rate_nm_s']*.006
+        options=dict(safe_hold=bias-velocity,previous=previous,bounds=(previous-delta,previous+delta))
+        with self.assertRaises(NoModelTorque):
+            mapper.compute(forward,desired,nominal,**options)  # original clipped search
+        torque,trace=mapper.compute(forward,desired,nominal,affine_gain=gain,**options)
+        self.assertEqual(trace['fallback'],'bounded_affine_rechecked')
+        self.assertTrue(np.all(np.abs(torque-previous)<=delta+1e-12))
+        self.assertTrue(np.all(np.abs(torque)<=mapper.limit))
+        self.assertLess(np.max(np.abs(forward(torque))),10.)
+        np.testing.assert_allclose(trace['checked_ddq_rad_s2'],forward(torque),atol=1e-12)
+        # Accepted acceleration bounds are NOT accurate desired-ddq tracking.
+        self.assertFalse(trace['tracking_within_limit'])
+
+    def test_bounded_rescue_still_refuses_an_infeasible_acceleration_box(self):
+        mapper=LocalTorqueMapper(load_torque_config())
+        with self.assertRaises(NoModelTorque) as ctx:
+            mapper.compute(lambda tau:tau+100,np.zeros(5),np.zeros(5),
+                safe_hold=-np.ones(5)*100,previous=np.zeros(5),
+                bounds=(-np.ones(5)*.1,np.ones(5)*.1),affine_gain=np.eye(5))
+        self.assertFalse(ctx.exception.trace['model_accepted'])
+        self.assertFalse(ctx.exception.trace['bounded_affine_rescue']['model_acceleration_within_limit'])
+
     def test_exact_affine_gain_preserves_selection_and_forward_checks(self):
         mapper = LocalTorqueMapper(load_torque_config())
         rng = np.random.default_rng(51026)

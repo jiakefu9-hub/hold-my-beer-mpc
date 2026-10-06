@@ -12,10 +12,12 @@ BP = ct.POINTER(ct.c_ubyte)
 
 
 class NativeArmDelay:
-    def __init__(self, inverse, library=LIBRARY):
-        self.lib = ct.CDLL(str(library))
+    def __init__(self, inverse, library=LIBRARY, *, retain_gil=True):
+        # At most 40 native 2 ms MODEL steps, no sleep/network/Python callback.
+        # Keep this short calculation together instead of yielding to ingress.
+        self.lib = (ct.PyDLL if retain_gil else ct.CDLL)(str(library))
         self.lib.g1_delay_abi.restype=ct.c_int
-        if self.lib.g1_delay_abi()!=1:
+        if self.lib.g1_delay_abi()!=2:
             raise RuntimeError('unsupported native delay ABI')
         self.lib.g1_delay_source_sha256.restype=ct.c_char_p
         source_hash=hashlib.sha256((ROOT/'cpp/g1_arm_delay/delay.cpp').read_bytes()).hexdigest()
@@ -31,6 +33,8 @@ class NativeArmDelay:
         self.lib.g1_delay_destroy.argtypes=[ct.c_void_p]
         self.lib.g1_delay_predict.argtypes=[ct.c_void_p,ct.c_int,DP,DP,DP,BP,DP,DP,DP,DP,DP]
         self.lib.g1_delay_predict.restype=ct.c_int
+        self.lib.g1_delay_linear_dynamics.argtypes=[ct.c_void_p,DP,DP,DP,DP,DP]
+        self.lib.g1_delay_linear_dynamics.restype=ct.c_int
         qi=np.ascontiguousarray(inverse.q_indices,dtype=np.int32)
         vi=np.ascontiguousarray(inverse.v_indices,dtype=np.int32)
         offset=np.ascontiguousarray(inverse.root_to_imu)
@@ -41,7 +45,7 @@ class NativeArmDelay:
         if not self.handle:
             raise RuntimeError('native delay model: '+error.value.decode())
         self._finalizer=weakref.finalize(self,self.lib.g1_delay_destroy,self.handle)
-        self.metadata=dict(backend='native_mujoco',abi=1,library=str(library),
+        self.metadata=dict(backend='native_mujoco',abi=2,library=str(library),retain_gil=retain_gil,
                            sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                            source_sha256=source_hash,mujoco_version=version)
 
@@ -69,3 +73,17 @@ class NativeArmDelay:
         if code:
             raise RuntimeError(f'native nominal delay propagation failed: {code}')
         return result[:5].copy(),result[5:].copy()
+
+    def linear_dynamics(self, q, dq, base):
+        if not self.handle:
+            raise RuntimeError('native dynamics already closed')
+        q=np.ascontiguousarray(q,dtype=float);dq=np.ascontiguousarray(dq,dtype=float)
+        b=np.r_[base.acc_world,base.omega_world,base.alpha_world,base.rot_world_body.ravel()]
+        if q.shape!=(5,) or dq.shape!=(5,) or b.shape!=(18,):
+            raise ValueError('invalid native dynamics dimensions')
+        mass=np.empty((5,5));bias=np.empty(5)
+        code=self.lib.g1_delay_linear_dynamics(self.handle,q.ctypes.data_as(DP),dq.ctypes.data_as(DP),
+            b.ctypes.data_as(DP),mass.ctypes.data_as(DP),bias.ctypes.data_as(DP))
+        if code:
+            raise RuntimeError(f'native conditional dynamics failed: {code}')
+        return mass,bias

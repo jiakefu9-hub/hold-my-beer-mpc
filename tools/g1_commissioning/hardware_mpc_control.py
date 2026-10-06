@@ -130,7 +130,7 @@ class RightArmHardwareMpc:
         path = Path(library_path or self.config["kinematics_library"])
         if not path.is_absolute():
             path = ROOT / path
-        self.backend = CppRightArmRneaBackend(self.model.xml, library_path=path)
+        self.backend = CppRightArmRneaBackend(self.model.xml, library_path=path, retain_gil=True)
         if (self.backend.nq, self.backend.nv) != (self.model.model.nq, self.model.model.nv):
             self.backend.close()
             raise ValueError("C++ and endpoint model dimensions differ")

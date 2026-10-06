@@ -73,10 +73,18 @@ def check_field_packet(frame, low, config):
     actual_dq = finite_vector(low.dq[list(ARM_MOTOR_INDICES)],13,'feedback dq')
     total = ff+kp[5:10]*(q[5:10]-actual_q[5:10])+kd[5:10]*(dq[5:10]-actual_dq[5:10])
     frame['diagnostics']['field_total_torque_estimate_at_latest_feedback_nm'] = total.tolist()
-    if frame['weight'] > 0 and (np.any(abs(total)>np.asarray(config['tau_abs_nm'])+1e-6)
-                              or np.any(abs(ff)>np.asarray(config['tau_ff_abs_nm'])+1e-6)):
-        raise HardwareMpcError('field total/feedforward torque envelope exceeded; hand back')
-    if frame['diagnostics'].get('mpc_active'):
+    active = bool(frame['diagnostics'].get('mpc_active'))
+    # Ramp-in/settle/hand-back are position-PD transitions with support FF.
+    # Unlike the PID baseline this includes FF; physical behavior is NOT proven
+    # by PID success. The MPC total envelope applies only to the active phase.
+    # Feedforward remains bounded at every nonzero ownership weight; once MPC
+    # is active, both feedforward and the full PD+feedforward estimate apply.
+    if frame['weight'] > 0 and np.any(abs(ff)>np.asarray(config['tau_ff_abs_nm'])+1e-6):
+        raise HardwareMpcError('field feedforward torque envelope exceeded; hand back')
+    if active and np.any(abs(total)>np.asarray(config['tau_abs_nm'])+1e-6):
+        raise HardwareMpcError('field MPC total torque envelope exceeded; hand back')
+    frame['diagnostics']['field_total_torque_envelope_applied'] = active
+    if active:
         lo, hi = np.deg2rad(config['q_min_deg']), np.deg2rad(config['q_max_deg'])
         if np.any(actual_q[5:10]<lo) or np.any(actual_q[5:10]>hi):
             raise HardwareMpcError('measured arm outside field MPC position envelope; hand back')

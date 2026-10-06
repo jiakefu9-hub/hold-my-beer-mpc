@@ -284,14 +284,7 @@ class ArmMPCPolicy:
         p_values = self._pack_upper_triangles(stage_hessians)
         # OSQP 首次 setup 后只需要更新固定稀疏结构中的数值，不再每拍
         # 重建相同的 scipy.sparse.csc_matrix。
-        P = None
-        if self._solver is None:
-            P = sparse.csc_matrix(
-                (p_values, (self._p_rows, self._p_cols)),
-                shape=(self.num_variables, self.num_variables),
-            )
-            if P.nnz != len(self._p_rows):
-                raise RuntimeError("MPC Hessian 的固定稀疏结构发生变化。")
+        P = self._cost_matrix_for_solver(p_values)
         cost_time = time.perf_counter() - cost_start
 
         constraints_start = time.perf_counter()
@@ -440,6 +433,18 @@ class ArmMPCPolicy:
             dq_ref.astype(np.float32),
             ddq_des.astype(np.float32),
         )
+
+    def _cost_matrix_for_solver(self, p_values):
+        """Original sparse solver needs a matrix only at its first setup."""
+        if self._solver is not None:
+            return None
+        matrix = sparse.csc_matrix(
+            (p_values, (self._p_rows, self._p_cols)),
+            shape=(self.num_variables, self.num_variables),
+        )
+        if matrix.nnz != len(self._p_rows):
+            raise RuntimeError("MPC Hessian 的固定稀疏结构发生变化。")
+        return matrix
 
     def get_last_diagnostics(self, copy_data=True):
         """【非核心代码】返回最近一次 MPC 的求解、预测和回退信息。"""

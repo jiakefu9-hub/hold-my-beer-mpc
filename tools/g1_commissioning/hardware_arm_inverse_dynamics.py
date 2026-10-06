@@ -60,6 +60,7 @@ class RightArmInverseDynamics:
         self.zeros = np.zeros(5)
         self._mass = np.empty((m.nv, m.nv))
         self._arm_block = np.ix_(self.v_indices, self.v_indices)
+        self.native_dynamics = None
         bottle = m.body("right_bottle")
         self.metadata = {
             "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
@@ -114,6 +115,8 @@ class RightArmInverseDynamics:
         The same-model inverse/forward identity alone proves no hardware gain.
         """
         self.prepare_state(q, dq, disturbance)
+        if self.native_dynamics is not None:
+            return self.native_dynamics.linear_dynamics(q,dq,disturbance)
         return self._prepared_linear_dynamics()
 
     def _prepared_linear_dynamics(self):
@@ -144,7 +147,8 @@ class RightArmInverseDynamics:
     def compute_with_linear_dynamics(self, q, dq, ddq, disturbance):
         """One validated state preparation for native ID and MuJoCo M/bias."""
         inverse = self.compute(q, dq, ddq, disturbance)
-        mass, bias = self._prepared_linear_dynamics()
+        mass, bias = (self.native_dynamics.linear_dynamics(q,dq,disturbance)
+                      if self.native_dynamics is not None else self._prepared_linear_dynamics())
         return inverse, mass, bias
 
     def compute(self, q, dq, ddq, disturbance):

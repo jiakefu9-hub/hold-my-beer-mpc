@@ -118,6 +118,17 @@ class MpcContractTest(unittest.TestCase):
                 np.testing.assert_allclose(actual[1],expected[1],atol=1e-11)
                 for a,b in zip(actual[0],expected[0]):
                     np.testing.assert_allclose(a,b,atol=1e-11)
+                policy=c.policy
+                full=sparse.block_diag(actual[0]).toarray()
+                lower,upper=policy._l_template.copy(),policy._u_template.copy()
+                lower[:10]=upper[:10]=np.r_[EXPECTED_TARGET_Q[5:10],np.zeros(5)]
+                reference=policy.condense(sparse.csc_matrix(np.triu(full)),actual[1],lower,upper)
+                fast=policy.condense(None,actual[1],lower,upper,cost_blocks=policy._cost_blocks)
+                for a,b in zip(reference[:5],fast[:5]):
+                    np.testing.assert_allclose(a,b,atol=1e-10,rtol=1e-12)
+                z=rng.normal(size=policy.num_variables)
+                self.assertAlmostEqual(policy._objective(z,actual[1],None),
+                                       .5*z@full@z+actual[1]@z,places=9)
         finally:c.close()
 
     def test_predictor_past_only_h0_and_so3(self):

@@ -34,6 +34,40 @@ def packet():
 
 
 class TorqueFieldTests(unittest.TestCase):
+    def test_prewrite_deadlines_unchanged_and_failed_timing_retained(self):
+        runtime=object.__new__(MpcRuntime)
+        runtime.field_trial=True;runtime.controller=SimpleNamespace(last_diagnostics={})
+        low=imu=SimpleNamespace(received_ns=0)
+        frame={'diagnostics':{}}
+        runtime.check_before_write(frame,low,imu,0,10_000_000)
+        with self.assertRaisesRegex(RuntimeError,'older than 10 ms'):
+            runtime.check_before_write(frame,low,imu,0,10_000_001)
+        self.assertGreater(runtime.controller.last_diagnostics['field_prewrite_timing']['wall_since_loop_begin_ms'],10.)
+        with self.assertRaisesRegex(RuntimeError,'older than 25 ms'):
+            runtime.check_before_write(frame,low,imu,25_000_000,25_000_001)
+
+    def test_field_waits_full_baseline_before_mpc(self):
+        runtime=MpcRuntime(predictor_mode='hold_current',field_trial=True,
+                           torque_config=FIELD_TORQUE_CONFIG)
+        from disturbance_types import DisturbanceInput,DisturbanceHorizon
+        d=DisturbanceInput(np.zeros(3),np.zeros(3),np.zeros(3),np.eye(3))
+        horizon=DisturbanceHorizon((d,)*10,(d,)*9)
+        try:
+            p=dict(target_q_array=EXPECTED_TARGET_Q,kp_array=np.r_[np.full(11,20.),0,0],
+                   kd_array=np.r_[np.ones(11),0,0],q_offset_limit_deg_array=np.full(5,5.))
+            plan=runtime.create_plan(EXPECTED_TARGET_Q,p)
+            for t in (3.,4.,4.999):
+                runtime.controller.set_disturbance_horizon(horizon)
+                with mock.patch.object(runtime.controller,'step',side_effect=AssertionError('too early')):
+                    frame=plan.sample(t,EXPECTED_TARGET_Q,np.zeros(13),[1,0,0,0],0.,.006)
+                self.assertFalse(frame['diagnostics']['mpc_active'])
+                self.assertEqual(frame['weight'],1.)
+                np.testing.assert_array_equal(frame['q_rad'],EXPECTED_TARGET_Q)
+            runtime.controller.set_disturbance_horizon(horizon)
+            frame=plan.sample(5.,EXPECTED_TARGET_Q,np.zeros(13),[1,0,0,0],0.,.006)
+            self.assertTrue(frame['diagnostics']['mpc_active'])
+        finally:runtime.close()
+
     def test_handback_preserves_complete_PD_law_for_changed_feedback(self):
         h=TorqueHandback();p=packet();h.accept(p)
         original={k:v.copy() if hasattr(v,'copy') else v for k,v in h.last.items()}
@@ -64,8 +98,18 @@ class TorqueFieldTests(unittest.TestCase):
         low=SimpleNamespace(q=q,dq=np.zeros(35))
         conf=load_torque_config(FIELD_TORQUE_CONFIG)
         check_field_packet(f,low,conf)
+        self.assertFalse(f['diagnostics']['field_total_torque_envelope_applied'])
+        # The already field-proven PID-style ramp/hand-back can temporarily
+        # carry a larger PD term; the bounded feedforward is still checked.
         low.q[22]+=1.
-        with self.assertRaisesRegex(HardwareMpcError,'torque envelope'):check_field_packet(f,low,conf)
+        check_field_packet(f,low,conf)
+        f['diagnostics']['mpc_active']=True
+        with self.assertRaisesRegex(HardwareMpcError,'MPC total torque envelope'):
+            check_field_packet(f,low,conf)
+        f['diagnostics']['mpc_active']=False
+        f['diagnostics']['tau_ff_candidate_nm'][0]=conf['tau_ff_abs_nm'][0]+.1
+        with self.assertRaisesRegex(HardwareMpcError,'feedforward torque envelope'):
+            check_field_packet(f,low,conf)
 
     def test_output_optin_and_stationary_first_before_any_runtime(self):
         for args in [['--execute'],['--execute','--allow-first-torque-field-trial','--task','walk'],

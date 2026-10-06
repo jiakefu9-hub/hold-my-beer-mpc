@@ -15,6 +15,22 @@ from disturbance_types import DisturbanceInput, DisturbanceHorizon
 
 
 class NativeDelayTest(unittest.TestCase):
+    def test_native_mass_bias_matches_independent_python_path(self):
+        c=RightArmMeasuredTorqueMpc(EXPECTED_TARGET_Q[5:10]);native=NativeArmDelay(c.inverse)
+        rng=np.random.default_rng(51006)
+        try:
+            for _ in range(80):
+                q=rng.uniform(-.3,.3,5);v=rng.uniform(-.8,.8,5)
+                b=DisturbanceInput(rng.normal(size=3),rng.normal(size=3),rng.normal(size=3),
+                                  Rotation.random(random_state=rng).as_matrix())
+                expected=c.inverse.linear_dynamics(q,v,b)
+                actual=native.linear_dynamics(q,v,b)
+                for a,e in zip(actual,expected):
+                    np.testing.assert_allclose(a,e,atol=2e-12,rtol=0.)
+            native.close()
+            with self.assertRaisesRegex(RuntimeError,'closed'):native.linear_dynamics(q,v,b)
+        finally:native.close();c.close()
+
     def test_random_moving_base_partial_weight_and_command_switches(self):
         c=RightArmMeasuredTorqueMpc(EXPECTED_TARGET_Q[5:10]);native=NativeArmDelay(c.inverse)
         h=CommandHistory();h.reset_history();h.inverse=c.inverse;h.mapper=c.mapper

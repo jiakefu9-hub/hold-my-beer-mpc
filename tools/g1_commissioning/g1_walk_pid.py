@@ -745,7 +745,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             return code, raw
 
     interlock = Interlock()
-    crc = CRC()
+    crc = runtime.create_crc() if runtime is not None and hasattr(runtime,'create_crc') else CRC()
     streams = Streams(journal, interlock, crc, observer=runtime)
     low_subscriber = imu_subscriber = None
     worker_stop = threading.Event()
@@ -774,6 +774,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     publisher_transport_failed = False
     velocity_thread = None
     velocity_failed = threading.Event()
+    velocity_ready = threading.Event()
+    task_started = threading.Event()
     last_zero_reply_ns = 0
     last_zero_lock = threading.Lock()
     stop_requested = threading.Event()
@@ -976,6 +978,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             plan = runtime.create_plan(_arm_slots(initial), profile)
             journal.record({'schema':'g1_mpc_event_v1','event':'prepared_field_plan',
                             'core':getattr(runtime.controller,'metadata',{})})
+            if hasattr(runtime, 'prepare_startup'):
+                runtime.prepare_startup()
         # Publisher creation occurs only after both state gates and typed confirmation.
         publisher = ChannelPublisher("rt/arm_sdk", LowCmd_)
         publisher.Init()
@@ -983,14 +987,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             "schema": "g1_pid_event_v1", "event": "arm_publisher_created",
             "topic": "rt/arm_sdk",
         })
-        epoch_ns = monotonic_ns()
-        streams.set_epoch(epoch_ns)
-        if runtime is not None:
-            runtime.set_epoch(epoch_ns)
-        journal.record({
-            "schema": "g1_pid_event_v1", "event": "task_epoch",
-            "task_epoch_monotonic_ns": epoch_ns,
-        })
+        epoch_ns = None
+        if runtime is None:
+            # Preserve the established PID startup order.
+            epoch_ns = monotonic_ns()
+            streams.set_epoch(epoch_ns)
+            journal.record({"schema": "g1_pid_event_v1", "event": "task_epoch",
+                            "task_epoch_monotonic_ns": epoch_ns})
+            task_started.set()
 
         def velocity_worker():
             nonlocal last_zero_reply_ns
@@ -998,6 +1002,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             heading_frozen_logged = False
             try:
                 client = VelocitySetter()
+                velocity_ready.set()
+                # Construct RPC on the housekeeping CPUs, but don't let task
+                # time or motion requests advance during MPC initialization.
+                while not task_started.wait(0.01):
+                    if worker_stop.is_set():
+                        return
+                if worker_stop.is_set():
+                    return
                 while not worker_stop.is_set():
                     iteration = time.monotonic()
                     task_s = (monotonic_ns() - epoch_ns) * 1e-9
@@ -1051,6 +1063,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             except Exception as exc:
                 velocity_failed.set()
                 stop_requested.set()
+                velocity_ready.set()
                 journal.record({
                     "schema": "g1_pid_event_v1", "event": "velocity_exception",
                     "reason": repr(exc),
@@ -1078,10 +1091,25 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
 
         velocity_thread = threading.Thread(target=velocity_worker, name="pid_velocity", daemon=True)
         velocity_thread.start()
+        if runtime is not None:
+            if not velocity_ready.wait(2.0) or velocity_failed.is_set():
+                raise RuntimeError('velocity client startup failed before MPC task epoch')
         scheduling = (runtime.enter_control_thread(args.cpu)
                       if runtime is not None and hasattr(runtime, 'enter_control_thread')
                       else pin_control_thread(args.cpu))
         journal.record({"schema": "g1_pid_event_v1", "event": "control_runtime", **scheduling})
+        if runtime is not None:
+            failure = health(streams, interlock, journal)
+            if failure or stop_requested.is_set():
+                raise RuntimeError(failure or 'stopped before MPC task epoch')
+            # GC, RPC construction, affinity/FIFO and host inspection are now
+            # finished. Only then anchor the predictor and the task schedule.
+            epoch_ns = monotonic_ns()
+            streams.set_epoch(epoch_ns)
+            runtime.set_epoch(epoch_ns)
+            journal.record({"schema": "g1_pid_event_v1", "event": "task_epoch",
+                            "task_epoch_monotonic_ns": epoch_ns})
+            task_started.set()
         clock = PeriodicClock(monotonic_ns(), CONTROL_PERIOD_S)
         last_iteration_ns = None
         previous_low_ns = previous_imu_ns = None

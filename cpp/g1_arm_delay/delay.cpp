@@ -48,7 +48,7 @@ void dynamics(Context& c,const double* q,const double* v,const double* b,double*
 }
 }
 extern "C" {
-int g1_delay_abi() {return 1;}
+int g1_delay_abi() {return 2;}
 const char* g1_delay_source_sha256() {return G1_DELAY_SOURCE_SHA256;}
 int g1_delay_header_version() {return mjVERSION_HEADER;}
 int g1_delay_runtime_version() {return mj_version();}
@@ -67,6 +67,15 @@ void* g1_delay_create(const char* xml,const int* qi,const int* vi,const double* 
   } catch(const std::exception& e) {std::snprintf(error,capacity,"%s",e.what());return nullptr;}
 }
 void g1_delay_destroy(void* context) {delete static_cast<Context*>(context);}
+int g1_delay_linear_dynamics(void* context,const double* q,const double* v,const double* base,
+                             double* mass,double* bias) {
+  if(!context || !finite(q,5) || !finite(v,5) || !finite(base,18)) return 1;
+  auto& c=*static_cast<Context*>(context);
+  dynamics(c,q,v,base,mass,bias);
+  double factor[25];std::copy(mass,mass+25,factor);
+  if(!finite(mass,25) || !finite(bias,5) || mju_cholFactor(factor,5,1e-14)!=5) return 2;
+  return 0;
+}
 int g1_delay_predict(void* context,int count,const double* dt,const double* bases,const double* commands,
                      const unsigned char* present,const double* kp,const double* kd,const double* limits,
                      const double* initial,double* output) {

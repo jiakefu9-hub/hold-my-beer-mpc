@@ -106,6 +106,11 @@ class MpcRuntime:
         if not self.field_trial or self.actuation != 'measured_torque_preview':
             raise ValueError('explicit torque field-trial authorization required')
 
+    @staticmethod
+    def create_crc():
+        from mpc_crc import PackedCRC
+        return PackedCRC()
+
     def enter_control_thread(self, cpu):
         if self.host_scope is None:
             raise RuntimeError('MPC requires explicit control/worker CPU placement')
@@ -125,6 +130,10 @@ class MpcRuntime:
     def check_before_write(self, frame, low, imu, begin_ns, now_ns):
         if not self.field_trial:
             return
+        timing = dict(wall_since_loop_begin_ms=(now_ns-begin_ns)*1e-6,
+                      selected_feedback_age_ms=(now_ns-min(low.received_ns,imu.received_ns))*1e-6)
+        frame.setdefault('diagnostics', {})['field_prewrite_timing'] = timing
+        self.controller.last_diagnostics['field_prewrite_timing'] = timing
         if now_ns - min(low.received_ns, imu.received_ns) > 25_000_000:
             raise RuntimeError('selected torque feedback older than 25 ms; hand back')
         if now_ns - begin_ns > 10_000_000:
@@ -181,13 +190,25 @@ class MpcRuntime:
                 "received_monotonic_ns": stamp, "quaternion_wxyz": quat,
                 "gyroscope_rad_s": gyro, "accelerometer_raw_m_s2": accel})
 
-    def set_epoch(self, epoch_ns):
-        self.epoch_ns = int(epoch_ns)
-        self.predictor.set_grid_origin(epoch_ns)
-        self.predictor.query(epoch_ns, 0., use_learned=False)
+    def prepare_startup(self):
+        # Collection can stall for tens of milliseconds. Finish it before
+        # opening the task clock or creating a command publisher.
         self._gc_was_enabled = gc.isenabled()
         gc.collect()
         gc.disable()
+
+    def set_epoch(self, epoch_ns):
+        self.epoch_ns = int(epoch_ns)
+        self.predictor.set_grid_origin(epoch_ns)
+        # The first command-time query is anchored to common RECEIVED data,
+        # not wall time. Warming farther ahead can make the first live query
+        # go backwards if no new callback arrived yet. Never reset mid-run.
+        stamp = epoch_ns
+        if self.assumed_command_delay_s is not None:
+            if self._latest_low_ns is None or self._latest_imu_ns is None:
+                raise ValueError('initial predictor needs both timestamped streams')
+            stamp = min(stamp,self._latest_low_ns,self._latest_imu_ns)
+        self.predictor.query(stamp, 0., use_learned=False)
 
     def create_plan(self, initial, profile):
         limits = np.asarray(self.controller.config["reference_offset_limit_deg"])
@@ -198,11 +219,11 @@ class MpcRuntime:
         if self.actuation == "measured_torque_preview":
             from hardware_mpc_torque_control import HardwareTorquePreviewPlan
             plan_type = HardwareTorquePreviewPlan
-        options={}
+        options=dict(mpc_start_s=5.) if self.field_trial else {}
         if self.assumed_command_delay_s is not None:
             from hardware_mpc_delay_plan import HardwareDelayTorquePreviewPlan
             plan_type=HardwareDelayTorquePreviewPlan
-            options=dict(assumed_command_delay_s=self.assumed_command_delay_s)
+            options.update(assumed_command_delay_s=self.assumed_command_delay_s)
         self._plan=plan_type(initial, profile["target_q_array"],
                             profile["kp_array"], profile["kd_array"], self.controller,**options)
         if self.assumed_command_delay_s is not None:
@@ -210,6 +231,7 @@ class MpcRuntime:
             if LIBRARY.is_file():
                 native=NativeArmDelay(self.controller.inverse)
                 self._plan.history.native=native
+                self.controller.inverse.native_dynamics=native
                 self.controller.metadata['delay_lifecycle']['propagation']=native.metadata
             elif self.field_trial:
                 raise ValueError('build cpp/g1_arm_delay before field execution; no silent slower fallback')
@@ -312,6 +334,8 @@ def build_parser():
                         help="measured torque: explicit controlled field trial; other modes offline only")
     parser.add_argument("--cpu", type=int, default=2)
     parser.add_argument('--rt-priority', type=int, default=0, help='0=ordinary; 1..40=control-thread FIFO, requires permission')
+    parser.add_argument('--compute-process',action='store_true',
+                        help='isolate SDK-free MPC calculation from Python DDS callbacks')
     parser.add_argument('--assumed-command-delay-ms', type=float, default=6.,
                         help='explicit nominal computation+application delay, not a measured DDS RTT')
     parser.add_argument('--allow-first-torque-field-trial', action='store_true',
@@ -357,10 +381,16 @@ def main(argv=None):
         scope = ControlThreadScope(args.cpu, args.rt_priority)
         scope.prepare_workers()
         # Load/tree/build QP and warm all local math before any DDS initialization.
-        runtime = MpcRuntime(args.mpc_config, args.controller_config, args.predictor,
+        runtime_type=MpcRuntime;compute_options={}
+        if args.compute_process:
+            from mpc_compute_process import ProcessMpcRuntime
+            runtime_type=ProcessMpcRuntime
+            compute_options=dict(compute_cpu=args.cpu,compute_priority=args.rt_priority,
+                                 compute_affinity=scope.affinity)
+        runtime = runtime_type(args.mpc_config, args.controller_config, args.predictor,
                              args.bank, stationary=args.task == "stationary", field_trial=True,
                              torque_config=FIELD_TORQUE_CONFIG,
-                             assumed_command_delay_s=args.assumed_command_delay_ms*.001)
+                             assumed_command_delay_s=args.assumed_command_delay_ms*.001,**compute_options)
         runtime.host_scope = scope
         journal = MpcJournal(args.output_dir)
         runtime.journal = journal
@@ -376,7 +406,8 @@ def main(argv=None):
             *[Path(__file__).with_name(name) for name in ('hardware_mpc_field.py',
                 'hardware_mpc_torque_control.py','hardware_arm_inverse_dynamics.py',
                 'hardware_torque_mapper.py','hardware_mpc_delay_plan.py',
-                'hardware_mpc_delay_preview.py','mpc_host.py','arm_execution_record.py','native_arm_delay.py')],
+                'hardware_mpc_delay_preview.py','mpc_host.py','arm_execution_record.py','native_arm_delay.py',
+                'mpc_compute_process.py','mpc_crc.py')],
             ROOT/'cpp/g1_arm_delay/delay.cpp', ROOT/'cpp/g1_arm_delay/CMakeLists.txt',
             ROOT / "arm_mpc.py", ROOT / "kinematics_helper.py"]
         journal.record({"schema": "g1_mpc_session_v1", "event": "session_start",

@@ -101,11 +101,32 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
             self._condensed_solver.warm_start(x=np.zeros(self.horizon*self.nu),
                                               y=np.zeros(self._ac.shape[0]))
 
+    def _cost_matrix_for_solver(self, p_values):
+        # The condensed solver consumes the exact stage blocks directly.
+        # Do not rebuild and then densify the unused 145x145 sparse matrix.
+        if self._cost_blocks is None:
+            raise RuntimeError('condensed stage costs were not assembled')
+        return None
+
+    def _objective(self, solution, linear, full_p):
+        if full_p is not None:
+            return float(.5*solution@full_p@solution+linear@solution)
+        blocks, terminal = self._cost_blocks
+        end = self.horizon*self.stage_dim
+        stages = solution[:end].reshape(self.horizon,self.stage_dim)
+        tail = solution[end:]
+        return float(.5*(np.einsum('ki,kij,kj->',stages,blocks,stages)
+                          + tail@terminal@tail)+linear@solution)
+
     def condense(self, P, linear, lower, upper, *, cost_blocks=None):
-        upper_triangle = P.toarray()
-        full_p = upper_triangle + upper_triangle.T - np.diag(np.diag(upper_triangle))
+        full_p = None
+        if P is not None:
+            upper_triangle = P.toarray()
+            full_p = upper_triangle + upper_triangle.T - np.diag(np.diag(upper_triangle))
         offset = self._E @ lower[:self.nx]
         if cost_blocks is None:
+            if full_p is None:
+                raise ValueError('condensing needs either a Hessian or exact stage blocks')
             pc = self._T.T @ full_p @ self._T
             qc = self._T.T @ (full_p @ offset + linear)
         else:
@@ -145,7 +166,7 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
                 status = "solved" if success else (
                     "daqp_wall_budget_exceeded" if flag == 1 else f"daqp_exitflag_{flag}")
                 info = SimpleNamespace(status=status, status_val=1 if success else -1,
-                    obj_val=float(.5*full_solution@full_p@full_solution+linear@full_solution),
+                    obj_val=self._objective(full_solution,linear,full_p),
                     iter=int(details["iterations"]), prim_res=primal, dual_res=dual,
                     run_time=wall, setup_time=float(details["setup_time"]),
                     solve_time=float(details["solve_time"]), update_time=0.)
@@ -167,7 +188,7 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
             full_solution = None if result.x is None else offset + self._T @ result.x
             info = SimpleNamespace(**vars(result.info))
             if full_solution is not None and np.isfinite(full_solution).all():
-                info.obj_val = float(.5*full_solution @ full_p @ full_solution + linear @ full_solution)
+                info.obj_val = self._objective(full_solution,linear,full_p)
             return SimpleNamespace(x=full_solution, info=info), None
         except Exception as exc:
             return None, exc

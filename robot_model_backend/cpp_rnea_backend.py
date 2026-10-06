@@ -103,7 +103,7 @@ class CppRightArmRneaBackend(PredictionKinematicsBackend):
 
     backend_name = "cpp_pinocchio"
 
-    def __init__(self, scene_mjcf_path, library_path=None):
+    def __init__(self, scene_mjcf_path, library_path=None, *, retain_gil=False):
         configured_path = library_path or os.environ.get(
             "RIGHT_ARM_RNEA_LIBRARY", str(DEFAULT_LIBRARY_PATH)
         )
@@ -115,7 +115,11 @@ class CppRightArmRneaBackend(PredictionKinematicsBackend):
                 f"{self.library_path}"
             )
         self.scene_mjcf_path = Path(scene_mjcf_path).expanduser().resolve()
-        self._library = ctypes.CDLL(str(self.library_path))
+        # Opt-in for the hardware control thread: these short, bounded native
+        # numerical calls neither wait for IO nor call back into Python. Avoid
+        # handing execution to a DDS callback at every microsecond-scale call.
+        # Simulation retains the original CDLL behavior by default.
+        self._library = (ctypes.PyDLL if retain_gil else ctypes.CDLL)(str(self.library_path))
         self._configure_common_signatures()
         abi_version = int(self._library.right_arm_rnea_abi_version())
         if abi_version != 3:

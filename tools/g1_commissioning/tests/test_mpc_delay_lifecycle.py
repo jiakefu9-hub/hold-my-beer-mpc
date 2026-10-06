@@ -132,6 +132,17 @@ class LifecycleTest(unittest.TestCase):
 
 
 class RuntimeTimestampTest(unittest.TestCase):
+    def test_startup_without_new_callback_does_not_query_backwards(self):
+        runtime=MpcRuntime(predictor_mode='hold_current',assumed_command_delay_s=.006)
+        try:
+            for stamp in range(0,18_000_001,2_000_000):
+                runtime.observe_low(stamp,np.zeros(35),np.zeros(35))
+                runtime.observe_imu(stamp,[1,0,0,0],[0,0,0],[0,0,9.81])
+            runtime.set_epoch(24_000_000)
+            runtime.prepare(25_000_000,None,None,0.,0.)
+            self.assertLessEqual(runtime.predictor._anchor_ns,18_000_000)
+        finally:runtime.close()
+
     def test_forecast_anchor_can_precede_raw_arm_observation(self):
         runtime=MpcRuntime(predictor_mode='hold_current',actuation='measured_torque_preview',
                            assumed_command_delay_s=.006)

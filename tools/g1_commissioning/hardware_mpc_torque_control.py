@@ -131,6 +131,7 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
 
     def step(self, arm_slots, imu_quaternion_wxyz, yaw0_rad, dt):
         start = time.perf_counter_ns()
+        start_cpu = time.thread_time_ns()
         slots = finite_vector(arm_slots, 13, "arm slots")
         rotation(imu_quaternion_wxyz)
         if not math.isfinite(float(dt)) or dt <= 0 or not math.isfinite(float(yaw0_rad)):
@@ -161,6 +162,7 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         bounds, self._next_total_bounds = self._next_total_bounds, None
         self.last_diagnostics.update(self._torque(q, dq, qref, dqref, ddq, self._current_base, bounds))
         self.last_diagnostics["controller_core_ms"] = (time.perf_counter_ns()-start)*1e-6
+        self.last_diagnostics["controller_thread_cpu_ms"] = (time.thread_time_ns()-start_cpu)*1e-6
         # Immutable JSON-native audit snapshot, including every candidate.
         # Native encoding avoids a Python recursive walk on the 6 ms thread;
         # nonfinite diagnostics remain null, exactly as in json_values.
@@ -176,8 +178,11 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
     command is checked again after this projection. Weight release retains
     support feedforward until weight reaches zero, avoiding a torque drop at 18s.
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, mpc_start_s=3., **kwargs):
         super().__init__(*args, **kwargs)
+        if not np.isfinite(mpc_start_s) or not 3.<=mpc_start_s<=5.:
+            raise ValueError('MPC start must be within the existing 3..5s baseline')
+        self.mpc_start_s = float(mpc_start_s)
         if (not np.allclose(self.kp[5:10], self.controller.torque_config["kp"])
                 or not np.allclose(self.kd[5:10], self.controller.torque_config["kd"])):
             raise ValueError("plan PD must match the evaluated torque model")
@@ -193,12 +198,22 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
         q = finite_vector(measured_slots, 13, "q")[5:10]
         dq = finite_vector(measured_dq, 13, "dq")[5:10]
         c._next_total_bounds = None
-        if self._last_total is not None and 3 <= task_s < 18:
+        active = self.mpc_start_s <= task_s < 18
+        if self._last_total is not None and active:
             delta = c.torque_config["transition_rate_nm_s"]*min(float(dt), .006)
             c._next_total_bounds = (self._last_total-delta, self._last_total+delta)
-        frame = super().sample(task_s, measured_slots, measured_dq, imu_quaternion, yaw0_rad, dt)
+        if 3. <= task_s < self.mpc_start_s:
+            # Complete the already scheduled two-second pre-walk baseline:
+            # fixed posture plus the same bounded support torque as entry.
+            # Do not jump straight from a moving arm into acceleration MPC.
+            frame = dict(stage='stationary_baseline',q_rad=self.target.copy(),dq_rad_s=np.zeros(13),
+                         kp=self.kp,kd=self.kd,weight=1.,terminal=False,
+                         diagnostics=dict(pid_active=False,mpc_active=False,entry_settle=True))
+            self._last_q = self.target.copy()
+        else:
+            frame = super().sample(task_s, measured_slots, measured_dq, imu_quaternion, yaw0_rad, dt)
         pd = self.kp[5:10]*(frame["q_rad"][5:10]-q)+self.kd[5:10]*(frame["dq_rad_s"][5:10]-dq)
-        if not 3 <= task_s < 18:
+        if not active:
             c._horizon = None
             inverse = c.inverse.compute(q, dq, np.zeros(5), base)
             entry = float(np.clip(task_s/3., 0., 1.))
@@ -209,7 +224,7 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
             total = np.asarray(frame["diagnostics"]["tau_total_estimated_at_feedback_nm"])
         limit = c.mapper.limit
         total = np.clip(total, -limit, limit)
-        if self._last_total is not None and not 3 <= task_s < 18:
+        if self._last_total is not None and not active:
             delta = c.torque_config["transition_rate_nm_s"]*min(float(dt), .006)
             # Scalar interpolation preserves coupled forward-model behaviour;
             # clipping five axes separately can create an unchecked direction.
@@ -218,13 +233,13 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
             total = self._last_total+ratio*difference
         self._last_total = total.copy()
         c._previous_total = total.copy()
-        mass, bias = (c._prepared_forward if 3 <= task_s < 18 else
+        mass, bias = (c._prepared_forward if active else
                       c.inverse.linear_dynamics(q, dq, base))
         acceleration = np.linalg.solve(mass, total-bias)
         # Entry is the existing position ramp, not acceleration-controlled MPC.
         # During active/release, reject a transition that invalidates the model
         # envelope instead of calling the pre-projection result accepted.
-        if frame["weight"] > 0 and task_s >= 3 and np.max(np.abs(acceleration)) > c.mapper.acc_limit+1e-9:
+        if frame["weight"] > 0 and task_s >= self.mpc_start_s and np.max(np.abs(acceleration)) > c.mapper.acc_limit+1e-9:
             raise HardwareMpcError("post-transition total torque fails forward-model envelope")
         frame["diagnostics"].update(tau_pd_at_feedback_nm=pd.tolist(),
             feedback_dt_s=float(dt),
@@ -232,6 +247,7 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
             tau_ff_candidate_nm=(total-pd).tolist(), expected_kp=self.kp[5:10].tolist(),
             expected_kd=self.kd[5:10].tolist(), post_transition_ddq_rad_s2=acceleration.tolist(),
             acceptance="conditional_forward_model_only", torque_output_authorized=False)
+        frame['diagnostics']['mpc_start_s'] = self.mpc_start_s
         # No residual torque command after ownership has been fully released.
         if frame["weight"] == 0:
             frame["diagnostics"]["tau_ff_candidate_nm"] = [0.]*5
