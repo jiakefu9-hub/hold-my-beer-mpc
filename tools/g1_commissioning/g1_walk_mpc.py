@@ -31,6 +31,7 @@ from mpc_host import host_evidence, select_cpu, ControlThreadScope
 
 PERMIT = "MPC_WALK_H0_CAPTURE"
 FIELD_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_field.yaml'
+FIELD_MPC_START_S = 4.0  # one second of fixed posture, then MPC before walking at 5 s
 
 
 class MpcJournal(Journal):
@@ -219,13 +220,16 @@ class MpcRuntime:
         if self.actuation == "measured_torque_preview":
             from hardware_mpc_torque_control import HardwareTorquePreviewPlan
             plan_type = HardwareTorquePreviewPlan
-        options=dict(mpc_start_s=5.) if self.field_trial else {}
+        options=dict(mpc_start_s=FIELD_MPC_START_S) if self.field_trial else {}
         if self.assumed_command_delay_s is not None:
             from hardware_mpc_delay_plan import HardwareDelayTorquePreviewPlan
             plan_type=HardwareDelayTorquePreviewPlan
             options.update(assumed_command_delay_s=self.assumed_command_delay_s)
         self._plan=plan_type(initial, profile["target_q_array"],
                             profile["kp_array"], profile["kd_array"], self.controller,**options)
+        self.controller.metadata['state_input'] = (
+            'measured q/dq directly; no model propagation' if self.assumed_command_delay_s is None
+            else 'measured q/dq propagated to explicitly assumed command time')
         if self.assumed_command_delay_s is not None:
             from native_arm_delay import NativeArmDelay, LIBRARY
             if LIBRARY.is_file():
@@ -336,8 +340,8 @@ def build_parser():
     parser.add_argument('--rt-priority', type=int, default=0, help='0=ordinary; 1..40=control-thread FIFO, requires permission')
     parser.add_argument('--compute-process',action='store_true',
                         help='isolate SDK-free MPC calculation from Python DDS callbacks')
-    parser.add_argument('--assumed-command-delay-ms', type=float, default=6.,
-                        help='explicit nominal computation+application delay, not a measured DDS RTT')
+    parser.add_argument('--assumed-command-delay-ms', type=float, default=None,
+                        help='opt-in model propagation; omitted uses measured q/dq directly. 0 still propagates observation age')
     parser.add_argument('--allow-first-torque-field-trial', action='store_true',
                         help='explicit stationary nonzero-torque commissioning trial')
     parser.add_argument('--torque-stationary-validated', action='store_true',
@@ -390,7 +394,8 @@ def main(argv=None):
         runtime = runtime_type(args.mpc_config, args.controller_config, args.predictor,
                              args.bank, stationary=args.task == "stationary", field_trial=True,
                              torque_config=FIELD_TORQUE_CONFIG,
-                             assumed_command_delay_s=args.assumed_command_delay_ms*.001,**compute_options)
+                             assumed_command_delay_s=(None if args.assumed_command_delay_ms is None
+                                                      else args.assumed_command_delay_ms*.001),**compute_options)
         runtime.host_scope = scope
         journal = MpcJournal(args.output_dir)
         runtime.journal = journal
@@ -407,13 +412,15 @@ def main(argv=None):
                 'hardware_mpc_torque_control.py','hardware_arm_inverse_dynamics.py',
                 'hardware_torque_mapper.py','hardware_mpc_delay_plan.py',
                 'hardware_mpc_delay_preview.py','mpc_host.py','arm_execution_record.py','native_arm_delay.py',
-                'mpc_compute_process.py','mpc_crc.py')],
+                'mpc_compute_process.py','mpc_crc.py','hardware_mpc_recovery.py',
+                'hardware_mpc_braking.py')],
             ROOT/'cpp/g1_arm_delay/delay.cpp', ROOT/'cpp/g1_arm_delay/CMakeLists.txt',
             ROOT / "arm_mpc.py", ROOT / "kinematics_helper.py"]
         journal.record({"schema": "g1_mpc_session_v1", "event": "session_start",
             "program": Path(__file__).name, "task": args.task, "required_fsm": 500,
             "publisher_created": False, "mode_setter_registered": False, "lowcmd_topic_created": False,
             "network_interface": args.nic, "control_nominal_period_ms": 6.,
+            "mpc_start_s": FIELD_MPC_START_S,
             "primary_metric_window_s": [5., 18.], "forward_speed_m_s": .5 if args.task == "walk" else 0.,
             "heading_target": "fixed_run_h0_positive_x", "host_before_control": host_evidence(),
             "requested_control_cpu": args.cpu, "requested_fifo_priority": args.rt_priority,

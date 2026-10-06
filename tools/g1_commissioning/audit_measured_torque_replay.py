@@ -12,6 +12,32 @@ from pathlib import Path
 import numpy as np
 
 
+def check_slew(row, previous, config):
+    """Check the configured reference, never silently reinterpret total slew."""
+    total=np.asarray(row['tau_total_estimated_at_feedback_nm'])
+    prior=np.asarray(previous['tau_total_estimated_at_feedback_nm'])
+    change=total-prior
+    mode=config.get('active_slew_reference','total')
+    if row.get('mpc_active',row.get('pid_active',False)) and mode=='none':
+        if row.get('torque_slew_reference')!='none' or row.get('torque_slew_bounds_nm') is not None:
+            raise ValueError('unexpected active torque-rate constraint')
+        if not np.isfinite(change).all():
+            raise ValueError('nonfinite torque change')
+        return
+    if row.get('mpc_active',row.get('pid_active',False)) and mode=='model_bias_relative':
+        bias=np.asarray(row['torque_model_bias_nm'])
+        old_bias=np.asarray(previous['torque_model_bias_nm'])
+        if (bias.shape!=(5,) or old_bias.shape!=(5,) or not np.isfinite(np.r_[bias,old_bias]).all()
+                or row.get('torque_slew_reference')!=mode
+                or not np.allclose(row['torque_previous_model_bias_nm'],old_bias,rtol=0,atol=1e-7)
+                or not np.allclose(row['torque_slew_bias_shift_nm'],bias-old_bias,rtol=0,atol=1e-7)):
+            raise ValueError('invalid model-bias slew provenance')
+        change-=bias-old_bias
+    bound=np.asarray(config['transition_rate_nm_s'])*min(row['feedback_dt_s'],.006)
+    if not np.isfinite(change).all() or np.any(np.abs(change)>bound+1e-6):
+        raise ValueError('torque rate envelope')
+
+
 def check_active(row, config, *, delay_enabled=False):
     q=np.asarray(row['q_measured_rad'])[5:10]
     dq=np.asarray(row['dq_measured_rad_s'])[5:10]
@@ -44,6 +70,33 @@ def check_active(row, config, *, delay_enabled=False):
             or np.any(qr>np.deg2rad(config['q_max_deg'])+1e-7)
             or np.max(np.abs(row['post_transition_ddq_rad_s2']))>config['max_abs_qacc_rad_s2']+1e-6):
         raise ValueError('invalid active command envelope')
+    if config.get('enforce_mapper_state_envelope',False):
+        # Recompute with the SELECTED torque's acceleration, not the desired
+        # ddq used for PD references. A bounded but outward fallback is invalid.
+        a=np.asarray(row['post_transition_ddq_rad_s2'])
+        limits=np.asarray(row['final_acceleration_bounds_rad_s2'])
+        if limits.shape!=(2,5) or not np.isfinite(limits).all():
+            raise ValueError('missing final model-state bounds')
+        nq=q+.006*dq+.5*.006**2*a;nv=dq+.006*a
+        h=nq+nv/config['recovery_rate_s_inv'];reentry=row['reentry']
+        if (np.any(a<limits[0]-1e-7) or np.any(a>limits[1]+1e-7)
+                or np.any(nq<np.deg2rad(config['q_min_deg'])-1e-8)
+                or np.any(nq>np.deg2rad(config['q_max_deg'])+1e-8)
+                or np.any(np.abs(nv)>config['max_dq_rad_s']+1e-8)
+                or np.any(h<np.asarray(reentry['first_lower_rad'])-1e-8)
+                or np.any(h>np.asarray(reentry['first_upper_rad'])+1e-8)):
+            raise ValueError('final torque violates first MPC state node')
+        if reentry['enabled']:
+            duration=reentry['duration_s'];elapsed=np.asarray(reentry['elapsed_s'])
+            if abs(duration-.054)>1e-10 or np.any(elapsed<0) or np.any(elapsed>=duration):
+                raise ValueError('invalid reentry deadline')
+            fraction=np.maximum(0.,1.-(elapsed+.006)/duration)
+            lo=np.deg2rad(config['q_min_deg'])+np.deg2rad(config['recovery_guard_deg'])
+            hi=np.deg2rad(config['q_max_deg'])-np.deg2rad(config['recovery_guard_deg'])
+            close(reentry['first_lower_rad'],lo-fraction*np.asarray(reentry['initial_lower_excess_rad']),
+                  'reentry lower contraction',1e-10)
+            close(reentry['first_upper_rad'],hi+fraction*np.asarray(reentry['initial_upper_excess_rad']),
+                  'reentry upper contraction',1e-10)
 
 
 def audit_run(directory):
@@ -83,9 +136,7 @@ def audit_run(directory):
             if previous:
                 if row['sequence']!=previous['sequence']+1 or t<=previous['task_elapsed_s']:
                     raise ValueError('missing/reordered commands')
-                change=np.abs(total-np.asarray(previous['tau_total_estimated_at_feedback_nm']))
-                bound=np.asarray(config['transition_rate_nm_s'])*min(row['feedback_dt_s'],.006)
-                if np.any(change>bound+1e-6):raise ValueError('torque rate envelope')
+                check_slew(row,previous,config)
             if 3<=t<18:
                 check_active(row,config,delay_enabled=delay_enabled);active+=1;times.append(t)
             if row['weight']==0 and np.max(np.abs(row['offline_packet_right_tau_nm']))!=0:

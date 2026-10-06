@@ -29,7 +29,8 @@ from mpc_host import ControlThreadScope, summarize_timing, percentiles
 from pid_timing import PeriodicClock
 
 
-def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=21., isolated=False):
+def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=21., isolated=False,
+        assumed_command_delay_s=None):
     from unitree_sdk2py.idl.default import (unitree_hg_msg_dds__LowState_,
         unitree_hg_msg_dds__IMUState_, unitree_hg_msg_dds__LowCmd_)
     scope = ControlThreadScope(cpu, rt_priority)
@@ -52,7 +53,7 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
             runtime_type=ProcessMpcRuntime
             options=dict(compute_cpu=cpu,compute_priority=rt_priority,compute_affinity=scope.affinity)
         runtime = runtime_type(predictor_mode='hold_current', stationary=True,
-            torque_config=FIELD_TORQUE_CONFIG, assumed_command_delay_s=.006, field_trial=True,**options)
+            torque_config=FIELD_TORQUE_CONFIG, assumed_command_delay_s=assumed_command_delay_s, field_trial=True,**options)
         runtime.host_scope=scope
         journal = MpcJournal(output)
         runtime.journal = journal
@@ -167,6 +168,7 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
         result = dict(schema='g1_mpc_ingress_benchmark_v1', host=host, threaded=threaded,isolated=isolated,
             source_sha256=source_hash, switch_ms=switch_ms,
             hardware_output=False, dds_initialized=False, source='synthetic_stationary_not_closed_loop',
+            assumed_command_delay_s=assumed_command_delay_s,
             all_stages=summarize_timing(rows), active=summarize_timing([r for r in rows if 5<=r['task_elapsed_s']<18]),
             prewrite_guard_rejections=sum(r['guard_rejection'] is not None for r in rows),
             terminal=bool(last_frame and last_frame['terminal']),
@@ -201,12 +203,15 @@ def main():
     parser.add_argument('--serial',action='store_true')
     parser.add_argument('--isolated',action='store_true')
     parser.add_argument('--duration',type=float,default=24.)
+    parser.add_argument('--assumed-command-delay-ms',type=float,default=None)
     args=parser.parse_args()
     if not .05<=args.switch_ms<=5 or not 4<=args.duration<=30:
         parser.error('switch-ms must be .05..5 and duration 4..30 seconds')
     with patch.object(socket,'socket',side_effect=RuntimeError('offline benchmark forbids sockets')):
         result=run(args.output_dir,cpu=args.cpu,rt_priority=args.rt_priority,switch_ms=args.switch_ms,
-                   threaded=not args.serial,duration=args.duration,isolated=args.isolated)
+                   threaded=not args.serial,duration=args.duration,isolated=args.isolated,
+                   assumed_command_delay_s=(None if args.assumed_command_delay_ms is None
+                                            else args.assumed_command_delay_ms*.001))
     print(json.dumps({k:result[k] for k in ('threaded','switch_ms','active','prewrite_guard_rejections',
                                           'journal_failed','journal_dropped')}),flush=True)
 

@@ -93,11 +93,11 @@ def _worker(request,response,nrequest,nresponse,ready,done,stopping,allowed,cpu,
 class ProcessMpcRuntime(MpcRuntime):
     """Same runner API, but only bounded numerical requests cross processes."""
     def __init__(self,*args,compute_cpu=7,compute_priority=0,compute_affinity=None,**kwargs):
-        if not kwargs.get('field_trial') or kwargs.get('assumed_command_delay_s') is None:
-            raise ValueError('compute process supports only the complete field torque lifecycle')
+        if not kwargs.get('field_trial'):
+            raise ValueError('compute process requires the field torque lifecycle')
         self.actuation='measured_torque_preview';self.field_trial=True
         self.stationary=kwargs.get('stationary',False)
-        self.assumed_command_delay_s=kwargs['assumed_command_delay_s']
+        self.assumed_command_delay_s=kwargs.get('assumed_command_delay_s')
         self.host_scope=None;self.journal=None;self.handback=TorqueHandback()
         self.epoch_ns=None;self._gc_was_enabled=None
         self._switch_interval=sys.getswitchinterval()
@@ -226,9 +226,10 @@ class ProcessMpcRuntime(MpcRuntime):
         # has died. Parent-only hand-back must never need the compute process.
         self.handback.accept(packet)
         if frame is self._candidate:
-            self._commit=dict(motors=[np.asarray([packet.motor_cmd[i].q,packet.motor_cmd[i].dq,
-                packet.motor_cmd[i].tau,packet.motor_cmd[i].kp,packet.motor_cmd[i].kd],dtype=np.float32).astype(float) for i in range(22,27)],
-                weight=float(np.float32(packet.motor_cmd[29].q)))
+            if self.assumed_command_delay_s is not None:
+                self._commit=dict(motors=[np.asarray([packet.motor_cmd[i].q,packet.motor_cmd[i].dq,
+                    packet.motor_cmd[i].tau,packet.motor_cmd[i].kp,packet.motor_cmd[i].kd],dtype=np.float32).astype(float) for i in range(22,27)],
+                    weight=float(np.float32(packet.motor_cmd[29].q)))
             frame['diagnostics']['committed_packet_sequence']=self._committed
             self._committed+=1
             self._candidate=None

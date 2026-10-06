@@ -1,13 +1,36 @@
-# First controlled torque trial. Not manufacturer's torque ratings or a calibration.
+# Field trial envelope. Not manufacturer's torque ratings or a calibration.
 # Keep simulation position/acceleration envelope; do not widen it to hide faults.
 schema: g1_measured_torque_preview_v1
-tau_abs_nm: [5, 3, 2, 5, 1.5]
-tau_ff_abs_nm: [5, 3, 2, 5, 1.5]
+# Full 09-18 H0 walk/stop records, 11 primary runs + trial 6 supplemental:
+# local total/FF box maxima [7.640,4.317,2.681,5.071,.321] Nm for |ddq|<=8.
+# ceil(1.25 * maxima), never reduce the old wrist limit. Engineering headroom,
+# not an identified hardware gain. See 20261006_MPC_BRAKING_PREPARATION.md.
+tau_abs_nm: [10, 6, 4, 7, 1.5]
+tau_ff_abs_nm: [10, 6, 4, 7, 1.5]
 transition_rate_nm_s: [50, 40, 30, 50, 20]
-recovery_envelope_enabled: true
+# transition_rate above applies to entry/release only. Active MPC has no
+# total- or bias-relative torque-rate cap; absolute total/FF checks remain.
+active_slew_reference: none
+# Keep the original MPC q/dq/ddq boxes.  The additional q+dq/6 envelope was
+# removed after it rejected a predicted 2.65 deg shoulder state because
+# the uncalibrated slow-recovery projection reached 4.91 deg.  The original
+# stopping-distance recovery, outer joint box and all torque limits remain.
+recovery_envelope_enabled: false
 recovery_rate_s_inv: 6.0
 recovery_guard_deg: [0.15, 0.15, 0.15, 0.15, 0.15]
+# Historical additional recovery gates are disabled in the field baseline.
+recovery_reentry_enabled: false
+enforce_mapper_state_envelope: false
+# Plan the already-enforced absolute total/FF limits, without torque-rate rows.
+planning_actuation_constraints_enabled: true
+# Slow early, instead of adding another infeasible hard stopping envelope.
+# 4 rad/s^2 and 12 ms are conservative tuning assumptions, not calibration.
+predictive_braking_enabled: true
+braking_deceleration_rad_s2: 4.0
+braking_reaction_s: 0.012
+braking_margin_deg: 1.0
+braking_velocity_weight: 50.0
 # Defaults are inherited from hardware_mpc_torque_preview.yaml, including the
 # full measured-state QP and candidate search. 250 g bottle per arm in the XML.
-# PID observed |tau_est| maxima [2.6875,.8125,.8125,3.3125,.8125] Nm inform scale,
-# but estimates do NOT certify these bounds or identify torque gain.
+# Historical first trial [5,3,2,5,1.5] used PID |tau_est| peaks as a scale;
+# it did not establish full-walk authority and is no longer the active limit.

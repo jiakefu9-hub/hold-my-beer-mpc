@@ -39,7 +39,7 @@ class LocalTorqueMapper:
             raise ValueError("invalid bounded mapper configuration")
 
     def compute(self, forward, desired, nominal, safe_hold, previous=None, bounds=None,
-                *, affine_gain=None, forward_batch=None):
+                *, affine_gain=None, forward_batch=None, acceleration_bounds=None):
         started = time.perf_counter_ns()
         desired = finite_vector(desired, 5, "desired acceleration")
         lower, upper = -self.limit, self.limit
@@ -48,6 +48,12 @@ class LocalTorqueMapper:
             upper = np.minimum(upper, finite_vector(bounds[1], 5, "torque upper"))
         if np.any(lower > upper):
             raise ValueError("empty torque envelope")
+        acc_lower,acc_upper=np.full(5,-self.acc_limit),np.full(5,self.acc_limit)
+        if acceleration_bounds is not None:
+            acc_lower=np.maximum(acc_lower,finite_vector(acceleration_bounds[0],5,'acceleration lower'))
+            acc_upper=np.minimum(acc_upper,finite_vector(acceleration_bounds[1],5,'acceleration upper'))
+            if np.any(acc_lower>acc_upper):
+                raise ValueError('empty final acceleration envelope')
         if affine_gain is not None:
             affine_gain = np.asarray(affine_gain, dtype=float)
             if affine_gain.shape != (5, 5) or not np.isfinite(affine_gain).all():
@@ -55,6 +61,8 @@ class LocalTorqueMapper:
         clip = lambda value: np.clip(finite_vector(value, 5, "torque"), lower, upper)
         trace = {"acceptance": "forward_model_only", "hardware_certified": False,
                  "passes": [], "fallback": None, "forward_calls": 0,
+                 "acceleration_lower_rad_s2":acc_lower.tolist(),
+                 "acceleration_upper_rad_s2":acc_upper.tolist(),
                  "gain_source": "finite_difference" if affine_gain is None else "exact_conditional_mass_inverse"}
 
         def evaluate(torque):
@@ -64,7 +72,7 @@ class LocalTorqueMapper:
             return acceleration, float(np.linalg.norm(error)), float(np.max(np.abs(error)))
 
         def safe(acceleration):
-            return bool(np.max(np.abs(acceleration)) <= self.acc_limit+1e-9)
+            return bool(np.all(acceleration>=acc_lower-1e-8) and np.all(acceleration<=acc_upper+1e-8))
 
         best_tau = clip(nominal)
         best_acc, best_error, best_max = evaluate(best_tau)
@@ -109,7 +117,7 @@ class LocalTorqueMapper:
             predictions = base_acc+(taus-base_tau)@gain.T
             predicted_errors = predictions-desired
             ranks = np.linalg.norm(predicted_errors,axis=1)
-            not_safe = ((np.max(np.abs(predictions),axis=1)>self.acc_limit+1e-9)
+            not_safe = (np.any((predictions<acc_lower-1e-8)|(predictions>acc_upper+1e-8),axis=1)
                         | (np.max(np.abs(predicted_errors),axis=1)>self.error_limit))
             order = np.lexsort((np.arange(len(self.scales)),ranks,not_safe))
             for index in order:
@@ -151,6 +159,40 @@ class LocalTorqueMapper:
             best_tau, best_acc, best_error, best_max, record["selected_scale"] = selected
             trace["passes"].append(record)
 
+        if not safe(best_acc) and acceleration_bounds is not None and affine_gain is not None:
+            # Existing candidates may obey |ddq| while accelerating OUT of the
+            # braking envelope. A <=5-variable QP searches the same torque box
+            # with the actual first-node acceleration constraints. Nothing is
+            # sent on solver failure; all results run through forward() again.
+            rescue=dict(attempted=True,kind='coupled_torque_and_first_state_node',
+                        max_iterations=100,time_budget_s=.0008)
+            trace['state_envelope_projection']=rescue
+            free=upper-lower>1e-12
+            if np.any(free):
+                import daqp
+                g=affine_gain[:,free]
+                h=g.T@g+1e-10*np.eye(np.count_nonzero(free))
+                f=g.T@(best_acc-desired)
+                scale=max(1.,float(np.max(np.diag(h))))
+                matrix=np.ascontiguousarray(np.r_[np.eye(np.count_nonzero(free)),g])
+                lo=np.r_[lower[free]-best_tau[free],acc_lower-best_acc]
+                hi=np.r_[upper[free]-best_tau[free],acc_upper-best_acc]
+                begin=time.perf_counter()
+                try:
+                    delta,_,flag,info=daqp.solve(np.ascontiguousarray(h/scale),np.ascontiguousarray(f/scale),
+                        matrix,np.ascontiguousarray(hi),np.ascontiguousarray(lo),
+                        primal_tol=1e-9,dual_tol=1e-10,eps_prox=0.,iter_limit=100,time_limit=.0008)
+                    elapsed=time.perf_counter()-begin
+                    rescue.update(solver_status=int(flag),wall_s=elapsed,iterations=int(info['iterations']))
+                    if flag==1 and elapsed<=.0008 and np.isfinite(delta).all():
+                        torque=best_tau.copy();torque[free]+=delta;torque=clip(torque)
+                        acc,error,maximum=evaluate(torque)
+                        rescue.update(checked_ddq_rad_s2=acc.tolist(),model_accepted=safe(acc))
+                        if safe(acc):
+                            best_tau,best_acc,best_error,best_max=torque,acc,error,maximum
+                            trace['fallback']='state_envelope_projection_rechecked'
+                except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
+                    rescue['failure']=str(exc)
         if not safe(best_acc):
             # Previous is re-evaluated at THIS state. Never assume last tick's
             # acceptance remains valid. Fallbacks need not improve tracking.

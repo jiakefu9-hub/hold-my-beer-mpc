@@ -1,5 +1,6 @@
 """Synthetic evidence checks only; no DDS participant or robot output."""
 import contextlib
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -12,7 +13,8 @@ from unittest import mock
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from analyze_mpc_execution import analyze, read_capture, write_outputs
+from analyze_mpc_execution import analyze, read_capture, write_outputs, error_stats
+from analyze_mpc_field_trial import review
 from arm_execution_record import command_evidence
 from g1_walk_mpc import main, MpcRuntime
 from hardware_pid_control import ARM_MOTOR_INDICES
@@ -38,6 +40,15 @@ def fixture():
 
 
 class ExecutionTest(unittest.TestCase):
+    def test_constant_acceleration_request_is_not_hidden_by_noise_statistic(self):
+        stats=error_stats(np.zeros((20,5)),np.full((20,5),2.))
+        np.testing.assert_allclose(stats['bias'],-2.)
+        np.testing.assert_allclose(stats['rmse'],2.)
+        np.testing.assert_allclose(stats['centered_rmse'],0.)
+        np.testing.assert_allclose(stats['actual_mean'],0.)
+        np.testing.assert_allclose(stats['expected_mean'],2.)
+        self.assertIsNone(error_stats([],[]))
+
     def analyze_rows(self, rows, **kwargs):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)/'raw.jsonl'
@@ -83,6 +94,45 @@ class ExecutionTest(unittest.TestCase):
         self.assertFalse(summary['absolute_torque_calibrated'])
         self.assertIsNone(summary['hardware_performance_passed'])
         self.assertGreater(len(data['acceleration_t']), 10)
+
+    def test_delay_shift_cannot_erase_constant_acceleration_bias(self):
+        rows = fixture()
+        for row in rows:
+            if row.get('event') == 'dds_write':
+                row['raw_mpc_ddq_rad_s2'] = [2.]*5
+        for delay in (0., .003, .006, .012):
+            with self.subTest(delay=delay):
+                _, summary = self.analyze_rows(rows, assumed_delay_s=delay)
+                stats = summary['windows']['primary_full_task']['measured_acc_minus_mpc_desired_rad_s2']
+                np.testing.assert_allclose(stats['actual_mean'], .8, atol=1e-12)
+                np.testing.assert_allclose(stats['expected_mean'], 2., atol=1e-12)
+                np.testing.assert_allclose(stats['bias'], -1.2, atol=1e-12)
+
+    def test_field_review_rejects_mixed_capture_and_missing_timing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            raw, endpoint, out = root/'raw.jsonl', root/'endpoint', root/'review'
+            rows = [dict(event='session_start', task='stationary', primary_metric_window_s=[5.,18.])]+fixture()
+            for row in rows:
+                if row.get('event') == 'dds_write':
+                    row['task_elapsed_s'] = (row['write_end_monotonic_ns']-1_000_000_000)*1e-9
+            raw.write_text(''.join(json.dumps(r)+'\n' for r in rows))
+            endpoint.mkdir()
+            (endpoint/'summary.json').write_text(json.dumps(dict(source_sha256='different')))
+            with self.assertRaisesRegex(ValueError, 'different raw capture'):
+                review(raw, endpoint, out)
+            self.assertFalse(out.exists())
+            (endpoint/'summary.json').write_text(json.dumps(dict(source_sha256=hashlib.sha256(raw.read_bytes()).hexdigest())))
+            np.savez(endpoint/'metrics.npz', task_elapsed_s=[5.], left_tilt_deg=[1.], right_tilt_deg=[1.])
+            with self.assertRaisesRegex(ValueError, 'missing active commands or full-cycle timing'):
+                review(raw, endpoint, out)
+            self.assertFalse(out.exists())
+
+    def test_field_review_does_not_overwrite(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            with self.assertRaises(FileExistsError):
+                review(out/'missing.jsonl', out/'missing_endpoint', out)
 
     def test_enqueue_order_does_not_change_result(self):
         rows = fixture()

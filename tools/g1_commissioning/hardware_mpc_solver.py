@@ -2,8 +2,9 @@
 
 For nine intervals, optimize 45 acceleration variables rather than 145 state+
 input variables. z=E*x0+T*u enforces the integrator equalities algebraically.
-Cost terms and inequality bounds are unchanged, then the full trajectory is
-reconstructed and checked by ArmMPCPolicy. No relaxed safety constraints.
+Simulation cost terms and bounds are preserved; the field controller can add
+a soft early-braking velocity cost. The full trajectory is reconstructed and
+checked by ArmMPCPolicy. No relaxed safety constraints.
 """
 from types import SimpleNamespace
 import time
@@ -57,9 +58,82 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         self._input_rows = np.concatenate([np.arange(self._cu(k), self._cu(k)+self.nu)
                                            for k in range(self.horizon)])
         self._condensed_solver = None
+        self._local_actuation = None
+        self._last_local_actuation = None
+        self._braking_velocity_cost = np.zeros(self.nu)
+
+    def set_local_actuation_constraints(self, mass, bias, total_limit, ff_limit, feedback_dq):
+        """Expose the executor's existing local torque envelope to the QP.
+
+        The conditional arm model is frozen for this 54 ms horizon.  This is
+        the same local approximation used by the final forward check, not a
+        new actuator limit. Only absolute total and feedforward limits are
+        planned. There are no inter-tick or future torque-rate constraints.
+        """
+        vectors = [np.asarray(x, dtype=np.float64) for x in
+                   (bias, total_limit, ff_limit, feedback_dq)]
+        if any(x.shape != (self.nu,) or not np.all(np.isfinite(x)) for x in vectors):
+            raise ValueError('local actuation vectors must be finite five-vectors')
+        bias, total_limit, ff_limit, feedback_dq = vectors
+        mass = np.asarray(mass, dtype=np.float64)
+        if (mass.shape != (self.nu, self.nu) or not np.all(np.isfinite(mass))
+                or np.any(total_limit <= 0) or np.any(ff_limit <= 0)):
+            raise ValueError('invalid local actuation model/envelope')
+        np.linalg.cholesky(.5*(mass+mass.T))
+        self._local_actuation = dict(mass=mass.copy(), bias=bias.copy(),
+            total_limit=total_limit.copy(), ff_limit=ff_limit.copy(),
+            feedback_dq=feedback_dq.copy())
+
+    def clear_local_actuation_constraints(self):
+        self._local_actuation = None
+
+    def set_braking_velocity_cost(self, weights):
+        weights = np.asarray(weights, dtype=float)
+        if weights.shape != (self.nu,) or not np.all(np.isfinite(weights)) or np.any(weights < 0):
+            raise ValueError('braking weights must be finite nonnegative five-vector')
+        self._braking_velocity_cost = weights.copy()
+
+    def _local_actuation_rows(self):
+        """Return normalized-input rows for absolute total and first FF only."""
+        data = self._local_actuation
+        if data is None:
+            return None
+        n, m, dt = self.horizon, self.nu, self.control_dt
+        scale = np.diag(self.max_ddq)
+        mass = data['mass']
+        rows, lower, upper = [], [], []
+
+        # Frozen local total-torque model: tau_k = M*a_k + b.
+        for k in range(n):
+            row = np.zeros((m, n*m))
+            row[:, k*m:(k+1)*m] = mass @ scale
+            rows.append(row)
+            lower.append(-data['total_limit']-data['bias'])
+            upper.append(data['total_limit']-data['bias'])
+
+        # Packet feedforward after the device-side one-step PD law.  Only the
+        # first action is transmitted; the next solve rechecks its own first
+        # action against fresh feedback.  Keeping this to one row block avoids
+        # burdening the 6 ms solve with limits on commands that are never sent.
+        kp = np.asarray(getattr(self, '_local_kp', np.zeros(m)), dtype=np.float64)
+        kd = np.asarray(getattr(self, '_local_kd', np.zeros(m)), dtype=np.float64)
+        pd_a = np.diag(.5*kp*dt**2+kd*dt)
+        current = (mass-pd_a) @ scale
+        offset = data['bias']-kp*dt*data['feedback_dq']
+        row = np.zeros((m, n*m)); row[:, :m] = current
+        rows.append(row)
+        lower.append(-data['ff_limit']-offset)
+        upper.append(data['ff_limit']-offset)
+
+        matrix = np.vstack(rows)
+        lo, hi = np.concatenate(lower), np.concatenate(upper)
+        row_scale = 1/np.maximum(np.max(np.abs(matrix), axis=1), 1e-12)
+        return (np.ascontiguousarray(matrix*row_scale[:, None]),
+                np.ascontiguousarray(lo*row_scale),
+                np.ascontiguousarray(hi*row_scale))
 
     def _build_cost(self, step_terms):
-        """Batch the unchanged seven objective terms across the nine stages."""
+        """Batch simulation terms, plus optional soft velocity braking cost."""
         terms = {key: np.stack([t[key] for t in step_terms]) for key in
                  ("C_omega", "D_omega", "G_g", "d_g", "C_acc", "B_acc", "D_acc",
                   "C_alpha", "B_alpha", "D_alpha")}
@@ -67,6 +141,8 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         ew, gg = terms["C_omega"] @ self.Sv, terms["G_g"]
         qxx = (self._state_regularization_hessian[None] + transpose(ew) @ self.Q_ee_omega @ ew
                + transpose(gg) @ self.Qg @ gg)
+        velocity_indices = np.arange(self.nu, self.nx)
+        qxx[:, velocity_indices, velocity_indices] += self._braking_velocity_cost
         fx = (self._posture_linear_cost[None, :, None]
               + transpose(ew) @ self.Q_ee_omega @ terms["D_omega"][..., None]
               + transpose(gg) @ self.Qg @ terms["d_g"][..., None])
@@ -97,6 +173,9 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
 
     def reset(self):
         super().reset()
+        self._braking_velocity_cost = np.zeros(self.nu)
+        self._local_actuation = None
+        self._last_local_actuation = None
         if getattr(self, "_condensed_solver", None) is not None:
             self._condensed_solver.warm_start(x=np.zeros(self.horizon*self.nu),
                                               y=np.zeros(self._ac.shape[0]))
@@ -150,19 +229,28 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         try:
             pc, qc, lc, uc, offset, full_p = self.condense(P, linear, lower, upper,
                                                         cost_blocks=self._cost_blocks)
+            local = self._local_actuation_rows()
+            self._last_local_actuation = local
+            solve_matrix = self._ac_dense
+            if local is not None:
+                if self.solver_backend != 'daqp':
+                    raise ValueError('local actuation constraints require the DAQP backend')
+                solve_matrix = np.ascontiguousarray(np.vstack((solve_matrix, local[0])))
+                lc = np.ascontiguousarray(np.r_[lc, local[1]])
+                uc = np.ascontiguousarray(np.r_[uc, local[2]])
             if self.solver_backend == "daqp":
                 begin = time.perf_counter()
                 u, _, flag, details = self._daqp.solve(
-                    np.ascontiguousarray(pc), np.ascontiguousarray(qc), self._ac_dense,
+                    np.ascontiguousarray(pc), np.ascontiguousarray(qc), solve_matrix,
                     np.ascontiguousarray(uc), np.ascontiguousarray(lc),
                     primal_tol=1e-7, dual_tol=1e-10, eps_prox=0.,
                     iter_limit=self.solver_max_iter, time_limit=self.solver_time_limit)
                 wall = time.perf_counter()-begin
                 success = flag == 1 and wall <= self.solver_time_limit
                 full_solution = offset + self._T @ u
-                residual = self._ac_dense @ u
+                residual = solve_matrix @ u
                 primal = float(max(np.max(lc-residual), np.max(residual-uc), 0.))
-                dual = float(np.max(np.abs(pc@u+qc+self._ac_dense.T@details["lam"])))
+                dual = float(np.max(np.abs(pc@u+qc+solve_matrix.T@details["lam"])))
                 status = "solved" if success else (
                     "daqp_wall_budget_exceeded" if flag == 1 else f"daqp_exitflag_{flag}")
                 info = SimpleNamespace(status=status, status_val=1 if success else -1,
@@ -195,6 +283,14 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
 
     def _check_result(self, result, lower, upper):
         solved, solution, status, status_val, violation = super()._check_result(result, lower, upper)
+        if solved and self._last_local_actuation is not None:
+            matrix, lo, hi = self._last_local_actuation
+            normalized = solution[self._input_rows]/self._input_scale
+            value = matrix @ normalized
+            local_violation = float(max(np.max(lo-value), np.max(value-hi), 0.))
+            violation = max(violation, local_violation)
+            if local_violation > 1e-6:
+                return False, solution, status+':local_actuation_residual', status_val, violation
         if solved and violation > 1e-6:
             return False, solution, status+":full_constraint_residual", status_val, violation
         return solved, solution, status, status_val, violation

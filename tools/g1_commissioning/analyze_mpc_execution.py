@@ -114,6 +114,7 @@ def read_capture(path):
     return commands, ordered, dict(raw_sha256=digest.hexdigest(), **counts,
         successful_commands=len(commands), unique_feedback_samples=len(ordered),
         session_task=session.get('task', 'unknown'), session_outcome=session_end.get('outcome'),
+        mpc_start_s=float(session.get('mpc_start_s',5.)),
         final_weight=session_end.get('final_weight'), capture_drain_recorded=bool(drain),
         journal_dropped=drain.get('queue_dropped'))
 
@@ -122,8 +123,15 @@ def error_stats(actual, expected):
     error = np.asarray(actual)-np.asarray(expected)
     if len(error) == 0:
         return None
+    # A small command-vs-estimate RMSE alone can hide a persistent bias;
+    # acceleration magnitude is also needed when the arm barely moves.
     return dict(samples=len(error), bias=error.mean(axis=0).tolist(),
         rmse=np.sqrt(np.mean(error**2, axis=0)).tolist(),
+        centered_rmse=np.std(error, axis=0).tolist(),
+        actual_mean=np.mean(actual, axis=0).tolist(),
+        expected_mean=np.mean(expected, axis=0).tolist(),
+        actual_rms=np.sqrt(np.mean(np.asarray(actual)**2, axis=0)).tolist(),
+        expected_rms=np.sqrt(np.mean(np.asarray(expected)**2, axis=0)).tolist(),
         p95_abs=np.percentile(np.abs(error), 95, axis=0).tolist(),
         max_abs=np.max(np.abs(error), axis=0).tolist())
 
@@ -189,7 +197,9 @@ def analyze(path, assumed_delay_s=0., derivative_window_s=.024, max_age_s=.05):
     if not rows:
         raise ValueError('no full-weight, timestamp-aligned torque pairs; do not infer success')
     windows = {}
-    for name, start, stop in [('pre_motion', 3., 5.), ('primary_full_task', 5., 18.)]:
+    for name, start, stop in [('pre_motion', 3., 5.), ('primary_full_task', 5., 18.),
+                             ('diagnostic_entry', audit['mpc_start_s'], audit['mpc_start_s']+1.),
+                             ('diagnostic_late', 8., 18.)]:
         torque = [r for r in rows if start <= r['t'] < stop]
         accel = [r for r in acceleration if start <= r['t']-r['span_s']/2
                  and r['t']+r['span_s']/2 < stop]
@@ -197,6 +207,7 @@ def analyze(path, assumed_delay_s=0., derivative_window_s=.024, max_age_s=.05):
                     and np.asarray(r['selected_total']).shape == (5,)
                     and np.isfinite(r['selected_total']).all()]
         windows[name] = dict(interval_s=[start, stop],
+            role='primary' if name=='primary_full_task' else 'diagnostic_only',
             torque_observed_interval_s=None if not torque else [torque[0]['t'], torque[-1]['t']],
             torque_max_gap_s=None if len(torque) < 2 else float(np.max(np.diff([r['t'] for r in torque]))),
             acceleration_observed_interval_s=None if not accel else

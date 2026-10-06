@@ -29,8 +29,17 @@ class RecoveryEnvelopeMpcPolicy(CondensedArmMPCPolicy):
     or plant mismatch, nor feasibility from arbitrary initial states.
     """
 
-    def __init__(self, *args, recovery_rate_s_inv=6.0,
+    def __init__(self, *args, recovery_rate_s_inv=6.0, recovery_reentry_enabled=False,
                  recovery_guard_rad=np.deg2rad(0.15), **kwargs):
+        if not isinstance(recovery_reentry_enabled, bool):
+            raise ValueError('recovery_reentry_enabled must be boolean')
+        self.recovery_reentry_enabled = recovery_reentry_enabled
+        self._reentry_time = None
+        self._reentry_start = np.full(5, np.nan)
+        self._reentry_lower = np.zeros(5)
+        self._reentry_upper = np.zeros(5)
+        self.reentry_diagnostics = dict(enabled=recovery_reentry_enabled, active=False)
+        self._one_step = None
         self.recovery_rate_s_inv = float(recovery_rate_s_inv)
         guard = np.asarray(recovery_guard_rad, dtype=np.float64)
         if guard.ndim == 0:
@@ -43,6 +52,35 @@ class RecoveryEnvelopeMpcPolicy(CondensedArmMPCPolicy):
             raise ValueError("recovery_rate_s_inv must be finite and positive")
         self.recovery_guard_rad = guard.copy()
         super().__init__(*args, **kwargs)
+
+    def reset(self):
+        super().reset()
+        self._reentry_time = None
+        self._reentry_start[:] = np.nan
+        self._one_step = None
+
+    def set_recovery_time(self, elapsed_s):
+        """Actual elapsed control time, not a horizon reset every new solve."""
+        if (not np.isfinite(elapsed_s) or elapsed_s < 0
+                or self._reentry_time is not None and elapsed_s < self._reentry_time):
+            raise ValueError('invalid/nonmonotonic recovery clock')
+        self._reentry_time = float(elapsed_s)
+
+    def first_step_acceleration_bounds(self, q, dq):
+        """Require the FINAL forward-checked torque to obey QP node one too."""
+        if self._one_step is None or not np.array_equal(np.r_[q,dq], self._one_step[0]):
+            raise ValueError('missing/stale first-step state envelope')
+        _, qlo, qhi, hlo, hhi = self._one_step
+        dt, rate = self.control_dt, self.recovery_rate_s_inv
+        offset = q+dt*dq+dq/rate
+        coefficient = .5*dt**2+dt/rate
+        lo = np.maximum.reduce((-self.max_ddq, (-self.max_dq-dq)/dt,
+                                (qlo-q-dt*dq)/(.5*dt**2), (hlo-offset)/coefficient))
+        hi = np.minimum.reduce((self.max_ddq, (self.max_dq-dq)/dt,
+                                (qhi-q-dt*dq)/(.5*dt**2), (hhi-offset)/coefficient))
+        if np.any(lo>hi+1e-8):
+            raise ValueError('empty first-step acceleration envelope')
+        return lo, hi
 
     def _build_constraints(self):
         rate, dt = self.recovery_rate_s_inv, self.control_dt
@@ -73,4 +111,43 @@ class RecoveryEnvelopeMpcPolicy(CondensedArmMPCPolicy):
         rows = slice(start, start+self.horizon*self.n)
         lower[rows] = np.maximum(lower[rows], np.tile(self.safety_joint_limits[:, 0], self.horizon))
         upper[rows] = np.minimum(upper[rows], np.tile(self.safety_joint_limits[:, 1], self.horizon))
+        self.reentry_diagnostics = dict(enabled=self.recovery_reentry_enabled, active=False)
+        if self.recovery_reentry_enabled:
+            if self._reentry_time is None:
+                raise ValueError('reentry requires an elapsed-time clock')
+            if (np.any(q<self.safety_joint_limits[:,0]-1e-10)
+                    or np.any(q>self.safety_joint_limits[:,1]+1e-10)
+                    or np.any(np.abs(dq)>self.max_dq+1e-10)):
+                raise ValueError('reentry refuses a state outside the outer q/dq bounds')
+            lo = self.safety_joint_limits[:,0]+self.recovery_guard_rad
+            hi = self.safety_joint_limits[:,1]-self.recovery_guard_rad
+            h = q+dq/self.recovery_rate_s_inv
+            below, above = np.maximum(lo-h,0.), np.maximum(h-hi,0.)
+            outside = np.maximum(below,above)>1e-10
+            self._reentry_start[~outside] = np.nan
+            begin = outside & np.isnan(self._reentry_start)
+            self._reentry_start[begin] = self._reentry_time
+            self._reentry_lower[begin], self._reentry_upper[begin] = below[begin], above[begin]
+            duration = self.horizon*self.control_dt
+            elapsed = np.where(outside,self._reentry_time-self._reentry_start,0.)
+            self.reentry_diagnostics = dict(enabled=True, active=bool(np.any(outside)),
+                axes=outside.tolist(), clock_s=self._reentry_time, duration_s=duration,
+                initial_lower_excess_rad=np.where(outside,self._reentry_lower,0.).tolist(),
+                initial_upper_excess_rad=np.where(outside,self._reentry_upper,0.).tolist(),
+                elapsed_s=elapsed.tolist(), h_rad=h.tolist(), lower_rad=lo.tolist(), upper_rad=hi.tolist())
+            if np.any(outside & (elapsed>=duration-1e-10)):
+                raise ValueError('braking-envelope reentry deadline exceeded')
+            # A fixed deadline per joint episode: no slack cost, no refreshed
+            # grace period. Bounds contract to the ORIGINAL envelope within
+            # at most N*dt (54 ms), while all original q/dq/ddq rows remain.
+            fraction=np.maximum(0.,1.-(elapsed[None,:]+np.arange(1,self.horizon+1)[:,None]*self.control_dt)/duration)
+            fraction*=outside[None,:]
+            lower[self.recovery_row_start:] = (lo-fraction*self._reentry_lower).ravel()
+            upper[self.recovery_row_start:] = (hi+fraction*self._reentry_upper).ravel()
+        self._one_step = (np.r_[q,dq].copy(), lower[start:start+self.n].copy(),
+            upper[start:start+self.n].copy(),
+            lower[self.recovery_row_start:self.recovery_row_start+self.n].copy(),
+            upper[self.recovery_row_start:self.recovery_row_start+self.n].copy())
+        self.reentry_diagnostics.update(first_lower_rad=self._one_step[3].tolist(),
+                                       first_upper_rad=self._one_step[4].tolist())
         return lower, upper, states, inputs, active

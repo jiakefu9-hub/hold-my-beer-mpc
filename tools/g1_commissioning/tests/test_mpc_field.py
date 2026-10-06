@@ -11,7 +11,7 @@ from unittest import mock
 import numpy as np
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from g1_walk_mpc import MpcJournal, MpcRuntime, FIELD_TORQUE_CONFIG, main
+from g1_walk_mpc import MpcJournal, MpcRuntime, FIELD_TORQUE_CONFIG, main, build_parser
 from g1_walk_pid import EXPECTED_TARGET_Q
 from hardware_mpc_field import TorqueHandback, check_field_packet
 from hardware_mpc_control import HardwareMpcError
@@ -34,6 +34,12 @@ def packet():
 
 
 class TorqueFieldTests(unittest.TestCase):
+    def test_raw_feedback_is_cli_default_and_delay_requires_an_explicit_value(self):
+        self.assertIsNone(build_parser().parse_args([]).assumed_command_delay_ms)
+        self.assertEqual(build_parser().parse_args(['--assumed-command-delay-ms','6']).assumed_command_delay_ms,6.)
+        c=load_torque_config(FIELD_TORQUE_CONFIG)
+        self.assertEqual(c['active_slew_reference'],'none')
+        self.assertFalse(c['recovery_envelope_enabled'])
     def test_prewrite_deadlines_unchanged_and_failed_timing_retained(self):
         runtime=object.__new__(MpcRuntime)
         runtime.field_trial=True;runtime.controller=SimpleNamespace(last_diagnostics={})
@@ -46,7 +52,7 @@ class TorqueFieldTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'older than 25 ms'):
             runtime.check_before_write(frame,low,imu,25_000_000,25_000_001)
 
-    def test_field_waits_full_baseline_before_mpc(self):
+    def test_field_settles_then_starts_mpc_before_walking(self):
         runtime=MpcRuntime(predictor_mode='hold_current',field_trial=True,
                            torque_config=FIELD_TORQUE_CONFIG)
         from disturbance_types import DisturbanceInput,DisturbanceHorizon
@@ -56,7 +62,7 @@ class TorqueFieldTests(unittest.TestCase):
             p=dict(target_q_array=EXPECTED_TARGET_Q,kp_array=np.r_[np.full(11,20.),0,0],
                    kd_array=np.r_[np.ones(11),0,0],q_offset_limit_deg_array=np.full(5,5.))
             plan=runtime.create_plan(EXPECTED_TARGET_Q,p)
-            for t in (3.,4.,4.999):
+            for t in (3.,3.5,3.999):
                 runtime.controller.set_disturbance_horizon(horizon)
                 with mock.patch.object(runtime.controller,'step',side_effect=AssertionError('too early')):
                     frame=plan.sample(t,EXPECTED_TARGET_Q,np.zeros(13),[1,0,0,0],0.,.006)
@@ -64,8 +70,14 @@ class TorqueFieldTests(unittest.TestCase):
                 self.assertEqual(frame['weight'],1.)
                 np.testing.assert_array_equal(frame['q_rad'],EXPECTED_TARGET_Q)
             runtime.controller.set_disturbance_horizon(horizon)
-            frame=plan.sample(5.,EXPECTED_TARGET_Q,np.zeros(13),[1,0,0,0],0.,.006)
+            frame=plan.sample(4.,EXPECTED_TARGET_Q,np.zeros(13),[1,0,0,0],0.,.006)
             self.assertTrue(frame['diagnostics']['mpc_active'])
+            self.assertEqual(frame['stage'],'stationary_baseline')
+            self.assertEqual(plan.mpc_start_s,4.)
+            self.assertEqual(frame['diagnostics']['torque_slew_reference'],'none')
+            self.assertIsNone(frame['diagnostics']['torque_slew_bounds_nm'])
+            np.testing.assert_allclose(frame['diagnostics']['mpc_initial_state'],
+                                       np.r_[EXPECTED_TARGET_Q[5:10],np.zeros(5)])
         finally:runtime.close()
 
     def test_handback_preserves_complete_PD_law_for_changed_feedback(self):

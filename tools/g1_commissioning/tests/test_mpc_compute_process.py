@@ -17,10 +17,17 @@ class ComputeProcessTests(unittest.TestCase):
                     torque_config=FIELD_TORQUE_CONFIG,assumed_command_delay_s=.006)
 
     def test_spawned_results_match_direct_and_worker_death_does_not_break_release(self):
+        self.check_runtime_parity(self.options())
+
+    def test_measured_state_worker_needs_no_delay_history_and_handback_still_works(self):
+        options=self.options();options['assumed_command_delay_s']=None
+        self.check_runtime_parity(options)
+
+    def check_runtime_parity(self,options):
         from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
         affinity=set(os.sched_getaffinity(0))
-        worker=ProcessMpcRuntime(compute_cpu=min(affinity),compute_affinity=affinity,**self.options())
-        direct=MpcRuntime(**self.options())
+        worker=ProcessMpcRuntime(compute_cpu=min(affinity),compute_affinity=affinity,**options)
+        direct=MpcRuntime(**options)
         self.addCleanup(direct.close);self.addCleanup(worker.close)
         profile=dict(target_q_array=EXPECTED_TARGET_Q,kp_array=np.r_[np.full(11,20.),0,0],
                      kd_array=np.r_[np.ones(11),0,0],q_offset_limit_deg_array=np.full(5,5.))
@@ -49,9 +56,15 @@ class ComputeProcessTests(unittest.TestCase):
                 np.testing.assert_allclose(frames[0][key],frames[1][key],atol=1e-12,rtol=0.)
             np.testing.assert_allclose(frames[0]['diagnostics']['tau_ff_candidate_nm'],
                                        frames[1]['diagnostics']['tau_ff_candidate_nm'],atol=1e-12,rtol=0.)
+            if options['assumed_command_delay_s'] is None:
+                self.assertNotIn('delay_preview',frames[1]['diagnostics'])
+                if frames[1]['diagnostics'].get('mpc_active'):
+                    np.testing.assert_allclose(frames[1]['diagnostics']['mpc_initial_state'],
+                                               np.r_[EXPECTED_TARGET_Q[5:10],np.zeros(5)])
             for r,f in zip((direct,worker),frames):
                 packet=r.make_message(f,state,unitree_hg_msg_dds__LowCmd_,r.create_crc())
                 r.accept_packet(f,packet)
+            if options['assumed_command_delay_s'] is None:self.assertIsNone(worker._commit)
         worker._process.terminate();worker._process.join(2.)
         with self.assertRaisesRegex(RuntimeError,'timeout/exited'):worker._rpc('activate',timeout=.02)
         with self.assertRaisesRegex(RuntimeError,'already failed'):worker._rpc('activate')
