@@ -23,3 +23,10 @@ stay under ignored `build/`; they are not committed.
 partial-weight and command-switch cases against the original Python/MuJoCo
 loop, including startup before any command. Position tolerance is `2e-12 rad`,
 velocity tolerance `2e-11 rad/s`. Numerical parity is not physical validation.
+
+ABI 2 also exposes the same conditional five-joint mass matrix and bias in one
+bounded native call (`g1_delay_linear_dynamics`). Another 80 deterministic
+moving-base states compare these outputs with the Python/MuJoCo reference at
+`2e-12` tolerance. This removes repeated Python/native crossings; it does not
+change the model, candidate search or torque/acceleration limits. Short native
+calls retain the GIL by default in the hardware wrapper; they contain no I/O.
