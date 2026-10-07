@@ -1,0 +1,11 @@
+# Separate learned-forecast experiment; successful upright baseline unchanged.
+# All other MPC defaults remain in hardware_mpc.yaml (6 ms, 9 intervals).
+schema: g1_hardware_mpc_config_v1
+q_ee_acc: 0.0
+q_ee_alpha: 0.0
+q_ee_omega: 0.0
+q_gravity: [30.0, 30.0]
+q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
+q_vel: 0.08
+r_ddq: 0.0025
+terminal_scale: 2.0

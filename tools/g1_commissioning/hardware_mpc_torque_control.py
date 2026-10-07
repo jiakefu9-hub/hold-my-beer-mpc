@@ -84,6 +84,7 @@ def load_torque_config(config=None):
 
 class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
     offline_only = True
+    policy_type = CondensedArmMPCPolicy
 
     def __init__(self, *args, torque_config=None, **kwargs):
         c = load_torque_config(torque_config)
@@ -98,7 +99,7 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         keys = ("q_ee_acc", "q_ee_alpha", "q_ee_omega", "q_gravity", "q_posture",
                 "q_vel", "r_ddq", "terminal_scale", "solver_eps_abs", "solver_eps_rel",
                 "solver_max_iter", "solver_check_termination", "solver_rho", "solver_adaptive_rho")
-        policy_type = CondensedArmMPCPolicy
+        policy_type = self.policy_type
         recovery_options = {}
         if c["recovery_envelope_enabled"]:
             from hardware_mpc_recovery import RecoveryEnvelopeMpcPolicy

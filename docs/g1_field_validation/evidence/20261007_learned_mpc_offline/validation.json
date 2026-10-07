@@ -1,0 +1,601 @@
+{
+  "schema": "g1_learned_mpc_validation_v1",
+  "hardware_output": false,
+  "dds_initialized": false,
+  "network_forbidden": true,
+  "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_torque_walk_reboot_performance_20261007_172732/raw.jsonl",
+  "source_sha256": "375f302a9709cdc2b19ab6f1e1e579621aff5061e50b68ef02a918458ad06f28",
+  "math_only": false,
+  "comparisons": {
+    "frozen_baseline_vs_yaw_aware_hold": {
+      "paired_states": 2322,
+      "per_joint_mean_abs_tau_change_nm": [
+        0.01068446325250593,
+        0.08768408608050447,
+        0.038035113561453525,
+        0.004769775987439836,
+        0.010007152869948289
+      ],
+      "per_joint_max_abs_tau_change_nm": [
+        0.11501465062279237,
+        0.5280318826700497,
+        0.6030230960318095,
+        0.023234817341450498,
+        0.035277563169706344
+      ]
+    },
+    "yaw_aware_hold_vs_learned": {
+      "paired_states": 2322,
+      "per_joint_mean_abs_tau_change_nm": [
+        0.14901441524147938,
+        0.08775228371749964,
+        0.04127657065979453,
+        0.08298676681088275,
+        0.012395518352456721
+      ],
+      "per_joint_max_abs_tau_change_nm": [
+        1.469614952780355,
+        1.0169124329530734,
+        0.4951325033746399,
+        0.8318534922396901,
+        0.15509603952505238
+      ]
+    }
+  },
+  "code_sha256": {
+    "tools/g1_commissioning/validate_mpc_learned.py": "24316bcf3d7293e72c664106d994bf24bac8c9518f2d6bb98bb13e4552ba729f",
+    "configs/hardware_mpc_learned.yaml": "59814a28179b45eca73f79198a8f3eb5e1e371d6a231cf2c776d31adf8b18a31",
+    "configs/hardware_mpc_torque_learned.yaml": "c224b2455e6f624e8a5733f88b754c165935c38091fe5ac671e164e7a18c13d4",
+    "tools/g1_commissioning/g1_walk_mpc.py": "b23f764266689ab958a292c272e952e6759a7dac0b337121bfac6eb22b726ddc",
+    "tools/g1_commissioning/g1_walk_mpc_learned.py": "e85e5025f77b9d940a8f344daeaf9153dfa0956d5577ee3b44b03deaaea9926d",
+    "tools/g1_commissioning/hardware_mpc_learned.py": "fcb004980c8d17c273f6c82af1801973e324d2c638e85a434d604fcdc63b6844",
+    "tools/g1_commissioning/hardware_mpc_torque_control.py": "d2a34c64dd6b89a79287a762c7a4fb33994268891ab3c35fceee532e8d4d7cb0",
+    "tools/g1_commissioning/hardware_mpc_solver.py": "7f89ce40efb2402c6655635b9f28c46bb07bfda54bb96f73c334bbb3209fe37d",
+    "tools/g1_commissioning/hardware_mpc_predictor.py": "86a43dcafc09f047d01dd7b5e873cd9f32b5a47be418bc9b225d0fa43a0bc159"
+  },
+  "limitations": [
+    "Recorded states do not respond to these new commands: not physical validation",
+    "Logical receive-time replay, no real-time pacing or DDS, RPC, worker IPC, audit-IO timing included",
+    "Host powersave/SCHED_OTHER measurements are not tomorrow CPU7/FIFO certification",
+    "Only conditional arm model consistency checked, no measured torque calibration",
+    "Learned forecasts are filtered H0 estimates, not exact raw landing impulses"
+  ],
+  "replay": {
+    "frozen_baseline": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2322,
+      "learned_commands": 0,
+      "final_weight": 0.0,
+      "planned_vs_final_acceleration_max_error_rad_s2": null,
+      "full_compute_ms": {
+        "count": 2155,
+        "mean": 2.668386615777262,
+        "p50": 2.641575,
+        "p99": 3.0272240999999998,
+        "maximum": 5.250451
+      },
+      "predictor_ms": {
+        "count": 2155,
+        "mean": 0.34260101067285387,
+        "p50": 0.34019,
+        "p99": 0.39114574,
+        "maximum": 0.685076
+      },
+      "core_plan_ms": {
+        "count": 2155,
+        "mean": 1.9302194937354984,
+        "p50": 1.9032509999999998,
+        "p99": 2.25178506,
+        "maximum": 3.9251609999999997
+      },
+      "packet_ms": {
+        "count": 2155,
+        "mean": 0.3437174742459397,
+        "p50": 0.342314,
+        "p99": 0.37451484,
+        "maximum": 0.633458
+      },
+      "over_6ms_count": 0,
+      "solver_time_limit_s": 0.0035,
+      "raw_sha256": "13e589e96af3fb7f550d63318101bf19b7aa63a9a7d59acdcb30bc4fb363e867"
+    },
+    "yaw_aware_hold": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2322,
+      "learned_commands": 0,
+      "final_weight": 0.0,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.764404337720407e-07,
+      "full_compute_ms": {
+        "count": 2155,
+        "mean": 2.407441731786543,
+        "p50": 2.377385,
+        "p99": 2.67855194,
+        "maximum": 3.0498279999999998
+      },
+      "predictor_ms": {
+        "count": 2155,
+        "mean": 0.337677339675174,
+        "p50": 0.33607,
+        "p99": 0.37321519999999997,
+        "maximum": 0.460644
+      },
+      "core_plan_ms": {
+        "count": 2155,
+        "mean": 1.6783350584686774,
+        "p50": 1.6488239999999998,
+        "p99": 1.9504267800000001,
+        "maximum": 2.141758
+      },
+      "packet_ms": {
+        "count": 2155,
+        "mean": 0.34060167006960557,
+        "p50": 0.33864,
+        "p99": 0.3642356,
+        "maximum": 0.40704199999999996
+      },
+      "over_6ms_count": 0,
+      "solver_time_limit_s": 0.0035,
+      "raw_sha256": "f3e037d0837864dc0d5df72340cffb1d8e95f9e9ea0273a9761d8fa02b77fd9a"
+    },
+    "learned": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2322,
+      "learned_commands": 2155,
+      "final_weight": 0.0,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.7607422004602995e-07,
+      "full_compute_ms": {
+        "count": 2155,
+        "mean": 2.8686755002320186,
+        "p50": 2.855801,
+        "p99": 3.2694911199999996,
+        "maximum": 3.644352
+      },
+      "predictor_ms": {
+        "count": 2155,
+        "mean": 0.7322623285382831,
+        "p50": 0.710089,
+        "p99": 0.99714308,
+        "maximum": 1.363735
+      },
+      "core_plan_ms": {
+        "count": 2155,
+        "mean": 1.735021959164733,
+        "p50": 1.710465,
+        "p99": 2.0168350600000005,
+        "maximum": 2.206404
+      },
+      "packet_ms": {
+        "count": 2155,
+        "mean": 0.34868139164733175,
+        "p50": 0.347061,
+        "p99": 0.37915331999999996,
+        "maximum": 0.541528
+      },
+      "over_6ms_count": 0,
+      "solver_time_limit_s": 0.0035,
+      "raw_sha256": "f6578fd4f04f4a3d0770f52c58f834905775d9bf1f05e3c0ddb170aa6d898865"
+    }
+  },
+  "predictor_verification": {
+    "schema": "g1_hardware_mpc_predictor_verification_v1",
+    "passed": true,
+    "bank_sha256": "0e7b25f9a8ddb6dcb893891cee21cfbc216f9174f6efe2e7c1d3f400ce1705c7",
+    "comparison": [
+      {
+        "trial": 9,
+        "anchors": 2157
+      },
+      {
+        "trial": 10,
+        "anchors": 2157
+      },
+      {
+        "trial": 11,
+        "anchors": 2157
+      },
+      {
+        "trial": 12,
+        "anchors": 2157
+      }
+    ],
+    "predicted_scalars_checked": 931824,
+    "max_prediction_absolute_error": 1.0658141036401503e-14,
+    "max_causal_preprocessor_feature_absolute_error": 1.7763568394002505e-14,
+    "limitations": [
+      "same accepted samples for preprocessing parity; live callback downsampling may differ",
+      "filtered forecast parity, not SO3-rollout forecast accuracy or physical control validation",
+      "comparison episodes were previously inspected, not new blind evaluation"
+    ]
+  },
+  "ingress_benchmarks": {
+    "ingress": {
+      "learned_variant": true,
+      "threaded": true,
+      "isolated": true,
+      "hardware_output": false,
+      "dds_initialized": false,
+      "active": {
+        "available": true,
+        "samples": 2153,
+        "controller_ms": {
+          "mean": 3.387950402693915,
+          "p50": 3.345824,
+          "p95": 3.6703183999999998,
+          "p99": 4.123948479999999,
+          "max": 9.783131
+        },
+        "full_work_ms": {
+          "mean": 4.118652571295866,
+          "p50": 4.090306,
+          "p95": 4.569711199999999,
+          "p99": 5.205031160000001,
+          "max": 11.65106
+        },
+        "ingress_ms": {
+          "mean": 0.13297831119368322,
+          "p50": 0.129852,
+          "p95": 0.15755999999999998,
+          "p99": 0.19694680000000006,
+          "max": 0.68714
+        },
+        "packet_ms": {
+          "mean": 0.5003271987923827,
+          "p50": 0.421222,
+          "p95": 0.7661509999999999,
+          "p99": 0.9340450800000002,
+          "max": 1.93867
+        },
+        "predictor_ms": {
+          "mean": 0.0013287352531351603,
+          "p50": 0.001281,
+          "p95": 0.0017957999999999997,
+          "p99": 0.002226,
+          "max": 0.003457
+        },
+        "prewrite_ms": {
+          "mean": 4.022584647933116,
+          "p50": 4.003958,
+          "p95": 4.318309599999999,
+          "p99": 5.04192432,
+          "max": 11.482531999999999
+        },
+        "thread_cpu_ms": {
+          "mean": 0.8137003608917789,
+          "p50": 0.803793,
+          "p95": 0.8968231999999999,
+          "p99": 1.03080252,
+          "max": 1.815636
+        },
+        "wake_lateness_ms": {
+          "mean": 0.07268291778913144,
+          "p50": 0.06408599999999999,
+          "p95": 0.0732032,
+          "p99": 0.26476496000000016,
+          "max": 3.5405919999999997
+        },
+        "deadline_misses": 15,
+        "skipped_slots": 15,
+        "reused_lowstate": null,
+        "reused_imu": null,
+        "deadline_miss_fraction": 0.006967022758941012,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "prewrite_guard_rejections": 1,
+      "terminal": true,
+      "final_weight": 0.0,
+      "journal_failed": false,
+      "journal_dropped": 0,
+      "limitations": [
+        "IDL decoding and actual callbacks included; no network receive, Write or RPC",
+        "rejected offline candidates committed only to continue timing, never real output",
+        "no hardware response, latency identification or hard realtime claim",
+        "parent thread CPU excludes child compute CPU when isolated",
+        "zero-speed RPC acknowledgement and full field health queries excluded"
+      ],
+      "host": {
+        "schema": "g1_mpc_host_evidence_v1",
+        "kernel_release": "6.8.1-1057-realtime",
+        "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+        "kernel_realtime_raw": "1",
+        "preempt_rt_active": true,
+        "process_scheduler": "SCHED_OTHER",
+        "process_scheduler_priority": 0,
+        "allowed_cpus": [
+          0
+        ],
+        "selected_control_cpu": 0,
+        "selected_cpu_smt_siblings": "0,5",
+        "scaling_driver": "intel_pstate",
+        "scaling_governor": "powersave",
+        "energy_performance_preference": "balance_performance",
+        "frequency_khz_snapshot": "1399975",
+        "platform_profile": "performance",
+        "isolated_cpus": "6-7",
+        "nohz_full_cpus": "6-7",
+        "rt_priority_limits": [
+          0,
+          0
+        ],
+        "memlock_bytes_limits": [
+          4154826752,
+          4154826752
+        ],
+        "capabilities": {
+          "CapPrm": "0000000000000000",
+          "CapEff": "0000000000000000",
+          "CapBnd": "0000000000000000"
+        },
+        "numerical_thread_environment": {
+          "OPENBLAS_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": null
+        },
+        "system_settings_changed": false,
+        "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+        "limitations": [
+          "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+          "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+          "governor label alone does not specify current CPU frequency or performance",
+          "host compute and local DDS Write durations do not measure motor execution latency"
+        ],
+        "compute_process_host": {
+          "schema": "g1_mpc_host_evidence_v1",
+          "kernel_release": "6.8.1-1057-realtime",
+          "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+          "kernel_realtime_raw": "1",
+          "preempt_rt_active": true,
+          "process_scheduler": "SCHED_OTHER",
+          "process_scheduler_priority": 0,
+          "allowed_cpus": [
+            2
+          ],
+          "selected_control_cpu": 2,
+          "selected_cpu_smt_siblings": "1-2",
+          "scaling_driver": "intel_pstate",
+          "scaling_governor": "powersave",
+          "energy_performance_preference": "balance_performance",
+          "frequency_khz_snapshot": "400000",
+          "platform_profile": "performance",
+          "isolated_cpus": "6-7",
+          "nohz_full_cpus": "6-7",
+          "rt_priority_limits": [
+            0,
+            0
+          ],
+          "memlock_bytes_limits": [
+            4154826752,
+            4154826752
+          ],
+          "capabilities": {
+            "CapPrm": "0000000000000000",
+            "CapEff": "0000000000000000",
+            "CapBnd": "0000000000000000"
+          },
+          "numerical_thread_environment": {
+            "OPENBLAS_NUM_THREADS": "1",
+            "OMP_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "NUMEXPR_NUM_THREADS": null
+          },
+          "system_settings_changed": false,
+          "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+          "limitations": [
+            "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+            "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+            "governor label alone does not specify current CPU frequency or performance",
+            "host compute and local DDS Write durations do not measure motor execution latency"
+          ]
+        },
+        "compute_pid": 5,
+        "python_thread_switch_interval_ms": 0.049999999999999996
+      }
+    },
+    "ingress_cpu7": {
+      "learned_variant": true,
+      "threaded": true,
+      "isolated": true,
+      "hardware_output": false,
+      "dds_initialized": false,
+      "active": {
+        "available": true,
+        "samples": 2157,
+        "controller_ms": {
+          "mean": 3.158439164116829,
+          "p50": 3.0781359999999998,
+          "p95": 3.6019156,
+          "p99": 4.09825232,
+          "max": 6.903562
+        },
+        "full_work_ms": {
+          "mean": 3.767212541492814,
+          "p50": 3.624847,
+          "p95": 4.4340361999999995,
+          "p99": 5.158425080000001,
+          "max": 14.248337999999999
+        },
+        "ingress_ms": {
+          "mean": 0.1120298919796013,
+          "p50": 0.106931,
+          "p95": 0.14516099999999998,
+          "p99": 0.19148264000000015,
+          "max": 3.038807
+        },
+        "packet_ms": {
+          "mean": 0.401663451553083,
+          "p50": 0.35717,
+          "p95": 0.6174389999999998,
+          "p99": 0.9063770400000002,
+          "max": 4.113137
+        },
+        "predictor_ms": {
+          "mean": 0.0012469786740843764,
+          "p50": 0.0011359999999999999,
+          "p95": 0.0015821999999999998,
+          "p99": 0.002125600000000001,
+          "max": 0.0934
+        },
+        "prewrite_ms": {
+          "mean": 3.6733794863235976,
+          "p50": 3.5448749999999998,
+          "p95": 4.3376512,
+          "p99": 4.934092960000001,
+          "max": 14.058859
+        },
+        "thread_cpu_ms": {
+          "mean": 0.7560953574408902,
+          "p50": 0.7407739999999999,
+          "p95": 0.8752617999999992,
+          "p99": 1.0625297200000001,
+          "max": 1.521518
+        },
+        "wake_lateness_ms": {
+          "mean": 0.06878703801576264,
+          "p50": 0.062847,
+          "p95": 0.09797999999999983,
+          "p99": 0.19687095999999998,
+          "max": 0.853887
+        },
+        "deadline_misses": 9,
+        "skipped_slots": 10,
+        "reused_lowstate": null,
+        "reused_imu": null,
+        "deadline_miss_fraction": 0.004172461752433936,
+        "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+      },
+      "prewrite_guard_rejections": 1,
+      "terminal": true,
+      "final_weight": 0.0,
+      "journal_failed": false,
+      "journal_dropped": 0,
+      "limitations": [
+        "IDL decoding and actual callbacks included; no network receive, Write or RPC",
+        "rejected offline candidates committed only to continue timing, never real output",
+        "no hardware response, latency identification or hard realtime claim",
+        "parent thread CPU excludes child compute CPU when isolated",
+        "zero-speed RPC acknowledgement and full field health queries excluded"
+      ],
+      "host": {
+        "schema": "g1_mpc_host_evidence_v1",
+        "kernel_release": "6.8.1-1057-realtime",
+        "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+        "kernel_realtime_raw": "1",
+        "preempt_rt_active": true,
+        "process_scheduler": "SCHED_OTHER",
+        "process_scheduler_priority": 0,
+        "allowed_cpus": [
+          2
+        ],
+        "selected_control_cpu": 2,
+        "selected_cpu_smt_siblings": "1-2",
+        "scaling_driver": "intel_pstate",
+        "scaling_governor": "powersave",
+        "energy_performance_preference": "balance_performance",
+        "frequency_khz_snapshot": "1884337",
+        "platform_profile": "performance",
+        "isolated_cpus": "6-7",
+        "nohz_full_cpus": "6-7",
+        "rt_priority_limits": [
+          0,
+          0
+        ],
+        "memlock_bytes_limits": [
+          4154826752,
+          4154826752
+        ],
+        "capabilities": {
+          "CapPrm": "0000000000000000",
+          "CapEff": "0000000000000000",
+          "CapBnd": "0000000000000000"
+        },
+        "numerical_thread_environment": {
+          "OPENBLAS_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": null
+        },
+        "system_settings_changed": false,
+        "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+        "limitations": [
+          "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+          "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+          "governor label alone does not specify current CPU frequency or performance",
+          "host compute and local DDS Write durations do not measure motor execution latency"
+        ],
+        "compute_process_host": {
+          "schema": "g1_mpc_host_evidence_v1",
+          "kernel_release": "6.8.1-1057-realtime",
+          "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+          "kernel_realtime_raw": "1",
+          "preempt_rt_active": true,
+          "process_scheduler": "SCHED_OTHER",
+          "process_scheduler_priority": 0,
+          "allowed_cpus": [
+            7
+          ],
+          "selected_control_cpu": 7,
+          "selected_cpu_smt_siblings": "6-7",
+          "scaling_driver": "intel_pstate",
+          "scaling_governor": "powersave",
+          "energy_performance_preference": "balance_performance",
+          "frequency_khz_snapshot": "400000",
+          "platform_profile": "performance",
+          "isolated_cpus": "6-7",
+          "nohz_full_cpus": "6-7",
+          "rt_priority_limits": [
+            0,
+            0
+          ],
+          "memlock_bytes_limits": [
+            4154826752,
+            4154826752
+          ],
+          "capabilities": {
+            "CapPrm": "0000000000000000",
+            "CapEff": "0000000000000000",
+            "CapBnd": "0000000000000000"
+          },
+          "numerical_thread_environment": {
+            "OPENBLAS_NUM_THREADS": "1",
+            "OMP_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "NUMEXPR_NUM_THREADS": null
+          },
+          "system_settings_changed": false,
+          "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+          "limitations": [
+            "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+            "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+            "governor label alone does not specify current CPU frequency or performance",
+            "host compute and local DDS Write durations do not measure motor execution latency"
+          ]
+        },
+        "compute_pid": 5,
+        "python_thread_switch_interval_ms": 0.049999999999999996
+      }
+    }
+  },
+  "artifacts": {
+    "evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/replay_v3/summary.json": "ddeb2f0f8f76fb2a63209978f2f9f9bb19d8392771ec3d2a6db3a316fbf4b3c7",
+    "evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/predictor_verification.json": "4ea88c071b1e908e367a14a08f34228a877fb1a923b2900b348decfaa55b6e07",
+    "evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/ingress/summary.json": "b43e405eb7650679cfab4f0ca27e7f1ca89bc2cebadab2e58753a6702e5b9a87",
+    "evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/ingress_cpu7/summary.json": "8cf19696bd7238cc5d488a823317060b670cdd4e60f76a5b282028b5f414019b"
+  },
+  "test_evidence": {
+    "tests_passed": 56,
+    "modules": [
+      "test_mpc_learned",
+      "test_mpc_actuation_constraints",
+      "test_measured_torque_mpc",
+      "test_mpc_field",
+      "test_mpc_serialization",
+      "test_mpc_braking",
+      "test_mpc_compute_process"
+    ],
+    "hardware_tests": false
+  },
+  "status": "offline_math_and_lifecycle_passed_not_hard_realtime_certified"
+}

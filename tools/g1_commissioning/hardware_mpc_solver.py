@@ -269,7 +269,10 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
                     primal_tol=1e-7, dual_tol=1e-10, eps_prox=0.,
                     iter_limit=self.solver_max_iter, time_limit=self.solver_time_limit)
                 wall = time.perf_counter()-begin
-                success = flag == 1 and wall <= self.solver_time_limit
+                wall_over_budget = wall > self.solver_time_limit
+                self._last_solved_wall_over_budget = flag == 1 and wall_over_budget
+                success = flag == 1 and (not wall_over_budget or
+                                         getattr(self, 'allow_solved_wall_overrun', False))
                 full_solution = offset + self._T @ u
                 residual = solve_matrix @ u
                 primal = float(max(np.max(lc-residual), np.max(residual-uc), 0.))

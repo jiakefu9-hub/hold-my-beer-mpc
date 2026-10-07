@@ -1375,7 +1375,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             if failure or prewrite_check_ns - min(low.received_ns, imu.received_ns) > STATE_TIMEOUT_NS:
                 raise RuntimeError(failure or "selected feedback stale before write")
             if runtime is not None and hasattr(runtime, 'check_before_write'):
-                runtime.check_before_write(frame, low, imu, loop_begin_ns, prewrite_check_ns)
+                if getattr(runtime, 'timing_grace', None) is not None:
+                    # A tolerant timing path must re-evaluate the unchanged
+                    # packet against a current snapshot, not relabel old data.
+                    latest = streams.latest()
+                    runtime.check_before_write(frame, low, imu, loop_begin_ns,
+                                               monotonic_ns(), latest=latest)
+                else:
+                    runtime.check_before_write(frame, low, imu, loop_begin_ns, prewrite_check_ns)
             write_begin_ns = monotonic_ns()
             try:
                 ok = bool(publisher.Write(message))

@@ -1,9 +1,9 @@
 # G1 真机实验入口
 
 这里区分“如何操作”“已经证实什么”“每次实际发生了什么”。
-截至 2026-10-05：H1、离线 HIL、A2/A3 和 IMU 零点观察已有记录；6 ms PID 已完成一轮真机功能复验
-并冻结。MPC 已接入实测状态＋多候选力矩、因果延迟预测和有界退权，提供显式开启、原地优先的
-受控首次力矩入口；本轮仍只做离线验证，尚无 MPC 真机效果或硬实时验收结果。
+截至 2026-10-07：H1、离线 HIL、A2/A3 和 IMU 零点观察已有记录；6 ms PID 已完成真机功能复验并冻结。
+`hold_current` 直立力矩 MPC 已首次完整走停退权；另有独立学习前馈版完成离线准备，尚未真机验证。
+没有将单轮成功或离线回放称为硬实时验收。
 
 采集／预测更新（2026-09-25）：旧五条带牵拉轨迹已撤回；十二条固定 H0 新轨迹已完成离线审计、
 方法比较与画图。当前入口是[十二条 H0 预测研究](H0_WALK_PREDICTOR_STUDY.md)，不是下方旧五条报告。
@@ -18,6 +18,7 @@
 | 下一步看步态相位、采走动时的原始扰动 | [RAW_WALK_CAPTURE.md](RAW_WALK_CAPTURE.md) |
 | 做“左臂固定、右臂 PID”的首次真机持瓶实验 | [HARDWARE_PID.md](HARDWARE_PID.md)：程序、完整 `[5,18)` 指标与仿真差异 |
 | 6 ms PID 复验后做右臂 MPC | [HARDWARE_MPC.md](HARDWARE_MPC.md)：预测模型、程序对应关系、时间验证和现场命令 |
+| 在成功基线上试学习扰动前馈 | [HARDWARE_MPC_LEARNED.md](HARDWARE_MPC_LEARNED.md)：独立入口、yaw 预测、直接力矩、明日命令 |
 | 看 MPC 按仿真迁移了哪些、还缺哪些 | [HARDWARE_MPC_TORQUE_MIGRATION.md](HARDWARE_MPC_TORQUE_MIGRATION.md)：实测状态、候选筛选、闭环对照与当前阻碍 |
 | 看 MPC 延迟／负载偏差和提前制动的离线研究 | [HARDWARE_MPC_ROBUSTNESS.md](HARDWARE_MPC_ROBUSTNESS.md)：失败归因、20 秒模型闭环、因果状态预测及尚未通过的时间条件 |
 | 看五条轨迹是否可用、如何对齐及能否预测扰动 | [WALK_DATASET_AUDIT.md](WALK_DATASET_AUDIT.md)：离线审计与世界系模板建议 |
@@ -41,7 +42,7 @@
 | 30 秒 phase observer | 已实测；本机 `GetPhase` 返回 7301，未取得可用官方相位 |
 | 21 秒 walk collector | 十二条固定 H0 轨迹已采集并离线研究；旧五条因吊绳牵拉全部撤回；第 06 条缺完整会话尾标记，单独补充分析 |
 | 真机 PID | 20 ms 和 6 ms 均有现场功能复验；6 ms 平顺、退权正常，0.934% 超时，不称为硬实时通过 |
-| 真机 MPC | 实测状态／多候选力矩路径已有受控首次原地试验入口；只有离线证据，尚未完成真机闭环验证。旧位置参考版禁止现场输出 |
+| 真机 MPC | hold_current 直立力矩基线已完整走停；独立学习版只经离线检查，仍待实机验证。旧位置参考版禁止现场输出 |
 | production adapter | 本次不变；`cpp/unitree_arm_adapter` 仍禁止真实 publisher |
 
 旧五条轨迹仅保留历史审计和方法参考，不再作为训练／检验数据。十二条新版轨迹用走前最后两秒平均

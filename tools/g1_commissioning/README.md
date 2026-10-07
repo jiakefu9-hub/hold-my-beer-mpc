@@ -21,6 +21,7 @@ the detailed staged procedure is in [RUNBOOK.md](../../docs/g1_field_validation/
 | `g1_walk_capture` | no | raw subscribers + getters + arm publisher + velocity RPC | separate opt-in 21-second arm/forward-walk capture; no mode setter |
 | `g1_walk_pid.py` | separate Python entry | raw subscribers + FSM getter + arm publisher + velocity RPC | fixed-left/right-PID 21-second H0 experiment; no mode setter or `rt/lowcmd` |
 | `g1_walk_mpc.py` | separate Python entry; measured-state torque preflight by default | explicit bounded first-torque trial; stationary before walk; legacy servo has no field entry | fixed-left/right-MPC; no mode setter or `rt/lowcmd` |
+| `g1_walk_mpc_learned.py` | independent learned/yaw-aware variant; offline preflight by default | same explicit field authorization and shared stop/release | direct conditional torque, frozen H0 forecasts; not yet field validated |
 
 All networked C++ targets are opt-in at CMake configure time. Merely running the
 A2 executable without its complete arguments exits before DDS initialization.
@@ -33,8 +34,10 @@ The [hardware MPC guide](../../docs/g1_field_validation/HARDWARE_MPC.md) maps th
 Its 45-input QP is an exact condensation of the simulation objective. The current
 [measured-state torque migration](../../docs/g1_field_validation/HARDWARE_MPC_TORQUE_MIGRATION.md)
 adds inverse dynamics and locally corrected, forward-checked torque candidates.
-Current evidence is still offline: an explicit controlled first-torque entry is
-implemented, not a claim of hardware performance or hard real-time acceptance.
+The 2026-10-07 hold-current upright torque baseline completed one physical walk/stop/release.
+The independent [learned variant](../../docs/g1_field_validation/HARDWARE_MPC_LEARNED.md)
+includes yaw PD in prediction and removes redundant same-model candidates;
+its evidence is offline only, not field performance or hard real-time acceptance.
 The old persistent-reference servo and nominal inverse preview remain offline comparisons.
 The hardware candidate uses DAQP 0.9.1 (pinned in `requirements-hardware-mpc.txt`);
 the simulation's OSQP implementation is unchanged. Runtime forecasts use a tracked

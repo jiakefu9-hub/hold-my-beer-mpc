@@ -1,0 +1,27 @@
+# Independent experiment. Same physical limits/gains as successful 2026-10-07
+# baseline, but yaw PD is INSIDE prediction and redundant candidates removed.
+schema: g1_measured_torque_preview_v1
+yaw_feedback_in_prediction: true
+tau_abs_nm: [10, 6, 4, 7, 1.5]
+tau_ff_abs_nm: [10, 6, 4, 7, 1.5]
+transition_rate_nm_s: [50, 40, 30, 50, 20]
+active_slew_reference: none
+recovery_envelope_enabled: false
+recovery_reentry_enabled: false
+enforce_mapper_state_envelope: false
+planning_actuation_constraints_enabled: true
+anchor_shoulder_yaw_reference: true
+kp: [20, 20, 2, 20, 20]
+kd: [1, 1, 0.2, 1, 1]
+max_dq_rad_s: 5.0
+max_ddq_rad_s2: 15.0
+max_abs_qacc_rad_s2: 15.0
+q_min_deg: [-20, -20, -25, -40, -40]
+q_max_deg: [20, 20, 20, 40, 40]
+q_margin_deg: [5, 5, 5, 0, 0]
+predictive_braking_enabled: true
+braking_deceleration_rad_s2: 4.0
+braking_reaction_s: 0.012
+braking_margin_deg: 1.0
+braking_velocity_weight: 50.0
+braking_min_deceleration_rad_s2: 6.0

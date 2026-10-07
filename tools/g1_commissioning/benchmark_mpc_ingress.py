@@ -22,7 +22,8 @@ for name in ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS'):
     os.environ[name] = '1'
 
 import numpy as np
-from g1_walk_mpc import MpcRuntime, MpcJournal, FIELD_TORQUE_CONFIG
+from g1_walk_mpc import (MpcRuntime, MpcJournal, FIELD_TORQUE_CONFIG,
+                         LEARNED_MPC_CONFIG, LEARNED_TORQUE_CONFIG)
 from g1_walk_pid import Streams, Interlock, EXPECTED_TARGET_Q
 from hardware_pid_control import ARM_MOTOR_INDICES
 from mpc_host import ControlThreadScope, summarize_timing, percentiles
@@ -30,7 +31,7 @@ from pid_timing import PeriodicClock
 
 
 def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=21., isolated=False,
-        assumed_command_delay_s=None):
+        assumed_command_delay_s=None, learned=False, inject_late_ms=0.):
     from unitree_sdk2py.idl.default import (unitree_hg_msg_dds__LowState_,
         unitree_hg_msg_dds__IMUState_, unitree_hg_msg_dds__LowCmd_)
     scope = ControlThreadScope(cpu, rt_priority)
@@ -44,6 +45,8 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
     sources=[*Path(__file__).parent.glob('*.py'),root/'arm_mpc.py',
              root/'robot_model_backend/cpp_rnea_backend.py',root/'cpp/g1_arm_delay/delay.cpp',
              root/'build/g1_arm_delay/libg1_arm_delay.so',root/'configs/hardware_mpc_torque_field.yaml']
+    if learned:
+        sources += [LEARNED_MPC_CONFIG, LEARNED_TORQUE_CONFIG]
     source_hash = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     try:
         scope.prepare_workers()
@@ -52,8 +55,11 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
             from mpc_compute_process import ProcessMpcRuntime
             runtime_type=ProcessMpcRuntime
             options=dict(compute_cpu=cpu,compute_priority=rt_priority,compute_affinity=scope.affinity)
-        runtime = runtime_type(predictor_mode='hold_current', stationary=True,
-            torque_config=FIELD_TORQUE_CONFIG, assumed_command_delay_s=assumed_command_delay_s, field_trial=True,**options)
+        if learned:
+            options['config'] = LEARNED_MPC_CONFIG
+        runtime = runtime_type(predictor_mode='learned_filtered' if learned else 'hold_current',
+            stationary=not learned, torque_config=LEARNED_TORQUE_CONFIG if learned else FIELD_TORQUE_CONFIG,
+            assumed_command_delay_s=assumed_command_delay_s, field_trial=True,**options)
         runtime.host_scope=scope
         journal = MpcJournal(output)
         runtime.journal = journal
@@ -110,6 +116,7 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
         previous = None
         last_frame = None
         release_start=None
+        injected=False
         while True:
             clock.wait()
             begin, cpu_begin = time.monotonic_ns(), time.thread_time_ns()
@@ -138,12 +145,23 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
                 # is claimed; zero-speed acknowledgment waiting is excluded.
                 frame=runtime.release_frame(task_s-release_start)
             after_control = time.monotonic_ns()
+            injected_this_cycle=0.
+            if inject_late_ms and not injected and 6.<=task_s<18.:
+                # Offline only: model a descheduled parent after a valid solve.
+                # Receive threads continue; test the refreshed-state path.
+                time.sleep(inject_late_ms*.001)
+                injected=True;injected_this_cycle=inject_late_ms
             packet = runtime.make_message(frame, low_state, unitree_hg_msg_dds__LowCmd_, crc)
             packet.serialize()  # same local CDR construction; NEVER Write
             prewrite = time.monotonic_ns()
             rejection = None
             try:
-                runtime.check_before_write(frame, low_state, imu_state, begin, prewrite)
+                if getattr(runtime,'timing_grace',None) is not None:
+                    latest = streams.latest()
+                    runtime.check_before_write(frame,low_state,imu_state,begin,time.monotonic_ns(),
+                                               latest=latest)
+                else:
+                    runtime.check_before_write(frame, low_state, imu_state, begin, prewrite)
             except RuntimeError as exc:
                 rejection = str(exc)
             # Offline hypothetical command history, including rejected times:
@@ -159,6 +177,8 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
                 thread_cpu_ms=(time.thread_time_ns()-cpu_begin)*1e-6,
                 wake_lateness_ms=(begin-clock.scheduled_ns)*1e-6,
                 deadline_missed=finished>clock.scheduled_ns+clock.period_ns,
+                injected_delay_ms=injected_this_cycle,
+                timing_grace=frame['diagnostics'].get('timing_grace'),
                 guard_rejection=rejection, mapper_fallback=frame['diagnostics'].get('mapper',{}).get('fallback'))
             row['skipped_slots'] = clock.advance(finished)
             rows.append(row); previous, last_frame = begin, frame
@@ -166,6 +186,8 @@ def run(output, *, cpu=7, rt_priority=0, switch_ms=5., threaded=True, duration=2
         if worker_errors:
             raise RuntimeError(str(worker_errors))
         result = dict(schema='g1_mpc_ingress_benchmark_v1', host=host, threaded=threaded,isolated=isolated,
+            learned_variant=learned,
+            injected_delay_ms=inject_late_ms,
             source_sha256=source_hash, switch_ms=switch_ms,
             hardware_output=False, dds_initialized=False, source='synthetic_stationary_not_closed_loop',
             assumed_command_delay_s=assumed_command_delay_s,
@@ -202,14 +224,18 @@ def main():
     parser.add_argument('--switch-ms',type=float,default=5.)
     parser.add_argument('--serial',action='store_true')
     parser.add_argument('--isolated',action='store_true')
+    parser.add_argument('--learned',action='store_true',help='exercise independent learned/yaw-aware variant')
+    parser.add_argument('--inject-late-ms',type=float,default=0.,help='one offline-only pause after a valid solve')
     parser.add_argument('--duration',type=float,default=24.)
     parser.add_argument('--assumed-command-delay-ms',type=float,default=None)
     args=parser.parse_args()
-    if not .05<=args.switch_ms<=5 or not 4<=args.duration<=30:
-        parser.error('switch-ms must be .05..5 and duration 4..30 seconds')
+    if not .05<=args.switch_ms<=5 or not 4<=args.duration<=30 or not 0<=args.inject_late_ms<=30:
+        parser.error('switch-ms must be .05..5, duration 4..30 seconds, inject-late-ms 0..30')
     with patch.object(socket,'socket',side_effect=RuntimeError('offline benchmark forbids sockets')):
         result=run(args.output_dir,cpu=args.cpu,rt_priority=args.rt_priority,switch_ms=args.switch_ms,
                    threaded=not args.serial,duration=args.duration,isolated=args.isolated,
+                   learned=args.learned,
+                   inject_late_ms=args.inject_late_ms,
                    assumed_command_delay_s=(None if args.assumed_command_delay_ms is None
                                             else args.assumed_command_delay_ms*.001))
     print(json.dumps({k:result[k] for k in ('threaded','switch_ms','active','prewrite_guard_rejections',

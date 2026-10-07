@@ -1,7 +1,8 @@
 """Single-flight, bounded, SDK-free compute worker for the existing MPC.
 
-The parent alone owns DDS, interlocks and hand-back. A timed-out/crashed worker
-is terminal for this run; no stale reply, automatic restart or command output.
+The parent alone owns DDS, interlocks and hand-back. A hard-timed-out/crashed
+worker is terminal. The learned variant allows a bounded longer wait, followed
+by parent-side late-result checks; no stale sequence or automatic restart.
 """
 import gc
 import multiprocessing as mp
@@ -124,9 +125,12 @@ class ProcessMpcRuntime(MpcRuntime):
             self.predictor=SimpleNamespace(bank=None if manifest is None else SimpleNamespace(manifest=manifest))
             self.controller=SimpleNamespace(config=initial['config'],torque_config=initial['torque_config'],
                 metadata=initial['metadata'],last_diagnostics={})
+            self.configure_timing_grace()
+            self._step_timeout_s = (.009 if self.timing_grace is None
+                                    else self.timing_grace.worker_timeout_s)
             self.controller.metadata['compute_isolation']=dict(process=True,pid=self._process.pid,
                 communication='bounded single-flight shared buffers',hardware_output=False,
-                deadline_s=.009,automatic_restart=False)
+                deadline_s=self._step_timeout_s,automatic_restart=False)
         except BaseException:
             self.close();raise
 
@@ -215,7 +219,7 @@ class ProcessMpcRuntime(MpcRuntime):
     def sample(self,*args):
         if self._prepare is None:raise RuntimeError('compute sample without fresh prepare')
         begin=time.perf_counter_ns();p,k=self._prepare;self._prepare=None
-        frame=self._rpc('step',timeout=.009,args=args,prepare_args=p,prepare_kwargs=k)
+        frame=self._rpc('step',timeout=self._step_timeout_s,args=args,prepare_args=p,prepare_kwargs=k)
         frame['diagnostics']['compute_process_roundtrip_ms']=(time.perf_counter_ns()-begin)*1e-6
         self.controller.last_diagnostics=frame['diagnostics']
         self._candidate=frame

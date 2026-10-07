@@ -1,0 +1,307 @@
+{
+  "schema": "g1_learned_mpc_timing_grace_offline_v1",
+  "review_date": "2026-10-08",
+  "baseline_commit": "46df505b0c6ce1e3f250e6aed7a8b23bbc54395f",
+  "hardware_output": false,
+  "dds_initialized": false,
+  "physical_safety_or_tracking_validated": false,
+  "physics_limits_changed": false,
+  "pitch_pd_added": false,
+  "legacy_time_gate_changed": false,
+  "tests": {
+    "passed": 70,
+    "elapsed_seconds": 56.704,
+    "command": "PYTHONPATH=tools/g1_commissioning:tools/g1_commissioning/tests MPLCONFIGDIR=/tmp/g1_mpl_cache /home/fjk/miniforge3/envs/g1_mpc/bin/python -m unittest test_mpc_timing_grace test_mpc_learned test_mpc_field test_mpc_compute_process test_mpc_actuation_constraints test_measured_torque_mpc test_mpc_braking test_mpc_serialization test_hardware_runner.FieldRunnerTest.test_stationary_and_walk_normal_release test_hardware_runner.FieldRunnerTest.test_nonzero_torque_normal_fault_operator_and_remote_handover -q"
+  },
+  "benchmark": {
+    "path": "evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/timing_grace_final",
+    "command": "PYTHONPATH=tools/g1_commissioning MPLCONFIGDIR=/tmp/g1_mpl_cache taskset -c 0-17 /home/fjk/miniforge3/envs/g1_mpc/bin/python tools/g1_commissioning/benchmark_mpc_ingress.py --learned --isolated --cpu 7 --duration 24 --switch-ms 0.05 --inject-late-ms 11 --output-dir evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/timing_grace_final",
+    "active": {
+      "available": true,
+      "samples": 2151,
+      "controller_ms": {
+        "mean": 3.4164813165969314,
+        "p50": 3.385983,
+        "p95": 3.673202,
+        "p99": 4.2016535,
+        "max": 5.092961
+      },
+      "full_work_ms": {
+        "mean": 4.0664725048814505,
+        "p50": 3.997315,
+        "p95": 4.5466975,
+        "p99": 5.6294295000000005,
+        "max": 16.098302
+      },
+      "ingress_ms": {
+        "mean": 0.1187011041376104,
+        "p50": 0.11070999999999999,
+        "p95": 0.1497915,
+        "p99": 0.3091735,
+        "max": 0.98381
+      },
+      "injected_delay_ms": {
+        "mean": 0.005113900511390051,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 11
+      },
+      "packet_ms": {
+        "mean": 0.414169229660623,
+        "p50": 0.382466,
+        "p95": 0.5731155,
+        "p99": 0.7668630000000001,
+        "max": 11.944355
+      },
+      "predictor_ms": {
+        "mean": 0.0012550106927010692,
+        "p50": 0.0010919999999999999,
+        "p95": 0.0015695,
+        "p99": 0.001981,
+        "max": 0.116101
+      },
+      "prewrite_ms": {
+        "mean": 3.9506066610878663,
+        "p50": 3.8919439999999996,
+        "p95": 4.3222629999999995,
+        "p99": 5.4618135,
+        "max": 15.717891
+      },
+      "thread_cpu_ms": {
+        "mean": 0.8233142501162249,
+        "p50": 0.809317,
+        "p95": 0.9421005,
+        "p99": 1.104922,
+        "max": 1.5618429999999999
+      },
+      "wake_lateness_ms": {
+        "mean": 0.06142546071594606,
+        "p50": 0.059356,
+        "p95": 0.0678545,
+        "p99": 0.072353,
+        "max": 0.9817309999999999
+      },
+      "deadline_misses": 15,
+      "skipped_slots": 16,
+      "reused_lowstate": null,
+      "reused_imu": null,
+      "deadline_miss_fraction": 0.00697350069735007,
+      "scope": "host loop metrics; full_work includes command logging enqueue and timing-row bookkeeping; final timestamp assignment/clock-advance overhead is bounded separately by actual_period; not network roundtrip or physical motor latency"
+    },
+    "terminal": true,
+    "final_weight": 0,
+    "guard_rejections": 0,
+    "journal_failed": false,
+    "journal_dropped": 0,
+    "injected_rows": [
+      {
+        "task_elapsed_s": 6.002518757000001,
+        "stage": "forward_walk",
+        "ingress_ms": 0.149288,
+        "predictor_ms": 0.000993,
+        "controller_ms": 3.623255,
+        "packet_ms": 11.944355,
+        "prewrite_ms": 15.717891,
+        "full_work_ms": 16.098302,
+        "thread_cpu_ms": 1.502695,
+        "wake_lateness_ms": 0.067616,
+        "deadline_missed": true,
+        "injected_delay_ms": 11,
+        "timing_grace": {
+          "policy": "bounded_occasional_lateness_v1",
+          "soft_ms": 10,
+          "hard_ms": 20,
+          "worker_timeout_ms": 18,
+          "source_max_age_ms": 25,
+          "latest_max_age_ms": 10,
+          "max_consecutive_late": 2,
+          "safety_certified": false,
+          "failed_solutions_reused": false,
+          "elapsed_ms": 15.723206,
+          "source_age_ms": 18.516471,
+          "solved_qp_wall_over_budget": false,
+          "late": true,
+          "accepted": true,
+          "consecutive_late": 1,
+          "latest_feedback_age_ms": 1.197265,
+          "latest_low_ns": 20520456626267,
+          "latest_imu_ns": 20520457419057,
+          "latest_q_rad": [
+            -0.06981316953897476,
+            0.01745329238474369,
+            0,
+            -0.13613568246364594,
+            0
+          ],
+          "latest_dq_rad_s": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "next_cycle_room_rad": [
+            0.27886417618378945,
+            0.3312240533380205,
+            0.3486773457227642,
+            0.5616075136579841,
+            0.69774319612163
+          ],
+          "accepted_late_total": 1
+        },
+        "guard_rejection": null,
+        "mapper_fallback": null,
+        "skipped_slots": 2
+      }
+    ],
+    "host": {
+      "schema": "g1_mpc_host_evidence_v1",
+      "kernel_release": "6.8.1-1057-realtime",
+      "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+      "kernel_realtime_raw": "1",
+      "preempt_rt_active": true,
+      "process_scheduler": "SCHED_OTHER",
+      "process_scheduler_priority": 0,
+      "allowed_cpus": [
+        2
+      ],
+      "selected_control_cpu": 2,
+      "selected_cpu_smt_siblings": "1-2",
+      "scaling_driver": "intel_pstate",
+      "scaling_governor": "powersave",
+      "energy_performance_preference": "balance_performance",
+      "frequency_khz_snapshot": "2708828",
+      "platform_profile": "performance",
+      "isolated_cpus": "6-7",
+      "nohz_full_cpus": "6-7",
+      "rt_priority_limits": [
+        0,
+        0
+      ],
+      "memlock_bytes_limits": [
+        4154826752,
+        4154826752
+      ],
+      "capabilities": {
+        "CapPrm": "0000000000000000",
+        "CapEff": "0000000000000000",
+        "CapBnd": "0000000000000000"
+      },
+      "numerical_thread_environment": {
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": null
+      },
+      "system_settings_changed": false,
+      "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+      "limitations": [
+        "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+        "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+        "governor label alone does not specify current CPU frequency or performance",
+        "host compute and local DDS Write durations do not measure motor execution latency"
+      ],
+      "compute_process_host": {
+        "schema": "g1_mpc_host_evidence_v1",
+        "kernel_release": "6.8.1-1057-realtime",
+        "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+        "kernel_realtime_raw": "1",
+        "preempt_rt_active": true,
+        "process_scheduler": "SCHED_OTHER",
+        "process_scheduler_priority": 0,
+        "allowed_cpus": [
+          7
+        ],
+        "selected_control_cpu": 7,
+        "selected_cpu_smt_siblings": "6-7",
+        "scaling_driver": "intel_pstate",
+        "scaling_governor": "powersave",
+        "energy_performance_preference": "balance_performance",
+        "frequency_khz_snapshot": "400000",
+        "platform_profile": "performance",
+        "isolated_cpus": "6-7",
+        "nohz_full_cpus": "6-7",
+        "rt_priority_limits": [
+          0,
+          0
+        ],
+        "memlock_bytes_limits": [
+          4154826752,
+          4154826752
+        ],
+        "capabilities": {
+          "CapPrm": "0000000000000000",
+          "CapEff": "0000000000000000",
+          "CapBnd": "0000000000000000"
+        },
+        "numerical_thread_environment": {
+          "OPENBLAS_NUM_THREADS": "1",
+          "OMP_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": null
+        },
+        "system_settings_changed": false,
+        "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+        "limitations": [
+          "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+          "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+          "governor label alone does not specify current CPU frequency or performance",
+          "host compute and local DDS Write durations do not measure motor execution latency"
+        ]
+      },
+      "compute_pid": 5,
+      "python_thread_switch_interval_ms": 0.049999999999999996
+    },
+    "limitations": [
+      "IDL decoding and actual callbacks included; no network receive, Write or RPC",
+      "rejected offline candidates committed only to continue timing, never real output",
+      "no hardware response, latency identification or hard realtime claim",
+      "parent thread CPU excludes child compute CPU when isolated",
+      "zero-speed RPC acknowledgement and full field health queries excluded"
+    ]
+  },
+  "source_sha256": {
+    "tools/g1_commissioning/mpc_timing_grace.py": "8c4c00f87e2b6bac63f2addbae9bac7c6cb8935ceb54fd952904e165ab6e4cfd",
+    "tools/g1_commissioning/g1_walk_mpc.py": "b251d2c8381e9eaeb5b27b971cb038f6144453b45af0379c367d029419b35517",
+    "tools/g1_commissioning/g1_walk_pid.py": "10901fc5805518cd3082ef79ba342f5d0b2d12e4772151511d0da620fba1c2eb",
+    "tools/g1_commissioning/g1_walk_mpc_learned.py": "e85e5025f77b9d940a8f344daeaf9153dfa0956d5577ee3b44b03deaaea9926d",
+    "tools/g1_commissioning/mpc_compute_process.py": "7f916ce583b4398f362f6aa8249ccf51055d5127bf1551cc173d432ec734eb14",
+    "tools/g1_commissioning/hardware_mpc_solver.py": "112ef5da6a13bade418886b96705c178876d1265f7b88c7e8e37f07e531cbeed",
+    "tools/g1_commissioning/hardware_mpc_learned.py": "a8576216e2f40d7956f41ff872d7185f8f7684760d94b5483a45e29bdc7ab8c7",
+    "tools/g1_commissioning/hardware_mpc_torque_control.py": "d2a34c64dd6b89a79287a762c7a4fb33994268891ab3c35fceee532e8d4d7cb0",
+    "tools/g1_commissioning/benchmark_mpc_ingress.py": "771d2348afec4a805cd02a230c326efe2d33bda258359fe7671da5dd29c6d628",
+    "tools/g1_commissioning/tests/test_mpc_timing_grace.py": "066560b081c4a92144c680c618443f50cfaaf528e38f1af6e8bff8f7cfb1d9cb",
+    "tools/g1_commissioning/tests/test_mpc_learned.py": "fc1185ec7dff676626f3cd03e02b2ab7761e1770cc643bf2006f075282a6fb5d",
+    "tools/g1_commissioning/tests/test_mpc_field.py": "fb5cee3b6e97b39f9a15f50a32d52c6e3c6542ab9e1cb0b4f2e4681740047d33",
+    "tools/g1_commissioning/tests/test_mpc_compute_process.py": "15dc66deff37c1c0b065365d9ec31d3e2c6e1339dd697ecbdfb2652b4477231a",
+    "tools/g1_commissioning/tests/test_mpc_actuation_constraints.py": "ddb6ff1bd4a77d2da941700e3ebabacf3178712d4083686e57458b83a8ca4af6",
+    "tools/g1_commissioning/tests/test_measured_torque_mpc.py": "517aea719acd7d008d380213f4d8c6931df3e23c44ea463311646504e3a4f75d",
+    "tools/g1_commissioning/tests/test_mpc_braking.py": "e46c13dce243e682ffe8f360d2d13a653db5254e52b596cb21750190fb26ea1e",
+    "tools/g1_commissioning/tests/test_mpc_serialization.py": "d1d46fc51ce1805fe69070d24e69039ef2837079358b46d1d4b6f1c0bda971eb",
+    "tools/g1_commissioning/tests/test_hardware_runner.py": "ea730905e61b805116a2d0ed91f19756ef8da50066f115c0d33cdfd93e6841dc",
+    "configs/hardware_mpc_learned.yaml": "59814a28179b45eca73f79198a8f3eb5e1e371d6a231cf2c776d31adf8b18a31",
+    "configs/hardware_mpc_torque_learned.yaml": "c224b2455e6f624e8a5733f88b754c165935c38091fe5ac671e164e7a18c13d4"
+  },
+  "output_sha256": {
+    "evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/timing_grace_final/summary.json": "7e740b244b187e2bc2cc4babdddfa11e327982ffb200cdc78994d2380cd33bd1",
+    "evaluation/hardware_shadow/commissioning/mpc_learned_preparation_20261007/timing_grace_final/timing.json": "ac2d76ae50b905662c13b56335a5df2c0b6a2a175cb49d3dda4786088802fd3b"
+  },
+  "limitations": [
+    "Engineering grace budgets only, not certified safe latency.",
+    "Synthetic stationary feedback does not respond to commands; not a closed-loop test.",
+    "Injected parent sleep verifies one late-cycle path, not every scheduler/network failure.",
+    "Valid solved local QP wall overrun is diagnostic; failed solver results remain rejected.",
+    "Prior validation.json is historical, predates timing-grace changes and is not overwritten."
+  ],
+  "preflight": {
+    "command": "MPLCONFIGDIR=/tmp/g1_mpl_cache taskset -c 0-17 /home/fjk/miniforge3/envs/g1_mpc/bin/python tools/g1_commissioning/g1_walk_mpc_learned.py --preflight --cpu 7",
+    "passed": true,
+    "dds_initialized": false,
+    "publisher_created": false,
+    "robot_connected": false,
+    "solver_status": "solved",
+    "actuation": "measured_torque_preview",
+    "serialized_bytes": 1004
+  }
+}

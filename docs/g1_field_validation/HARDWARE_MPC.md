@@ -3,6 +3,8 @@
 对应 [`g1_walk_mpc.py`](../../tools/g1_commissioning/g1_walk_mpc.py)，更新于 2026-10-07。
 **当前状态：2026-10-07 首次直立基线力矩 MPC 已完整走停并退权，操作者确认全程平顺。**
 首次成功使用 `hold_current` 和 `hardware_mpc_upright_baseline.yaml`，不是全部代价与学习前馈版本。
+新增独立 [学习前馈版](HARDWARE_MPC_LEARNED.md)：yaw 回拉进入预测、取消重复候选；仅经离线检查，
+不替换本文成功基线。要运行该新实验，请使用它自己的入口／配置／命令。
 右瓶 `[5,18)` 倾角 RMS 0.836°，此前 6 ms PID 为 1.899°；两条单次实测仅作描述性比较。
 可分享结果、运行源码哈希及复算说明见 [首次成功证据包](evidence/20261007_first_complete_mpc/README.md)。
 成功版本已单独冻结为 `ab38f93`。此后的性能准备与故障退权修复仅经离线检查，见
