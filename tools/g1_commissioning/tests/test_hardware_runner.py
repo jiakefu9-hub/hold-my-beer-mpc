@@ -24,6 +24,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import g1_walk_pid as runner
 from hardware_pid_control import ARM_MOTOR_INDICES, FixedH0Heading, HardwarePidPlan
+# Import numerical extensions before patch.dict(sys.modules) installs fake
+# SDK modules; reimporting SciPy native extensions after restoring that dict
+# is not supported and is unrelated to the transport behavior under test.
+from hardware_mpc_field import TorqueHandback
 
 
 class Clock:
@@ -104,7 +108,6 @@ class Harness:
             field_trial = harness.torque
 
             def __init__(self):
-                from hardware_mpc_field import TorqueHandback
                 self.handback = TorqueHandback()
                 self.predictor = None
                 if harness.failure == 'startup_delay':
@@ -176,6 +179,16 @@ class Harness:
                     harness.injected_at = now
                     if harness.failure == "compute":
                         raise RuntimeError("injected MPC solve failure")
+                    if harness.failure == "query_stale":
+                        interlock=harness.streams.interlock
+                        # Emulate a soft query outage independently of whether
+                        # this release uses the startup-only FSM policy.
+                        interlock._fsm_freshness_required=True
+                        interlock._fsm_observed_ns=now-runner.FSM_TIMEOUT_NS-1
+                        raise RuntimeError(interlock.check(now))
+                    if harness.failure == "observer":
+                        harness.streams.interlock.trip('injected predictor failure',release_blocking=False)
+                        raise RuntimeError('injected predictor failure')
                     if harness.failure == "remote":
                         keys = (1 << 5) | (1 << 9)
                         harness.streams.interlock.observe_remote([0, 0, keys & 255, keys >> 8])
@@ -270,6 +283,10 @@ class Harness:
                     return 0, '{"data":500}'
                 assert api == 7105
                 harness.velocities.append((harness.task_s(), json.loads(payload)["velocity"]))
+                if harness.failure == 'velocity_timeout' and harness.task_s() >= 6:
+                    if harness.injected_at is None:
+                        harness.injected_at=harness.clock.monotonic_ns()
+                    return -1, 'injected timeout'
                 return 0, '{}'
 
         def factory(domain, nic):
@@ -419,6 +436,23 @@ class FieldRunnerTest(unittest.TestCase):
                 self.assertEqual(h.run(), code)
                 self.assert_gradual_release(h)
                 self.assertEqual(h.velocities[-1][1], [0.,0.,0.])
+
+    def test_soft_faults_release_without_loco_ack_or_controller(self):
+        for failure in ('query_stale','observer','velocity_timeout'):
+            with self.subTest(failure=failure):
+                h=Harness(failure,torque=True)
+                self.assertEqual(h.run(),3)
+                self.assert_gradual_release(h)
+                release=[r for r in h.rows if r.get('event')=='dds_write'
+                         and 'release' in r.get('stage','')]
+                self.assertLess((release[0]['write_begin_monotonic_ns']-h.injected_at)*1e-9,.15)
+                # All velocity calls after the first timeout may fail; arm
+                # release still completes and does not require a new QP.
+                self.assertEqual(h.writes[-1]['weight'],0.)
+                self.assertEqual(h.velocities[-1][1],[0.,0.,0.])
+                if failure=='velocity_timeout':
+                    event=next(r for r in h.rows if r.get('event')=='session_end')
+                    self.assertEqual(event['outcome'],'velocity_fault_release_completed')
 
     def test_dds_failure_never_retries_arm_write(self):
         for failure in ("write_false","write_raise"):

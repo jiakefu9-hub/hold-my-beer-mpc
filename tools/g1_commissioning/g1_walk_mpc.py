@@ -389,6 +389,9 @@ def main(argv=None):
         # without inventing MPC-specific reviewed flags in a copied profile.
         profile_kind = 'pid' if 'schema=g1_hardware_pid_walk_site_v1' in args.profile.read_text() else 'mpc'
         profile = load_profile(args.profile, profile_kind)
+        from field_performance import prepare as prepare_field_performance
+        performance_setup = prepare_field_performance(
+            args.cpu, compute_process=args.compute_process, rt_priority=args.rt_priority)
         scope = ControlThreadScope(args.cpu, args.rt_priority)
         scope.prepare_workers()
         # Load/tree/build QP and warm all local math before any DDS initialization.
@@ -420,7 +423,7 @@ def main(argv=None):
                 'hardware_torque_mapper.py','hardware_mpc_delay_plan.py',
                 'hardware_mpc_delay_preview.py','mpc_host.py','arm_execution_record.py','native_arm_delay.py',
                 'mpc_compute_process.py','mpc_crc.py','hardware_mpc_recovery.py',
-                'hardware_mpc_braking.py')],
+                'hardware_mpc_braking.py','field_performance.py')],
             ROOT/'cpp/g1_arm_delay/delay.cpp', ROOT/'cpp/g1_arm_delay/CMakeLists.txt',
             ROOT / "arm_mpc.py", ROOT / "kinematics_helper.py"]
         journal.record({"schema": "g1_mpc_session_v1", "event": "session_start",
@@ -431,6 +434,7 @@ def main(argv=None):
             "primary_metric_window_s": [5., 18.], "forward_speed_m_s": .5 if args.task == "walk" else 0.,
             "heading_target": "fixed_run_h0_positive_x", "host_before_control": host_evidence(),
             "requested_control_cpu": args.cpu, "requested_fifo_priority": args.rt_priority,
+            "performance_setup": performance_setup,
             "assumed_command_delay_ms": args.assumed_command_delay_ms,
             "hardware_delay_identified": False, "profile_kind": profile_kind,
             "pid_6ms_validation": "operator_attestation_not_automatically_certified",

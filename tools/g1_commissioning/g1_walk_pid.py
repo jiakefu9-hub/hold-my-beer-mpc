@@ -68,11 +68,10 @@ FSM_TIMEOUT_NS = 2_500_000_000
 FSM_RPC_TIMEOUT_S = 0.3
 VELOCITY_RPC_TIMEOUT_S = 0.5
 # These are synchronous Loco RPCs, not the 6 ms arm DDS control loop.  The
-# previous 20 Hz + 20 Hz pair accumulated server-side latency during a field
-# walk. A velocity request remains valid for at most 0.2 s, so 10 Hz retains
-# one complete refresh of overlap. FSM is supervisory rather than part of the
-# control loop: 1 Hz avoids Loco-service backlog while still detecting an
-# uncommanded mode exit; LowState/remote interlocks remain callback-driven.
+# previous 20 Hz + 20 Hz pair had increasing round-trip latency in the field;
+# robot-side queuing was not measured. A velocity request lasts at most 0.2 s,
+# so 10 Hz retains one refresh of overlap. FSM polling is startup-only at 1 Hz;
+# during output LowState/remote checks remain live but FSM changes are not polled.
 FSM_POLL_PERIOD_S = 1.0
 VELOCITY_RPC_PERIOD_S = 0.1
 STATE_SAMPLE_PERIOD_NS = 2_000_000
@@ -399,15 +398,18 @@ class Interlock:
     def __init__(self):
         self._lock = threading.Lock()
         self._fault = None
+        self._release_fault = None
         self._fsm_request_ns = None
         self._fsm_observed_ns = None
         self._fsm_freshness_required = True
         self._last_tick = None
 
-    def trip(self, reason):
+    def trip(self, reason, *, release_blocking=True):
         with self._lock:
             if self._fault is None:
                 self._fault = str(reason)
+            if release_blocking and self._release_fault is None:
+                self._release_fault = str(reason)
 
     def observe_tick(self, tick):
         tick = int(tick) & 0xFFFFFFFF
@@ -416,6 +418,7 @@ class Interlock:
                 delta = (tick - self._last_tick) & 0xFFFFFFFF
                 if delta >= 0x80000000:
                     self._fault = self._fault or "LowState tick rollback"
+                    self._release_fault = self._release_fault or "LowState tick rollback"
             self._last_tick = tick
 
     def observe_remote(self, remote):
@@ -433,10 +436,13 @@ class Interlock:
                 return
             elif value != 500:
                 self._fault = self._fault or f"left required FSM 500: FSM={value}"
+                self._release_fault = self._release_fault or f"left required FSM 500: FSM={value}"
             elif request_ns <= 0 or reply_ns < request_ns or reply_ns - request_ns > FSM_TIMEOUT_NS:
                 self._fault = self._fault or "invalid or late FSM reply"
+                self._release_fault = self._release_fault or "invalid or late FSM reply"
             elif self._fsm_request_ns is not None and request_ns <= self._fsm_request_ns:
                 self._fault = self._fault or "non-monotonic FSM observation"
+                self._release_fault = self._release_fault or "non-monotonic FSM observation"
             else:
                 self._fsm_request_ns = request_ns
                 # Freshness begins when the successful observation becomes
@@ -469,6 +475,22 @@ class Interlock:
             ):
                 self._fault = "FSM observation stale or future"
                 return self._fault
+            return ""
+
+    def check_release(self):
+        """Allow bounded hand-back after query/compute failure, never takeover.
+
+        The separate latch matters: an earlier soft fault must not hide a later
+        remote stop, observed mode exit or tick rollback. LowState validity and
+        transport health are checked independently by the release loop.
+        """
+        with self._lock:
+            if self._release_fault:
+                return self._release_fault
+            if self._fsm_observed_ns is None:
+                return "FSM never validated"
+            if monotonic_ns() < self._fsm_observed_ns:
+                return "FSM observation in future"
             return ""
 
 
@@ -552,7 +574,7 @@ class Streams:
             try:
                 self.observer.observe_low(now, q, dq)
             except Exception as exc:
-                self.interlock.trip(f"controller LowState observer: {exc}")
+                self.interlock.trip(f"controller LowState observer: {exc}", release_blocking=False)
         if now - self.low_journal_ns < LOWSTATE_JOURNAL_PERIOD_NS:
             return
         self.low_journal_ns = now
@@ -605,7 +627,7 @@ class Streams:
                 self.observer.observe_imu(
                     now, snapshot.quaternion, snapshot.gyro, snapshot.accelerometer)
             except Exception as exc:
-                self.interlock.trip(f"controller IMU observer: {exc}")
+                self.interlock.trip(f"controller IMU observer: {exc}", release_blocking=False)
         if now - self.imu_journal_ns < IMU_JOURNAL_PERIOD_NS:
             return
         self.imu_journal_ns = now
@@ -798,7 +820,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                 query_fsm_once()
                 fsm_poll_stop.wait(FSM_POLL_PERIOD_S)
         except Exception as exc:
-            interlock.trip(f"FSM worker exception: {exc}")
+            interlock.trip(f"FSM worker exception: {exc}", release_blocking=False)
 
     publisher = None
     publisher_transport_failed = False
@@ -828,8 +850,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     def fallback_weight_release(reason):
         """Best-effort three-second release for catchable software faults.
 
-        It deliberately refuses to publish after an FSM/remote interlock, stale
-        or invalid LowState, or a DDS write failure.  In those cases continuing
+        Query/compute failure triggers release without waiting for a Loco reply.
+        It refuses to publish after observed mode exit/remote stop, stale or
+        invalid LowState, or a DDS write failure. In those cases continuing
         to command the arm could fight the robot's own damping/mode transition.
         No path in this helper sends a one-frame weight-zero command.
         """
@@ -854,12 +877,24 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             "kd": np.asarray(last_frame["kd"], dtype=float).copy(),
         }
         start_ns = monotonic_ns()
-        release_start_ns = None
-        release_ramp = None
+        release_start_ns = start_ns
+        release_ramp = WeightReleaseRamp(start_weight, CONTROL_PERIOD_S)
+        release_clock = PeriodicClock(start_ns, CONTROL_PERIOD_S)
         attempted = False
+        with last_zero_lock:
+            zero_acknowledged = last_zero_reply_ns >= start_ns
+        journal.record({
+            "schema": "g1_pid_event_v1", "event": "fault_weight_release_started",
+            "reason": str(reason), "start_weight": start_weight,
+            "duration_s": WEIGHT_RELEASE_DURATION_S,
+            "zero_velocity_acknowledged": zero_acknowledged,
+            "zero_velocity_ack_wait_s": 0.0,
+            "release_independent_of_loco_ack": True,
+        })
         while True:
+            release_clock.wait()
             low, _ = streams.latest()
-            interlock_reason = interlock.check()
+            interlock_reason = interlock.check_release()
             loop_ns = monotonic_ns()
             if interlock_reason:
                 return {
@@ -870,39 +905,18 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             if (
                 low is None or not low.crc_valid or loop_ns < low.received_ns
                 or loop_ns - low.received_ns > STATE_TIMEOUT_NS
+                or len(low.q) <= WEIGHT_MOTOR_INDEX or len(low.dq) <= WEIGHT_MOTOR_INDEX
+                or not finite_array(_arm_slots(low)) or not finite_array(_arm_dq(low))
+                or (low.mode_pr, low.mode_machine) != (last_state.mode_pr, last_state.mode_machine)
             ):
                 return {
                     "attempted": attempted,
                     "completed": False,
-                    "reason": "fresh CRC-valid LowState unavailable during release",
+                    "reason": "fresh valid unchanged-mode LowState unavailable during release",
                 }
-            with last_zero_lock:
-                zero_reply = last_zero_reply_ns
-            zero_acknowledged = zero_reply >= start_ns
-            zero_wait_s = (loop_ns - start_ns) * 1e-9
-            if (
-                release_start_ns is None
-                and (zero_acknowledged or zero_wait_s >= ZERO_SPEED_ACK_WAIT_S)
-            ):
-                release_start_ns = loop_ns
-                release_ramp = WeightReleaseRamp(start_weight, CONTROL_PERIOD_S)
-                journal.record({
-                    "schema": "g1_pid_event_v1",
-                    "event": "fault_weight_release_started",
-                    "reason": str(reason),
-                    "start_weight": start_weight,
-                    "duration_s": WEIGHT_RELEASE_DURATION_S,
-                    "zero_velocity_acknowledged": zero_acknowledged,
-                    "zero_velocity_ack_wait_s": zero_wait_s,
-                })
-            if release_start_ns is None:
-                elapsed_s = 0.0
-                weight, terminal = start_weight, False
-                release_stage = "fault_stop_wait"
-            else:
-                elapsed_s = (loop_ns - release_start_ns) * 1e-9
-                weight, terminal = release_ramp.sample(elapsed_s)
-                release_stage = "fault_arm_release"
+            elapsed_s = (loop_ns - release_start_ns) * 1e-9
+            weight, terminal = release_ramp.sample(elapsed_s)
+            release_stage = "fault_arm_release"
             frame = {**frozen, "weight": weight}
             attempted = True
             write_begin_ns = monotonic_ns()
@@ -957,8 +971,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     "duration_s": elapsed_s,
                     "final_weight": weight,
                 }
-            next_time = loop_ns / 1e9 + CONTROL_PERIOD_S
-            time.sleep(max(0.001, next_time - time.monotonic()))
+            release_clock.advance(monotonic_ns())
 
     try:
         ChannelFactoryInitialize(0, args.nic)
@@ -985,8 +998,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             streams, interlock, journal, 0, profile["startup_valid_samples_int"]
         )
         # Continuous GetFsmId calls share the synchronous Unitree Loco service
-        # with SetVelocity and have repeatedly created server-side backlog in
-        # the field. Stop polling before operator dwell; perform one final
+        # with SetVelocity; field calls timed out, but the side causing delay
+        # is not identified. Stop polling before operator dwell; perform one final
         # explicit FSM=500 check immediately after typed confirmation instead.
         fsm_poll_stop.set()
         fsm_thread.join(FSM_RPC_TIMEOUT_S + 0.5)
@@ -1303,11 +1316,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                 with last_zero_lock:
                     zero_reply = last_zero_reply_ns
                 zero_acknowledged = zero_reply >= abort_start_ns
-                zero_ack_timed_out = task_s - abort_start_s >= ZERO_SPEED_ACK_WAIT_S
-                if (
-                    abort_release_start_s is None
-                    and (zero_acknowledged or zero_ack_timed_out)
-                ):
+                # Stop velocity requests run independently. A missing Loco
+                # acknowledgement must not delay the arm hand-back.
+                if abort_release_start_s is None:
                     abort_release_start_s = task_s
                     abort_release_ramp = WeightReleaseRamp(
                         abort_weight, CONTROL_PERIOD_S
@@ -1462,19 +1473,26 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         velocity_thread.join()
         journal.record({
             "schema": "g1_pid_event_v1", "event": "session_end",
-            "outcome": "operator_stop_release_completed" if abort_start_s is not None
+            "outcome": ("velocity_fault_release_completed" if velocity_failed.is_set()
+                        else "operator_stop_release_completed") if abort_start_s is not None
                 else "normal_release_completed",
             "final_weight": 0.0, "physical_stop_verified": False,
         })
-        return 130 if abort_start_s is not None else 0
+        return (3 if velocity_failed.is_set() else 130) if abort_start_s is not None else 0
     except Exception as exc:
-        # First stop requesting motion. Keep the FSM observer alive while a
-        # catchable software fault attempts its full three-second hand-back.
+        # First stop requesting motion. Keep LowState/remote monitoring alive
+        # while a catchable software fault attempts a three-second hand-back.
         stop_requested.set()
         if runtime is not None:
             journal.record({"schema": "g1_mpc_event_v1", "event": "controller_fault_detail",
                             "reason": str(exc), "diagnostics": runtime.controller.last_diagnostics})
         release_result = fallback_weight_release(str(exc))
+        if release_result['completed']:
+            print('ARM RELEASE COMPLETE weight=0; confirm physical arm hand-back on site',
+                  file=sys.stderr)
+        else:
+            print(f"ARM RELEASE NOT CONFIRMED: {release_result['reason']}; "
+                  'use the verified on-site stop/recovery method before another run', file=sys.stderr)
         worker_stop.set()
         if velocity_thread is not None and velocity_thread.is_alive():
             velocity_thread.join()
@@ -1551,6 +1569,10 @@ def main(argv=None):
                 "use --allow-first-6ms-field-trial only for the supervised first trial; "
                 "20 ms baseline is preserved in Git"
             )
+        from field_performance import prepare as prepare_field_performance
+        allowed = sorted(os.sched_getaffinity(0))
+        selected_cpu = (7 if 7 in allowed else allowed[0]) if args.cpu is None else args.cpu
+        performance_setup = prepare_field_performance(selected_cpu)
         journal = Journal(args.output_dir)
         shutil.copy2(args.profile, args.output_dir / "arm_profile.conf")
         shutil.copy2(args.controller_config, args.output_dir / "controller_config.yaml")
@@ -1572,6 +1594,7 @@ def main(argv=None):
             "control_nominal_period_ms": CONTROL_PERIOD_S * 1000,
             "profile_declared_period_ms": float(profile["control_period_ms"]),
             "first_6ms_field_trial_opt_in": args.allow_first_6ms_field_trial,
+            "performance_setup": performance_setup,
             "pid_physical_reference_period_ms": PID_REFERENCE_PERIOD_S * 1000,
             "derivative_alpha_at_nominal_period": 1 - (1 - pid_parameters.de_g_alpha) ** (CONTROL_PERIOD_S / PID_REFERENCE_PERIOD_S),
             "jacobian_method": "analytic_mujoco_site",
@@ -1582,6 +1605,7 @@ def main(argv=None):
                     Path(__file__).with_name("hardware_pid_control.py"),
                     Path(__file__).with_name("endpoint_pose.py"),
                     Path(__file__).with_name("pid_timing.py"),
+                    Path(__file__).with_name("field_performance.py"),
                 )
             },
             "profile_sha256": hashlib.sha256(args.profile.read_bytes()).hexdigest(),

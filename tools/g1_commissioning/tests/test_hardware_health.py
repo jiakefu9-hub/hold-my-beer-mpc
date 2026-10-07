@@ -69,6 +69,28 @@ class HealthTest(unittest.TestCase):
         lock.observe_remote([0,0,32,2])
         self.assertIn("L2+B",lock.check(102))
 
+    def test_query_timeout_allows_only_release_and_later_stop_still_latches(self):
+        for stop in ('remote', 'fsm', 'tick'):
+            lock=runner.Interlock()
+            lock.observe_fsm(0,500,100,101)
+            lock.observe_tick(10)
+            self.assertIn('stale',lock.check(102+runner.FSM_TIMEOUT_NS))
+            self.assertEqual(lock.check_release(),'')
+            if stop=='remote': lock.observe_remote([0,0,32,2])
+            elif stop=='fsm': lock.observe_fsm(0,1,103,104)
+            else: lock.observe_tick(9)
+            self.assertTrue(lock.check_release())
+
+    def test_observer_failure_allows_release_but_unknown_fault_does_not(self):
+        lock=runner.Interlock()
+        self.assertTrue(lock.check_release())
+        lock.observe_fsm(0,500,100,101)
+        lock.trip('predictor failure',release_blocking=False)
+        self.assertTrue(lock.check(102))
+        self.assertEqual(lock.check_release(),'')
+        lock.trip('unknown unsafe fault')
+        self.assertEqual(lock.check_release(),'unknown unsafe fault')
+
 
 if __name__=="__main__":
     unittest.main()

@@ -117,6 +117,11 @@ ground truth 完全相同的传感器。第一轮先验证闭环方向、是否�
 [`pid_walk_capture.template`](../../tools/g1_commissioning/profiles/pid_walk_capture.template)，只填写
 本次真实确认过的项目。模板故意是 `DRAFT`，不能直接运行，也不要机械地把确认项全改成 true。
 
+2026-10-07 起，实际运行入口在 DDS 前自动复核所用 CPU 及 SMT 同核的 governor 和 ACPI 平台
+`performance`。需要权限时先在同一终端 `sudo -v`，不向 Codex 提供密码；已经满足设置则不调用 sudo。
+设置前后记录在 `session_start.performance_setup`；PID 的调度策略、增益和 6 ms 周期未因此改变。
+详细边界见 [MPC 的主机设置说明](HARDWARE_MPC.md#4-cpu-与实时调度)。
+
 机器人已经处于 FSM 500、原地自主平衡，且有线只读状态正常后：
 
 ```bash
