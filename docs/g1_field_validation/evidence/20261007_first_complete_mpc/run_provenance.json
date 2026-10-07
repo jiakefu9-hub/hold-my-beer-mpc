@@ -1,0 +1,647 @@
+[
+  {
+    "schema": "g1_mpc_session_v1",
+    "event": "session_start",
+    "program": "g1_walk_mpc.py",
+    "task": "walk",
+    "required_fsm": 500,
+    "publisher_created": false,
+    "mode_setter_registered": false,
+    "lowcmd_topic_created": false,
+    "network_interface": "enx6c1ff701509c",
+    "control_nominal_period_ms": 6.0,
+    "mpc_start_s": 4.0,
+    "primary_metric_window_s": [
+      5.0,
+      18.0
+    ],
+    "forward_speed_m_s": 0.5,
+    "heading_target": "fixed_run_h0_positive_x",
+    "host_before_control": {
+      "schema": "g1_mpc_host_evidence_v1",
+      "kernel_release": "6.8.1-1057-realtime",
+      "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+      "kernel_realtime_raw": "1",
+      "preempt_rt_active": true,
+      "process_scheduler": "SCHED_OTHER",
+      "process_scheduler_priority": 0,
+      "allowed_cpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "selected_control_cpu": 2,
+      "selected_cpu_smt_siblings": "1-2",
+      "scaling_driver": "intel_pstate",
+      "scaling_governor": "performance",
+      "energy_performance_preference": "default",
+      "frequency_khz_snapshot": "4200000",
+      "platform_profile": "performance",
+      "isolated_cpus": "6-7",
+      "nohz_full_cpus": "6-7",
+      "rt_priority_limits": [
+        40,
+        40
+      ],
+      "memlock_bytes_limits": [
+        4154826752,
+        4154826752
+      ],
+      "capabilities": {
+        "CapPrm": "0000000000000000",
+        "CapEff": "0000000000000000",
+        "CapBnd": "000001ffffffffff"
+      },
+      "numerical_thread_environment": {
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": null
+      },
+      "system_settings_changed": false,
+      "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+      "limitations": [
+        "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+        "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+        "governor label alone does not specify current CPU frequency or performance",
+        "host compute and local DDS Write durations do not measure motor execution latency"
+      ]
+    },
+    "requested_control_cpu": 7,
+    "requested_fifo_priority": 20,
+    "assumed_command_delay_ms": null,
+    "hardware_delay_identified": false,
+    "profile_kind": "pid",
+    "pid_6ms_validation": "operator_attestation_not_automatically_certified",
+    "core": {
+      "schema": "g1_hardware_mpc_core_v1",
+      "model": "measured_state_acceleration_mpc",
+      "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+      "solver_package_version": "0.9.1",
+      "state": "measured q,dq; previous solution only warm-starts optimization",
+      "tracking_offset_model": "none; measured initial state, no persistent-reference governor",
+      "actuation": "measured_torque_preview",
+      "frame": "fixed H0",
+      "config": {
+        "schema": "g1_hardware_mpc_config_v1",
+        "control_period_s": 0.006,
+        "horizon": 9,
+        "prediction_backend": "cpp_pinocchio",
+        "solver_backend": "daqp",
+        "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+        "q_ee_acc": 0.0,
+        "q_ee_alpha": 0.0,
+        "q_ee_omega": 0.0,
+        "q_gravity": [
+          30.0,
+          30.0
+        ],
+        "q_posture": [
+          4.0,
+          4.0,
+          1.5,
+          0.2,
+          0.2
+        ],
+        "q_vel": 0.08,
+        "r_ddq": 0.0025,
+        "terminal_scale": 2.0,
+        "regularization": 1e-06,
+        "reference_offset_limit_deg": [
+          5.0,
+          5.0,
+          5.0,
+          5.0,
+          5.0
+        ],
+        "reference_max_dq_rad_s": 0.07,
+        "reference_max_ddq_rad_s2": 0.2,
+        "solver_eps_abs": 0.001,
+        "solver_eps_rel": 1e-05,
+        "solver_max_iter": 1000,
+        "solver_check_termination": 10,
+        "solver_time_limit_s": 0.0035,
+        "solver_rho": 0.001,
+        "solver_adaptive_rho": true
+      },
+      "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+      "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+      "xml_sha256": {
+        "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+        "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+      },
+      "cost": {
+        "term_names": [
+          "linear_acceleration",
+          "angular_acceleration",
+          "angular_velocity",
+          "gravity",
+          "posture",
+          "velocity",
+          "control"
+        ],
+        "Q_ee_acc": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "Q_ee_alpha": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "Q_ee_omega": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "Qg": [
+          [
+            30.0,
+            0.0
+          ],
+          [
+            0.0,
+            30.0
+          ]
+        ],
+        "Qq": [
+          [
+            4.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            4.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.5,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.2,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.2
+          ]
+        ],
+        "Qv": [
+          [
+            0.08,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.08,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.08,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.08,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.08
+          ]
+        ],
+        "R": [
+          [
+            0.0025,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0025,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0025,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0025,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0025
+          ]
+        ],
+        "posture_reference": [
+          -0.06981317007977318,
+          0.017453292519943295,
+          0.0,
+          -0.1361356816555577,
+          0.0
+        ],
+        "terminal_scale": 2.0
+      },
+      "offline_only": true,
+      "field_output_supported": true,
+      "torque_config": {
+        "schema": "g1_measured_torque_preview_v1",
+        "q_min_deg": [
+          -20.0,
+          -20.0,
+          -25.0,
+          -40.0,
+          -40.0
+        ],
+        "q_max_deg": [
+          20.0,
+          20.0,
+          20.0,
+          40.0,
+          40.0
+        ],
+        "q_margin_deg": [
+          5.0,
+          5.0,
+          5.0,
+          0.0,
+          0.0
+        ],
+        "max_dq_rad_s": 5.0,
+        "max_ddq_rad_s2": 15.0,
+        "kp": [
+          20.0,
+          20.0,
+          2.0,
+          20.0,
+          20.0
+        ],
+        "kd": [
+          1.0,
+          1.0,
+          0.2,
+          1.0,
+          1.0
+        ],
+        "tau_abs_nm": [
+          10,
+          6,
+          4,
+          7,
+          1.5
+        ],
+        "perturbation_nm": 0.1,
+        "regularization": 5.0,
+        "candidate_scales": [
+          1.0,
+          0.5,
+          0.25,
+          0.125
+        ],
+        "max_joint_error_rad_s2": 4.0,
+        "max_abs_qacc_rad_s2": 15.0,
+        "second_pass_error_rad_s2": 5.0,
+        "rescue_passes": 2,
+        "transition_rate_nm_s": [
+          50.0,
+          40.0,
+          30.0,
+          50.0,
+          20.0
+        ],
+        "tau_ff_abs_nm": [
+          10,
+          6,
+          4,
+          7,
+          1.5
+        ],
+        "active_slew_reference": "none",
+        "recovery_envelope_enabled": false,
+        "recovery_rate_s_inv": 6.0,
+        "recovery_guard_deg": [
+          0.15,
+          0.15,
+          0.15,
+          0.15,
+          0.15
+        ],
+        "recovery_reentry_enabled": false,
+        "enforce_mapper_state_envelope": false,
+        "planning_actuation_constraints_enabled": true,
+        "anchor_shoulder_yaw_reference": true,
+        "predictive_braking_enabled": true,
+        "braking_deceleration_rad_s2": 4.0,
+        "braking_reaction_s": 0.012,
+        "braking_margin_deg": 1.0,
+        "braking_velocity_weight": 50.0,
+        "braking_min_deceleration_rad_s2": 6.0
+      },
+      "inverse_dynamics": {
+        "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+        "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+        "bottle_mass_kg_from_xml": 0.25,
+        "bottle_com_local_m": [
+          0.0,
+          0.0,
+          0.000212
+        ],
+        "bottle_diagonal_inertia_kg_m2": [
+          0.0009031911494166669,
+          0.0009031911494166669,
+          0.0001318234375
+        ],
+        "model_joint_armature_kg_m2": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "hardware_parameters_calibrated": false,
+        "friction_compensation": "none; do not transfer simulation friction",
+        "external_hand_wrench": "assumed_zero; no contact-force feedback",
+        "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+      },
+      "recovery_envelope": {
+        "enabled": false
+      },
+      "forward_model": "MuJoCo conditional right-arm mass/bias with prescribed observed torso motion",
+      "unmodelled": [
+        "unknown ground/contact reactions",
+        "actuator delay and torque gain",
+        "physical friction and payload inertia error",
+        "future arm-to-base reaction"
+      ],
+      "output_semantics": "selected total torque minus current PD; device adds PD once",
+      "shoulder_yaw_execution": {
+        "nominal_reference_rad": 0.0,
+        "reference_anchored": true,
+        "packet_kp": 2.0,
+        "packet_kd": 0.2,
+        "semantics": "fixed nominal packet q/dq reference; field-configured light firmware PD is retained once on shoulder yaw while other axes retain model-total execution"
+      },
+      "planning_actuation_constraints": {
+        "enabled": true,
+        "semantics": "absolute total/feedforward limits inside the acceleration MPC; no torque-rate rows",
+        "local_model": "current conditional arm mass and bias frozen across 54 ms horizon"
+      },
+      "predictive_braking": {
+        "enabled": true,
+        "semantics": "soft horizon cost plus latched first-action braking; no abort gate",
+        "deceleration_rad_s2": 4.0,
+        "reaction_s": 0.012,
+        "margin_deg": 1.0,
+        "velocity_weight": 50.0,
+        "minimum_deceleration_rad_s2": 6.0,
+        "physical_guarantee": false
+      },
+      "field_scope": "explicit controlled first trial, not hardware-validated performance",
+      "field_torque_limits_calibrated": false,
+      "first_trial_task": "stationary_before_walk",
+      "compute_isolation": {
+        "process": true,
+        "pid": 35161,
+        "communication": "bounded single-flight shared buffers",
+        "hardware_output": false,
+        "deadline_s": 0.009,
+        "automatic_restart": false
+      }
+    },
+    "warmup": {
+      "samples": 30,
+      "max_core_ms": 4.56475,
+      "median_core_ms": 3.485165
+    },
+    "predictor_mode": "hold_current",
+    "predictor_manifest": null,
+    "control_source_sha256": {
+      "tools/g1_commissioning/g1_walk_mpc.py": "52bde3aab664192d54e682158eb2ab88a75d217e968012116a56bf4c5a694dbb",
+      "tools/g1_commissioning/g1_walk_pid.py": "8c543ca97b2c85525bef2ce87f2547def4a70e2ca81912da4f35db75e9b4b7de",
+      "tools/g1_commissioning/hardware_mpc_control.py": "b5955a9db61b3fdd317b2b7dc7038f61d8cd0617cb739fd45c82f287ba5e5543",
+      "tools/g1_commissioning/hardware_mpc_solver.py": "7f89ce40efb2402c6655635b9f28c46bb07bfda54bb96f73c334bbb3209fe37d",
+      "tools/g1_commissioning/hardware_mpc_predictor.py": "86a43dcafc09f047d01dd7b5e873cd9f32b5a47be418bc9b225d0fa43a0bc159",
+      "tools/g1_commissioning/hardware_mpc_field.py": "66de91ea78faa6bc85ff8d8406fbc0984e32177f424d51f616e2977b2e9cfcc3",
+      "tools/g1_commissioning/hardware_mpc_torque_control.py": "4a3b540439afdb36789137b3745e788807caa91a8e88f444979f8b6eb7dfbbe4",
+      "tools/g1_commissioning/hardware_arm_inverse_dynamics.py": "00b362b7b4aaf49530045b5cf13bfd803e0b4bc370f86d58428fbf31472f8b41",
+      "tools/g1_commissioning/hardware_torque_mapper.py": "36b769f55f4d5560f3caff2a34c5ca3c98fd98b212c1e7b53dff47de630d48d2",
+      "tools/g1_commissioning/hardware_mpc_delay_plan.py": "ce11a24c6132015763cc6b041ca4687131d5d5ca4e6be198b6c70813bd0ddf47",
+      "tools/g1_commissioning/hardware_mpc_delay_preview.py": "643a555bcd009f0333744d15bbfa3f14d0ddf447ed7a846c832631b457d7e4ec",
+      "tools/g1_commissioning/mpc_host.py": "c002e3f41ac2d0ca4f2e744156050e59ce16dbe4f0d0760e9e4e4e6fd72712f9",
+      "tools/g1_commissioning/arm_execution_record.py": "329358335eebea7c9149a9d6cfa16d5df7306e48228ac9e14938a1c64e023631",
+      "tools/g1_commissioning/native_arm_delay.py": "12ef802d84286ba235c220afa010fd497265916a4df19704c9296e10fd611865",
+      "tools/g1_commissioning/mpc_compute_process.py": "8094f2db6af46130d0a61935e48c3417c0bac0980166391a8c8ce7ddc0e720b9",
+      "tools/g1_commissioning/mpc_crc.py": "63d35953c73269ff73f2a37a8d269d26ea98a28ec04cb3b8f80f807063f4b3db",
+      "tools/g1_commissioning/hardware_mpc_recovery.py": "b6989856d8d89a7a9a2aa0d14b18f84a9b2a74eda70e8a636426a33d93211ad2",
+      "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+      "cpp/g1_arm_delay/delay.cpp": "97a19cbd213a6c718b37a510aab7ed761a6d11643b54d5cc238c43d8e3941a42",
+      "cpp/g1_arm_delay/CMakeLists.txt": "62aa9bb8387f92b76f1d31c1609527927104bf5a0397b667ed6b4a58b32d7182",
+      "arm_mpc.py": "0dd4d3830437529cf99407fb76de96072da2b2dc0612d3789d47b46622c28b5a",
+      "kinematics_helper.py": "34b244c038301a79f6adb09bbc8b1e1bcebc56871cd67baadc0a1b1589a672f1"
+    },
+    "profile_sha256": "3411f143f6651dadbe48d6c12e237ea5dd57cb4d86d8a519498a71b371aa3e04",
+    "controller_config_sha256": "f1e9d049d25fe92fd8cc673a196acc22e7df9dec2d47bb2532415c3080432465",
+    "torque_config_sha256": "ee3b289e830309d6d99bae02e46d2b27776479b2f40af183b0ebdd1adfcb80e6",
+    "monotonic_ns": 12586009138694
+  },
+  {
+    "schema": "g1_mpc_host_evidence_v1",
+    "event": "control_runtime",
+    "kernel_release": "6.8.1-1057-realtime",
+    "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+    "kernel_realtime_raw": "1",
+    "preempt_rt_active": true,
+    "process_scheduler": "SCHED_FIFO",
+    "process_scheduler_priority": 20,
+    "allowed_cpus": [
+      2
+    ],
+    "selected_control_cpu": 2,
+    "selected_cpu_smt_siblings": "1-2",
+    "scaling_driver": "intel_pstate",
+    "scaling_governor": "performance",
+    "energy_performance_preference": "default",
+    "frequency_khz_snapshot": "4300000",
+    "platform_profile": "performance",
+    "isolated_cpus": "6-7",
+    "nohz_full_cpus": "6-7",
+    "rt_priority_limits": [
+      40,
+      40
+    ],
+    "memlock_bytes_limits": [
+      4154826752,
+      4154826752
+    ],
+    "capabilities": {
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "000001ffffffffff"
+    },
+    "numerical_thread_environment": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": null
+    },
+    "system_settings_changed": false,
+    "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+    "limitations": [
+      "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+      "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+      "governor label alone does not specify current CPU frequency or performance",
+      "host compute and local DDS Write durations do not measure motor execution latency"
+    ],
+    "compute_process_host": {
+      "schema": "g1_mpc_host_evidence_v1",
+      "kernel_release": "6.8.1-1057-realtime",
+      "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+      "kernel_realtime_raw": "1",
+      "preempt_rt_active": true,
+      "process_scheduler": "SCHED_FIFO",
+      "process_scheduler_priority": 20,
+      "allowed_cpus": [
+        7
+      ],
+      "selected_control_cpu": 7,
+      "selected_cpu_smt_siblings": "6-7",
+      "scaling_driver": "intel_pstate",
+      "scaling_governor": "performance",
+      "energy_performance_preference": "default",
+      "frequency_khz_snapshot": "400000",
+      "platform_profile": "performance",
+      "isolated_cpus": "6-7",
+      "nohz_full_cpus": "6-7",
+      "rt_priority_limits": [
+        40,
+        40
+      ],
+      "memlock_bytes_limits": [
+        4154826752,
+        4154826752
+      ],
+      "capabilities": {
+        "CapPrm": "0000000000000000",
+        "CapEff": "0000000000000000",
+        "CapBnd": "000001ffffffffff"
+      },
+      "numerical_thread_environment": {
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": null
+      },
+      "system_settings_changed": false,
+      "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+      "limitations": [
+        "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+        "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+        "governor label alone does not specify current CPU frequency or performance",
+        "host compute and local DDS Write durations do not measure motor execution latency"
+      ]
+    },
+    "compute_pid": 35161,
+    "python_thread_switch_interval_ms": 0.5,
+    "monotonic_ns": 12594849398633
+  },
+  {
+    "schema": "g1_mpc_event_v1",
+    "event": "session_end",
+    "outcome": "normal_release_completed",
+    "final_weight": 0.0,
+    "physical_stop_verified": false,
+    "monotonic_ns": 12615917304373
+  }
+]

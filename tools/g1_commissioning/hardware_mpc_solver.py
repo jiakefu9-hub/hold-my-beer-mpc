@@ -60,6 +60,7 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         self._condensed_solver = None
         self._local_actuation = None
         self._last_local_actuation = None
+        self._first_acceleration_bounds = None
         self._braking_velocity_cost = np.zeros(self.nu)
 
     def set_local_actuation_constraints(self, mass, bias, total_limit, ff_limit, feedback_dq):
@@ -87,6 +88,19 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
     def clear_local_actuation_constraints(self):
         self._local_actuation = None
 
+    def set_first_acceleration_bounds(self, lower=None, upper=None):
+        """Optionally restrict only the acceleration that will be transmitted."""
+        if lower is None and upper is None:
+            self._first_acceleration_bounds = None
+            return
+        lower, upper = [np.asarray(x, dtype=np.float64) for x in (lower, upper)]
+        if (lower.shape != (self.nu,) or upper.shape != (self.nu,)
+                or not np.all(np.isfinite(lower)) or not np.all(np.isfinite(upper))
+                or np.any(lower > upper) or np.any(lower < -self.max_ddq)
+                or np.any(upper > self.max_ddq)):
+            raise ValueError('invalid first acceleration bounds')
+        self._first_acceleration_bounds = (lower.copy(), upper.copy())
+
     def set_braking_velocity_cost(self, weights):
         weights = np.asarray(weights, dtype=float)
         if weights.shape != (self.nu,) or not np.all(np.isfinite(weights)) or np.any(weights < 0):
@@ -94,36 +108,44 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         self._braking_velocity_cost = weights.copy()
 
     def _local_actuation_rows(self):
-        """Return normalized-input rows for absolute total and first FF only."""
+        """Return normalized-input rows for torque and optional first-action braking."""
         data = self._local_actuation
-        if data is None:
+        if data is None and self._first_acceleration_bounds is None:
             return None
         n, m, dt = self.horizon, self.nu, self.control_dt
         scale = np.diag(self.max_ddq)
-        mass = data['mass']
         rows, lower, upper = [], [], []
 
-        # Frozen local total-torque model: tau_k = M*a_k + b.
-        for k in range(n):
-            row = np.zeros((m, n*m))
-            row[:, k*m:(k+1)*m] = mass @ scale
-            rows.append(row)
-            lower.append(-data['total_limit']-data['bias'])
-            upper.append(data['total_limit']-data['bias'])
+        if data is not None:
+            mass = data['mass']
+            # Frozen local total-torque model: tau_k = M*a_k + b.
+            for k in range(n):
+                row = np.zeros((m, n*m))
+                row[:, k*m:(k+1)*m] = mass @ scale
+                rows.append(row)
+                lower.append(-data['total_limit']-data['bias'])
+                upper.append(data['total_limit']-data['bias'])
 
-        # Packet feedforward after the device-side one-step PD law.  Only the
-        # first action is transmitted; the next solve rechecks its own first
-        # action against fresh feedback.  Keeping this to one row block avoids
-        # burdening the 6 ms solve with limits on commands that are never sent.
-        kp = np.asarray(getattr(self, '_local_kp', np.zeros(m)), dtype=np.float64)
-        kd = np.asarray(getattr(self, '_local_kd', np.zeros(m)), dtype=np.float64)
-        pd_a = np.diag(.5*kp*dt**2+kd*dt)
-        current = (mass-pd_a) @ scale
-        offset = data['bias']-kp*dt*data['feedback_dq']
-        row = np.zeros((m, n*m)); row[:, :m] = current
-        rows.append(row)
-        lower.append(-data['ff_limit']-offset)
-        upper.append(data['ff_limit']-offset)
+            # Packet feedforward after the device-side one-step PD law.  Only the
+            # first action is transmitted; the next solve rechecks its own first
+            # action against fresh feedback.  Keeping this to one row block avoids
+            # burdening the 6 ms solve with limits on commands that are never sent.
+            kp = np.asarray(getattr(self, '_local_kp', np.zeros(m)), dtype=np.float64)
+            kd = np.asarray(getattr(self, '_local_kd', np.zeros(m)), dtype=np.float64)
+            pd_a = np.diag(.5*kp*dt**2+kd*dt)
+            current = (mass-pd_a) @ scale
+            offset = data['bias']-kp*dt*data['feedback_dq']
+            row = np.zeros((m, n*m)); row[:, :m] = current
+            rows.append(row)
+            lower.append(-data['ff_limit']-offset)
+            upper.append(data['ff_limit']-offset)
+
+        if self._first_acceleration_bounds is not None:
+            # u is normalized; multiplying by max_ddq gives physical rad/s^2.
+            row = np.zeros((m, n*m)); row[:, :m] = scale
+            rows.append(row)
+            lower.append(self._first_acceleration_bounds[0])
+            upper.append(self._first_acceleration_bounds[1])
 
         matrix = np.vstack(rows)
         lo, hi = np.concatenate(lower), np.concatenate(upper)
@@ -176,6 +198,7 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         self._braking_velocity_cost = np.zeros(self.nu)
         self._local_actuation = None
         self._last_local_actuation = None
+        self._first_acceleration_bounds = None
         if getattr(self, "_condensed_solver", None) is not None:
             self._condensed_solver.warm_start(x=np.zeros(self.horizon*self.nu),
                                               y=np.zeros(self._ac.shape[0]))

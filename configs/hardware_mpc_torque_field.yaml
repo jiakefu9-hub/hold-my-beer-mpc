@@ -11,7 +11,7 @@ transition_rate_nm_s: [50, 40, 30, 50, 20]
 # transition_rate above applies to entry/release only. Active MPC has no
 # total- or bias-relative torque-rate cap; absolute total/FF checks remain.
 active_slew_reference: none
-# Keep the original MPC q/dq/ddq boxes.  The additional q+dq/6 envelope was
+# Keep the MPC q/dq/ddq boxes.  The additional q+dq/6 envelope was
 # removed after it rejected a predicted 2.65 deg shoulder state because
 # the uncalibrated slow-recovery projection reached 4.91 deg.  The original
 # stopping-distance recovery, outer joint box and all torque limits remain.
@@ -23,13 +23,48 @@ recovery_reentry_enabled: false
 enforce_mapper_state_envelope: false
 # Plan the already-enforced absolute total/FF limits, without torque-rate rows.
 planning_actuation_constraints_enabled: true
-# Slow early, instead of adding another infeasible hard stopping envelope.
-# 4 rad/s^2 and 12 ms are conservative tuning assumptions, not calibration.
+# Keep the right shoulder-yaw packet q/dq reference at the established nominal
+# zero-angle pose.  Use only a light restoring PD on that axis: at 20 deg and
+# zero velocity Kp=2 contributes about -0.70 Nm, rather than the -6.98 Nm from
+# the A3 posture-hold Kp=20.  The other four right-arm axes keep the existing
+# 20/1 packet gains, which are cancelled once in feedforward as before.  The
+# existing +/-4 Nm yaw total-torque box still applies.
+anchor_shoulder_yaw_reference: true
+kp: [20, 20, 2, 20, 20]
+kd: [1, 1, 0.2, 1, 1]
+# 10-07 upright-baseline walk reached right-elbow dq=1.129 rad/s during the
+# first-step torso impact while MPC was already commanding inward braking. The
+# old 1 rad/s state box then made the next QP mathematically infeasible.
+# Keep the requested wider field state envelope explicit in this overlay; the
+# offline/simulation-like preview defaults remain 1 rad/s and 8 rad/s^2.  The
+# first 25 rad/s^2 field attempt made the narrow shoulder-roll brake alternate
+# between both acceleration rails before walking.  Fifteen remains wider than
+# the old field value without preserving that unnecessarily aggressive rail.
+max_dq_rad_s: 5.0
+max_ddq_rad_s2: 15.0
+# The final conditional forward-model check must accept accelerations that the
+# widened MPC is explicitly allowed to request. Absolute total/FF torque boxes
+# remain unchanged and are still enforced inside the QP and before publication.
+max_abs_qacc_rad_s2: 15.0
+# The 10-07 runs showed that the old shoulder pitch/roll working boxes
+# ([-4,+4] and [-4,+2] deg) were not usable recovery envelopes.  In the second
+# run the roll target was already +1 deg, and the brake alternated at +/-25
+# rad/s^2 before walking.  Use +/-15 deg as the normal shoulder pitch/roll
+# working box, with five additional degrees used only for recovery.  The yaw
+# working/recovery boxes remain [-20,+15]/[-25,+20].  These are controller
+# envelopes, not mechanical ratings or tracking targets.
+q_min_deg: [-20, -20, -25, -40, -40]
+q_max_deg: [20, 20, 20, 40, 40]
+q_margin_deg: [5, 5, 5, 0, 0]
+# Trigger from the original inner working box. Once triggered, require the
+# first command to keep braking until measured outward speed has stopped;
+# this is a recovery command, not another exit condition.
 predictive_braking_enabled: true
 braking_deceleration_rad_s2: 4.0
 braking_reaction_s: 0.012
 braking_margin_deg: 1.0
 braking_velocity_weight: 50.0
+braking_min_deceleration_rad_s2: 6.0
 # Defaults are inherited from hardware_mpc_torque_preview.yaml, including the
 # full measured-state QP and candidate search. 250 g bottle per arm in the XML.
 # Historical first trial [5,3,2,5,1.5] used PID |tau_est| peaks as a scale;

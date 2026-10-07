@@ -300,6 +300,13 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                      kp=np.r_[np.full(11, 20), 0, 0], kd=np.r_[np.ones(11), 0, 0], weight=1.,
                      diagnostics=diag)
         frame["q_rad"][5:10], frame["dq_rad_s"][5:10] = qr, dqr
+        if actuation == 'measured_torque_preview':
+            # Exercise the exact evaluated packet gains.  Field overlays may
+            # intentionally soften one axis; a preflight using hard-coded A3
+            # gains would either test the wrong packet or, correctly, fail the
+            # packet/model consistency gate.
+            frame["kp"][5:10] = diag["expected_kp"]
+            frame["kd"][5:10] = diag["expected_kd"]
         packet = runtime.make_message(frame, SimpleNamespace(mode_pr=0, mode_machine=4),
                                       unitree_hg_msg_dds__LowCmd_, CRC())
         serialized = packet.serialize()

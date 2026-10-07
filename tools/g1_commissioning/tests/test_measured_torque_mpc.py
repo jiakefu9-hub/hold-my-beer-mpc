@@ -17,6 +17,7 @@ from hardware_mpc_torque_control import (RightArmMeasuredTorqueMpc, HardwareTorq
 from hardware_torque_mapper import LocalTorqueMapper, NoModelTorque
 from g1_walk_pid import EXPECTED_TARGET_Q, run_device
 from g1_walk_mpc import main, build_parser
+from hardware_mpc_control import load_mpc_config
 
 
 def horizon():
@@ -43,6 +44,9 @@ class MapperTest(unittest.TestCase):
         bias=nominal-np.linalg.solve(gain,acceleration)
         forward=lambda tau:gain@(tau-bias)
         config=load_torque_config(Path(__file__).resolve().parents[3]/'configs/hardware_mpc_torque_field.yaml')
+        # Preserve the historical 10 rad/s2 handoff fixture independently of
+        # the later field-wide acceleration-envelope commissioning change.
+        config['max_abs_qacc_rad_s2']=10.
         mapper=LocalTorqueMapper(config)
         delta=config['transition_rate_nm_s']*.006
         options=dict(safe_hold=bias-velocity,previous=previous,bounds=(previous-delta,previous+delta))
@@ -177,6 +181,94 @@ class MeasuredMpcTest(unittest.TestCase):
         self.c.warmup(EXPECTED_TARGET_Q,[1,0,0,0],count=3)
 
     def tearDown(self):self.c.close()
+
+    def test_upright_field_overlay_disables_only_dynamic_endpoint_costs(self):
+        root=Path(__file__).resolve().parents[3]
+        config=load_mpc_config(root/'configs/hardware_mpc_upright_baseline.yaml')
+        self.assertEqual(config['q_ee_acc'],0.)
+        self.assertEqual(config['q_ee_alpha'],0.)
+        self.assertEqual(config['q_ee_omega'],0.)
+        self.assertEqual(config['q_gravity'],[30.,30.])
+        self.assertEqual(config['q_posture'],[4.,4.,1.5,.2,.2])
+        self.assertEqual(config['q_vel'],.08)
+        self.assertEqual(config['r_ddq'],.0025)
+        self.assertEqual(config['control_period_s'],.006)
+        self.assertEqual(config['horizon'],9)
+
+    def test_field_torque_overlay_has_requested_wide_velocity_and_acceleration(self):
+        root=Path(__file__).resolve().parents[3]
+        config=load_torque_config(root/'configs/hardware_mpc_torque_field.yaml')
+        self.assertEqual(config['max_dq_rad_s'],5.)
+        self.assertEqual(config['max_ddq_rad_s2'],15.)
+        self.assertEqual(config['max_abs_qacc_rad_s2'],15.)
+        # Widening state acceleration does not silently widen field torque.
+        np.testing.assert_array_equal(config['tau_abs_nm'],[10,6,4,7,1.5])
+        np.testing.assert_array_equal(config['tau_ff_abs_nm'],[10,6,4,7,1.5])
+        self.assertTrue(config['anchor_shoulder_yaw_reference'])
+        np.testing.assert_array_equal(config['kp'],[20,20,2,20,20])
+        np.testing.assert_array_equal(config['kd'],[1,1,.2,1,1])
+
+    def test_field_overlay_anchors_yaw_and_retains_existing_pd_once(self):
+        root=Path(__file__).resolve().parents[3]
+        c=RightArmMeasuredTorqueMpc(EXPECTED_TARGET_Q[5:10],
+            config=root/'configs/hardware_mpc_upright_baseline.yaml',
+            torque_config=root/'configs/hardware_mpc_torque_field.yaml')
+        try:
+            c.policy.solver_time_limit=.1
+            slots=EXPECTED_TARGET_Q.copy()
+            slots[7]=.1
+            c.set_measured_dq(np.zeros(5));c.set_disturbance_horizon(horizon())
+            qr,dqr,diag=c.step(slots,[1,0,0,0],0.,.006)
+            self.assertEqual(qr[2],EXPECTED_TARGET_Q[7])
+            self.assertEqual(dqr[2],0.)
+            self.assertTrue(diag['shoulder_yaw_reference_anchored'])
+            pd=np.asarray(diag['tau_pd_at_feedback_nm'])
+            selected=np.asarray(diag['tau_model_selected_nm'])
+            retained=np.asarray(diag['retained_firmware_pd_nm'])
+            total=np.asarray(diag['tau_total_estimated_at_feedback_nm'])
+            ff=np.asarray(diag['tau_ff_candidate_nm'])
+            self.assertAlmostEqual(pd[2],-.2)
+            np.testing.assert_array_equal(retained[[0,1,3,4]],np.zeros(4))
+            self.assertEqual(retained[2],pd[2])
+            np.testing.assert_allclose(total,selected+retained,atol=1e-12)
+            np.testing.assert_allclose(ff+pd,total,atol=1e-12)
+            self.assertAlmostEqual(ff[2],selected[2])
+            c.reset()
+            plan=HardwareTorquePreviewPlan(EXPECTED_TARGET_Q,EXPECTED_TARGET_Q,
+                np.r_[np.full(11,20.),0,0],np.r_[np.ones(11),0,0],c,mpc_start_s=4.)
+            c.set_disturbance_horizon(horizon())
+            frame=plan.sample(4.1,slots,np.zeros(13),[1,0,0,0],0.,.006)
+            self.assertEqual(frame['q_rad'][7],EXPECTED_TARGET_Q[7])
+            self.assertEqual(frame['dq_rad_s'][7],0.)
+            self.assertEqual(frame['kp'][7],2.)
+            self.assertEqual(frame['kd'][7],.2)
+            packet_pd=(frame['kp'][7]*(frame['q_rad'][7]-slots[7])
+                       +frame['kd'][7]*frame['dq_rad_s'][7])
+            self.assertAlmostEqual(
+                frame['diagnostics']['tau_ff_candidate_nm'][2]+packet_pd,
+                frame['diagnostics']['tau_total_estimated_at_feedback_nm'][2])
+            self.assertLess(frame['diagnostics']['tau_total_estimated_at_feedback_nm'][2],
+                            frame['diagnostics']['tau_model_selected_nm'][2]-.15)
+        finally:c.close()
+
+    def test_field_overlay_accepts_recorded_first_step_elbow_velocity(self):
+        root=Path(__file__).resolve().parents[3]
+        c=RightArmMeasuredTorqueMpc(EXPECTED_TARGET_Q[5:10],
+            config=root/'configs/hardware_mpc_upright_baseline.yaml',
+            torque_config=root/'configs/hardware_mpc_torque_field.yaml')
+        try:
+            c.policy.solver_time_limit=.1
+            slots=EXPECTED_TARGET_Q.copy()
+            # 20261007_150349 controller_fault_detail: the old 1 rad/s box was
+            # already violated and could not recover within one 6 ms step.
+            slots[5:10]=[.0411418453,.0076219672,-.0092997588,-.0475653894,-.0345505215]
+            dq=np.array([-.3374757767,-.5184855461,.0567572899,1.1290099621,.0199417509])
+            c.set_measured_dq(dq);c.set_disturbance_horizon(horizon())
+            _,_,diag=c.step(slots,[1,0,0,0],0.,.006)
+            self.assertTrue(diag['mpc']['solved'])
+            self.assertGreater(diag['mpc']['min_constraint_margins']['dq'],0.)
+            self.assertLessEqual(np.max(np.abs(diag['raw_mpc_ddq_rad_s2'])),15.+1e-9)
+        finally:c.close()
 
     def test_measurement_is_initial_state_even_when_old_reference_is_wrong(self):
         c=self.c; slots=EXPECTED_TARGET_Q.copy(); slots[5:10]+=.005

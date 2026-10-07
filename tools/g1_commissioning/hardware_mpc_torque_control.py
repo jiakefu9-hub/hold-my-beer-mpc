@@ -18,7 +18,7 @@ from endpoint_pose import ROOT, rotation
 from hardware_arm_inverse_dynamics import RightArmInverseDynamics, finite_vector
 from hardware_mpc_control import RightArmHardwareMpc, HardwareMpcError, json_values
 from hardware_mpc_solver import CondensedArmMPCPolicy
-from hardware_mpc_braking import braking_cost
+from hardware_mpc_braking import LatchedPredictiveBrake
 from hardware_torque_mapper import LocalTorqueMapper, NoModelTorque
 from hardware_pid_control import HardwarePidPlan
 
@@ -56,6 +56,8 @@ def load_torque_config(config=None):
             raise ValueError('bounded reentry requires both recovery and final mapper state checks')
     if not isinstance(values.setdefault('planning_actuation_constraints_enabled',False),bool):
         raise ValueError('planning_actuation_constraints_enabled must be boolean')
+    if not isinstance(values.setdefault('anchor_shoulder_yaw_reference',False),bool):
+        raise ValueError('anchor_shoulder_yaw_reference must be boolean')
     if not isinstance(values.setdefault('predictive_braking_enabled',False),bool):
         raise ValueError('predictive_braking_enabled must be boolean')
     for key, default in (('braking_deceleration_rad_s2',4.),('braking_reaction_s',.012),
@@ -66,6 +68,11 @@ def load_torque_config(config=None):
     if (values['braking_deceleration_rad_s2'] > values['max_ddq_rad_s2']
             or np.any(2*values['braking_margin_deg'] >= values['q_max_deg']-values['q_min_deg'])):
         raise ValueError('invalid predictive braking tuning')
+    values['braking_min_deceleration_rad_s2'] = float(
+        values.get('braking_min_deceleration_rad_s2', 6.))
+    if (not math.isfinite(values['braking_min_deceleration_rad_s2'])
+            or not 0 < values['braking_min_deceleration_rad_s2'] <= values['max_ddq_rad_s2']):
+        raise ValueError('invalid braking_min_deceleration_rad_s2')
     if enabled:
         values["recovery_guard_deg"] = finite_vector(values["recovery_guard_deg"], 5, "recovery guard")
         rate = float(values["recovery_rate_s_inv"])
@@ -81,6 +88,9 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
     def __init__(self, *args, torque_config=None, **kwargs):
         c = load_torque_config(torque_config)
         mapper = LocalTorqueMapper(c)
+        # The base constructor calls the overridden reset(), so create this
+        # state before delegating to it.
+        self.brake = LatchedPredictiveBrake(5)
         super().__init__(*args, **kwargs)
         self.torque_config = c
         self.minimum, self.maximum = np.deg2rad(c["q_min_deg"]), np.deg2rad(c["q_max_deg"])
@@ -107,6 +117,7 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         self.policy._local_kd = c['kd'].copy()
         self.inverse = RightArmInverseDynamics(self.model, self.backend)
         self.mapper = mapper
+        self._active_braking_acceleration_bounds = None
         self._prepared_forward = None
         self.metadata.update(model="measured_state_acceleration_mpc",
             state="measured q,dq; previous solution only warm-starts optimization",
@@ -123,15 +134,23 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
             unmodelled=["unknown ground/contact reactions", "actuator delay and torque gain",
                         "physical friction and payload inertia error", "future arm-to-base reaction"],
             output_semantics="selected total torque minus current PD; device adds PD once",
+            shoulder_yaw_execution=dict(
+                nominal_reference_rad=float(self.nominal[2]),
+                reference_anchored=c['anchor_shoulder_yaw_reference'],
+                packet_kp=float(c['kp'][2]), packet_kd=float(c['kd'][2]),
+                semantics=('fixed nominal packet q/dq reference; field-configured light firmware PD '
+                           'is retained once on shoulder yaw while other axes retain model-total execution')),
             planning_actuation_constraints=dict(
                 enabled=c['planning_actuation_constraints_enabled'],
                 semantics='absolute total/feedforward limits inside the acceleration MPC; no torque-rate rows',
                 local_model='current conditional arm mass and bias frozen across 54 ms horizon'),
             predictive_braking=dict(enabled=c['predictive_braking_enabled'],
-                semantics='soft velocity cost near estimated stopping boundary; no extra hard gate',
+                semantics='soft horizon cost plus latched first-action braking; no abort gate',
                 deceleration_rad_s2=c['braking_deceleration_rad_s2'],
                 reaction_s=c['braking_reaction_s'], margin_deg=c['braking_margin_deg'],
-                velocity_weight=c['braking_velocity_weight'], physical_guarantee=False),
+                velocity_weight=c['braking_velocity_weight'],
+                minimum_deceleration_rad_s2=c['braking_min_deceleration_rad_s2'],
+                physical_guarantee=False),
             cost=self.policy.get_cost_definition())
         self.reset()
 
@@ -142,6 +161,8 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         self._next_total_bounds = None
         self._next_slew_bias = None
         self._recovery_elapsed_s = 0.
+        self._active_braking_acceleration_bounds = None
+        self.brake.reset()
 
     def _torque(self, q, dq, qref, dqref, ddq, base, bounds=None, prepared_dynamics=None):
         if prepared_dynamics is None:
@@ -172,8 +193,19 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         gain = np.linalg.solve(mass, np.eye(5))
         forward = lambda tau: gain @ (tau-bias)
         pd = self.torque_config["kp"]*(qref-q)+self.torque_config["kd"]*(dqref-dq)
+        retained_pd = np.zeros(5)
+        if self.torque_config['anchor_shoulder_yaw_reference']:
+            retained_pd[2] = pd[2]
         acceleration_bounds = (self.policy.first_step_acceleration_bounds(q,dq)
                                if self.torque_config['enforce_mapper_state_envelope'] else None)
+        active_brake_bounds = getattr(self, '_active_braking_acceleration_bounds', None)
+        if active_brake_bounds is not None:
+            brake_lo, brake_hi = active_brake_bounds
+            if acceleration_bounds is None:
+                acceleration_bounds = (brake_lo.copy(), brake_hi.copy())
+            else:
+                acceleration_bounds = (np.maximum(acceleration_bounds[0], brake_lo),
+                                       np.minimum(acceleration_bounds[1], brake_hi))
         self.last_diagnostics['final_acceleration_bounds_rad_s2'] = acceleration_bounds
         try:
             # The optimizer requests acceleration.  M*ddq+b is therefore the
@@ -191,11 +223,15 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
             raise
         self._previous_total = total.copy()
         self._prepared_forward = (mass, bias)
+        executed_total = total + retained_pd
         return dict(inverse_dynamics=inverse, mapper=mapping,
                     final_acceleration_bounds_rad_s2=acceleration_bounds,
                     **slew_diagnostics,
                     tau_nominal_ff_nm=inverse["tau_model_nm"], tau_pd_at_feedback_nm=pd,
-                    tau_ff_candidate_nm=total-pd, tau_total_estimated_at_feedback_nm=total,
+                    tau_model_selected_nm=total,
+                    retained_firmware_pd_nm=retained_pd,
+                    tau_ff_candidate_nm=executed_total-pd,
+                    tau_total_estimated_at_feedback_nm=executed_total,
                     expected_kp=self.torque_config["kp"], expected_kd=self.torque_config["kd"],
                     torque_output_authorized=False, torque_estimate_feedback_used_for_control=False)
 
@@ -230,12 +266,21 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
             self.policy.clear_local_actuation_constraints()
         braking = dict(enabled=self.torque_config['predictive_braking_enabled'])
         braking_weights = np.zeros(5)
+        self._active_braking_acceleration_bounds = None
         if braking['enabled']:
             c = self.torque_config
-            braking_weights, detail = braking_cost(q,dq,self.minimum,self.maximum,
+            # The trigger uses the normal operating box. The policy may open
+            # its separately configured outer box only while recovering.
+            braking_weights, brake_bounds, detail = self.brake.update(
+                q,dq,self.policy.joint_limits[:,0],self.policy.joint_limits[:,1],
                 deceleration=c['braking_deceleration_rad_s2'], reaction_s=c['braking_reaction_s'],
-                margin_rad=np.deg2rad(c['braking_margin_deg']), weight=c['braking_velocity_weight'])
+                margin_rad=np.deg2rad(c['braking_margin_deg']), weight=c['braking_velocity_weight'],
+                max_ddq=self.policy.max_ddq,
+                minimum_deceleration=c['braking_min_deceleration_rad_s2'])
+            self._active_braking_acceleration_bounds = brake_bounds if detail['latched'] else None
             braking.update(detail)
+        self.policy.set_first_acceleration_bounds(
+            *(self._active_braking_acceleration_bounds or (None,None)))
         self.policy.set_braking_velocity_cost(braking_weights)
         try:
             qref, dqref, ddq = self.policy.compute_action({"current_q": q, "current_dq": dq, "dt": .006}, helpers)
@@ -245,12 +290,24 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
                 predictive_braking=braking,
                 reentry=getattr(self.policy,'reentry_diagnostics',None)))
             raise
+        if self.torque_config['anchor_shoulder_yaw_reference']:
+            # The endpoint-upright objective is almost insensitive to rotation
+            # about the arm/bottle vertical axis.  Do not let the one-step
+            # packet reference follow a measured shoulder-yaw drift.  This is
+            # the established nominal A3 angle (zero for the current profile),
+            # while the acceleration MPC still uses the measured state.
+            qref = np.asarray(qref, dtype=float).copy()
+            dqref = np.asarray(dqref, dtype=float).copy()
+            qref[2] = self.nominal[2]
+            dqref[2] = 0.0
         qp = self.policy.get_last_diagnostics(copy_data=False)
         self.last_diagnostics = dict(mpc_active=True, controller_kind=ACTUATION,
             measured_q_rad=q, measured_dq_rad_s=dq, mpc_initial_state=np.r_[q, dq],
             raw_mpc_ddq_rad_s2=ddq, one_step_q_reference_rad=qref,
             predictive_braking=braking,
             one_step_dq_reference_rad_s=dqref, predictor=self._extra,
+            shoulder_yaw_reference_anchored=
+                self.torque_config['anchor_shoulder_yaw_reference'],
             gravity_error_before_m_s2=qp["gravity_error"], feedback_dt_s=float(dt),
             command_integration_dt_s=.006, mpc={key: value for key, value in qp.items()
                 if key not in {"working_states", "working_inputs", "predicted_states", "predicted_inputs",
@@ -289,6 +346,13 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
         if not np.isfinite(mpc_start_s) or not 3.<=mpc_start_s<=5.:
             raise ValueError('MPC start must be within the existing 3..5s baseline')
         self.mpc_start_s = float(mpc_start_s)
+        # The field yaw anchor deliberately uses a much softer packet PD than
+        # the A3 posture hold.  Apply that single-axis overlay to the actual
+        # command gains before checking that execution matches the evaluated
+        # torque model; the other twelve slots are unchanged.
+        if self.controller.torque_config['anchor_shoulder_yaw_reference']:
+            self.kp[7] = self.controller.torque_config['kp'][2]
+            self.kd[7] = self.controller.torque_config['kd'][2]
         if (not np.allclose(self.kp[5:10], self.controller.torque_config["kp"])
                 or not np.allclose(self.kd[5:10], self.controller.torque_config["kd"])):
             raise ValueError("plan PD must match the evaluated torque model")
@@ -328,10 +392,12 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
             inverse = c.inverse.compute(q, dq, np.zeros(5), base)
             entry = float(np.clip(task_s/3., 0., 1.))
             total = inverse["tau_model_nm"]*entry+pd
+            model_total = total.copy()
             frame["diagnostics"].update(controller_kind=ACTUATION, inverse_dynamics=inverse,
                 torque_output_authorized=False, transition_model=True)
         else:
             total = np.asarray(frame["diagnostics"]["tau_total_estimated_at_feedback_nm"])
+            model_total = np.asarray(frame["diagnostics"]["tau_model_selected_nm"])
         limit = c.mapper.limit
         total = np.clip(total, -limit, limit)
         if self._last_total is not None and not active:
@@ -342,22 +408,29 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
             ratio = min(1., float(np.min(delta/np.maximum(np.abs(difference), 1e-12))))
             total = self._last_total+ratio*difference
         self._last_total = total.copy()
-        c._previous_total = total.copy()
+        c._previous_total = model_total.copy()
         mass, bias = (c._prepared_forward if active else
                       c.inverse.linear_dynamics(q, dq, base))
-        acceleration = np.linalg.solve(mass, total-bias)
+        model_acceleration = np.linalg.solve(mass, model_total-bias)
+        closed_loop_acceleration = np.linalg.solve(mass, total-bias)
         self._last_bias = bias.copy()
         # Entry is the existing position ramp, not acceleration-controlled MPC.
         # During active/release, reject a transition that invalidates the model
         # envelope instead of calling the pre-projection result accepted.
-        if frame["weight"] > 0 and task_s >= self.mpc_start_s and np.max(np.abs(acceleration)) > c.mapper.acc_limit+1e-9:
+        if (frame["weight"] > 0 and task_s >= self.mpc_start_s
+                and np.max(np.abs(model_acceleration)) > c.mapper.acc_limit+1e-9):
             raise HardwareMpcError("post-transition total torque fails forward-model envelope")
+        retained = total-model_total if active else np.zeros(5)
         frame["diagnostics"].update(tau_pd_at_feedback_nm=pd.tolist(),
             torque_model_bias_nm=bias.tolist(),
             feedback_dt_s=float(dt),
+            tau_model_selected_nm=model_total.tolist(),
+            retained_firmware_pd_nm=retained.tolist(),
             tau_total_estimated_at_feedback_nm=total.tolist(),
             tau_ff_candidate_nm=(total-pd).tolist(), expected_kp=self.kp[5:10].tolist(),
-            expected_kd=self.kd[5:10].tolist(), post_transition_ddq_rad_s2=acceleration.tolist(),
+            expected_kd=self.kd[5:10].tolist(),
+            post_transition_ddq_rad_s2=model_acceleration.tolist(),
+            estimated_closed_loop_ddq_rad_s2=closed_loop_acceleration.tolist(),
             acceptance="conditional_forward_model_only", torque_output_authorized=False)
         frame['diagnostics']['mpc_start_s'] = self.mpc_start_s
         # No residual torque command after ownership has been fully released.

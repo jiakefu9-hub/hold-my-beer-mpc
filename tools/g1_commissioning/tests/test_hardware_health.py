@@ -44,6 +44,14 @@ class HealthTest(unittest.TestCase):
         lock.observe_fsm(0,500,300_000_000,300_000_000)
         self.assertIn("stale",runner.health(streams,lock,journal,300_000_001))
 
+    def test_fsm_freshness_starts_when_valid_slow_reply_is_received(self):
+        lock=runner.Interlock()
+        request=100
+        reply=request+300_000_000
+        lock.observe_fsm(0,500,request,reply)
+        self.assertEqual(lock.check(reply+runner.FSM_TIMEOUT_NS-1),"")
+        self.assertIn("stale",lock.check(reply+runner.FSM_TIMEOUT_NS+1))
+
     def test_mode_exit_and_remote_still_latch(self):
         for reason in ("fsm","remote"):
             lock=runner.Interlock()
@@ -52,6 +60,14 @@ class HealthTest(unittest.TestCase):
             else:lock.observe_remote([0,0,32,2])
             lock.observe_fsm(0,500,103,104)
             self.assertTrue(lock.check(105))
+
+    def test_latched_fsm_skips_rpc_freshness_but_keeps_live_faults(self):
+        lock=runner.Interlock()
+        lock.observe_fsm(0,500,100,101)
+        self.assertTrue(lock.latch_valid_fsm())
+        self.assertEqual(lock.check(101+10*runner.FSM_TIMEOUT_NS),"")
+        lock.observe_remote([0,0,32,2])
+        self.assertIn("L2+B",lock.check(102))
 
 
 if __name__=="__main__":

@@ -1,0 +1,8 @@
+# First complete-walk hardware baseline: stabilize posture/uprightness before
+# commissioning dynamic disturbance-rejection objectives. load_mpc_config()
+# overlays these keys on configs/hardware_mpc.yaml, preserving the same 6 ms
+# horizon, solver, joint costs and inverse-dynamics torque execution.
+schema: g1_hardware_mpc_config_v1
+q_ee_acc: 0.0
+q_ee_alpha: 0.0
+q_ee_omega: 0.0

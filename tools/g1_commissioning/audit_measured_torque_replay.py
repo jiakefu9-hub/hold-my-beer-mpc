@@ -55,13 +55,19 @@ def check_active(row, config, *, delay_enabled=False):
         q=np.asarray(row['command_time_q_rad']);dq=np.asarray(row['command_time_dq_rad_s'])
     close(row['mpc_initial_state'],np.r_[q,dq],'initial state differs from feedback')
     close(row['command_integration_dt_s'],.006,'wrong MPC period')
-    close(qr,q+.006*dq+.5*.006**2*ddq,'one-step q reference')
-    close(dqr,dq+.006*ddq,'one-step dq reference')
+    expected_qr=q+.006*dq+.5*.006**2*ddq
+    expected_dqr=dq+.006*ddq
+    if config.get('anchor_shoulder_yaw_reference',False):
+        expected_qr[2]=0.
+        expected_dqr[2]=0.
+    close(qr,expected_qr,'one-step q reference')
+    close(dqr,expected_dqr,'one-step dq reference')
     pd=np.asarray(config['kp'])*(qr-q)+np.asarray(config['kd'])*(dqr-dq)
     close(row['tau_pd_at_feedback_nm'],pd,'PD arithmetic')
     total=np.asarray(row['tau_total_estimated_at_feedback_nm'])
     close(np.asarray(row['offline_packet_right_tau_nm'])+pd,total,'packet duplicates/omits PD',1e-6)
-    close(row['mapper']['tau_total_nm'],total,'final output changed after mapper')
+    model_total=np.asarray(row.get('tau_model_selected_nm',total))
+    close(row['mapper']['tau_total_nm'],model_total,'model output changed after mapper')
     close(row['mapper']['checked_ddq_rad_s2'],row['post_transition_ddq_rad_s2'],'final forward check')
     if (not np.isfinite(np.r_[q,dq,ddq,qr,dqr,total]).all()
             or np.max(np.abs(ddq))>config['max_ddq_rad_s2']+1e-6

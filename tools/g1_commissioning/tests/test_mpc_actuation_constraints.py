@@ -42,5 +42,21 @@ class ActuationConstraintTests(unittest.TestCase):
             p.set_local_actuation_constraints(np.eye(4),np.zeros(5),np.ones(5),np.ones(5),
                 np.zeros(5))
 
+    def test_first_acceleration_bound_is_added_to_existing_rows(self):
+        p=self.policy();mass=np.diag([.4,.5,.3,.6,.2])
+        p.set_local_actuation_constraints(mass,np.zeros(5),np.full(5,25.),np.full(5,25.),
+            np.zeros(5))
+        lo=-p.max_ddq.copy();hi=p.max_ddq.copy();hi[2]=-6.
+        p.set_first_acceleration_bounds(lo,hi)
+        matrix,lower,upper=p._local_actuation_rows()
+        self.assertEqual(matrix.shape,(55,45))
+        candidate=np.zeros(45);candidate[2]=-6./8.
+        value=matrix@candidate
+        self.assertTrue(np.all(value>=lower-1e-12));self.assertTrue(np.all(value<=upper+1e-12))
+        candidate[2]=0.
+        self.assertGreater(np.max(matrix@candidate-upper),0.)
+        p.set_first_acceleration_bounds()
+        self.assertEqual(p._local_actuation_rows()[0].shape,(50,45))
+
 
 if __name__=='__main__':unittest.main()

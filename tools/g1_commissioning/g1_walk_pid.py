@@ -64,9 +64,17 @@ SCHEMA = "g1_hardware_pid_walk_site_v1"
 # 20 ms baseline is field-tested; 6 ms is offline-prepared, awaiting a field run.
 FIELD_OUTPUT_LOCKED = True
 STATE_TIMEOUT_NS = 100_000_000
-FSM_TIMEOUT_NS = 600_000_000
+FSM_TIMEOUT_NS = 2_500_000_000
 FSM_RPC_TIMEOUT_S = 0.3
 VELOCITY_RPC_TIMEOUT_S = 0.5
+# These are synchronous Loco RPCs, not the 6 ms arm DDS control loop.  The
+# previous 20 Hz + 20 Hz pair accumulated server-side latency during a field
+# walk. A velocity request remains valid for at most 0.2 s, so 10 Hz retains
+# one complete refresh of overlap. FSM is supervisory rather than part of the
+# control loop: 1 Hz avoids Loco-service backlog while still detecting an
+# uncommanded mode exit; LowState/remote interlocks remain callback-driven.
+FSM_POLL_PERIOD_S = 1.0
+VELOCITY_RPC_PERIOD_S = 0.1
 STATE_SAMPLE_PERIOD_NS = 2_000_000
 LOWSTATE_JOURNAL_PERIOD_NS = 20_000_000
 IMU_JOURNAL_PERIOD_NS = 5_000_000
@@ -392,6 +400,8 @@ class Interlock:
         self._lock = threading.Lock()
         self._fault = None
         self._fsm_request_ns = None
+        self._fsm_observed_ns = None
+        self._fsm_freshness_required = True
         self._last_tick = None
 
     def trip(self, reason):
@@ -429,6 +439,19 @@ class Interlock:
                 self._fault = self._fault or "non-monotonic FSM observation"
             else:
                 self._fsm_request_ns = request_ns
+                # Freshness begins when the successful observation becomes
+                # available to this process. Counting from request start makes
+                # a valid slow RPC consume its own entire freshness budget and
+                # can reject a reply immediately after it was received.
+                self._fsm_observed_ns = reply_ns
+
+    def latch_valid_fsm(self):
+        """Keep a twice-validated FSM=500 result without runtime RPC polling."""
+        with self._lock:
+            if self._fault is not None or self._fsm_observed_ns is None:
+                return False
+            self._fsm_freshness_required = False
+            return True
 
     def check(self, now_ns=None):
         with self._lock:
@@ -438,9 +461,12 @@ class Interlock:
             now_ns = monotonic_ns() if now_ns is None else int(now_ns)
             if self._fault:
                 return self._fault
-            if self._fsm_request_ns is None:
+            if self._fsm_observed_ns is None:
                 return "FSM not yet observed"
-            if now_ns < self._fsm_request_ns or now_ns - self._fsm_request_ns > FSM_TIMEOUT_NS:
+            if self._fsm_freshness_required and (
+                now_ns < self._fsm_observed_ns
+                or now_ns - self._fsm_observed_ns > FSM_TIMEOUT_NS
+            ):
                 self._fault = "FSM observation stale or future"
                 return self._fault
             return ""
@@ -717,28 +743,22 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         },
     })
 
-    class FsmGetter(Client):
+    class LocoClient(Client):
         def __init__(self):
             super().__init__(LOCO_SERVICE_NAME, False)
-            self.SetTimeout(FSM_RPC_TIMEOUT_S)
+            self.SetTimeout(max(FSM_RPC_TIMEOUT_S, VELOCITY_RPC_TIMEOUT_S))
             self._SetApiVerson(LOCO_API_VERSION)
             self._RegistApi(ROBOT_API_ID_LOCO_GET_FSM_ID, 0)
+            self._RegistApi(ROBOT_API_ID_LOCO_SET_VELOCITY, 0)
 
-        def get(self):
+        def get_fsm(self):
             code, raw = self._Call(ROBOT_API_ID_LOCO_GET_FSM_ID, "{}")
             value = -1
             if code == 0:
                 value = int(json.loads(raw)["data"])
             return code, value, raw
 
-    class VelocitySetter(Client):
-        def __init__(self):
-            super().__init__(LOCO_SERVICE_NAME, False)
-            self.SetTimeout(VELOCITY_RPC_TIMEOUT_S)
-            self._SetApiVerson(LOCO_API_VERSION)
-            self._RegistApi(ROBOT_API_ID_LOCO_SET_VELOCITY, 0)
-
-        def send(self, vx, wz, duration):
+        def send_velocity(self, vx, wz, duration):
             payload = json.dumps({"velocity": [float(vx), 0.0, float(wz)],
                                   "duration": float(duration)})
             code, raw = self._Call(ROBOT_API_ID_LOCO_SET_VELOCITY, payload)
@@ -749,24 +769,34 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     streams = Streams(journal, interlock, crc, observer=runtime)
     low_subscriber = imu_subscriber = None
     worker_stop = threading.Event()
+    fsm_poll_stop = threading.Event()
+    # Both APIs are served by the same Unitree Loco service.  Two outstanding
+    # synchronous RPCs can make both clients time out even though DDS state is
+    # healthy, so serialize the calls while leaving the 6 ms arm loop separate.
+    loco_rpc_lock = threading.Lock()
     fsm_client = fsm_thread = None
+
+    def query_fsm_once():
+        with loco_rpc_lock:
+            begin = monotonic_ns()
+            try:
+                rc, value, raw = fsm_client.get_fsm()
+            except Exception as exc:
+                rc, value, raw = -1, -1, repr(exc)
+            end = monotonic_ns()
+        journal.record({
+            "schema": "g1_pid_event_v1", "event": "fsm_reply",
+            "request_ns": begin, "reply_ns": end, "return_code": rc,
+            "fsm_id": value, "raw_reply": raw,
+        })
+        interlock.observe_fsm(rc, value, begin, end)
+        return rc, value
 
     def fsm_worker():
         try:
-            while not worker_stop.is_set():
-                begin = monotonic_ns()
-                try:
-                    rc, value, raw = fsm_client.get()
-                except Exception as exc:
-                    rc, value, raw = -1, -1, repr(exc)
-                end = monotonic_ns()
-                journal.record({
-                    "schema": "g1_pid_event_v1", "event": "fsm_reply",
-                    "request_ns": begin, "reply_ns": end, "return_code": rc,
-                    "fsm_id": value, "raw_reply": raw,
-                })
-                interlock.observe_fsm(rc, value, begin, end)
-                worker_stop.wait(0.05)
+            while not worker_stop.is_set() and not fsm_poll_stop.is_set():
+                query_fsm_once()
+                fsm_poll_stop.wait(FSM_POLL_PERIOD_S)
         except Exception as exc:
             interlock.trip(f"FSM worker exception: {exc}")
 
@@ -936,7 +966,17 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         imu_subscriber = ChannelSubscriber("rt/secondary_imu", IMUState_)
         low_subscriber.Init(streams.low_callback, 0)
         imu_subscriber.Init(streams.imu_callback, 0)
-        fsm_client = FsmGetter()
+        try:
+            fsm_client = LocoClient()
+        except Exception as exc:
+            # Preserve the established audit event for failures while
+            # registering the velocity API, now that one client owns both
+            # Loco calls.
+            journal.record({
+                "schema": "g1_pid_event_v1", "event": "velocity_exception",
+                "reason": repr(exc),
+            })
+            raise
         fsm_thread = threading.Thread(target=fsm_worker, name="pid_fsm", daemon=True)
         fsm_thread.start()
         previous_sigint = signal.signal(signal.SIGINT, request_stop)
@@ -944,6 +984,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         initial = startup_gate(
             streams, interlock, journal, 0, profile["startup_valid_samples_int"]
         )
+        # Continuous GetFsmId calls share the synchronous Unitree Loco service
+        # with SetVelocity and have repeatedly created server-side backlog in
+        # the field. Stop polling before operator dwell; perform one final
+        # explicit FSM=500 check immediately after typed confirmation instead.
+        fsm_poll_stop.set()
+        fsm_thread.join(FSM_RPC_TIMEOUT_S + 0.5)
+        if fsm_thread.is_alive():
+            raise RuntimeError("FSM startup observer did not stop")
         print(
             f"REAL {controller_label} OUTPUT: 3 s arm entry, 2 s baseline, "
             f"10 s at {0.0 if runtime is not None and runtime.stationary else 0.5} m/s, "
@@ -954,6 +1002,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         reply = input("> ")
         if reply != f"EXECUTE {profile['robot_id']}" or stop_requested.is_set():
             raise RuntimeError("confirmation rejected before command output")
+        rc, value = query_fsm_once()
+        if rc != 0 or value != 500:
+            raise RuntimeError(f"final FSM 500 confirmation failed: rc={rc}, FSM={value}")
         before, _ = streams.latest()
         initial = startup_gate(
             streams, interlock, journal, before.sequence,
@@ -962,6 +1013,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         failure = health(streams, interlock, journal)
         if failure:
             raise RuntimeError(f"pre-publisher: {failure}")
+        if not interlock.latch_valid_fsm():
+            raise RuntimeError("could not latch final FSM 500 confirmation")
+        journal.record({
+            "schema": "g1_pid_event_v1", "event": "fsm_runtime_latched",
+            "fsm_id": 500,
+            "reason": "avoid competing synchronous GetFsmId and SetVelocity RPCs; "
+                      "LowState/remote and controller interlocks remain live",
+        })
 
         # Local construction precedes any command publisher.
         if runtime is None:
@@ -998,10 +1057,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
 
         def velocity_worker():
             nonlocal last_zero_reply_ns
-            client = None
+            client = fsm_client
             heading_frozen_logged = False
             try:
-                client = VelocitySetter()
                 velocity_ready.set()
                 # Construct RPC on the housekeeping CPUs, but don't let task
                 # time or motion requests advance during MPC initialization.
@@ -1035,12 +1093,23 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     if runtime is not None and runtime.stationary:
                         motion.update(vx_m_s=0.0, yaw_rate_rad_s=0.0,
                                       walking_active=False, heading_hold_active=False)
+                    # There is no active locomotion lease to refresh before
+                    # the scheduled walk. Repeated zero-speed RPCs here only
+                    # load the synchronous Loco service while the arms enter.
+                    # A requested abort still sends zero immediately below.
+                    if task_s < WALK_START_S and not stop_requested.is_set():
+                        worker_stop.wait(min(
+                            VELOCITY_RPC_PERIOD_S,
+                            max(0.001, WALK_START_S - task_s),
+                        ))
+                        continue
                     vx = motion["vx_m_s"]
                     wz = motion["yaw_rate_rad_s"]
                     duration = motion["duration_s"]
-                    begin = monotonic_ns()
-                    rc, raw = client.send(vx, wz, duration)
-                    end = monotonic_ns()
+                    with loco_rpc_lock:
+                        begin = monotonic_ns()
+                        rc, raw = client.send_velocity(vx, wz, duration)
+                        end = monotonic_ns()
                     journal.record({
                         "schema": "g1_pid_event_v1", "event": "velocity_reply",
                         "task_elapsed_s": task_s, "request_ns": begin, "reply_ns": end,
@@ -1058,7 +1127,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     if vx == 0.0 and wz == 0.0:
                         with last_zero_lock:
                             last_zero_reply_ns = end
-                    delay = max(0.001, 0.05 - (time.monotonic() - iteration))
+                    delay = max(0.001, VELOCITY_RPC_PERIOD_S - (time.monotonic() - iteration))
                     worker_stop.wait(delay)
             except Exception as exc:
                 velocity_failed.set()
@@ -1071,9 +1140,10 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             finally:
                 if client is not None:
                     try:
-                        begin = monotonic_ns()
-                        rc, raw = client.send(0.0, 0.0, 0.2)
-                        end = monotonic_ns()
+                        with loco_rpc_lock:
+                            begin = monotonic_ns()
+                            rc, raw = client.send_velocity(0.0, 0.0, 0.2)
+                            end = monotonic_ns()
                         if rc == 0:
                             with last_zero_lock:
                                 last_zero_reply_ns = end
@@ -1419,6 +1489,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         return 3
     finally:
         worker_stop.set()
+        fsm_poll_stop.set()
         for worker in (velocity_thread, fsm_thread):
             if worker is not None and worker.is_alive():
                 worker.join()
