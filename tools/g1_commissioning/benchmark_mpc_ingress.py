@@ -224,7 +224,7 @@ def main():
     parser.add_argument('--switch-ms',type=float,default=5.)
     parser.add_argument('--serial',action='store_true')
     parser.add_argument('--isolated',action='store_true')
-    parser.add_argument('--learned',action='store_true',help='exercise independent learned/yaw-aware variant')
+    parser.add_argument('--learned',action='store_true',help='exercise independent learned/feedback-aware variant')
     parser.add_argument('--inject-late-ms',type=float,default=0.,help='one offline-only pause after a valid solve')
     parser.add_argument('--duration',type=float,default=24.)
     parser.add_argument('--assumed-command-delay-ms',type=float,default=None)

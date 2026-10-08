@@ -1,7 +1,12 @@
 # Independent experiment. Same physical limits/gains as successful 2026-10-07
-# baseline, but yaw PD is INSIDE prediction and redundant candidates removed.
+# baseline, but light posture feedback is INSIDE prediction and redundant
+# candidates are removed.  Pitch gains below are an MPC-internal modeled bias;
+# they do not replace the packet's already validated entry/hand-back gains.
 schema: g1_measured_torque_preview_v1
 yaw_feedback_in_prediction: true
+pitch_feedback_in_prediction: true
+pitch_feedback_kp: 2.0
+pitch_feedback_kd: 0.2
 tau_abs_nm: [10, 6, 4, 7, 1.5]
 tau_ff_abs_nm: [10, 6, 4, 7, 1.5]
 transition_rate_nm_s: [50, 40, 30, 50, 20]

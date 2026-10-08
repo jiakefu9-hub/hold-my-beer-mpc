@@ -1,4 +1,4 @@
-"""Learned-forecast experiment: yaw-aware MPC and direct conditional RNEA.
+"""Learned-forecast experiment: feedback-aware MPC and direct conditional RNEA.
 
 The successful baseline is deliberately left in hardware_mpc_torque_control.
 No SDK, publishers, model fitting, or hardware authority in this module.
@@ -13,16 +13,19 @@ from hardware_mpc_torque_control import RightArmMeasuredTorqueMpc
 
 
 class YawFeedbackMpcPolicy(CondensedArmMPCPolicy):
-    """Exact input change of coordinates for a frozen local yaw-PD model.
+    """Exact input change of coordinates for frozen local posture feedback.
 
-    Original nominal acceleration u, retained yaw torque p(x):
+    Original nominal acceleration u, modeled feedback torque p(x):
         a = u + inv(M) @ p(x) = u + F x + f
         x_next = A x + B (u + F x + f).
     Optimize NET acceleration a instead: the existing integrator, physical
     q/dq/a limits, endpoint costs and condensed matrices stay unchanged.
     Substitute u = a - F x - f in the nominal-acceleration effort cost.
-    This is algebraically the same feedback-aware prediction, not a second
-    PD added after planning, nor an empirical model of the real servo.
+    Yaw p(x) is the retained device-side PD.  Pitch p(x) is a deliberately
+    light MPC-internal centering prior around the already validated nominal
+    pose; it leaves the packet gains and entry/release motion unchanged.  Both
+    are inside prediction, effort cost and physical envelopes.  Neither is a
+    second torque added after planning nor an empirical model of the servo.
     """
 
     def __init__(self, *args, **kwargs):
@@ -31,6 +34,8 @@ class YawFeedbackMpcPolicy(CondensedArmMPCPolicy):
         self.feedback_F = np.zeros((self.nu, self.nx))
         self.feedback_f = np.zeros(self.nu)
         self.feedback_pd = np.zeros(self.nu)
+        self.model_feedback_kp = np.zeros(self.nu)
+        self.model_feedback_kd = np.zeros(self.nu)
         # A valid solved QP that was descheduled is not an infeasible QP.
         # Native solve budget remains; the parent enforces the bounded total
         # latency, fresh feedback and repeated-lateness rules before any Write.
@@ -38,14 +43,23 @@ class YawFeedbackMpcPolicy(CondensedArmMPCPolicy):
 
     def set_local_actuation_constraints(self, mass, bias, total_limit, ff_limit, feedback_dq):
         super().set_local_actuation_constraints(mass, bias, total_limit, ff_limit, feedback_dq)
-        direction = np.linalg.solve(mass, np.eye(self.nu)[:, 2])
-        kp, kd = float(self._local_kp[2]), float(self._local_kd[2])
+        # Pitch uses the optional MPC-internal light centering prior.  Yaw uses
+        # the retained fixed-reference packet PD, so its real device feedback
+        # is represented by the same affine model.  All five joint states are
+        # coupled through inv(M), not treated as independent scalar motors.
+        kp, kd = self.model_feedback_kp.copy(), self.model_feedback_kd.copy()
+        kp[2], kd[2] = float(self._local_kp[2]), float(self._local_kd[2])
+        directions = np.linalg.solve(mass, np.eye(self.nu))
         self.feedback_F.fill(0.)
-        self.feedback_F[:, 2] = -direction * kp
-        self.feedback_F[:, self.nu+2] = -direction * kd
-        self.feedback_f = direction * kp * self.default_q[2]
+        self.feedback_f.fill(0.)
         self.feedback_pd.fill(0.)
-        self.feedback_pd[2] = kp*(self.default_q[2]-self.feedback_q[2])-kd*feedback_dq[2]
+        for joint in np.flatnonzero((kp != 0.) | (kd != 0.)):
+            direction = directions[:, joint]
+            self.feedback_F[:, joint] = -direction * kp[joint]
+            self.feedback_F[:, self.nu+joint] = -direction * kd[joint]
+            self.feedback_f += direction * kp[joint] * self.default_q[joint]
+            self.feedback_pd[joint] = (kp[joint]*(self.default_q[joint]-self.feedback_q[joint])
+                                       - kd[joint]*feedback_dq[joint])
 
     def _build_cost(self, step_terms):
         blocks, linear = super()._build_cost(step_terms)
@@ -62,8 +76,10 @@ class YawFeedbackMpcPolicy(CondensedArmMPCPolicy):
     def _local_actuation_rows(self):
         matrix, lo, hi = super()._local_actuation_rows()
         # Replace just the yaw FF row: its packet reference is fixed at nominal,
-        # unlike the one-step references on the other four axes. All total
-        # torque rows already constrain M*a+b, INCLUDING predicted yaw feedback.
+        # unlike the one-step references on the other four axes.  The internal
+        # pitch prior is not a second packet PD, so the superclass pitch FF row
+        # remains the actual transmitted law.  All total-torque rows already
+        # constrain M*a+b, INCLUDING both modeled feedback components.
         row_index = self.horizon*self.nu + 2
         row = np.zeros(self.horizon*self.nu)
         row[:self.nu] = self._local_actuation['mass'][2]*self.max_ddq
@@ -82,17 +98,28 @@ class RightArmLearnedTorqueMpc(RightArmMeasuredTorqueMpc):
         super().__init__(*args, **kwargs)
         c = self.torque_config
         if (not c.get('yaw_feedback_in_prediction', False)
+                or not c.get('pitch_feedback_in_prediction', False)
                 or not c['anchor_shoulder_yaw_reference']
                 or not c['planning_actuation_constraints_enabled']
                 or c['active_slew_reference'] != 'none'
                 or c['recovery_envelope_enabled']):
-            raise ValueError('learned variant requires its explicit yaw-aware direct-torque configuration')
+            raise ValueError('learned variant requires its explicit feedback-aware direct-torque configuration')
+        pitch_kp, pitch_kd = float(c.get('pitch_feedback_kp', float('nan'))), float(
+            c.get('pitch_feedback_kd', float('nan')))
+        if not np.isfinite([pitch_kp, pitch_kd]).all() or pitch_kp <= 0. or pitch_kd < 0.:
+            raise ValueError('invalid modeled pitch feedback gains')
+        self.policy.model_feedback_kp[0] = pitch_kp
+        self.policy.model_feedback_kd[0] = pitch_kd
         self.metadata.update(
             variant='learned_yaw_aware_direct_v1',
             forward_model='conditional rigid right arm with observed moving torso, not full-body contact dynamics',
             torque_mapping='direct M*a+b; one final affine consistency/envelope check; no candidate search',
-            output_semantics='a includes yaw feedback; packet tau=(M*a+b)-PD, device adds PD once',
-            tracking_offset_model='yaw PD represented across horizon by exact input-coordinate substitution',
+            output_semantics='a includes modeled pitch/yaw feedback; packet tau=(M*a+b)-PD, device adds PD once',
+            tracking_offset_model='light pitch centering and yaw PD represented by exact input-coordinate substitution',
+            pitch_feedback_prediction=dict(enabled=True, kp=pitch_kp, kd=pitch_kd,
+                target_rad=float(self.nominal[0]), physical_identification=False,
+                packet_gain_changed=False, added_after_planning=False,
+                equation='a=u+F*x+f; effort=(a-F*x-f)^T R (a-F*x-f)'),
             yaw_feedback_prediction=dict(enabled=True, kp=float(c['kp'][2]), kd=float(c['kd'][2]),
                 target_rad=float(self.nominal[2]), physical_identification=False,
                 equation='a=u+F*x+f; effort=(a-F*x-f)^T R (a-F*x-f)',
@@ -128,13 +155,13 @@ class RightArmLearnedTorqueMpc(RightArmMeasuredTorqueMpc):
             raise HardwareMpcError('direct final torque disagrees with planned physical envelope')
         self._prepared_forward = (mass, bias)
         self._previous_total = total.copy()
-        yaw_acc = self.policy.feedback_F@np.r_[q, dq]+self.policy.feedback_f
-        nominal = ddq-yaw_acc
+        feedback_acc = self.policy.feedback_F@np.r_[q, dq]+self.policy.feedback_f
+        nominal = ddq-feedback_acc
         qp = self.policy.get_last_diagnostics(copy_data=False)
         # Small, auditable 9x5 evidence: no recomputation or file IO in the core.
         predicted_states = qp['predicted_states'][:-1]
         predicted_net = qp['predicted_inputs']
-        predicted_yaw = predicted_states@self.policy.feedback_F.T+self.policy.feedback_f
+        predicted_feedback = predicted_states@self.policy.feedback_F.T+self.policy.feedback_f
         return dict(
             solver_wall_over_budget=bool(getattr(self.policy,'_last_solved_wall_over_budget',False)),
             inverse_dynamics=dict(tau_model_nm=total, method='conditional affine RNEA M*a+b'),
@@ -142,14 +169,15 @@ class RightArmLearnedTorqueMpc(RightArmMeasuredTorqueMpc):
                 forward_calls=1, model_accepted=True, hardware_certified=False,
                 tau_total_nm=total, checked_ddq_rad_s2=checked,
                 error_norm=float(np.linalg.norm(checked-ddq))),
-            yaw_feedback_model=dict(F_rad_s2_per_state=self.policy.feedback_F,
+            posture_feedback_model=dict(F_rad_s2_per_state=self.policy.feedback_F,
                 f_rad_s2=self.policy.feedback_f,
-                current_yaw_pd_nm=self.policy.feedback_pd,
-                current_yaw_acceleration_rad_s2=yaw_acc,
+                active_joint_indices=[0, 2],
+                current_feedback_torque_nm=self.policy.feedback_pd,
+                current_feedback_acceleration_rad_s2=feedback_acc,
                 nominal_mpc_acceleration_rad_s2=nominal,
                 horizon_net_acceleration_rad_s2=predicted_net,
-                horizon_yaw_acceleration_rad_s2=predicted_yaw,
-                horizon_nominal_acceleration_rad_s2=predicted_net-predicted_yaw),
+                horizon_feedback_acceleration_rad_s2=predicted_feedback,
+                horizon_nominal_acceleration_rad_s2=predicted_net-predicted_feedback),
             final_acceleration_bounds_rad_s2=limits,
             torque_slew_reference='none', torque_model_bias_nm=bias,
             torque_previous_model_bias_nm=None, torque_slew_bias_shift_nm=np.zeros(5),

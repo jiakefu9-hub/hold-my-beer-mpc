@@ -34,10 +34,12 @@ class LearnedMpcTests(unittest.TestCase):
                     'q_margin_deg', 'max_dq_rad_s', 'max_ddq_rad_s2', 'max_abs_qacc_rad_s2',
                     'braking_deceleration_rad_s2', 'braking_min_deceleration_rad_s2'):
             np.testing.assert_array_equal(new[key], old[key], err_msg=key)
+        self.assertEqual(new['pitch_feedback_kp'], 2.)
+        self.assertEqual(new['pitch_feedback_kd'], .2)
 
     def test_nominal_and_net_coordinates_have_identical_forward_dynamics(self):
         c = self.controller(); p = c.policy
-        q = EXPECTED_TARGET_Q[5:10].copy(); q[2] = .13
+        q = EXPECTED_TARGET_Q[5:10].copy(); q[0] -= .08; q[2] = .13
         dq = np.array([.1, -.04, .09, .2, 0.])
         p.feedback_q = q
         m, b = c.inverse.linear_dynamics(q, dq, horizon().nodes[0])
@@ -49,7 +51,7 @@ class LearnedMpcTests(unittest.TestCase):
         np.testing.assert_allclose(p.A@x+p.B@net,
             (p.A+p.B@p.feedback_F)@x+p.B@nominal+p.B@p.feedback_f, atol=1e-12)
 
-    def test_effort_cost_exactly_substitutes_yaw_feedback_over_entire_horizon(self):
+    def test_effort_cost_exactly_substitutes_modeled_feedback_over_entire_horizon(self):
         c = self.controller(); p = c.policy
         p.feedback_q = EXPECTED_TARGET_Q[5:10].copy()
         p.set_local_actuation_constraints(np.eye(5)*.2, np.zeros(5), np.ones(5)*10,
@@ -84,13 +86,30 @@ class LearnedMpcTests(unittest.TestCase):
         np.testing.assert_allclose(ff+pd, total, atol=1e-12)
         np.testing.assert_allclose(d['mapper']['checked_ddq_rad_s2'], d['raw_mpc_ddq_rad_s2'], atol=1e-10)
         np.testing.assert_allclose(np.asarray(d['tau_nominal_ff_nm'])+np.asarray(
-            d['yaw_feedback_model']['current_yaw_pd_nm']), total, atol=1e-12)
+            d['posture_feedback_model']['current_feedback_torque_nm']), total, atol=1e-12)
         self.assertEqual(d['mapper']['candidate_count'], 0)
         self.assertEqual(qr[2], 0.); self.assertEqual(dqr[2], 0.)
         self.assertFalse(d['mapper']['hardware_certified'])
         m,b = c._prepared_forward
         rnea = c.inverse.compute(slots[5:10], dq, np.asarray(d['raw_mpc_ddq_rad_s2']), horizon().nodes[0])
         np.testing.assert_allclose(rnea['tau_model_nm'], total, atol=1e-10)
+
+    def test_pitch_centering_is_light_restoring_modeled_and_does_not_anchor_packet_reference(self):
+        c = self.controller(); p = c.policy
+        q = c.nominal.copy(); q[0] -= .1
+        dq = np.zeros(5); dq[0] = -.2
+        p.feedback_q = q
+        m, b = c.inverse.linear_dynamics(q, dq, horizon().nodes[0])
+        p.set_local_actuation_constraints(m, b, c.mapper.limit, c.mapper.limit, dq)
+        self.assertAlmostEqual(p.feedback_pd[0], .24, places=12)
+        self.assertGreater((p.feedback_F@np.r_[q, dq]+p.feedback_f)[0], 0.)
+        np.testing.assert_allclose(p.feedback_pd[[1,3,4]], 0.)
+        slots = EXPECTED_TARGET_Q.copy(); slots[5:10] = q
+        c.set_measured_dq(dq); c.set_disturbance_horizon(horizon())
+        qref, _, diagnostic = c.step(slots, [1,0,0,0], 0., .006)
+        self.assertNotEqual(qref[0], c.nominal[0])
+        self.assertEqual(qref[2], c.nominal[2])
+        self.assertEqual(diagnostic['posture_feedback_model']['active_joint_indices'], [0,2])
 
     def test_affine_torque_matches_independent_rnea_with_moving_base(self):
         c = self.controller(); rng = np.random.default_rng(8)

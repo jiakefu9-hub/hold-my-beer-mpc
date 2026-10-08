@@ -1,8 +1,13 @@
 # G1 真机实验入口
 
+当前进度与下一步：[实验进度简表](EXPERIMENT_STATUS.md)；右臂三轮辨识及联合分析已完成，暂不写回物理参数；
+新版不加学习前馈 MPC 加入预测内轻度 pitch 回正后已完整走停，随后同版学习前馈 MPC 也已
+首次完整走停，两轮均正常退权且操作者确认平顺。完整证据见[成功对照](sessions/20261008_MPC_REFINED_AND_LEARNED_SUCCESS.md)。
+
 这里区分“如何操作”“已经证实什么”“每次实际发生了什么”。
 截至 2026-10-07：H1、离线 HIL、A2/A3 和 IMU 零点观察已有记录；6 ms PID 已完成真机功能复验并冻结。
-`hold_current` 直立力矩 MPC 已首次完整走停退权；另有独立学习前馈版完成离线准备，尚未真机验证。
+旧 `hold_current` 直立力矩 MPC 已首次完整走停退权；独立 refined `hold_current` 修正版和
+`learned_filtered` 已各完成一次完整走停退权。单轮成功不等于硬实时或统计效果已经验证。
 没有将单轮成功或离线回放称为硬实时验收。
 
 采集／预测更新（2026-09-25）：旧五条带牵拉轨迹已撤回；十二条固定 H0 新轨迹已完成离线审计、
@@ -17,8 +22,9 @@
 | 查某天实验的成果、参数与证据路径 | [sessions/README.md](sessions/README.md) |
 | 下一步看步态相位、采走动时的原始扰动 | [RAW_WALK_CAPTURE.md](RAW_WALK_CAPTURE.md) |
 | 做“左臂固定、右臂 PID”的首次真机持瓶实验 | [HARDWARE_PID.md](HARDWARE_PID.md)：程序、完整 `[5,18)` 指标与仿真差异 |
-| 6 ms PID 复验后做右臂 MPC | [HARDWARE_MPC.md](HARDWARE_MPC.md)：预测模型、程序对应关系、时间验证和现场命令 |
-| 在成功基线上试学习扰动前馈 | [HARDWARE_MPC_LEARNED.md](HARDWARE_MPC_LEARNED.md)：独立入口、yaw 预测、直接力矩、明日命令 |
+| 查已成功的旧版右臂 MPC | [HARDWARE_MPC.md](HARDWARE_MPC.md)：预测模型、程序对应关系、时间验证和现场命令 |
+| 查新版微调 MPC 与学习扰动前馈 | [HARDWARE_MPC_LEARNED.md](HARDWARE_MPC_LEARNED.md)：程序、模型和现场命令；[成功对照](sessions/20261008_MPC_REFINED_AND_LEARNED_SUCCESS.md)：两轮实测证据 |
+| 辨识右臂力矩通道、摩擦与耦合 | [HARDWARE_ARM_IDENTIFICATION.md](HARDWARE_ARM_IDENTIFICATION.md)：原地小幅激励、三轮采集与离线拟合 |
 | 看 MPC 按仿真迁移了哪些、还缺哪些 | [HARDWARE_MPC_TORQUE_MIGRATION.md](HARDWARE_MPC_TORQUE_MIGRATION.md)：实测状态、候选筛选、闭环对照与当前阻碍 |
 | 看 MPC 延迟／负载偏差和提前制动的离线研究 | [HARDWARE_MPC_ROBUSTNESS.md](HARDWARE_MPC_ROBUSTNESS.md)：失败归因、20 秒模型闭环、因果状态预测及尚未通过的时间条件 |
 | 看五条轨迹是否可用、如何对齐及能否预测扰动 | [WALK_DATASET_AUDIT.md](WALK_DATASET_AUDIT.md)：离线审计与世界系模板建议 |
@@ -42,7 +48,7 @@
 | 30 秒 phase observer | 已实测；本机 `GetPhase` 返回 7301，未取得可用官方相位 |
 | 21 秒 walk collector | 十二条固定 H0 轨迹已采集并离线研究；旧五条因吊绳牵拉全部撤回；第 06 条缺完整会话尾标记，单独补充分析 |
 | 真机 PID | 20 ms 和 6 ms 均有现场功能复验；6 ms 平顺、退权正常，0.934% 超时，不称为硬实时通过 |
-| 真机 MPC | hold_current 直立力矩基线已完整走停；独立学习版只经离线检查，仍待实机验证。旧位置参考版禁止现场输出 |
+| 真机 MPC | 旧 hold_current 基线、新版 refined hold 和学习版均已有完整走停；学习版目前只有一轮，不能称为统计或硬实时验收。旧位置参考版禁止现场输出 |
 | production adapter | 本次不变；`cpp/unitree_arm_adapter` 仍禁止真实 publisher |
 
 旧五条轨迹仅保留历史审计和方法参考，不再作为训练／检验数据。十二条新版轨迹用走前最后两秒平均

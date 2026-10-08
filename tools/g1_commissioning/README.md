@@ -6,6 +6,25 @@ entry and latest evidence index are in
 [`docs/g1_field_validation/README.md`](../../docs/g1_field_validation/README.md);
 the detailed staged procedure is in [RUNBOOK.md](../../docs/g1_field_validation/RUNBOOK.md).
 
+After reconnecting the cable, restore and verify the previously field-checked
+host-side wired profile with:
+
+```bash
+./tools/g1_commissioning/connect_g1_network.sh
+```
+
+This only activates the existing NetworkManager profile and verifies
+`192.168.123.99/24` plus the PC1 route. It does not change robot mode or publish
+DDS commands.
+
+For the stationary right-arm identification, use the dedicated same-terminal
+launcher so the sudo authorization applies to host setup while Python remains
+unprivileged:
+
+```bash
+./tools/g1_commissioning/run_g1_arm_identification.sh
+```
+
 ## Capability separation
 
 | Target | Default build | Network | Command capability |
@@ -21,7 +40,10 @@ the detailed staged procedure is in [RUNBOOK.md](../../docs/g1_field_validation/
 | `g1_walk_capture` | no | raw subscribers + getters + arm publisher + velocity RPC | separate opt-in 21-second arm/forward-walk capture; no mode setter |
 | `g1_walk_pid.py` | separate Python entry | raw subscribers + FSM getter + arm publisher + velocity RPC | fixed-left/right-PID 21-second H0 experiment; no mode setter or `rt/lowcmd` |
 | `g1_walk_mpc.py` | separate Python entry; measured-state torque preflight by default | explicit bounded first-torque trial; stationary before walk; legacy servo has no field entry | fixed-left/right-MPC; no mode setter or `rt/lowcmd` |
-| `g1_walk_mpc_learned.py` | independent learned/yaw-aware variant; offline preflight by default | same explicit field authorization and shared stop/release | direct conditional torque, frozen H0 forecasts; not yet field validated |
+| `g1_walk_mpc_learned.py` | independent learned/feedback-aware variant; offline preflight by default | same explicit field authorization and shared stop/release | direct conditional torque, pitch/yaw modeled feedback, frozen H0 forecasts; corrected hold and learned modes each completed one smooth field walk/stop/release on 2026-10-08 |
+| `g1_arm_system_identification.py` | stationary small-signal Arm SDK torque excitation; offline preflight by default | explicit `ARM_ID_STATIONARY`, FSM 500, shared interlocks/release | capture only; never auto-updates MPC |
+| `analyze_arm_system_identification.py` | offline delay/gain/friction/local 5x5 comparison | no SDK or output | `tau_est` is reported telemetry, not absolute torque truth |
+| `review_arm_identification_batch.py` | three-run identification review, rigid-model residuals and plots | no SDK or output; fit/select on runs 1–2, evaluate on run 3 | no test-run intercept/centering, no automatic physical-parameter writes |
 
 All networked C++ targets are opt-in at CMake configure time. Merely running the
 A2 executable without its complete arguments exits before DDS initialization.

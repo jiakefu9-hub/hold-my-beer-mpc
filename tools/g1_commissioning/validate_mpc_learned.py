@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Causal recorded-input comparison; no DDS or physical closed-loop claim.
 
-Replays the first complete MPC run through the frozen baseline, yaw-aware
-hold-current, and yaw-aware learned controller. Uses recorded loop/receive
+Replays the first complete MPC run through the frozen baseline, feedback-aware
+hold-current, and feedback-aware learned controller. Uses recorded loop/receive
 timestamps, all stages, real IDL/CRC serialization, and final packet checks.
 Output contains every computed command; never fits a predictor on this run.
 """

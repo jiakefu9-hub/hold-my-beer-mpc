@@ -5,7 +5,10 @@
 
 | 日期 | 记录 | 结果范围 |
 | --- | --- | --- |
-| 10-07～08 | [学习前馈 MPC 离线准备](20261007_MPC_LEARNED_PREPARATION.md) | 独立入口、yaw 预测、直接力矩；三组回放通过，追加偶发长尾容错与故意延迟检查，尚未真机验证 |
+| 10-08 | [refined 与 learned MPC 首次完整成功](20261008_MPC_REFINED_AND_LEARNED_SUCCESS.md) | 同版 hold/learned 各完成一次完整走停和正常退权，操作者确认平顺；保存哈希、约束余量、时间、PID 对照和预测对齐结果 |
+| 10-08 | [新版 hold-current 首次现场运行](20261008_MPC_REFINED_HOLD_FIELD.md) | 前进段完整、动作平顺；停车后肩 pitch 高速逼近边界触发 QP 拒绝并完整退权；据此加入预测内轻度 pitch 回正，后续复验已成功 |
+| 10-08 | [右臂三轮辨识联合分析](20261008_ARM_IDENTIFICATION.md) | 原地采集均平顺、完整退权；固定质量／惯量评估摩擦候选，未可靠分离参数，暂不写回 MPC，继续新版 hold_current |
+| 10-07～08 | [学习前馈 MPC 离线准备](20261007_MPC_LEARNED_PREPARATION.md) | 独立入口、yaw 预测、直接力矩；三组回放及容错检查通过，后续真机结果见上方成功记录 |
 | 10-07 | [首次完整 MPC 证据包](../evidence/20261007_first_complete_mpc/README.md) | hold_current 直立基线完整走停退权，操作者确认平顺；不是学习版实测 |
 | 09-11 | [H1 只读与 tick 修正](20260911_H1.md) | 500/500、离线审计 PASS；不是完整硬件验收 |
 | 09-11 | [Publisher-absent HIL](20260911_HIL_OFFLINE.md) | 完全离线输出链验证，无实际 command publisher |
