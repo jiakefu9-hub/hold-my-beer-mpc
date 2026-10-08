@@ -11,8 +11,10 @@ from scipy.spatial.transform import Rotation
 from disturbance_types import DisturbanceInput, DisturbanceHorizon
 from g1_walk_mpc import (MpcRuntime, build_parser, FIELD_TORQUE_CONFIG,
                          LEARNED_ACC_ALPHA_MPC_CONFIG,
-                         LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG, LEARNED_ACC_MPC_CONFIG,
-                         LEARNED_MPC_CONFIG, LEARNED_TORQUE_CONFIG)
+                         LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG,
+                         LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG, LEARNED_ACC_MPC_CONFIG,
+                         LEARNED_MPC_CONFIG, LEARNED_ROLL_TORQUE_CONFIG,
+                         LEARNED_TORQUE_CONFIG)
 from g1_walk_pid import EXPECTED_TARGET_Q
 from hardware_mpc_control import HardwareMpcError
 from hardware_mpc_learned import RightArmLearnedTorqueMpc, YawFeedbackMpcPolicy
@@ -30,6 +32,13 @@ class LearnedMpcTests(unittest.TestCase):
         c.policy.solver_time_limit = .1
         return c
 
+    def roll_controller(self):
+        c = RightArmLearnedTorqueMpc(EXPECTED_TARGET_Q[5:10], LEARNED_MPC_CONFIG,
+                                    torque_config=LEARNED_ROLL_TORQUE_CONFIG)
+        self.addCleanup(c.close)
+        c.policy.solver_time_limit = .1
+        return c
+
     def test_physical_config_matches_successful_baseline(self):
         old, new = [load_torque_config(p) for p in (FIELD_TORQUE_CONFIG, LEARNED_TORQUE_CONFIG)]
         for key in ('tau_abs_nm', 'tau_ff_abs_nm', 'kp', 'kd', 'q_min_deg', 'q_max_deg',
@@ -38,6 +47,17 @@ class LearnedMpcTests(unittest.TestCase):
             np.testing.assert_array_equal(new[key], old[key], err_msg=key)
         self.assertEqual(new['pitch_feedback_kp'], 2.)
         self.assertEqual(new['pitch_feedback_kd'], .2)
+
+    def test_roll_trial_preserves_physical_config_and_adds_only_light_internal_prior(self):
+        old, new = [load_torque_config(p) for p in
+                    (LEARNED_TORQUE_CONFIG, LEARNED_ROLL_TORQUE_CONFIG)]
+        for key in ('tau_abs_nm', 'tau_ff_abs_nm', 'kp', 'kd', 'q_min_deg', 'q_max_deg',
+                    'q_margin_deg', 'max_dq_rad_s', 'max_ddq_rad_s2', 'max_abs_qacc_rad_s2',
+                    'braking_deceleration_rad_s2', 'braking_min_deceleration_rad_s2'):
+            np.testing.assert_array_equal(new[key], old[key], err_msg=key)
+        self.assertTrue(new['roll_feedback_in_prediction'])
+        self.assertEqual(new['roll_feedback_kp'], 1.)
+        self.assertEqual(new['roll_feedback_kd'], .1)
 
     def test_nominal_and_net_coordinates_have_identical_forward_dynamics(self):
         c = self.controller(); p = c.policy
@@ -112,6 +132,22 @@ class LearnedMpcTests(unittest.TestCase):
         self.assertNotEqual(qref[0], c.nominal[0])
         self.assertEqual(qref[2], c.nominal[2])
         self.assertEqual(diagnostic['posture_feedback_model']['active_joint_indices'], [0,2])
+
+    def test_optional_roll_centering_is_modeled_and_keeps_packet_reference_unanchored(self):
+        c = self.roll_controller(); p = c.policy
+        q = c.nominal.copy(); q[1] += .05
+        dq = np.zeros(5); dq[1] = .1
+        p.feedback_q = q
+        m, b = c.inverse.linear_dynamics(q, dq, horizon().nodes[0])
+        p.set_local_actuation_constraints(m, b, c.mapper.limit, c.mapper.limit, dq)
+        self.assertAlmostEqual(p.feedback_pd[1], -.06, places=12)
+        self.assertLess((p.feedback_F@np.r_[q, dq]+p.feedback_f)[1], 0.)
+        slots = EXPECTED_TARGET_Q.copy(); slots[5:10] = q
+        c.set_measured_dq(dq); c.set_disturbance_horizon(horizon())
+        qref, _, diagnostic = c.step(slots, [1,0,0,0], 0., .006)
+        self.assertNotEqual(qref[1], c.nominal[1])
+        self.assertEqual(qref[2], c.nominal[2])
+        self.assertEqual(diagnostic['posture_feedback_model']['active_joint_indices'], [0,1,2])
 
     def test_affine_torque_matches_independent_rnea_with_moving_base(self):
         c = self.controller(); rng = np.random.default_rng(8)
@@ -201,6 +237,34 @@ class LearnedMpcTests(unittest.TestCase):
         self.assertEqual(velocity['q_ee_omega'], 1.)
         self.assertEqual(velocity['mpc_start_s'], 3.3)
         self.assertEqual(velocity['mpc_handoff_duration_s'], 1.5)
+
+    def test_omega2_trial_changes_only_omega_from_validated_omega1_trial(self):
+        from hardware_mpc_control import load_mpc_config
+        omega1 = load_mpc_config(LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG)
+        omega2 = load_mpc_config(LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG)
+        changed = {key for key in omega1.keys() | omega2.keys()
+                   if omega1.get(key) != omega2.get(key)}
+        self.assertEqual(changed, {'q_ee_omega'})
+        self.assertEqual(omega2['q_ee_acc'], .01)
+        self.assertEqual(omega2['q_ee_alpha'], .0005)
+        self.assertEqual(omega2['q_ee_omega'], 2.)
+        self.assertEqual(omega2['mpc_start_s'], 3.3)
+        self.assertEqual(omega2['mpc_handoff_duration_s'], 1.5)
+
+    def test_omega05_trial_changes_only_omega_from_validated_omega1_trial(self):
+        from g1_walk_mpc import (LEARNED_ACC_ALPHA_OMEGA05_MPC_CONFIG,
+                                 LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG)
+        from hardware_mpc_control import load_mpc_config
+        omega1 = load_mpc_config(LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG)
+        omega05 = load_mpc_config(LEARNED_ACC_ALPHA_OMEGA05_MPC_CONFIG)
+        changed = {key for key in omega1.keys() | omega05.keys()
+                   if omega1.get(key) != omega05.get(key)}
+        self.assertEqual(changed, {'q_ee_omega'})
+        self.assertEqual(omega05['q_ee_acc'], .01)
+        self.assertEqual(omega05['q_ee_alpha'], .0005)
+        self.assertEqual(omega05['q_ee_omega'], .5)
+        self.assertEqual(omega05['mpc_start_s'], 3.3)
+        self.assertEqual(omega05['mpc_handoff_duration_s'], 1.5)
 
     def test_acceleration_trial_has_one_time_bumpless_mpc_handoff(self):
         c = RightArmLearnedTorqueMpc(EXPECTED_TARGET_Q[5:10], LEARNED_ACC_MPC_CONFIG,

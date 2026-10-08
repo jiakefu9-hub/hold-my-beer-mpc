@@ -32,14 +32,21 @@ from mpc_host import host_evidence, select_cpu, ControlThreadScope
 PERMIT = "MPC_WALK_H0_CAPTURE"
 FIELD_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_field.yaml'
 LEARNED_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned.yaml'
+LEARNED_ROLL_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned_roll_center.yaml'
+LEARNED_FIELD_TORQUE_CONFIGS = frozenset((LEARNED_TORQUE_CONFIG.resolve(),
+                                          LEARNED_ROLL_TORQUE_CONFIG.resolve()))
 LEARNED_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned.yaml'
 LEARNED_ACC_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001.yaml'
 LEARNED_ACC_ALPHA_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005.yaml'
+LEARNED_ACC_ALPHA_OMEGA05_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega05.yaml'
 LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega1.yaml'
+LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega2.yaml'
 LEARNED_FIELD_MPC_CONFIGS = frozenset((LEARNED_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_ALPHA_MPC_CONFIG.resolve(),
-                                       LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve()))
+                                       LEARNED_ACC_ALPHA_OMEGA05_MPC_CONFIG.resolve(),
+                                       LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve(),
+                                       LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG.resolve()))
 FIELD_MPC_START_S = 4.0  # one second of fixed posture, then MPC before walking at 5 s
 
 
@@ -75,8 +82,9 @@ class MpcRuntime:
         self.host_scope = None
         self.handback = None
         if self.field_trial:
-            if actuation != 'measured_torque_preview' or Path(torque_config or '').resolve() not in (
-                    FIELD_TORQUE_CONFIG, LEARNED_TORQUE_CONFIG):
+            if (actuation != 'measured_torque_preview'
+                    or Path(torque_config or '').resolve() not in
+                    ({FIELD_TORQUE_CONFIG.resolve()} | LEARNED_FIELD_TORQUE_CONFIGS)):
                 raise ValueError('field trial requires the bounded measured-torque field configuration')
             from hardware_mpc_field import TorqueHandback
             self.handback = TorqueHandback()
@@ -98,7 +106,8 @@ class MpcRuntime:
         elif actuation == "measured_torque_preview":
             from hardware_mpc_torque_control import RightArmMeasuredTorqueMpc
             controller_type = RightArmMeasuredTorqueMpc
-            if isinstance(torque_config, (str, Path)) and Path(torque_config).resolve() == LEARNED_TORQUE_CONFIG:
+            if (isinstance(torque_config, (str, Path))
+                    and Path(torque_config).resolve() in LEARNED_FIELD_TORQUE_CONFIGS):
                 from hardware_mpc_learned import RightArmLearnedTorqueMpc
                 controller_type = RightArmLearnedTorqueMpc
         torque_options = {} if torque_config is None else dict(torque_config=torque_config)
@@ -316,8 +325,8 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
             if LIBRARY.is_file():
                 native = NativeArmDelay(runtime.controller.inverse)
                 native_metadata = native.metadata
-            elif torque_config is not None and Path(torque_config).resolve() in (
-                    FIELD_TORQUE_CONFIG, LEARNED_TORQUE_CONFIG):
+            elif (torque_config is not None and Path(torque_config).resolve() in
+                    ({FIELD_TORQUE_CONFIG.resolve()} | LEARNED_FIELD_TORQUE_CONFIGS)):
                 raise ValueError('field preflight requires building cpp/g1_arm_delay')
         q = np.zeros(35)
         from hardware_pid_control import ARM_MOTOR_INDICES
@@ -394,7 +403,10 @@ def build_parser(*, learned=False):
 
 def main(argv=None, *, learned=False):
     args = build_parser(learned=learned).parse_args(argv)
-    field_config = LEARNED_TORQUE_CONFIG if learned else FIELD_TORQUE_CONFIG
+    field_config = (Path(args.torque_config).resolve() if learned
+                    else FIELD_TORQUE_CONFIG.resolve())
+    allowed_field_configs = (LEARNED_FIELD_TORQUE_CONFIGS if learned
+                             else frozenset((FIELD_TORQUE_CONFIG.resolve(),)))
     journal = runtime = scope = None
     try:
         select_cpu(args.cpu)  # fail before subscribers/threads if CPU unavailable
@@ -408,11 +420,12 @@ def main(argv=None, *, learned=False):
             raise ValueError('offline-only unless measured torque and --allow-first-torque-field-trial are explicit')
         if args.execute and args.task == 'walk' and not args.torque_stationary_validated:
             raise ValueError('first torque trial is stationary; walk requires an actual stationary trial result')
-        if args.execute and args.torque_config is not None and args.torque_config.resolve() != field_config:
-            raise ValueError(f'field execution for this entry accepts only {field_config.name}')
+        if args.execute and (args.torque_config is None
+                or args.torque_config.resolve() not in allowed_field_configs):
+            raise ValueError('field execution rejects an unreviewed torque configuration')
         if learned and (args.actuation != 'measured_torque_preview'
                 or args.mpc_config.resolve() not in LEARNED_FIELD_MPC_CONFIGS
-                or args.torque_config.resolve() != LEARNED_TORQUE_CONFIG
+                or args.torque_config.resolve() not in LEARNED_FIELD_TORQUE_CONFIGS
                 or args.assumed_command_delay_ms is not None):
             raise ValueError('learned entry requires its paired configs and measured state, without delay-model changes')
         if not args.execute:
