@@ -10,7 +10,8 @@ from scipy.spatial.transform import Rotation
 
 from disturbance_types import DisturbanceInput, DisturbanceHorizon
 from g1_walk_mpc import (MpcRuntime, build_parser, FIELD_TORQUE_CONFIG,
-                         LEARNED_ACC_ALPHA_MPC_CONFIG, LEARNED_ACC_MPC_CONFIG,
+                         LEARNED_ACC_ALPHA_MPC_CONFIG,
+                         LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG, LEARNED_ACC_MPC_CONFIG,
                          LEARNED_MPC_CONFIG, LEARNED_TORQUE_CONFIG)
 from g1_walk_pid import EXPECTED_TARGET_Q
 from hardware_mpc_control import HardwareMpcError
@@ -187,6 +188,19 @@ class LearnedMpcTests(unittest.TestCase):
         self.assertEqual(angular['q_ee_omega'], 0.)
         self.assertEqual(angular['mpc_start_s'], 3.3)
         self.assertEqual(angular['mpc_handoff_duration_s'], 1.5)
+
+    def test_angular_velocity_trial_changes_only_omega_from_acc_alpha_trial(self):
+        from hardware_mpc_control import load_mpc_config
+        angular = load_mpc_config(LEARNED_ACC_ALPHA_MPC_CONFIG)
+        velocity = load_mpc_config(LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG)
+        changed = {key for key in angular.keys() | velocity.keys()
+                   if angular.get(key) != velocity.get(key)}
+        self.assertEqual(changed, {'q_ee_omega'})
+        self.assertEqual(velocity['q_ee_acc'], .01)
+        self.assertEqual(velocity['q_ee_alpha'], .0005)
+        self.assertEqual(velocity['q_ee_omega'], 1.)
+        self.assertEqual(velocity['mpc_start_s'], 3.3)
+        self.assertEqual(velocity['mpc_handoff_duration_s'], 1.5)
 
     def test_acceleration_trial_has_one_time_bumpless_mpc_handoff(self):
         c = RightArmLearnedTorqueMpc(EXPECTED_TARGET_Q[5:10], LEARNED_ACC_MPC_CONFIG,

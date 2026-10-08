@@ -35,9 +35,11 @@ LEARNED_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned.yaml'
 LEARNED_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned.yaml'
 LEARNED_ACC_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001.yaml'
 LEARNED_ACC_ALPHA_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005.yaml'
+LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega1.yaml'
 LEARNED_FIELD_MPC_CONFIGS = frozenset((LEARNED_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_MPC_CONFIG.resolve(),
-                                       LEARNED_ACC_ALPHA_MPC_CONFIG.resolve()))
+                                       LEARNED_ACC_ALPHA_MPC_CONFIG.resolve(),
+                                       LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve()))
 FIELD_MPC_START_S = 4.0  # one second of fixed posture, then MPC before walking at 5 s
 
 
