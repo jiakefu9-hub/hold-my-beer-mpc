@@ -51,6 +51,7 @@ def _worker(request,response,nrequest,nresponse,ready,done,stopping,allowed,cpu,
         _store(response,nresponse,dict(id=0,ok=True,result=dict(
             warmup=runtime.warmup,config=runtime.controller.config,
             torque_config=runtime.controller.torque_config,metadata=runtime.controller.metadata,
+            mpc_start_s=runtime.mpc_start_s,
             predictor_manifest=None if runtime.predictor.bank is None else runtime.predictor.bank.manifest)))
         done.release()
         while not stopping.value:
@@ -125,6 +126,7 @@ class ProcessMpcRuntime(MpcRuntime):
             self.predictor=SimpleNamespace(bank=None if manifest is None else SimpleNamespace(manifest=manifest))
             self.controller=SimpleNamespace(config=initial['config'],torque_config=initial['torque_config'],
                 metadata=initial['metadata'],last_diagnostics={})
+            self.mpc_start_s=float(initial['mpc_start_s'])
             self.configure_timing_grace()
             self._step_timeout_s = (.009 if self.timing_grace is None
                                     else self.timing_grace.worker_timeout_s)

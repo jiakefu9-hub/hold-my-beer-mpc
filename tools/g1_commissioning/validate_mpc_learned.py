@@ -135,7 +135,17 @@ def replay(data, output, name, cpu, *, math_only=False):
                         np.testing.assert_allclose(np.asarray(d['tau_ff_candidate_nm'])+pd,
                                                    d['tau_total_estimated_at_feedback_nm'],atol=1e-10)
                         if learned_variant:
-                            closure=float(np.max(abs(np.asarray(d['estimated_closed_loop_ddq_rad_s2'])-
+                            # During an explicitly configured one-time handoff,
+                            # the transmitted torque is intentionally blended
+                            # from the preceding support packet.  Validate the
+                            # underlying MPC/inverse-dynamics closure there;
+                            # after the handoff, validate the final transmitted
+                            # torque exactly as before.
+                            handoff=d.get('mpc_handoff',{})
+                            acceleration_key=('post_transition_ddq_rad_s2'
+                                if handoff.get('active') else
+                                'estimated_closed_loop_ddq_rad_s2')
+                            closure=float(np.max(abs(np.asarray(d[acceleration_key])-
                                                       d['raw_mpc_ddq_rad_s2'])))
                             closure_max=max(closure_max,closure)
                             if closure>1e-6:raise ValueError('planned acceleration != final torque acceleration')

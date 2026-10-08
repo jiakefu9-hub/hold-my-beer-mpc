@@ -29,6 +29,7 @@ class ComputeProcessTests(unittest.TestCase):
         worker=ProcessMpcRuntime(compute_cpu=min(affinity),compute_affinity=affinity,**options)
         direct=MpcRuntime(**options)
         self.addCleanup(direct.close);self.addCleanup(worker.close)
+        self.assertEqual(worker.mpc_start_s,direct.mpc_start_s)
         profile=dict(target_q_array=EXPECTED_TARGET_Q,kp_array=np.r_[np.full(11,20.),0,0],
                      kd_array=np.r_[np.ones(11),0,0],q_offset_limit_deg_array=np.full(5,5.))
         plans=[r.create_plan(EXPECTED_TARGET_Q,profile) for r in (direct,worker)]

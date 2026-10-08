@@ -10,6 +10,7 @@ from scipy.spatial.transform import Rotation
 
 from disturbance_types import DisturbanceInput, DisturbanceHorizon
 from g1_walk_mpc import (MpcRuntime, build_parser, FIELD_TORQUE_CONFIG,
+                         LEARNED_ACC_ALPHA_MPC_CONFIG, LEARNED_ACC_MPC_CONFIG,
                          LEARNED_MPC_CONFIG, LEARNED_TORQUE_CONFIG)
 from g1_walk_pid import EXPECTED_TARGET_Q
 from hardware_mpc_control import HardwareMpcError
@@ -160,6 +161,63 @@ class LearnedMpcTests(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(main(['--cpu',str(min(os.sched_getaffinity(0)))]),0)
         self.assertEqual(preflight.call_args.args[-1],LEARNED_TORQUE_CONFIG)
+
+    def test_acceleration_cost_trial_changes_only_requested_dynamic_weight(self):
+        from hardware_mpc_control import load_mpc_config
+        baseline = load_mpc_config(LEARNED_MPC_CONFIG)
+        trial = load_mpc_config(LEARNED_ACC_MPC_CONFIG)
+        changed = {key for key in baseline.keys() | trial.keys()
+                   if baseline.get(key) != trial.get(key)}
+        self.assertEqual(changed, {'q_ee_acc', 'mpc_start_s', 'mpc_handoff_duration_s'})
+        self.assertEqual(trial['q_ee_acc'], .01)
+        self.assertEqual(trial['q_ee_alpha'], 0.)
+        self.assertEqual(trial['q_ee_omega'], 0.)
+        self.assertEqual(trial['mpc_start_s'], 3.3)
+        self.assertEqual(trial['mpc_handoff_duration_s'], 1.5)
+
+    def test_angular_acceleration_trial_changes_only_alpha_from_acc_trial(self):
+        from hardware_mpc_control import load_mpc_config
+        acceleration = load_mpc_config(LEARNED_ACC_MPC_CONFIG)
+        angular = load_mpc_config(LEARNED_ACC_ALPHA_MPC_CONFIG)
+        changed = {key for key in acceleration.keys() | angular.keys()
+                   if acceleration.get(key) != angular.get(key)}
+        self.assertEqual(changed, {'q_ee_alpha'})
+        self.assertEqual(angular['q_ee_acc'], .01)
+        self.assertEqual(angular['q_ee_alpha'], .0005)
+        self.assertEqual(angular['q_ee_omega'], 0.)
+        self.assertEqual(angular['mpc_start_s'], 3.3)
+        self.assertEqual(angular['mpc_handoff_duration_s'], 1.5)
+
+    def test_acceleration_trial_has_one_time_bumpless_mpc_handoff(self):
+        c = RightArmLearnedTorqueMpc(EXPECTED_TARGET_Q[5:10], LEARNED_ACC_MPC_CONFIG,
+                                    torque_config=LEARNED_TORQUE_CONFIG)
+        self.addCleanup(c.close)
+        c.policy.solver_time_limit = .1
+        plan = HardwareTorquePreviewPlan(EXPECTED_TARGET_Q, EXPECTED_TARGET_Q,
+            np.r_[np.full(11,20.),0,0], np.r_[np.ones(11),0,0], c, mpc_start_s=3.3)
+        frames = []
+        for task_s in (3.294, 3.3, 4.05, 4.8, 4.9):
+            c.set_measured_dq(np.zeros(5)); c.set_disturbance_horizon(horizon())
+            frames.append(plan.sample(task_s, EXPECTED_TARGET_Q, np.zeros(13),
+                                      [1,0,0,0], 0., .006))
+        before, start, middle, end, after = frames
+        np.testing.assert_allclose(start['q_rad'], before['q_rad'], atol=1e-12)
+        np.testing.assert_allclose(start['dq_rad_s'], before['dq_rad_s'], atol=1e-12)
+        np.testing.assert_allclose(start['diagnostics']['tau_total_estimated_at_feedback_nm'],
+                                   before['diagnostics']['tau_total_estimated_at_feedback_nm'], atol=1e-12)
+        np.testing.assert_allclose([f['diagnostics']['mpc_handoff']['scale']
+                                    for f in (start,middle,end,after)],
+                                   [0.,.5,1.,1.], atol=1e-12)
+        for frame in (start,middle,end,after):
+            d=frame['diagnostics']; total=np.asarray(d['tau_total_estimated_at_feedback_nm'])
+            pd=(np.asarray(frame['kp'][5:10])*(np.asarray(frame['q_rad'][5:10])-EXPECTED_TARGET_Q[5:10])
+                +np.asarray(frame['kd'][5:10])*np.asarray(frame['dq_rad_s'][5:10]))
+            np.testing.assert_allclose(np.asarray(d['tau_ff_candidate_nm'])+pd,total,atol=1e-12)
+            self.assertLessEqual(np.max(np.abs(d['post_transition_ddq_rad_s2'])),15.+1e-9)
+        self.assertEqual(start['diagnostics']['mpc_handoff']['execution_check'],
+                         'bounded_interpolation_from_previously_transmitted_packet')
+        self.assertFalse(end['diagnostics']['mpc_handoff']['active'])
+        self.assertFalse(after['diagnostics']['mpc_handoff']['active'])
 
     def test_spawned_learned_worker_matches_direct_and_retains_parent_handback(self):
         from test_mpc_compute_process import ComputeProcessTests

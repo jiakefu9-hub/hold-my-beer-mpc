@@ -33,6 +33,11 @@ PERMIT = "MPC_WALK_H0_CAPTURE"
 FIELD_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_field.yaml'
 LEARNED_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned.yaml'
 LEARNED_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned.yaml'
+LEARNED_ACC_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001.yaml'
+LEARNED_ACC_ALPHA_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005.yaml'
+LEARNED_FIELD_MPC_CONFIGS = frozenset((LEARNED_MPC_CONFIG.resolve(),
+                                       LEARNED_ACC_MPC_CONFIG.resolve(),
+                                       LEARNED_ACC_ALPHA_MPC_CONFIG.resolve()))
 FIELD_MPC_START_S = 4.0  # one second of fixed posture, then MPC before walking at 5 s
 
 
@@ -97,6 +102,8 @@ class MpcRuntime:
         torque_options = {} if torque_config is None else dict(torque_config=torque_config)
         self.controller = controller_type(EXPECTED_TARGET_Q[5:10], config,
                                           model=EndpointModel(model_config), **torque_options)
+        self.mpc_start_s = float(self.controller.config.get(
+            'mpc_start_s', FIELD_MPC_START_S))
         self.configure_timing_grace()
         if self.field_trial:
             self.controller.metadata.update(field_output_supported=True,
@@ -241,7 +248,7 @@ class MpcRuntime:
         if self.actuation == "measured_torque_preview":
             from hardware_mpc_torque_control import HardwareTorquePreviewPlan
             plan_type = HardwareTorquePreviewPlan
-        options=dict(mpc_start_s=FIELD_MPC_START_S) if self.field_trial else {}
+        options=dict(mpc_start_s=self.mpc_start_s) if self.field_trial else {}
         if self.assumed_command_delay_s is not None:
             from hardware_mpc_delay_plan import HardwareDelayTorquePreviewPlan
             plan_type=HardwareDelayTorquePreviewPlan
@@ -402,7 +409,7 @@ def main(argv=None, *, learned=False):
         if args.execute and args.torque_config is not None and args.torque_config.resolve() != field_config:
             raise ValueError(f'field execution for this entry accepts only {field_config.name}')
         if learned and (args.actuation != 'measured_torque_preview'
-                or args.mpc_config.resolve() != LEARNED_MPC_CONFIG
+                or args.mpc_config.resolve() not in LEARNED_FIELD_MPC_CONFIGS
                 or args.torque_config.resolve() != LEARNED_TORQUE_CONFIG
                 or args.assumed_command_delay_ms is not None):
             raise ValueError('learned entry requires its paired configs and measured state, without delay-model changes')
@@ -465,7 +472,7 @@ def main(argv=None, *, learned=False):
             "task": args.task, "required_fsm": 500,
             "publisher_created": False, "mode_setter_registered": False, "lowcmd_topic_created": False,
             "network_interface": args.nic, "control_nominal_period_ms": 6.,
-            "mpc_start_s": FIELD_MPC_START_S,
+            "mpc_start_s": runtime.mpc_start_s,
             "primary_metric_window_s": [5., 18.], "forward_speed_m_s": .5 if args.task == "walk" else 0.,
             "heading_target": "fixed_run_h0_positive_x", "host_before_control": host_evidence(),
             "requested_control_cpu": args.cpu, "requested_fifo_priority": args.rt_priority,

@@ -1,0 +1,16 @@
+# Independent field experiment derived from the validated learned baseline.
+# Only endpoint linear-acceleration cost changes; alpha/omega remain disabled.
+schema: g1_hardware_mpc_config_v1
+q_ee_acc: 0.01
+q_ee_alpha: 0.0
+q_ee_omega: 0.0
+# Measured hardware still tracks the lift for about 0.2 s after the nominal
+# three-second ramp.  Start after a short settling margin, then use most of the
+# former idle second for a longer handoff that finishes before walking at 5 s.
+mpc_start_s: 3.3
+mpc_handoff_duration_s: 1.5
+q_gravity: [30.0, 30.0]
+q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
+q_vel: 0.08
+r_ddq: 0.0025
+terminal_scale: 2.0

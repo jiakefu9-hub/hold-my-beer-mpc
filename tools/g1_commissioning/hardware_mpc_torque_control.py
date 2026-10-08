@@ -359,6 +359,23 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
             raise ValueError("plan PD must match the evaluated torque model")
         self._last_total = None
         self._last_bias = None
+        self.handoff_duration_s = float(
+            self.controller.config.get('mpc_handoff_duration_s', 0.))
+        if (not np.isfinite(self.handoff_duration_s)
+                or not 0. <= self.handoff_duration_s <= 2.):
+            raise ValueError('MPC handoff duration must be within 0..2.0 s')
+        if self.mpc_start_s + self.handoff_duration_s > 5. + 1e-12:
+            raise ValueError('MPC handoff must finish before walking starts at 5 s')
+        self._handoff_total = None
+        self._handoff_q = None
+        self._handoff_dq = None
+        self._last_command_dq = np.zeros(13)
+
+    @staticmethod
+    def _handoff_scale(progress):
+        """Quintic smoothstep with zero velocity/acceleration at both ends."""
+        u = float(np.clip(progress, 0., 1.))
+        return u*u*u*(10. + u*(-15. + 6.*u))
 
     def sample(self, task_s, measured_slots, measured_dq, imu_quaternion, yaw0_rad, dt):
         c = self.controller
@@ -369,6 +386,9 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
         base = c._horizon.nodes[0]
         q = finite_vector(measured_slots, 13, "q")[5:10]
         dq = finite_vector(measured_dq, 13, "dq")[5:10]
+        previous_command_q = self._last_q.copy()
+        previous_command_dq = self._last_command_dq.copy()
+        previous_total = None if self._last_total is None else self._last_total.copy()
         c._next_total_bounds = None
         c._next_slew_bias = None
         active = self.mpc_start_s <= task_s < 18
@@ -387,7 +407,29 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
             self._last_q = self.target.copy()
         else:
             frame = super().sample(task_s, measured_slots, measured_dq, imu_quaternion, yaw0_rad, dt)
-        pd = self.kp[5:10]*(frame["q_rad"][5:10]-q)+self.kd[5:10]*(frame["dq_rad_s"][5:10]-dq)
+        handoff = dict(enabled=self.handoff_duration_s > 0., active=False,
+                       duration_s=self.handoff_duration_s, progress=1., scale=1.,
+                       profile='quintic_smoothstep', changes_steady_mpc=False)
+        if active and self.handoff_duration_s > 0.:
+            if self._handoff_total is None:
+                if previous_total is None:
+                    raise HardwareMpcError('MPC handoff has no preceding support-torque packet')
+                self._handoff_total = previous_total
+                self._handoff_q = previous_command_q[5:10].copy()
+                self._handoff_dq = previous_command_dq[5:10].copy()
+            handoff_end_s = self.mpc_start_s + self.handoff_duration_s
+            progress = float(np.clip(
+                (task_s-self.mpc_start_s)/self.handoff_duration_s, 0., 1.))
+            scale = self._handoff_scale(progress)
+            planned_q = np.asarray(frame['q_rad'][5:10], dtype=float).copy()
+            planned_dq = np.asarray(frame['dq_rad_s'][5:10], dtype=float).copy()
+            frame['q_rad'][5:10] = self._handoff_q + scale*(planned_q-self._handoff_q)
+            frame['dq_rad_s'][5:10] = self._handoff_dq + scale*(planned_dq-self._handoff_dq)
+            handoff.update(active=task_s < handoff_end_s, progress=progress, scale=scale,
+                start_q_rad=self._handoff_q.tolist(), start_dq_rad_s=self._handoff_dq.tolist(),
+                planned_q_rad=planned_q.tolist(), planned_dq_rad_s=planned_dq.tolist())
+        pd = (self.kp[5:10]*(frame["q_rad"][5:10]-q)
+              + self.kd[5:10]*(frame["dq_rad_s"][5:10]-dq))
         if not active:
             c._horizon = None
             inverse = c.inverse.compute(q, dq, np.zeros(5), base)
@@ -399,8 +441,15 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
         else:
             total = np.asarray(frame["diagnostics"]["tau_total_estimated_at_feedback_nm"])
             model_total = np.asarray(frame["diagnostics"]["tau_model_selected_nm"])
+            handoff['planned_total_nm'] = total.tolist()
+            if self.handoff_duration_s > 0.:
+                total = self._handoff_total + handoff['scale']*(total-self._handoff_total)
+                handoff.update(start_total_nm=self._handoff_total.tolist(),
+                               executed_total_nm=total.tolist())
         limit = c.mapper.limit
         total = np.clip(total, -limit, limit)
+        if active and self.handoff_duration_s > 0.:
+            handoff['executed_total_nm'] = total.tolist()
         if self._last_total is not None and not active:
             delta = c.torque_config["transition_rate_nm_s"]*min(float(dt), .006)
             # Scalar interpolation preserves coupled forward-model behaviour;
@@ -421,19 +470,41 @@ class HardwareTorquePreviewPlan(HardwarePidPlan):
         if (frame["weight"] > 0 and task_s >= self.mpc_start_s
                 and np.max(np.abs(model_acceleration)) > c.mapper.acc_limit+1e-9):
             raise HardwareMpcError("post-transition total torque fails forward-model envelope")
+        # Do not reinterpret the previously transmitted support packet as a
+        # fresh acceleration-MPC result at the first handoff sample.  The two
+        # paths use different bias terms, so that calculation can report a
+        # large fictitious acceleration even though the packet is unchanged.
+        # The handoff remains a convex interpolation between that already-used
+        # support packet and an MPC packet whose own forward-model envelope is
+        # checked above.  Absolute torque and command-state bounds are still
+        # enforced by their existing paths.
+        if active and handoff['active']:
+            handoff['execution_check'] = (
+                'bounded_interpolation_from_previously_transmitted_packet')
         retained = total-model_total if active else np.zeros(5)
         frame["diagnostics"].update(tau_pd_at_feedback_nm=pd.tolist(),
             torque_model_bias_nm=bias.tolist(),
             feedback_dt_s=float(dt),
             tau_model_selected_nm=model_total.tolist(),
             retained_firmware_pd_nm=retained.tolist(),
+            handoff_total_offset_nm=(total-model_total).tolist() if active else np.zeros(5).tolist(),
             tau_total_estimated_at_feedback_nm=total.tolist(),
             tau_ff_candidate_nm=(total-pd).tolist(), expected_kp=self.kp[5:10].tolist(),
             expected_kd=self.kd[5:10].tolist(),
             post_transition_ddq_rad_s2=model_acceleration.tolist(),
             estimated_closed_loop_ddq_rad_s2=closed_loop_acceleration.tolist(),
-            acceptance="conditional_forward_model_only", torque_output_authorized=False)
+            mpc_handoff=handoff,
+            acceptance=("conditional_forward_model_with_bounded_handoff"
+                        if active and handoff['active'] else
+                        "conditional_forward_model_only"),
+            torque_output_authorized=False)
         frame['diagnostics']['mpc_start_s'] = self.mpc_start_s
+        if task_s < 18.:
+            # HardwarePidPlan stored the raw MPC proposal before this optional
+            # handoff overlay.  Release and the next handoff sample must retain
+            # the command that was actually prepared for transmission.
+            self._last_q = np.asarray(frame['q_rad'], dtype=float).copy()
+            self._last_command_dq = np.asarray(frame['dq_rad_s'], dtype=float).copy()
         # No residual torque command after ownership has been fully released.
         if frame["weight"] == 0:
             frame["diagnostics"]["tau_ff_candidate_nm"] = [0.]*5
