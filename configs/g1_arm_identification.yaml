@@ -1,0 +1,34 @@
+schema: g1_arm_closed_loop_identification_v1
+
+# One stationary 10 s screening experiment.  These are deliberately small
+# fractions of the already field-used MPC envelopes, not motor ratings.
+excitation_start_s: 5.0
+excitation_stop_s: 15.0
+fade_s: 0.75
+# Run-1 screening showed clear shoulder-pitch response but weak response on
+# roll/yaw/elbow/wrist.  Keep pitch unchanged and raise only those four axes;
+# all remain below 25% of their existing field torque envelopes.
+tau_peak_nm: [0.8, 0.8, 0.5, 0.9, 0.35]
+frequencies_hz:
+  - [0.4, 1.2, 2.0]
+  - [0.5, 1.3, 2.1]
+  - [0.6, 1.4, 2.2]
+  - [0.7, 1.5, 2.3]
+  - [0.8, 1.6, 2.4]
+component_weights: [1.0, 0.6, 0.35]
+phase_rad: [0.0, 0.7, 1.4, 2.1, 2.8]
+
+# Hold the same operating pose while injecting feedforward torque.  The yaw
+# axis uses modest identification-only stabilization after the expanded pilot
+# crossed breakaway friction and drifted nearly 10 degrees with kp/kd=2/0.2.
+right_kp: [20.0, 20.0, 6.0, 20.0, 20.0]
+right_kd: [1.0, 1.0, 0.5, 1.0, 1.0]
+
+# Existing field envelopes remain the outer packet checks.  The tighter
+# identification-state checks below only apply while excitation is active.
+tau_abs_nm: [10.0, 6.0, 4.0, 7.0, 1.5]
+tau_ff_abs_nm: [10.0, 6.0, 4.0, 7.0, 1.5]
+q_min_deg: [-20.0, -20.0, -25.0, -40.0, -40.0]
+q_max_deg: [20.0, 20.0, 20.0, 40.0, 40.0]
+identification_q_offset_deg: [10.0, 10.0, 10.0, 10.0, 10.0]
+identification_max_dq_rad_s: 2.0

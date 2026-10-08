@@ -733,7 +733,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         if authorize is None:
             raise ValueError("offline-only torque candidate cannot enter run_device")
         authorize()
-    controller_label = "PID" if runtime is None else "MPC"
+    controller_label = ("PID" if runtime is None else
+                        getattr(runtime, "controller_label", "MPC"))
     # Delayed imports: reaching this point still has not initialized DDS.
     import unitree_sdk2py
     from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelPublisher, ChannelSubscriber
