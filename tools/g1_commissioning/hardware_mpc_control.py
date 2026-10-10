@@ -72,6 +72,8 @@ def load_mpc_config(config=None):
                       if isinstance(config, (str, Path)) else dict(config))
     if values.get("schema") != "g1_hardware_mpc_config_v1":
         raise ValueError("unexpected hardware MPC configuration schema")
+    values.setdefault('q_ee_vel', 0.0)
+    ArmMPCPolicy._make_weight(values['q_ee_vel'], 3, 'q_ee_vel')
     if values["prediction_backend"] != "cpp_pinocchio":
         raise ValueError("hardware MPC requires the explicit C++ kinematics backend")
     if values["horizon"] != 9 or abs(float(values["control_period_s"]) - .006) > 1e-12:
@@ -139,8 +141,9 @@ class RightArmHardwareMpc:
         self.helper = KinematicsHelper(
             self.model.model, "right_grasp_site", indices,
             position_reference_q=self.nominal, prediction_backend=self.backend,
+            include_linear_velocity_terms=bool(np.any(np.asarray(self.config['q_ee_vel']) != 0.)),
         )
-        keys = ("q_ee_acc", "q_ee_alpha", "q_ee_omega", "q_gravity", "q_posture",
+        keys = ("q_ee_acc", "q_ee_alpha", "q_ee_omega", "q_ee_vel", "q_gravity", "q_posture",
                 "q_vel", "r_ddq", "terminal_scale", "solver_eps_abs", "solver_eps_rel",
                 "solver_max_iter", "solver_check_termination", "solver_rho",
                 "solver_adaptive_rho")

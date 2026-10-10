@@ -30,10 +30,14 @@ class ComputeProcessTests(unittest.TestCase):
         direct=MpcRuntime(**options)
         self.addCleanup(direct.close);self.addCleanup(worker.close)
         self.assertEqual(worker.mpc_start_s,direct.mpc_start_s)
-        profile=dict(target_q_array=EXPECTED_TARGET_Q,kp_array=np.r_[np.full(11,20.),0,0],
+        nominal=EXPECTED_TARGET_Q.copy()
+        if options.get('zero_arm_neutral'):nominal[:10]=0.
+        profile=dict(target_q_array=nominal,kp_array=np.r_[np.full(11,20.),0,0],
                      kd_array=np.r_[np.ones(11),0,0],q_offset_limit_deg_array=np.full(5,5.))
-        plans=[r.create_plan(EXPECTED_TARGET_Q,profile) for r in (direct,worker)]
-        q=np.zeros(35);q[list(ARM_MOTOR_INDICES)]=EXPECTED_TARGET_Q
+        scale=float(options.get('left_pd_gain_scale',1.))
+        profile['kp_array'][:5]*=scale;profile['kd_array'][:5]*=scale
+        plans=[r.create_plan(nominal,profile) for r in (direct,worker)]
+        q=np.zeros(35);q[list(ARM_MOTOR_INDICES)]=nominal
         state=SimpleNamespace(q=q,dq=np.zeros(35),mode_pr=0,mode_machine=4,received_ns=0)
         for r in (direct,worker):
             r.observe_low(0,q,state.dq);r.observe_imu(0,[1,0,0,0],[0,0,0],[0,0,9.81]);r.set_epoch(0)
@@ -52,7 +56,7 @@ class ComputeProcessTests(unittest.TestCase):
             def relaxed_test_rpc(op,**kw):
                 kw['timeout']=2.;return original_rpc(op,**kw)
             with mock.patch.object(worker,'_rpc',side_effect=relaxed_test_rpc):
-                frames=[p.sample(task_s,EXPECTED_TARGET_Q,np.zeros(13),[1,0,0,0],0.,.006) for p in plans]
+                frames=[p.sample(task_s,nominal,np.zeros(13),[1,0,0,0],0.,.006) for p in plans]
             for key in ('q_rad','dq_rad_s','kp','kd','weight'):
                 np.testing.assert_allclose(frames[0][key],frames[1][key],atol=1e-12,rtol=0.)
             np.testing.assert_allclose(frames[0]['diagnostics']['tau_ff_candidate_nm'],
@@ -61,7 +65,7 @@ class ComputeProcessTests(unittest.TestCase):
                 self.assertNotIn('delay_preview',frames[1]['diagnostics'])
                 if frames[1]['diagnostics'].get('mpc_active'):
                     np.testing.assert_allclose(frames[1]['diagnostics']['mpc_initial_state'],
-                                               np.r_[EXPECTED_TARGET_Q[5:10],np.zeros(5)])
+                                               np.r_[nominal[5:10],np.zeros(5)])
             for r,f in zip((direct,worker),frames):
                 packet=r.make_message(f,state,unitree_hg_msg_dds__LowCmd_,r.create_crc())
                 r.accept_packet(f,packet)

@@ -1123,6 +1123,8 @@ if __name__ == "__main__":
         joint_indices=right_arm_id_index_scratch.qpos_indices,
         imu_site_name="imu_in_torso",
         position_reference_q=right_arm_target,
+        include_linear_velocity_terms=bool(
+            getattr(arm_policy, '_linear_velocity_cost_active', False)),
         prediction_backend=(
             prediction_backend if arm_controller == "mpc" else None
         ),

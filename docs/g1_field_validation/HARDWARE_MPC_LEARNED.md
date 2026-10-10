@@ -8,6 +8,14 @@
 没有重新拟合模型，没有使用已作废的旧五条轨迹；角度、力矩、速度和加速度限值不变。
 仅新版改变时间处理：偶发慢一拍先复查最新状态，不再一超过 10 ms 就直接退出，具体见第 6 节。
 
+2026-10-09 新增并完成 B 组真机实验的独立候选：`hardware_mpc_learned_omega1_vel01.yaml`
+加入 `q_ee_vel=0.1`，目标是冻结 H0 中扣除 IMU 原点平移后的末端速度
+`v_endpoint-v_IMU=omega_IMU×r_IMU_endpoint+J_v*dq`；没有绝对平移速度估计。
+所有原配置该项默认零。另一候选 `hardware_mpc_learned_omega1_acc_y0015.yaml`
+只改 Y 向加速度权重。两者均未晋升基线。额外肩 roll 回正已删除，pitch/yaw 回正保留；
+左臂增益统一通过 `--left-pd-gain-scale` 指定。当前安排以[当前进度](EXPERIMENT_STATUS.md)为准，
+后文的早期执行顺序保留为历史说明。
+
 ## 1. 和已经成功的程序是什么关系
 
 原成功入口 `g1_walk_mpc.py`、`hardware_mpc_upright_baseline.yaml`、
@@ -227,6 +235,12 @@ MPC 活跃阶段还检查最新速度、计划加速度，以及按现有加速�
 原成功入口仍使用原来的 10 ms／子进程 9 ms 行为。
 
 ## 7. 离线结果与首次完整现场结果
+
+`--zero-arm-neutral` 将左右五关节中立目标都设为零，并同步改变右臂 MPC 的
+posture、pitch 与 yaw 名义参考。它只准入 164546 的三项动态代价配置及无 roll torque 配置。
+左臂保持固定关节目标，不使用身体 IMU；默认 Kp/Kd 为 `20/1`，可通过 `--left-pd-gain-scale`
+显式选择增益倍率。原配置和现场 profile 不改写；定义、无网络验证与直接命令见
+[共同零中立位准备](sessions/20261009_ZERO_ARM_NEUTRAL_PREPARATION.md)。
 
 结果／命令／限制见 [离线准备记录](sessions/20261007_MPC_LEARNED_PREPARATION.md)。
 早期普通调度／powersave 的 CPU 7 并发检查有一次约 14 ms 长尾，按旧规则会退权。

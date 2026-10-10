@@ -260,3 +260,16 @@ r1 summary 把 task/protocol gate 与 nominal mapping path 分开：两条均为
 | [`disturbance_template/full_task_template_builder.py`](../../disturbance_template/full_task_template_builder.py) | 6 ms window、SO(3) 均值、template/held-out 离线构建 |
 | [`disturbance_template/full_task_online_parity.py`](../../disturbance_template/full_task_online_parity.py) | held-out offline-online replay parity |
 | [`main_sim.py`](../../main_sim.py) | 正式任务、process runtime、headline 与控制质量记录 |
+
+## 11. 可选末端相对线速度代价（2026-10-10）
+
+`mpc_q_ee_vel` 默认 `0`，新增项为每个预测节点（含终端）的
+`v_rel = v_endpoint - v_IMU = omega_IMU × r_IMU_endpoint + J_v*dq` 的二次代价。
+仿真以世界系 W 表达，终端沿用 `terminal_scale`；它不是速度硬约束，也不是要求行走时末端在世界中静止。
+现有 `mpc_q_vel` 仍是关节速度代价，两者不同。零权重跳过新增任务项；不改原基线配置。
+
+为独立配置复现实验，`run.sh` 支持 `MPC_CONFIG_FILE=/absolute/path/to/config.yaml`，
+省略仍使用 `g1.yaml`。正式 full-task 的 CPU 7、线程、24 ms 接管与力矩验收要求保持不变。
+仿真和真机的完整目标函数、模型、预测器与执行链不同，不能按此权重数值直接横向解释控制强弱。
+标准与 held-out 初态的 `0／0.01／0.1` 对照见
+[本地结果](../../evaluation/mpc_velocity_sweep_20261010/RESULT.md)；结果不支持替换原零权重基线。

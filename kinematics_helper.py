@@ -76,6 +76,7 @@ class KinematicsHelper:
         imu_site_name: str = "imu_in_torso",
         position_reference_q: Optional[np.ndarray] = None,
         prediction_backend: Optional[Any] = None,
+        include_linear_velocity_terms: bool = False,
     ):
         self.model = model
         self.ee_site_name = ee_site_name
@@ -85,6 +86,7 @@ class KinematicsHelper:
         # 【核心代码】MPC 预测运动学可以由 MuJoCo 或 Pinocchio 提供；
         # LQR/PID 的既有 MuJoCo 路径保持不变。
         self.prediction_backend = prediction_backend
+        self.include_linear_velocity_terms = bool(include_linear_velocity_terms)
         self.position_reference_q = None if position_reference_q is None else np.asarray(position_reference_q, dtype=np.float64).copy()
         if self.position_reference_q is not None and self.position_reference_q.shape != self.joint_indices.shape:
             raise ValueError("position_reference_q 必须与被控关节数量一致。")
@@ -502,6 +504,7 @@ class KinematicsHelper:
         delta_R = W_R_B_predicted @ np.swapaxes(W_R_B_current, 1, 2)
 
         J_v = delta_R @ np.asarray(prediction.J_v_world, dtype=np.float64)
+        velocity_jacobian = J_v.copy() if self.include_linear_velocity_terms else None
         dJ_v = delta_R @ np.asarray(prediction.dJ_v_world, dtype=np.float64)
         J_w = delta_R @ np.asarray(prediction.J_w_world, dtype=np.float64)
         dJ_w = delta_R @ np.asarray(prediction.dJ_w_world, dtype=np.float64)
@@ -531,6 +534,11 @@ class KinematicsHelper:
             - np.asarray(prediction.imu_position_world, dtype=np.float64),
             optimize=False,
         )
+        # Inertial H0 components of v_E-v_IMU. Translational base velocity
+        # cancels; body rotation must remain. These are NODE terms, including
+        # the terminal node, independent of interval acceleration flags.
+        velocity_offset = (np.cross(node_omega, r_BE)
+                           if self.include_linear_velocity_terms else None)
         r_BE[inactive] = 0.0
         interval_omega[inactive] = 0.0
         interval_acc[inactive] = 0.0
@@ -570,6 +578,8 @@ class KinematicsHelper:
             "G_g": G_g,
             "gravity_error": gravity_error.copy(),
         }
+        if self.include_linear_velocity_terms:
+            fields.update(C_vel=velocity_jacobian, D_vel=velocity_offset)
         return tuple(
             {name: value[k] for name, value in fields.items()}
             for k in range(node_count)
@@ -623,6 +633,10 @@ class KinematicsHelper:
         # base 平移严格相消，不需要进入模板。前馈只需用预测姿态相对当前姿态
         # 的旋转增量修正它；关闭前馈时 delta_R=I，退化为 LQR 的直接差值写法。
         delta_R = W_R_B_predicted @ W_R_B_current.T
+        velocity_terms = {}
+        if self.include_linear_velocity_terms:
+            velocity_terms = dict(C_vel=delta_R @ J_v,
+                D_vel=np.cross(omega_B_node, delta_R @ (p_E-p_B)))
         r_BE = (
             delta_R @ (p_E - p_B)
             if acceleration_required
@@ -686,6 +700,7 @@ class KinematicsHelper:
             "d_g": gravity_error - J_g @ q,
             "G_g": np.hstack([J_g, np.zeros_like(J_g)]),
             "gravity_error": gravity_error.copy(),
+            **velocity_terms,
         }
 
     @staticmethod

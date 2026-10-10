@@ -62,7 +62,7 @@ fi
 
 PYTHON_COMMAND=(
     "$G1_MPC_CONDA" run --no-capture-output -n g1_mpc
-    python "$REPO_DIR/main_sim.py" g1.yaml "${RUN_ARGS[@]}"
+    python "$REPO_DIR/main_sim.py" "${MPC_CONFIG_FILE:-g1.yaml}" "${RUN_ARGS[@]}"
 )
 
 # 默认选择最高频率组中编号最大的逻辑 CPU；本机对应 4.5 GHz 性能核。

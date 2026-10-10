@@ -73,7 +73,8 @@ def replay(data, output, name, cpu, *, math_only=False):
     if math_only:
         runtime.controller.policy.solver_time_limit = .1
     initial = np.asarray(commands[0]['q_measured_rad'])
-    profile = dict(target_q_array=EXPECTED_TARGET_Q, kp_array=np.r_[np.full(11,20.),0,0],
+    target_q=getattr(runtime,'target_q',EXPECTED_TARGET_Q)
+    profile = dict(target_q_array=target_q, kp_array=np.r_[np.full(11,20.),0,0],
                    kd_array=np.r_[np.ones(11),0,0], q_offset_limit_deg_array=np.full(5,5.))
     plan = runtime.create_plan(initial, profile)
     crc = runtime.create_crc()

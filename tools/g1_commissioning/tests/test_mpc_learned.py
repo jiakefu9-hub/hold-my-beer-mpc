@@ -10,10 +10,11 @@ from scipy.spatial.transform import Rotation
 
 from disturbance_types import DisturbanceInput, DisturbanceHorizon
 from g1_walk_mpc import (MpcRuntime, build_parser, FIELD_TORQUE_CONFIG,
+                         apply_left_pd_gain_experiment, apply_zero_arm_neutral_experiment,
                          LEARNED_ACC_ALPHA_MPC_CONFIG,
                          LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG,
                          LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG, LEARNED_ACC_MPC_CONFIG,
-                         LEARNED_MPC_CONFIG, LEARNED_ROLL_TORQUE_CONFIG,
+                         LEARNED_MPC_CONFIG,
                          LEARNED_TORQUE_CONFIG)
 from g1_walk_pid import EXPECTED_TARGET_Q
 from hardware_mpc_control import HardwareMpcError
@@ -32,13 +33,6 @@ class LearnedMpcTests(unittest.TestCase):
         c.policy.solver_time_limit = .1
         return c
 
-    def roll_controller(self):
-        c = RightArmLearnedTorqueMpc(EXPECTED_TARGET_Q[5:10], LEARNED_MPC_CONFIG,
-                                    torque_config=LEARNED_ROLL_TORQUE_CONFIG)
-        self.addCleanup(c.close)
-        c.policy.solver_time_limit = .1
-        return c
-
     def test_physical_config_matches_successful_baseline(self):
         old, new = [load_torque_config(p) for p in (FIELD_TORQUE_CONFIG, LEARNED_TORQUE_CONFIG)]
         for key in ('tau_abs_nm', 'tau_ff_abs_nm', 'kp', 'kd', 'q_min_deg', 'q_max_deg',
@@ -47,17 +41,6 @@ class LearnedMpcTests(unittest.TestCase):
             np.testing.assert_array_equal(new[key], old[key], err_msg=key)
         self.assertEqual(new['pitch_feedback_kp'], 2.)
         self.assertEqual(new['pitch_feedback_kd'], .2)
-
-    def test_roll_trial_preserves_physical_config_and_adds_only_light_internal_prior(self):
-        old, new = [load_torque_config(p) for p in
-                    (LEARNED_TORQUE_CONFIG, LEARNED_ROLL_TORQUE_CONFIG)]
-        for key in ('tau_abs_nm', 'tau_ff_abs_nm', 'kp', 'kd', 'q_min_deg', 'q_max_deg',
-                    'q_margin_deg', 'max_dq_rad_s', 'max_ddq_rad_s2', 'max_abs_qacc_rad_s2',
-                    'braking_deceleration_rad_s2', 'braking_min_deceleration_rad_s2'):
-            np.testing.assert_array_equal(new[key], old[key], err_msg=key)
-        self.assertTrue(new['roll_feedback_in_prediction'])
-        self.assertEqual(new['roll_feedback_kp'], 1.)
-        self.assertEqual(new['roll_feedback_kd'], .1)
 
     def test_nominal_and_net_coordinates_have_identical_forward_dynamics(self):
         c = self.controller(); p = c.policy
@@ -133,22 +116,6 @@ class LearnedMpcTests(unittest.TestCase):
         self.assertEqual(qref[2], c.nominal[2])
         self.assertEqual(diagnostic['posture_feedback_model']['active_joint_indices'], [0,2])
 
-    def test_optional_roll_centering_is_modeled_and_keeps_packet_reference_unanchored(self):
-        c = self.roll_controller(); p = c.policy
-        q = c.nominal.copy(); q[1] += .05
-        dq = np.zeros(5); dq[1] = .1
-        p.feedback_q = q
-        m, b = c.inverse.linear_dynamics(q, dq, horizon().nodes[0])
-        p.set_local_actuation_constraints(m, b, c.mapper.limit, c.mapper.limit, dq)
-        self.assertAlmostEqual(p.feedback_pd[1], -.06, places=12)
-        self.assertLess((p.feedback_F@np.r_[q, dq]+p.feedback_f)[1], 0.)
-        slots = EXPECTED_TARGET_Q.copy(); slots[5:10] = q
-        c.set_measured_dq(dq); c.set_disturbance_horizon(horizon())
-        qref, _, diagnostic = c.step(slots, [1,0,0,0], 0., .006)
-        self.assertNotEqual(qref[1], c.nominal[1])
-        self.assertEqual(qref[2], c.nominal[2])
-        self.assertEqual(diagnostic['posture_feedback_model']['active_joint_indices'], [0,1,2])
-
     def test_affine_torque_matches_independent_rnea_with_moving_base(self):
         c = self.controller(); rng = np.random.default_rng(8)
         for _ in range(15):
@@ -191,6 +158,8 @@ class LearnedMpcTests(unittest.TestCase):
         self.assertFalse(args.execute);self.assertEqual(args.mpc_config,LEARNED_MPC_CONFIG)
         self.assertEqual(args.torque_config,LEARNED_TORQUE_CONFIG)
         self.assertEqual(args.predictor,'learned_filtered')
+        self.assertFalse(args.zero_arm_neutral)
+        self.assertEqual(args.left_pd_gain_scale,1.)
         self.assertEqual(build_parser().parse_args([]).torque_config,None)
         from g1_walk_mpc_learned import main
         with mock.patch('g1_walk_mpc.preflight',return_value={'passed':True}) as preflight:
@@ -198,6 +167,77 @@ class LearnedMpcTests(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(main(['--cpu',str(min(os.sched_getaffinity(0)))]),0)
         self.assertEqual(preflight.call_args.args[-1],LEARNED_TORQUE_CONFIG)
+
+    def test_explicit_left_pd_double_changes_only_left_packet_gains(self):
+        args = build_parser(learned=True).parse_args(['--left-pd-gain-scale', '2'])
+        self.assertEqual(args.left_pd_gain_scale, 2.)
+        profile = dict(target_q_array=EXPECTED_TARGET_Q.copy(),
+            kp_array=np.r_[np.full(11,20.),0.,0.],
+            kd_array=np.r_[np.ones(11),0.,0.],
+            q_offset_limit_deg_array=np.full(5,5.),
+            pid_q_offset_limit_deg_array=np.full(5,5.))
+        effective = apply_left_pd_gain_experiment(profile, args.left_pd_gain_scale)
+        np.testing.assert_array_equal(effective['kp_array'],
+            np.r_[np.full(5,40.),np.full(6,20.),0.,0.])
+        np.testing.assert_array_equal(effective['kd_array'],
+            np.r_[np.full(5,2.),np.ones(6),0.,0.])
+        np.testing.assert_array_equal(profile['kp_array'],np.r_[np.full(11,20.),0.,0.])
+        np.testing.assert_array_equal(profile['kd_array'],np.r_[np.ones(11),0.,0.])
+        self.assertEqual(effective['left_pd_gain_experiment']['scale'],2.)
+        self.assertTrue(effective['left_pd_gain_experiment']['reviewed_profile_file_unchanged'])
+
+    def test_explicit_left_pd_150_percent_changes_only_left_packet_gains(self):
+        args=build_parser(learned=True).parse_args(['--left-pd-gain-scale','1.5'])
+        self.assertEqual(args.left_pd_gain_scale,1.5)
+        profile=dict(target_q_array=EXPECTED_TARGET_Q.copy(),
+            kp_array=np.r_[np.full(11,20.),0.,0.],kd_array=np.r_[np.ones(11),0.,0.],
+            q_offset_limit_deg_array=np.full(5,5.))
+        effective=apply_left_pd_gain_experiment(profile,args.left_pd_gain_scale)
+        np.testing.assert_array_equal(effective['kp_array'],
+            np.r_[np.full(5,30.),np.full(6,20.),0.,0.])
+        np.testing.assert_array_equal(effective['kd_array'],
+            np.r_[np.full(5,1.5),np.ones(6),0.,0.])
+        self.assertEqual(effective['left_pd_gain_experiment']['scale'],1.5)
+
+    def test_zero_neutral_changes_only_arm_targets_and_drives_all_internal_references(self):
+        profile = dict(target_q_array=EXPECTED_TARGET_Q.copy(),
+            kp_array=np.r_[np.full(11,20.),0.,0.],kd_array=np.r_[np.ones(11),0.,0.],
+            q_offset_limit_deg_array=np.full(5,5.),pid_q_offset_limit_deg_array=np.full(5,5.))
+        effective=apply_zero_arm_neutral_experiment(profile,True)
+        np.testing.assert_array_equal(effective['target_q_array'][:10],np.zeros(10))
+        np.testing.assert_array_equal(effective['target_q_array'][10:],EXPECTED_TARGET_Q[10:])
+        np.testing.assert_array_equal(effective['kp_array'],profile['kp_array'])
+        np.testing.assert_array_equal(profile['target_q_array'],EXPECTED_TARGET_Q)
+        runtime=MpcRuntime(config=LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG,
+            predictor_mode='hold_current',stationary=True,torque_config=LEARNED_TORQUE_CONFIG,
+            zero_arm_neutral=True)
+        self.addCleanup(runtime.close)
+        np.testing.assert_array_equal(runtime.target_q[:10],np.zeros(10))
+        np.testing.assert_array_equal(runtime.controller.nominal,np.zeros(5))
+        np.testing.assert_array_equal(runtime.controller.policy.default_q,np.zeros(5))
+        self.assertEqual(runtime.controller.metadata['pitch_feedback_prediction']['target_rad'],0.)
+        self.assertEqual(runtime.controller.metadata['yaw_feedback_prediction']['target_rad'],0.)
+        self.assertTrue(runtime.controller.metadata['zero_arm_neutral_experiment']['enabled'])
+        runtime.create_plan(EXPECTED_TARGET_Q,effective)
+        bad=dict(effective);bad['target_q_array']=EXPECTED_TARGET_Q.copy()
+        with self.assertRaisesRegex(ValueError,'effective profile'):
+            runtime.create_plan(EXPECTED_TARGET_Q,bad)
+
+    def test_zero_neutral_rejects_nonbaseline(self):
+        with self.assertRaisesRegex(ValueError,'164546'):
+            MpcRuntime(config=LEARNED_MPC_CONFIG,torque_config=LEARNED_TORQUE_CONFIG,
+                       zero_arm_neutral=True)
+
+    def test_spawned_zero_neutral_worker_matches_direct_runtime(self):
+        from test_mpc_compute_process import ComputeProcessTests
+        helper=ComputeProcessTests()
+        try:
+            helper.check_runtime_parity(dict(config=LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG,
+                predictor_mode='hold_current',stationary=True,field_trial=True,
+                torque_config=LEARNED_TORQUE_CONFIG,assumed_command_delay_s=None,
+                zero_arm_neutral=True))
+        finally:
+            helper.doCleanups()
 
     def test_acceleration_cost_trial_changes_only_requested_dynamic_weight(self):
         from hardware_mpc_control import load_mpc_config

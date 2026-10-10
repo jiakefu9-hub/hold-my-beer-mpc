@@ -231,6 +231,7 @@ def create_arm_controller(config, controller_name, default_q, control_dt):
             "q_ee_alpha": config.get("mpc_q_ee_alpha", 0.075),
             # 默认关闭；需要时可用标量、3 维对角权重或 3x3 矩阵配置。
             "q_ee_omega": config.get("mpc_q_ee_omega", 0.0),
+            "q_ee_vel": config.get("mpc_q_ee_vel", 0.0),
             "q_gravity": config.get("mpc_q_gravity", 30.0),
             "q_posture": config.get("mpc_q_posture", 0.05),
             "q_vel": config.get("mpc_q_vel", 0.02),

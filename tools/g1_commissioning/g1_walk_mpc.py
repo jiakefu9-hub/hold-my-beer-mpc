@@ -32,21 +32,28 @@ from mpc_host import host_evidence, select_cpu, ControlThreadScope
 PERMIT = "MPC_WALK_H0_CAPTURE"
 FIELD_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_field.yaml'
 LEARNED_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned.yaml'
-LEARNED_ROLL_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned_roll_center.yaml'
-LEARNED_FIELD_TORQUE_CONFIGS = frozenset((LEARNED_TORQUE_CONFIG.resolve(),
-                                          LEARNED_ROLL_TORQUE_CONFIG.resolve()))
+LEARNED_FIELD_TORQUE_CONFIGS = frozenset((LEARNED_TORQUE_CONFIG.resolve(),))
 LEARNED_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned.yaml'
 LEARNED_ACC_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001.yaml'
 LEARNED_ACC_ALPHA_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005.yaml'
 LEARNED_ACC_ALPHA_OMEGA05_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega05.yaml'
 LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega1.yaml'
 LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega2.yaml'
+LEARNED_VEL01_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_omega1_vel01.yaml'
+LEARNED_ACC_Y0015_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_omega1_acc_y0015.yaml'
+LEARNED_POSTURE_PITCH2_ELBOW01_MPC_CONFIG = (
+    ROOT / 'configs/hardware_mpc_learned_omega1_posture_pitch2_elbow01.yaml')
+LEARNED_POSTURE_ROLL2_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_omega1_posture_roll2.yaml'
 LEARNED_FIELD_MPC_CONFIGS = frozenset((LEARNED_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_ALPHA_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_ALPHA_OMEGA05_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve(),
-                                       LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG.resolve()))
+                                       LEARNED_ACC_ALPHA_OMEGA2_MPC_CONFIG.resolve(),
+                                       LEARNED_VEL01_MPC_CONFIG.resolve(),
+                                       LEARNED_ACC_Y0015_MPC_CONFIG.resolve(),
+                                       LEARNED_POSTURE_PITCH2_ELBOW01_MPC_CONFIG.resolve(),
+                                       LEARNED_POSTURE_ROLL2_MPC_CONFIG.resolve()))
 FIELD_MPC_START_S = 4.0  # one second of fixed posture, then MPC before walking at 5 s
 
 
@@ -73,12 +80,25 @@ class MpcRuntime:
     def __init__(self, config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                  predictor_mode="learned_filtered", bank_path=DEFAULT_BANK,
                  stationary=False, journal=None, actuation="measured_torque_preview", torque_config=None,
-                 assumed_command_delay_s=None, field_trial=False):
+                 assumed_command_delay_s=None, field_trial=False, zero_arm_neutral=False,
+                 left_pd_gain_scale=1.):
         from endpoint_pose import EndpointModel
         if actuation not in {"reference_servo", "inverse_dynamics_preview", "measured_torque_preview"}:
             raise ValueError("unsupported MPC actuation")
         self.actuation = actuation
         self.field_trial = bool(field_trial)
+        self.zero_arm_neutral = bool(zero_arm_neutral)
+        self.left_pd_gain_scale = float(left_pd_gain_scale)
+        if self.left_pd_gain_scale not in (1.,1.5,2.):
+            raise ValueError('left PD gain scale must be 1, 1.5 or 2')
+        self.target_q = EXPECTED_TARGET_Q.copy()
+        if self.zero_arm_neutral:
+            self.target_q[:10] = 0.
+        if self.zero_arm_neutral and (actuation != 'measured_torque_preview'
+                or Path(config).resolve() != LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve()
+                or Path(torque_config or '').resolve() != LEARNED_TORQUE_CONFIG.resolve()
+                or assumed_command_delay_s is not None):
+            raise ValueError('zero arm neutral requires the 164546 learned measured-torque configuration')
         self.host_scope = None
         self.handback = None
         if self.field_trial:
@@ -111,17 +131,23 @@ class MpcRuntime:
                 from hardware_mpc_learned import RightArmLearnedTorqueMpc
                 controller_type = RightArmLearnedTorqueMpc
         torque_options = {} if torque_config is None else dict(torque_config=torque_config)
-        self.controller = controller_type(EXPECTED_TARGET_Q[5:10], config,
+        self.controller = controller_type(self.target_q[5:10], config,
                                           model=EndpointModel(model_config), **torque_options)
         self.mpc_start_s = float(self.controller.config.get(
             'mpc_start_s', FIELD_MPC_START_S))
         self.configure_timing_grace()
+        self.controller.metadata['zero_arm_neutral_experiment'] = dict(
+            enabled=self.zero_arm_neutral,
+            target_q_rad=self.target_q.copy(), target_q_deg=np.rad2deg(self.target_q),
+            left_uses_body_imu=False,
+            right_mpc_uses_measured_body_imu=True,
+            baseline_164546_files_unchanged=True)
         if self.field_trial:
             self.controller.metadata.update(field_output_supported=True,
                 field_scope='explicit controlled first trial, not hardware-validated performance',
                 field_torque_limits_calibrated=False, first_trial_task='stationary_before_walk')
         try:
-            self.warmup = self.controller.warmup(EXPECTED_TARGET_Q, [1, 0, 0, 0])
+            self.warmup = self.controller.warmup(self.target_q, [1, 0, 0, 0])
         except Exception:
             self.controller.close()
             raise
@@ -251,6 +277,9 @@ class MpcRuntime:
         self.predictor.query(stamp, 0., use_learned=False)
 
     def create_plan(self, initial, profile):
+        if self.zero_arm_neutral and not np.array_equal(
+                np.asarray(profile['target_q_array'],dtype=float),self.target_q):
+            raise ValueError('zero arm neutral effective profile target is missing')
         limits = np.asarray(self.controller.config["reference_offset_limit_deg"])
         if self.actuation != "measured_torque_preview" and np.any(limits > profile["q_offset_limit_deg_array"]):
             raise ValueError("MPC config exceeds reviewed profile reference bounds")
@@ -310,13 +339,15 @@ class MpcRuntime:
 
 def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
               mode="learned_filtered", bank=DEFAULT_BANK, cpu=None,
-              actuation="measured_torque_preview", torque_config=None):
+              actuation="measured_torque_preview", torque_config=None, *, zero_arm_neutral=False,
+              left_pd_gain_scale=1.):
     """Local libraries/model/real QP/IDL/CRC only; no DDS factory or endpoint."""
     from types import SimpleNamespace
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
     runtime = MpcRuntime(config, model_config, mode, bank, stationary=True, actuation=actuation,
-                         torque_config=torque_config)
+                         torque_config=torque_config,
+                         zero_arm_neutral=zero_arm_neutral,left_pd_gain_scale=left_pd_gain_scale)
     native = None
     try:
         native_metadata = None
@@ -330,15 +361,19 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
                 raise ValueError('field preflight requires building cpp/g1_arm_delay')
         q = np.zeros(35)
         from hardware_pid_control import ARM_MOTOR_INDICES
-        q[list(ARM_MOTOR_INDICES)] = EXPECTED_TARGET_Q
+        q[list(ARM_MOTOR_INDICES)] = runtime.target_q
         for ns in range(0, 502_000_000, 2_000_000):
             runtime.observe_low(ns, q, np.zeros(35))
             runtime.observe_imu(ns, np.array([1., 0, 0, 0]), np.zeros(3), np.array([0., 0, 9.81]))
         runtime.prepare(500_000_000, None, None, 0., .5)
-        qr, dqr, diag = runtime.controller.step(EXPECTED_TARGET_Q, [1, 0, 0, 0], 0, .006)
-        frame = dict(q_rad=EXPECTED_TARGET_Q.copy(), dq_rad_s=np.zeros(13),
+        qr, dqr, diag = runtime.controller.step(runtime.target_q, [1, 0, 0, 0], 0, .006)
+        frame = dict(q_rad=runtime.target_q.copy(), dq_rad_s=np.zeros(13),
                      kp=np.r_[np.full(11, 20), 0, 0], kd=np.r_[np.ones(11), 0, 0], weight=1.,
                      diagnostics=diag)
+        frame['kp'] = np.asarray(frame['kp'],dtype=float)
+        frame['kd'] = np.asarray(frame['kd'],dtype=float)
+        frame['kp'][:5] *= left_pd_gain_scale
+        frame['kd'][:5] *= left_pd_gain_scale
         frame["q_rad"][5:10], frame["dq_rad_s"][5:10] = qr, dqr
         if actuation == 'measured_torque_preview':
             # Exercise the exact evaluated packet gains.  Field overlays may
@@ -397,8 +432,58 @@ def build_parser(*, learned=False):
     parser.add_argument("--pid-6ms-validated", action="store_true",
                         help="operator confirms current 6 ms PID trial passed; not software-generated evidence")
     if learned:
+        parser.add_argument('--zero-arm-neutral', action='store_true',
+                            help='experiment: both five-joint arm neutral targets are exactly zero')
+        parser.add_argument('--left-pd-gain-scale',type=float,choices=(1.,1.5,2.),default=1.,
+                            help='explicit experiment: scale only the five left-arm packet Kp/Kd gains')
         parser.set_defaults(mpc_config=LEARNED_MPC_CONFIG, torque_config=LEARNED_TORQUE_CONFIG)
     return parser
+
+
+def apply_left_pd_gain_experiment(profile, scale=1.):
+    """Return the effective field profile without mutating its reviewed source.
+
+    Arm SDK slots 0..4 are the left arm, 5..9 are the right arm and slot 10 is
+    the waist.  This opt-in experiment changes only the five left packet gains.
+    """
+    effective = dict(profile)
+    effective['target_q_array'] = np.asarray(profile['target_q_array'], dtype=float).copy()
+    effective['kp_array'] = np.asarray(profile['kp_array'], dtype=float).copy()
+    effective['kd_array'] = np.asarray(profile['kd_array'], dtype=float).copy()
+    effective['q_offset_limit_deg_array'] = np.asarray(
+        profile['q_offset_limit_deg_array'], dtype=float).copy()
+    if 'pid_q_offset_limit_deg_array' in profile:
+        effective['pid_q_offset_limit_deg_array'] = np.asarray(
+            profile['pid_q_offset_limit_deg_array'], dtype=float).copy()
+    scale=float(scale)
+    if scale not in (1.,1.5,2.):
+        raise ValueError('left PD gain scale must be 1, 1.5 or 2')
+    effective['kp_array'][:5] *= scale
+    effective['kd_array'][:5] *= scale
+    effective['left_pd_gain_experiment'] = dict(
+        enabled=scale!=1., scale=scale, slots=list(range(5)),
+        kp=effective['kp_array'][:5].tolist(), kd=effective['kd_array'][:5].tolist(),
+        right_arm_unchanged=True, waist_unchanged=True,
+        reviewed_profile_file_unchanged=True)
+    return effective
+
+
+def apply_zero_arm_neutral_experiment(profile, enabled):
+    """Apply the opt-in symmetric zero neutral without editing the field profile."""
+    effective = dict(profile)
+    for key in ('target_q_array','kp_array','kd_array','q_offset_limit_deg_array'):
+        effective[key] = np.asarray(profile[key],dtype=float).copy()
+    if 'pid_q_offset_limit_deg_array' in profile:
+        effective['pid_q_offset_limit_deg_array'] = np.asarray(
+            profile['pid_q_offset_limit_deg_array'],dtype=float).copy()
+    if enabled:
+        effective['target_q_array'][:10] = 0.
+    effective['zero_arm_neutral_experiment'] = dict(
+        enabled=bool(enabled), target_q_rad=effective['target_q_array'].tolist(),
+        target_q_deg=np.rad2deg(effective['target_q_array']).tolist(),
+        changed_slots=list(range(10)) if enabled else [], waist_unchanged=True,
+        gains_unchanged=True, reviewed_profile_file_unchanged=True)
+    return effective
 
 
 def main(argv=None, *, learned=False):
@@ -410,6 +495,13 @@ def main(argv=None, *, learned=False):
     journal = runtime = scope = None
     try:
         select_cpu(args.cpu)  # fail before subscribers/threads if CPU unavailable
+        zero_neutral = bool(getattr(args, 'zero_arm_neutral', False))
+        left_gain_scale=float(getattr(args,'left_pd_gain_scale',1.))
+        if zero_neutral and (not learned
+                or args.mpc_config.resolve() != LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve()
+                or args.torque_config.resolve() != LEARNED_TORQUE_CONFIG.resolve()
+                or args.assumed_command_delay_ms is not None):
+            raise ValueError('zero arm neutral requires exact 164546 MPC and no-roll torque configs')
         if args.preflight and args.execute:
             raise ValueError("--preflight and --execute are mutually exclusive")
         if args.execute and args.actuation == "reference_servo":
@@ -431,7 +523,9 @@ def main(argv=None, *, learned=False):
         if not args.execute:
             print(json.dumps(preflight(args.mpc_config, args.controller_config,
                                       args.predictor, args.bank, args.cpu, args.actuation,
-                                      args.torque_config), indent=2))
+                                      args.torque_config,
+                                      zero_arm_neutral=zero_neutral,
+                                      left_pd_gain_scale=left_gain_scale), indent=2))
             return 0
         if not (args.nic and args.profile and args.output_dir and
                 args.permit_real_output == PERMIT and args.pid_6ms_validated):
@@ -441,6 +535,11 @@ def main(argv=None, *, learned=False):
         # without inventing MPC-specific reviewed flags in a copied profile.
         profile_kind = 'pid' if 'schema=g1_hardware_pid_walk_site_v1' in args.profile.read_text() else 'mpc'
         profile = load_profile(args.profile, profile_kind)
+        profile = apply_zero_arm_neutral_experiment(profile,zero_neutral)
+        profile = apply_left_pd_gain_experiment(profile,left_gain_scale)
+        if zero_neutral:
+            print('EXPERIMENT: both five-joint arm neutral targets are exactly zero; '
+                  'right MPC uses measured body IMU; left arm keeps fixed joint targets with PD.')
         from field_performance import prepare as prepare_field_performance
         performance_setup = prepare_field_performance(
             args.cpu, compute_process=args.compute_process, rt_priority=args.rt_priority)
@@ -456,6 +555,8 @@ def main(argv=None, *, learned=False):
         runtime = runtime_type(args.mpc_config, args.controller_config, args.predictor,
                              args.bank, stationary=args.task == "stationary", field_trial=True,
                              torque_config=field_config,
+                             zero_arm_neutral=zero_neutral,
+                             left_pd_gain_scale=left_gain_scale,
                              assumed_command_delay_s=(None if args.assumed_command_delay_ms is None
                                                       else args.assumed_command_delay_ms*.001),**compute_options)
         runtime.host_scope = scope
@@ -495,6 +596,8 @@ def main(argv=None, *, learned=False):
             "assumed_command_delay_ms": args.assumed_command_delay_ms,
             "hardware_delay_identified": False, "profile_kind": profile_kind,
             "pid_6ms_validation": "operator_attestation_not_automatically_certified",
+            "zero_arm_neutral_experiment": profile['zero_arm_neutral_experiment'],
+            "left_pd_gain_experiment": profile['left_pd_gain_experiment'],
             "core": runtime.controller.metadata, "warmup": runtime.warmup,
             "predictor_mode": args.predictor,
             "predictor_manifest": None if runtime.predictor.bank is None else runtime.predictor.bank.manifest,

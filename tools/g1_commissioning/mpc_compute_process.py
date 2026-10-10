@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 import numpy as np
 from g1_walk_mpc import MpcRuntime
+from g1_walk_pid import EXPECTED_TARGET_Q
 from hardware_mpc_field import TorqueHandback
 
 CAPACITY = 2**20
@@ -99,6 +100,10 @@ class ProcessMpcRuntime(MpcRuntime):
             raise ValueError('compute process requires the field torque lifecycle')
         self.actuation='measured_torque_preview';self.field_trial=True
         self.stationary=kwargs.get('stationary',False)
+        self.zero_arm_neutral=bool(kwargs.get('zero_arm_neutral',False))
+        self.left_pd_gain_scale=float(kwargs.get('left_pd_gain_scale',1.))
+        self.target_q=EXPECTED_TARGET_Q.copy()
+        if self.zero_arm_neutral:self.target_q[:10]=0.
         self.assumed_command_delay_s=kwargs.get('assumed_command_delay_s')
         self.host_scope=None;self.journal=None;self.handback=TorqueHandback()
         self.epoch_ns=None;self._gc_was_enabled=None

@@ -52,6 +52,7 @@ MPC_COST_TERM_NAMES = (
     "posture",
     "velocity",
     "control",
+    "linear_velocity_relative_imu",
 )
 CONTACT_CONSTRAINT_TYPES = np.array(
     [
@@ -5448,6 +5449,7 @@ def add_mpc_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
     Q_ee_omega = np.asarray(
         cost_definition["Q_ee_omega"], dtype=np.float64
     )
+    Q_ee_vel = np.asarray(cost_definition.get('Q_ee_vel', np.zeros((3, 3))), dtype=np.float64)
     Qg = np.asarray(cost_definition["Qg"], dtype=np.float64)
     Qq = np.asarray(cost_definition["Qq"], dtype=np.float64)
     Qv = np.asarray(cost_definition["Qv"], dtype=np.float64)
@@ -5499,6 +5501,8 @@ def add_mpc_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
         dq_actual = right_dq[end_index]
         # 与 x1 模型预测对齐：取下一次控制更新前的世界系末端角速度。
         ee_ang_vel_actual = ee_ang_vel[end_index]
+        # EE samples are post-step; torso samples are pre-step. Align at x1.
+        ee_rel_vel_actual = ee_lin_vel[end_index] - torso_lin_vel[next_index]
         gravity_actual = gravity_error[end_index, :2]
         posture_error = q_actual - posture_reference
         control = ddq_des[start_index]
@@ -5511,6 +5515,7 @@ def add_mpc_tracking_trajectory_data(trajectory_data, simulation_dt, cost_defini
                 posture_error @ Qq @ posture_error,
                 dq_actual @ Qv @ dq_actual,
                 control @ R @ control,
+                ee_rel_vel_actual @ Q_ee_vel @ ee_rel_vel_actual,
             ],
             dtype=np.float64,
         )
@@ -6133,7 +6138,7 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
                 "end-effector angular velocity"
             ),
             "weighted_cost": (
-                "the same Q_A, Q_alpha, Q_omega, Q_G, Q_q, Q_v and R "
+                "the same Q_A, Q_alpha, Q_omega, Q_G, Q_q, Q_v, R and Q_ee_vel "
                 "applied to "
                 "model and actual interval outcomes; fallback samples are not "
                 "optimized MPC ideals"
@@ -6402,12 +6407,14 @@ def compute_mpc_diagnostics(trajectory_data, eval_start_time, eval_end_time):
     diagnostics["interval_disturbance"] = interval_diagnostics
 
     if np.any(tracking_valid):
-        task_term_count = MPC_COST_TERM_NAMES.index("posture")
+        task_indices = [MPC_COST_TERM_NAMES.index(name) for name in (
+            'linear_acceleration', 'angular_acceleration', 'angular_velocity',
+            'gravity', 'linear_velocity_relative_imu')]
         model_task_total = np.sum(
-            model_cost[tracking_valid, :task_term_count], axis=1
+            model_cost[tracking_valid][:, task_indices], axis=1
         )
         actual_task_total = np.sum(
-            actual_cost[tracking_valid, :task_term_count], axis=1
+            actual_cost[tracking_valid][:, task_indices], axis=1
         )
         diagnostics["weighted_task_cost_total"] = {
             "model_mean": float(np.mean(model_task_total)),
@@ -8417,7 +8424,8 @@ def record_eval_step(model, data, counter, simulation_dt, scene_ids, buffers, ri
     )
     mpc_cost_model = np.array(
         [
-            float(mpc_prediction_costs.get(name, np.nan))
+            float(mpc_prediction_costs.get(name,
+                0.0 if mpc_prediction_valid and name == 'linear_velocity_relative_imu' else np.nan))
             for name in MPC_COST_TERM_NAMES
         ],
         dtype=np.float64,

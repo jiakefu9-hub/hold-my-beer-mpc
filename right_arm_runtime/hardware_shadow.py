@@ -850,6 +850,8 @@ class HardwareShadowController:
             joint_indices=self._right_q_indices,
             imu_site_name="imu_in_torso",
             position_reference_q=right_target,
+            include_linear_velocity_terms=bool(
+                getattr(self.policy, '_linear_velocity_cost_active', False)),
             prediction_backend=self.prediction_backend,
         )
         requested_config = dict(self.config)

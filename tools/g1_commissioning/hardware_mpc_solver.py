@@ -15,8 +15,8 @@ from arm_mpc import ArmMPCPolicy
 
 
 class CondensedArmMPCPolicy(ArmMPCPolicy):
-    def __init__(self, *args, solver_backend="daqp", **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, solver_backend="daqp", q_ee_vel=0.0, **kwargs):
+        super().__init__(*args, q_ee_vel=q_ee_vel, **kwargs)
         if solver_backend not in {"daqp", "osqp"}:
             raise ValueError("unknown explicit QP backend")
         self.solver_backend = solver_backend
@@ -168,6 +168,11 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         fx = (self._posture_linear_cost[None, :, None]
               + transpose(ew) @ self.Q_ee_omega @ terms["D_omega"][..., None]
               + transpose(gg) @ self.Qg @ terms["d_g"][..., None])
+        if self._linear_velocity_cost_active:
+            ev = np.stack([t['C_vel'] for t in step_terms]) @ self.Sv
+            dv = np.stack([t['D_vel'] for t in step_terms])[..., None]
+            qxx += transpose(ev) @ self.Q_ee_vel @ ev
+            fx += transpose(ev) @ self.Q_ee_vel @ dv
         terminal_h = 2*self.terminal_scale*qxx[-1] + self.reg*np.eye(self.nx)
         terminal_f = 2*self.terminal_scale*fx[-1, :, 0]
         qxx, fx = qxx[:-1].copy(), fx[:-1].copy()
@@ -192,6 +197,20 @@ class CondensedArmMPCPolicy(ArmMPCPolicy):
         linear=np.r_[2*np.concatenate((fx,fu),axis=1).reshape(-1),terminal_f]
         self._cost_blocks = (blocks, terminal_h)
         return [*blocks,terminal_h],linear
+
+    def get_cost_definition(self):
+        definition = super().get_cost_definition()
+        definition['linear_velocity_semantics'] = 'v_E-v_IMU = omega_IMU x r_IMU_E + J_v*dq; fixed H0'
+        return definition
+
+    def _build_one_step_diagnostics(self, q, dq, q_ref, dq_ref, ddq,
+                                    acceleration_terms, end_state_terms):
+        result = super()._build_one_step_diagnostics(
+            q, dq, q_ref, dq_ref, ddq, acceleration_terms, end_state_terms)
+        if self._linear_velocity_cost_active:
+            result['ee_lin_vel_relative_imu_h0_m_s'] = result.pop('ee_lin_vel_relative_imu_m_s')
+            result['ee_lin_vel_relative_imu_offset_h0_m_s'] = result.pop('ee_lin_vel_relative_imu_offset_m_s')
+        return result
 
     def reset(self):
         super().reset()

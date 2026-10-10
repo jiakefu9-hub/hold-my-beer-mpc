@@ -55,18 +55,19 @@ def _definition_ast_hashes(path: Path) -> dict[str, str]:
 
 
 class SharedRightArmControlSetupTest(unittest.TestCase):
-    def test_extracted_definitions_match_frozen_pre_extraction_ast(self):
+    def test_shared_layout_definitions_match_frozen_pre_extraction_ast(self):
+        hashes = _definition_ast_hashes(REPO_ROOT / "right_arm_control_setup.py")
+        # The factory now accepts an optional endpoint velocity objective;
+        # its behavior is tested below instead of freezing its implementation.
+        hashes.pop('create_arm_controller')
         self.assertEqual(
-            _definition_ast_hashes(REPO_ROOT / "right_arm_control_setup.py"),
+            hashes,
             {
                 "RIGHT_ARM_JOINT_NAMES": (
                     "c568828bee7fc2e9b0333f0ada7e67fe8c304b0532eec36dc42a136c5473e23a"
                 ),
                 "ArmControllerSetup": (
                     "9c7d4467d08b862cb55061d5f9aab1b2da1aa773d78ef7c8d739f1d8be4b6c17"
-                ),
-                "create_arm_controller": (
-                    "ecc54c558e531df14aeb67fffdb764f0931812c917208829915e50f1ac311a73"
                 ),
             },
         )
@@ -135,6 +136,8 @@ class SharedRightArmControlSetupTest(unittest.TestCase):
         self.assertEqual(metadata["q_ee_acc"], config["mpc_q_ee_acc"])
         self.assertEqual(metadata["q_ee_alpha"], config["mpc_q_ee_alpha"])
         self.assertEqual(metadata["q_ee_omega"], config["mpc_q_ee_omega"])
+        self.assertEqual(metadata['q_ee_vel'], 0.)
+        self.assertFalse(setup.policy._linear_velocity_cost_active)
         self.assertEqual(metadata["max_ddq"], float(config["mpc_max_ddq"]))
         self.assertEqual(metadata["solver"], "OSQP")
         self.assertEqual(
@@ -145,6 +148,15 @@ class SharedRightArmControlSetupTest(unittest.TestCase):
             metadata["forward_dynamics_max_abs_qacc"],
             float(config["ddq_execution_max_abs_qacc"]),
         )
+
+
+    def test_explicit_endpoint_velocity_objective_reaches_simulation_policy(self):
+        config = yaml.safe_load((REPO_ROOT / 'configs/g1.yaml').read_text())
+        config['mpc_q_ee_vel'] = .01
+        setup = shared_setup.create_arm_controller(config, 'mpc', np.zeros(5), .006)
+        np.testing.assert_array_equal(setup.policy.Q_ee_vel, np.eye(3)*.01)
+        self.assertIn('linear_velocity_relative_imu', setup.policy.get_cost_definition()['term_names'])
+        self.assertEqual(setup.metadata['mpc_config']['q_ee_vel'], .01)
 
 
 if __name__ == "__main__":

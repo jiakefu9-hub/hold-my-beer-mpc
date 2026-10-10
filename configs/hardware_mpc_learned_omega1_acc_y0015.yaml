@@ -1,0 +1,14 @@
+# Unvalidated field candidate: change only the fixed-H0 Y acceleration weight.
+# Separate from the endpoint-velocity trial, so the effect remains attributable.
+schema: g1_hardware_mpc_config_v1
+q_ee_acc: [0.01, 0.015, 0.01]
+q_ee_alpha: 0.0005
+q_ee_omega: 1.0
+q_ee_vel: 0.0
+mpc_start_s: 3.3
+mpc_handoff_duration_s: 1.5
+q_gravity: [30.0, 30.0]
+q_posture: [4.0, 4.0, 1.5, 0.2, 0.2]
+q_vel: 0.08
+r_ddq: 0.0025
+terminal_scale: 2.0

@@ -96,7 +96,7 @@ class RightArmMeasuredTorqueMpc(RightArmHardwareMpc):
         self.torque_config = c
         self.minimum, self.maximum = np.deg2rad(c["q_min_deg"]), np.deg2rad(c["q_max_deg"])
         self.max_dq, self.max_ddq = float(c["max_dq_rad_s"]), float(c["max_ddq_rad_s2"])
-        keys = ("q_ee_acc", "q_ee_alpha", "q_ee_omega", "q_gravity", "q_posture",
+        keys = ("q_ee_acc", "q_ee_alpha", "q_ee_omega", "q_ee_vel", "q_gravity", "q_posture",
                 "q_vel", "r_ddq", "terminal_scale", "solver_eps_abs", "solver_eps_rel",
                 "solver_max_iter", "solver_check_termination", "solver_rho", "solver_adaptive_rho")
         policy_type = self.policy_type

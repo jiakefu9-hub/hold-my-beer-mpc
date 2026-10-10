@@ -71,6 +71,7 @@ class ArmMPCPolicy:
         solver_polishing=False,
         solver_verbose=False,
         solver_time_limit=None,
+        q_ee_vel=0.0,
     ):
         # 【非核心代码】参数检查和权重整理。
         if osqp is None:
@@ -96,6 +97,8 @@ class ArmMPCPolicy:
         self.Q_ee_alpha = self._make_weight(q_ee_alpha, 3, "q_ee_alpha")
         # 默认权重为零，因此未配置时与原 MPC 完全一致。
         self.Q_ee_omega = self._make_weight(q_ee_omega, 3, "q_ee_omega")
+        self.Q_ee_vel = self._make_weight(q_ee_vel, 3, "q_ee_vel")
+        self._linear_velocity_cost_active = bool(np.any(self.Q_ee_vel != 0.))
         # MPC 使用末端系重力向量的 x/y 分量，因此这里严格是 2x2。
         self.Qg = self._make_weight(q_gravity, 2, "q_gravity")
         self.Qq = self._make_weight(q_posture, self.n, "q_posture")
@@ -456,7 +459,7 @@ class ArmMPCPolicy:
 
     def get_cost_definition(self):
         """【非核心代码】返回实际使用的代价权重，便于实验记录。"""
-        return {
+        definition = {
             "term_names": self.COST_TERM_NAMES,
             "Q_ee_acc": self.Q_ee_acc.copy(),
             "Q_ee_alpha": self.Q_ee_alpha.copy(),
@@ -468,6 +471,13 @@ class ArmMPCPolicy:
             "posture_reference": self.default_q.copy(),
             "terminal_scale": self.terminal_scale,
         }
+        definition.update(
+            Q_ee_vel=self.Q_ee_vel.copy(),
+            linear_velocity_semantics='v_E-v_IMU = omega_IMU x r_IMU_E + J_v*dq; inertial components',
+            linear_velocity_target='zero relative to translating IMU origin, not zero world speed')
+        if self._linear_velocity_cost_active:
+            definition['term_names'] = (*definition['term_names'], 'linear_velocity_relative_imu')
+        return definition
 
     def set_joint_limits(self, joint_limits):
         """更新外层安全边界，并由配置裕量得到正常运行边界。"""
@@ -527,6 +537,10 @@ class ArmMPCPolicy:
             )
             fu = np.zeros(self.nu, dtype=np.float64)
 
+            if self._linear_velocity_cost_active:
+                E_vel = terms['C_vel'] @ self.Sv
+                Qxx += E_vel.T @ self.Q_ee_vel @ E_vel
+                fx += E_vel.T @ self.Q_ee_vel @ terms['D_vel']
             if self._linear_acceleration_cost_active:
                 E_acc = terms["C_acc"] @ self.Sv
                 Qxx += E_acc.T @ self.Q_ee_acc @ E_acc
@@ -581,6 +595,11 @@ class ArmMPCPolicy:
             + terminal["G_g"].T @ Qg_terminal @ terminal["d_g"]
             - self.Sq.T @ Qq_terminal @ self.default_q
         )
+        if self._linear_velocity_cost_active:
+            E_vel_terminal = terminal['C_vel'] @ self.Sv
+            Q_vel_terminal = self.terminal_scale * self.Q_ee_vel
+            Qxx_terminal += E_vel_terminal.T @ Q_vel_terminal @ E_vel_terminal
+            fx_terminal += E_vel_terminal.T @ Q_vel_terminal @ terminal['D_vel']
         H_terminal = 2.0 * Qxx_terminal
         H_terminal = 0.5 * (H_terminal + H_terminal.T)
         H_terminal += self.reg * np.eye(self.nx, dtype=np.float64)
@@ -1103,7 +1122,7 @@ class ArmMPCPolicy:
         return validated_terms
 
     def _step_term_shapes(self):
-        return {
+        shapes = {
             "D_acc": (3,),
             "C_acc": (3, self.n),
             "B_acc": (3, self.nu),
@@ -1116,6 +1135,9 @@ class ArmMPCPolicy:
             "d_g": (2,),
             "gravity_error": (2,),
         }
+        if self._linear_velocity_cost_active:
+            shapes.update(C_vel=(3, self.nu), D_vel=(3,))
+        return shapes
 
     def _build_one_step_diagnostics(
         self,
@@ -1164,6 +1186,13 @@ class ArmMPCPolicy:
             "velocity": float(dq_ref @ self.Qv @ dq_ref),
             "control": float(ddq @ self.R @ ddq),
         }
+        relative_velocity = {}
+        if self._linear_velocity_cost_active:
+            v_rel = end_state_terms['D_vel'] + end_state_terms['C_vel'] @ dq_ref
+            costs['linear_velocity_relative_imu'] = float(v_rel @ self.Q_ee_vel @ v_rel)
+            relative_velocity = dict(ee_lin_vel_relative_imu_m_s=v_rel,
+                ee_lin_vel_relative_imu_offset_m_s=end_state_terms['D_vel'].copy(),
+                ee_lin_vel_relative_imu_dq_map=end_state_terms['C_vel'].copy())
         return {
             "q": q_ref.copy(),
             "dq": dq_ref.copy(),
@@ -1184,6 +1213,7 @@ class ArmMPCPolicy:
             ),
             "ee_ang_acc_ddq_map": acceleration_terms["B_alpha"].copy(),
             "cost_terms": costs,
+            **relative_velocity,
         }
 
     def _empty_diagnostics(self):

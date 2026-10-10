@@ -21,9 +21,9 @@ class YawFeedbackMpcPolicy(CondensedArmMPCPolicy):
     Optimize NET acceleration a instead: the existing integrator, physical
     q/dq/a limits, endpoint costs and condensed matrices stay unchanged.
     Substitute u = a - F x - f in the nominal-acceleration effort cost.
-    Yaw p(x) is the retained device-side PD.  Pitch p(x), and optionally roll
-    p(x), are deliberately light MPC-internal centering priors around the
-    already validated nominal pose; they leave packet gains and entry/release
+    Yaw p(x) is the retained device-side PD.  Pitch p(x) is a deliberately
+    light MPC-internal centering prior around the nominal pose;
+    it leaves packet gains and entry/release
     motion unchanged.  All enabled terms are inside prediction, effort cost
     and physical envelopes.  None is a second torque added after planning or
     an empirical model of the servo.
@@ -111,30 +111,14 @@ class RightArmLearnedTorqueMpc(RightArmMeasuredTorqueMpc):
             raise ValueError('invalid modeled pitch feedback gains')
         self.policy.model_feedback_kp[0] = pitch_kp
         self.policy.model_feedback_kd[0] = pitch_kd
-        roll_enabled = c.get('roll_feedback_in_prediction', False)
-        if not isinstance(roll_enabled, bool):
-            raise ValueError('roll_feedback_in_prediction must be boolean')
-        roll_kp = roll_kd = 0.
-        if roll_enabled:
-            roll_kp, roll_kd = float(c.get('roll_feedback_kp', float('nan'))), float(
-                c.get('roll_feedback_kd', float('nan')))
-            if not np.isfinite([roll_kp, roll_kd]).all() or roll_kp <= 0. or roll_kd < 0.:
-                raise ValueError('invalid modeled roll feedback gains')
-            self.policy.model_feedback_kp[1] = roll_kp
-            self.policy.model_feedback_kd[1] = roll_kd
-        centered_axes = 'pitch/roll and yaw' if roll_enabled else 'pitch and yaw'
         self.metadata.update(
             variant='learned_yaw_aware_direct_v1',
             forward_model='conditional rigid right arm with observed moving torso, not full-body contact dynamics',
             torque_mapping='direct M*a+b; one final affine consistency/envelope check; no candidate search',
-            output_semantics=f'a includes modeled {centered_axes} feedback; packet tau=(M*a+b)-PD, device adds PD once',
-            tracking_offset_model=f'light {centered_axes} centering represented by exact input-coordinate substitution',
+            output_semantics='a includes modeled pitch and yaw feedback; packet tau=(M*a+b)-PD, device adds PD once',
+            tracking_offset_model='light pitch and yaw centering represented by exact input-coordinate substitution',
             pitch_feedback_prediction=dict(enabled=True, kp=pitch_kp, kd=pitch_kd,
                 target_rad=float(self.nominal[0]), physical_identification=False,
-                packet_gain_changed=False, added_after_planning=False,
-                equation='a=u+F*x+f; effort=(a-F*x-f)^T R (a-F*x-f)'),
-            roll_feedback_prediction=dict(enabled=roll_enabled, kp=roll_kp, kd=roll_kd,
-                target_rad=float(self.nominal[1]), physical_identification=False,
                 packet_gain_changed=False, added_after_planning=False,
                 equation='a=u+F*x+f; effort=(a-F*x-f)^T R (a-F*x-f)'),
             yaw_feedback_prediction=dict(enabled=True, kp=float(c['kp'][2]), kd=float(c['kd'][2]),
