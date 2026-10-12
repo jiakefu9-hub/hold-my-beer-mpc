@@ -1,0 +1,108 @@
+{
+  "hardware_output": false,
+  "robot_connected": false,
+  "dds_initialized": false,
+  "field_tests": 112,
+  "simulation_tests": 36,
+  "original_command_parity": {
+    "samples": 202,
+    "max_abs_command_difference": 0.0,
+    "passed": true,
+    "hardware_output": false,
+    "original_torque": true,
+    "alignment": false,
+    "C_selected": false,
+    "math_only_solver_budget_s": 0.1,
+    "source_snapshot": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/field_comparison_cleanup_20261012/before/tools/g1_commissioning/g1_walk_mpc.py",
+    "old_registry_import_replaced_for_retired_module": true
+  },
+  "preflight": {
+    "T01": true,
+    "T02": true,
+    "T03": true,
+    "T06": true
+  },
+  "historical_replay_status": "preflight_passed_replay_not_applicable",
+  "historical_replay_complete": false,
+  "historical_replay_bounds": [
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "status": "not_applicable",
+      "bounds": {
+        "q_min_deg": [
+          -13.603820958603212,
+          -0.23071290454904103,
+          0.25337219052269055,
+          1.3465119239910706,
+          -2.2027588457741496
+        ],
+        "q_max_deg": [
+          -1.004562451897496,
+          4.391784742448342,
+          8.423080638239874,
+          6.8252564927715325,
+          -1.1968232056883634
+        ],
+        "outside_outer_bound_frames": 1086
+      }
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "status": "not_applicable",
+      "bounds": {
+        "q_min_deg": [
+          -10.056610024481278,
+          -0.8040619286466544,
+          2.1038818256978713,
+          0.13801575158838325,
+          -2.1237946018928087
+        ],
+        "q_max_deg": [
+          -1.3883972053025273,
+          4.115066458414446,
+          8.063964659606235,
+          2.2851563269304793,
+          -1.1913300260483808
+        ],
+        "outside_outer_bound_frames": 462
+      }
+    }
+  ],
+  "conditional_model_results": {
+    "T01": {
+      "passed": 4,
+      "total": 4,
+      "roll_min_deg": -12.466859220452505,
+      "roll_max_deg": 1.0694359184276716,
+      "sampled_contact_frames": 0
+    },
+    "T02": {
+      "passed": 4,
+      "total": 4,
+      "roll_min_deg": -12.497575553348724,
+      "roll_max_deg": 1.0694359184276716,
+      "sampled_contact_frames": 0
+    },
+    "T03": {
+      "passed": 4,
+      "total": 4,
+      "roll_min_deg": -5.919789534065952,
+      "roll_max_deg": 0.34055604501161474,
+      "sampled_contact_frames": 0
+    },
+    "T06": {
+      "passed": 4,
+      "total": 4,
+      "roll_min_deg": -11.436683993674988,
+      "roll_max_deg": 1.0871182658478824,
+      "sampled_contact_frames": 0
+    }
+  },
+  "config_sha256": {
+    "configs/hardware_control_comparison_20261012/mpc_acc002.yaml": "ee87e21f3c59d1278c9285a12776591889fd9f0cfc35d80a23289916d4a9612a",
+    "configs/hardware_control_comparison_20261012/mpc_baseline.yaml": "5d97a7edaf4199a3c3f6563f1f0d926c556e4240976d6cbf971e9cd797d0a729",
+    "configs/hardware_control_comparison_20261012/torque_common.yaml": "66e62ff0d70011e1379b8aa9628e3b304b9aeb103431040d9bf5b033e380f466",
+    "configs/hardware_acceleration_pid_20261012.yaml": "aeb61c5777c5e98d5bf792acb267a89f816060aa72d7e76d02b9da5987e35165"
+  },
+  "hardware_validated": false
+}

@@ -1,0 +1,7 @@
+{
+  "samples": 200,
+  "max_absolute_command_difference": 0.0,
+  "passed": true,
+  "original_runtime_snapshot": "hardware_before",
+  "hardware_output": false
+}

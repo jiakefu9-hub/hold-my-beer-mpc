@@ -1,0 +1,104 @@
+{
+  "hardware_output": false,
+  "conditional_model_only": true,
+  "model_matches_controller": true,
+  "physical_performance_validated": false,
+  "results": [
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "source_sha256": "f0855bf4e97b9a53e30e790959ce97162902ec3e8abd8fc87fd89b5896d0f2dc",
+      "baseline": false,
+      "passed": true,
+      "delay_ms": 0.0,
+      "samples": 2500,
+      "error": null,
+      "last_task_s": 17.999757384000002,
+      "q_absmax_deg": [
+        10.061712652007163,
+        8.179460313046572,
+        9.669891078353444,
+        18.196882595319426,
+        8.120746878361615
+      ],
+      "dq_absmax": [
+        1.1284665578892021,
+        0.7698449765427988,
+        0.658940589436167,
+        1.0078658278019907,
+        0.7292252586373535
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "source_sha256": "f0855bf4e97b9a53e30e790959ce97162902ec3e8abd8fc87fd89b5896d0f2dc",
+      "baseline": false,
+      "passed": true,
+      "delay_ms": 4.0,
+      "samples": 2500,
+      "error": null,
+      "last_task_s": 17.999757384000002,
+      "q_absmax_deg": [
+        9.861448941807021,
+        5.580360421750531,
+        9.174720065902672,
+        12.903389049287986,
+        5.133981279707955
+      ],
+      "dq_absmax": [
+        1.0797787383326882,
+        0.41788437379348303,
+        0.6828988733048554,
+        0.960121618815109,
+        0.4585396000130011
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "source_sha256": "aeb15dc42e359219476f56b959d2b98d7f543e9e64c199f021d17b993405cf50",
+      "baseline": false,
+      "passed": true,
+      "delay_ms": 0.0,
+      "samples": 2492,
+      "error": null,
+      "last_task_s": 17.999464503000002,
+      "q_absmax_deg": [
+        11.009826379311855,
+        8.489188847268247,
+        22.71490291211735,
+        17.11662701663519,
+        5.8305562718803134
+      ],
+      "dq_absmax": [
+        1.5271069979410616,
+        0.5573007702170639,
+        0.8507674735079883,
+        1.3168105942520627,
+        0.508789057896365
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "source_sha256": "aeb15dc42e359219476f56b959d2b98d7f543e9e64c199f021d17b993405cf50",
+      "baseline": false,
+      "passed": true,
+      "delay_ms": 4.0,
+      "samples": 2492,
+      "error": null,
+      "last_task_s": 17.999464503000002,
+      "q_absmax_deg": [
+        9.948628825451364,
+        4.867737501091473,
+        17.917951679236758,
+        11.953950751691186,
+        4.771698634613294
+      ],
+      "dq_absmax": [
+        1.107978865071944,
+        0.39445420131985726,
+        0.5872552532089208,
+        0.9571290449804988,
+        0.42680621188535783
+      ]
+    }
+  ]
+}

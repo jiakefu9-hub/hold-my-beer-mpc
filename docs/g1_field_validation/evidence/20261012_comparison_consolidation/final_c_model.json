@@ -1,0 +1,191 @@
+{
+  "hardware_output": false,
+  "conditional_model_only": true,
+  "config_sha256": {
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_control_comparison_20261012/mpc_baseline.yaml": "5d97a7edaf4199a3c3f6563f1f0d926c556e4240976d6cbf971e9cd797d0a729",
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/g1_payload75.yaml": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_control_comparison_20261012/torque_common.yaml": "66e62ff0d70011e1379b8aa9628e3b304b9aeb103431040d9bf5b033e380f466",
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_acceleration_pid_20261012.yaml": "aeb61c5777c5e98d5bf792acb267a89f816060aa72d7e76d02b9da5987e35165"
+  },
+  "source_sha256": "64cfa69b5ee1e6e703e7bf5b93d633736df0777bb349c449d2b024b73a014ab2",
+  "model_matches_controller": true,
+  "physical_performance_validated": false,
+  "results": [
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "source_sha256": "f0855bf4e97b9a53e30e790959ce97162902ec3e8abd8fc87fd89b5896d0f2dc",
+      "trial": "T03",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 0.0,
+      "samples": 2500,
+      "error": null,
+      "last_task_s": 17.999757384000002,
+      "q_absmax_deg": [
+        9.738722388676493,
+        5.919789534065952,
+        9.539934356297794,
+        12.616843271918546,
+        5.868837970425826
+      ],
+      "q_min_deg": [
+        -9.738722388676493,
+        -5.919789534065952,
+        -8.170713233417086,
+        -6.1573525354971945,
+        -1.611557094568298
+      ],
+      "q_max_deg": [
+        5.464591654373039,
+        0.27149100410617316,
+        9.539934356297794,
+        12.616843271918546,
+        5.868837970425826
+      ],
+      "dq_absmax": [
+        1.2239121451816015,
+        0.5498824067401972,
+        0.6633780866613905,
+        1.002385613790935,
+        0.5370019587573813
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "source_sha256": "f0855bf4e97b9a53e30e790959ce97162902ec3e8abd8fc87fd89b5896d0f2dc",
+      "trial": "T03",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 4.0,
+      "samples": 2500,
+      "error": null,
+      "last_task_s": 17.999757384000002,
+      "q_absmax_deg": [
+        9.008413108704097,
+        4.162847700872878,
+        9.685195137938543,
+        9.035763278867043,
+        3.8370513095234466
+      ],
+      "q_min_deg": [
+        -9.008413108704097,
+        -4.162847700872878,
+        -8.003248569328987,
+        -5.322089925787172,
+        -1.611557094568298
+      ],
+      "q_max_deg": [
+        5.551265894038143,
+        0.2604776451499625,
+        9.685195137938543,
+        9.035763278867043,
+        3.8370513095234466
+      ],
+      "dq_absmax": [
+        1.0400719080279899,
+        0.404750841487701,
+        0.6833657223866197,
+        0.960121618815109,
+        0.40929385799372603
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "source_sha256": "aeb15dc42e359219476f56b959d2b98d7f543e9e64c199f021d17b993405cf50",
+      "trial": "T03",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 0.0,
+      "samples": 2492,
+      "error": null,
+      "last_task_s": 17.999464503000002,
+      "q_absmax_deg": [
+        8.797499736546932,
+        5.849663216430175,
+        12.914643964378156,
+        11.910601189345318,
+        6.215442456055418
+      ],
+      "q_min_deg": [
+        -8.797499736546932,
+        -5.849663216430175,
+        -12.914643964378156,
+        -7.544032434880551,
+        -1.5943909081933518
+      ],
+      "q_max_deg": [
+        5.7784564267959055,
+        0.34055604501161474,
+        2.0983886460578884,
+        11.910601189345318,
+        6.215442456055418
+      ],
+      "dq_absmax": [
+        1.2271809509058853,
+        0.4578462810188811,
+        0.5737511072623093,
+        1.0148123362349062,
+        0.48959195103702385
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "source_sha256": "aeb15dc42e359219476f56b959d2b98d7f543e9e64c199f021d17b993405cf50",
+      "trial": "T03",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 4.0,
+      "samples": 2492,
+      "error": null,
+      "last_task_s": 17.999464503000002,
+      "q_absmax_deg": [
+        7.596603701704986,
+        4.66324200193997,
+        12.297978050754011,
+        8.32343326137478,
+        4.748211928282447
+      ],
+      "q_min_deg": [
+        -7.596603701704986,
+        -4.66324200193997,
+        -12.297978050754011,
+        -6.409338288931752,
+        -1.5943909081933518
+      ],
+      "q_max_deg": [
+        5.529027566269064,
+        0.32687318429311696,
+        2.8530629660034394,
+        8.32343326137478,
+        4.748211928282447
+      ],
+      "dq_absmax": [
+        1.0167858010268926,
+        0.4329951743820426,
+        0.5902769750662191,
+        0.9571290449804988,
+        0.42680621188535783
+      ]
+    }
+  ]
+}

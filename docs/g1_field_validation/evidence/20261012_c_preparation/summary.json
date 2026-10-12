@@ -1,0 +1,50 @@
+{
+  "hardware_run": false,
+  "network_used": false,
+  "field_test_count": 75,
+  "simulation_test_count": 7,
+  "config_sha256": "aeb61c5777c5e98d5bf792acb267a89f816060aa72d7e76d02b9da5987e35165",
+  "replays": [
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "status": "passed",
+      "active_commands": 2448,
+      "learned_commands": 2165,
+      "final_weight": 0.0,
+      "full_compute_ms": {
+        "count": 2165,
+        "mean": 2.308408640646651,
+        "p50": 2.285332,
+        "p99": 2.7864784000000005,
+        "maximum": 3.1492579999999997
+      },
+      "over_6ms_count": 0,
+      "planned_vs_final_acceleration_max_error_rad_s2": 1.9539925233402755e-14
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "status": "passed",
+      "active_commands": 2440,
+      "learned_commands": 2157,
+      "final_weight": 0.0,
+      "full_compute_ms": {
+        "count": 2157,
+        "mean": 2.202268089012517,
+        "p50": 2.199003,
+        "p99": 2.5109812,
+        "maximum": 2.89839
+      },
+      "over_6ms_count": 0,
+      "planned_vs_final_acceleration_max_error_rad_s2": 2.1316282072803006e-14
+    }
+  ],
+  "conditional_model_passed": 4,
+  "physical_performance_validated": false,
+  "default_baseline_parity": {
+    "samples": 200,
+    "max_absolute_command_difference": 0.0,
+    "passed": true,
+    "original_runtime_snapshot": "hardware_before",
+    "hardware_output": false
+  }
+}

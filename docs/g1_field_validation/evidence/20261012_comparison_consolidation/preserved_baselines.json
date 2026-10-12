@@ -1,0 +1,22 @@
+{
+  "configs/hardware_mpc_learned_acc001_alpha0005_omega1.yaml": {
+    "unchanged": true,
+    "sha256": "2d2da5ee5ce12f173af4cd76a445acfb77c06f644fa330aa3aa28a60a7852cb0"
+  },
+  "configs/hardware_mpc_torque_learned.yaml": {
+    "unchanged": true,
+    "sha256": "41e153ca138147e2dc006bb7f15a511872a69e5299f925c401322234f703b879"
+  },
+  "configs/g1.yaml": {
+    "unchanged": true,
+    "sha256": "f1e9d049d25fe92fd8cc673a196acc22e7df9dec2d47bb2532415c3080432465"
+  },
+  "configs/g1_payload75.yaml": {
+    "unchanged": true,
+    "sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb"
+  },
+  "configs/hardware_mpc.yaml": {
+    "unchanged": true,
+    "sha256": "759971863c55f28d3da7028a98d14b215ba05a3b608ea8070eca055b33e96058"
+  }
+}

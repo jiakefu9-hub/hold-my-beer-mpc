@@ -61,15 +61,22 @@ def stats(values):
                 p99=float(np.percentile(x,99)), maximum=float(x.max())) if len(x) else None
 
 
-def replay(data, output, name, cpu, *, math_only=False):
+def replay(data, output, name, cpu, *, math_only=False, config=None,
+           predictor_mode=None, zero_arm_neutral=False, align_accel_forecast=False,
+           use_logged_query_times=False, model_config=None, acceleration_pid_config=None,
+           torque_config=None):
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     commands, low, imu, timing = data
     learned_variant = name != 'frozen_baseline'
-    mode = 'learned_filtered' if name == 'learned' else 'hold_current'
-    runtime = MpcRuntime(config=LEARNED_MPC_CONFIG if learned_variant else
-                         ROOT/'configs/hardware_mpc_upright_baseline.yaml',
-        torque_config=LEARNED_TORQUE_CONFIG if learned_variant else FIELD_TORQUE_CONFIG,
-        predictor_mode=mode, field_trial=True, stationary=False)
+    mode = predictor_mode or ('learned_filtered' if name == 'learned' else 'hold_current')
+    selected_config = config if config is not None else (LEARNED_MPC_CONFIG if learned_variant else
+                         ROOT/'configs/hardware_mpc_upright_baseline.yaml')
+    runtime = MpcRuntime(config=selected_config,
+        model_config=model_config or ROOT/'configs/g1.yaml',
+        torque_config=torque_config or (LEARNED_TORQUE_CONFIG if learned_variant else FIELD_TORQUE_CONFIG),
+        predictor_mode=mode, field_trial=True, stationary=False,
+        zero_arm_neutral=zero_arm_neutral, align_accel_forecast=align_accel_forecast,
+        acceleration_pid_config=acceleration_pid_config)
     if math_only:
         runtime.controller.policy.solver_time_limit = .1
     initial = np.asarray(commands[0]['q_measured_rad'])
@@ -79,6 +86,9 @@ def replay(data, output, name, cpu, *, math_only=False):
     plan = runtime.create_plan(initial, profile)
     crc = runtime.create_crc()
     epoch = timing[commands[0]['sequence']]-round(commands[0]['task_elapsed_s']*1e9)
+    if use_logged_query_times:
+        anchor = next(c['predictor']['anchor_monotonic_ns'] for c in commands if 'predictor' in c)
+        epoch = anchor - round((anchor-epoch)/2_000_000)*2_000_000
     runtime.predictor.set_grid_origin(epoch)
     li = max(0,int(np.searchsorted([r[0] for r in low],epoch-500_000_000))-1)
     ii = max(0,int(np.searchsorted([r[0] for r in imu],epoch-500_000_000))-1)
@@ -94,6 +104,8 @@ def replay(data, output, name, cpu, *, math_only=False):
                 # A selected snapshot may arrive just after cycle wakeup. Use
                 # its actual availability, never future samples/interpolation.
                 now=max(timing[c['sequence']],c['state_received_monotonic_ns'],c['imu_received_monotonic_ns'])
+                if use_logged_query_times and 'predictor' in c:
+                    now = c['predictor']['query_monotonic_ns']
                 start=time.perf_counter_ns()
                 while li<len(low) and low[li][0]<=now:
                     runtime.observe_low(*low[li]);li+=1
@@ -171,6 +183,7 @@ def replay(data, output, name, cpu, *, math_only=False):
         full_compute_ms=stats(active_times),predictor_ms=stats(predictor_times),core_plan_ms=stats(core_times),
         packet_ms=stats(packet_times),over_6ms_count=sum(x>6 for x in active_times),
         solver_time_limit_s=learned_qp.solver_time_limit,
+        source_query_timestamps_used=use_logged_query_times,
         raw_sha256=hashlib.sha256((output/f'{name}.jsonl').read_bytes()).hexdigest())
     return result,dict(records)
 

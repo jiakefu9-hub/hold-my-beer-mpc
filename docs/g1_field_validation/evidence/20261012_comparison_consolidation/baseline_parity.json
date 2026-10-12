@@ -1,0 +1,12 @@
+{
+  "samples": 202,
+  "max_abs_command_difference": 0.0,
+  "passed": true,
+  "hardware_output": false,
+  "original_torque": true,
+  "alignment": false,
+  "C_selected": false,
+  "math_only_solver_budget_s": 0.1,
+  "source_snapshot": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/field_comparison_cleanup_20261012/before/tools/g1_commissioning/g1_walk_mpc.py",
+  "old_registry_import_replaced_for_retired_module": true
+}

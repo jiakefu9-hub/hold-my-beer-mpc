@@ -1,0 +1,191 @@
+{
+  "hardware_output": false,
+  "conditional_model_only": true,
+  "config_sha256": {
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_control_comparison_20261012/mpc_baseline.yaml": "5d97a7edaf4199a3c3f6563f1f0d926c556e4240976d6cbf971e9cd797d0a729",
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/g1_payload75.yaml": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_control_comparison_20261012/torque_common.yaml": "66e62ff0d70011e1379b8aa9628e3b304b9aeb103431040d9bf5b033e380f466",
+    "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_acceleration_pid_20261012.yaml": "aeb61c5777c5e98d5bf792acb267a89f816060aa72d7e76d02b9da5987e35165"
+  },
+  "source_sha256": "64cfa69b5ee1e6e703e7bf5b93d633736df0777bb349c449d2b024b73a014ab2",
+  "model_matches_controller": true,
+  "physical_performance_validated": false,
+  "results": [
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "source_sha256": "f0855bf4e97b9a53e30e790959ce97162902ec3e8abd8fc87fd89b5896d0f2dc",
+      "trial": "T01",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 0.0,
+      "samples": 2500,
+      "error": null,
+      "last_task_s": 17.999757384000002,
+      "q_absmax_deg": [
+        6.876307397990688,
+        12.466859220452505,
+        6.181396411191126,
+        12.602232028438653,
+        12.538756026016516
+      ],
+      "q_min_deg": [
+        -6.876307397990688,
+        -12.466859220452505,
+        -6.181396411191126,
+        -7.2337114953354185,
+        -1.611557094568298
+      ],
+      "q_max_deg": [
+        5.46787425813465,
+        0.27149100410617316,
+        4.938164939150049,
+        12.602232028438653,
+        12.538756026016516
+      ],
+      "dq_absmax": [
+        1.2314852826019098,
+        0.504338072154708,
+        0.4144252114315591,
+        1.1952993058386316,
+        0.46712727468493775
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat_walk_20261009_174504/raw.jsonl",
+      "source_sha256": "f0855bf4e97b9a53e30e790959ce97162902ec3e8abd8fc87fd89b5896d0f2dc",
+      "trial": "T01",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 4.0,
+      "samples": 2500,
+      "error": null,
+      "last_task_s": 17.999757384000002,
+      "q_absmax_deg": [
+        7.1162889906246445,
+        4.044868325138992,
+        4.8725775857816584,
+        9.01337376080176,
+        4.164938527369702
+      ],
+      "q_min_deg": [
+        -7.1162889906246445,
+        -4.044868325138992,
+        -4.465175351786434,
+        -6.741395876290038,
+        -1.611557094568298
+      ],
+      "q_max_deg": [
+        5.554265819307596,
+        0.2604776451499625,
+        4.8725775857816584,
+        9.01337376080176,
+        4.164938527369702
+      ],
+      "dq_absmax": [
+        1.234675177328601,
+        0.33466906977572664,
+        0.43000525642618376,
+        0.960121618815109,
+        0.40929385799372603
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "source_sha256": "aeb15dc42e359219476f56b959d2b98d7f543e9e64c199f021d17b993405cf50",
+      "trial": "T01",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 0.0,
+      "samples": 2492,
+      "error": null,
+      "last_task_s": 17.999464503000002,
+      "q_absmax_deg": [
+        6.925518394970711,
+        11.62099030010172,
+        10.72417377468687,
+        11.93147561144643,
+        10.635681462276981
+      ],
+      "q_min_deg": [
+        -6.925518394970711,
+        -11.62099030010172,
+        -10.72417377468687,
+        -7.88378545483972,
+        -1.5943909081933518
+      ],
+      "q_max_deg": [
+        5.39298645702193,
+        1.0694359184276716,
+        3.842008255169229,
+        11.93147561144643,
+        10.635681462276981
+      ],
+      "dq_absmax": [
+        1.2403428039285556,
+        0.4594076026241472,
+        0.5632786780413802,
+        1.1750323827912463,
+        0.48959195103702385
+      ]
+    },
+    {
+      "source": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/hardware_shadow/commissioning/mpc_zero_leftpd100_nopulse_right164546_repeat2_walk_20261009_180354/raw.jsonl",
+      "source_sha256": "aeb15dc42e359219476f56b959d2b98d7f543e9e64c199f021d17b993405cf50",
+      "trial": "T01",
+      "passed": true,
+      "sampled_geometry": {
+        "frames": 0,
+        "pairs": [],
+        "other_joints_at_qpos0": true,
+        "exhaustive_collision_validation": false
+      },
+      "delay_ms": 4.0,
+      "samples": 2492,
+      "error": null,
+      "last_task_s": 17.999464503000002,
+      "q_absmax_deg": [
+        6.935458341945777,
+        7.808641061972473,
+        10.505001755567136,
+        8.370586380847687,
+        6.398555650435509
+      ],
+      "q_min_deg": [
+        -6.935458341945777,
+        -7.808641061972473,
+        -10.505001755567136,
+        -7.5503845729462435,
+        -1.5943909081933518
+      ],
+      "q_max_deg": [
+        5.521465114483543,
+        0.9466505096042749,
+        3.9267369867228705,
+        8.370586380847687,
+        6.398555650435509
+      ],
+      "dq_absmax": [
+        1.233173977538739,
+        0.3686208146639124,
+        0.5039415944101218,
+        0.9571290449804988,
+        0.42680621188535783
+      ]
+    }
+  ]
+}

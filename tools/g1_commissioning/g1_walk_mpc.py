@@ -28,11 +28,17 @@ from hardware_pid_control import HardwarePidPlan, CONTROL_PERIOD_S
 from hardware_mpc_control import RightArmHardwareMpc, DEFAULT_CONFIG, json_values
 from hardware_mpc_predictor import HardwareMpcPredictor, DEFAULT_BANK
 from mpc_host import host_evidence, select_cpu, ControlThreadScope
+from hardware_control_comparison import (
+    CANDIDATE_CONFIGS, ZERO_NEUTRAL_MPC_CONFIGS, validate_trial_config,
+    TORQUE_CONFIG as COMPARISON_TORQUE_CONFIG, validate_comparison_torque,
+    BASELINE_CONFIG as COMPARISON_MPC_CONFIG,
+)
 
 PERMIT = "MPC_WALK_H0_CAPTURE"
 FIELD_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_field.yaml'
 LEARNED_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned.yaml'
-LEARNED_FIELD_TORQUE_CONFIGS = frozenset((LEARNED_TORQUE_CONFIG.resolve(),))
+LEARNED_FIELD_TORQUE_CONFIGS = frozenset((
+    LEARNED_TORQUE_CONFIG.resolve(), COMPARISON_TORQUE_CONFIG.resolve()))
 LEARNED_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned.yaml'
 LEARNED_ACC_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001.yaml'
 LEARNED_ACC_ALPHA_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005.yaml'
@@ -53,7 +59,7 @@ LEARNED_FIELD_MPC_CONFIGS = frozenset((LEARNED_MPC_CONFIG.resolve(),
                                        LEARNED_VEL01_MPC_CONFIG.resolve(),
                                        LEARNED_ACC_Y0015_MPC_CONFIG.resolve(),
                                        LEARNED_POSTURE_PITCH2_ELBOW01_MPC_CONFIG.resolve(),
-                                       LEARNED_POSTURE_ROLL2_MPC_CONFIG.resolve()))
+                                       LEARNED_POSTURE_ROLL2_MPC_CONFIG.resolve())) | CANDIDATE_CONFIGS
 FIELD_MPC_START_S = 4.0  # one second of fixed posture, then MPC before walking at 5 s
 
 
@@ -81,13 +87,24 @@ class MpcRuntime:
                  predictor_mode="learned_filtered", bank_path=DEFAULT_BANK,
                  stationary=False, journal=None, actuation="measured_torque_preview", torque_config=None,
                  assumed_command_delay_s=None, field_trial=False, zero_arm_neutral=False,
-                 left_pd_gain_scale=1.):
+                 left_pd_gain_scale=1., align_accel_forecast=False, acceleration_pid_config=None):
         from endpoint_pose import EndpointModel
         if actuation not in {"reference_servo", "inverse_dynamics_preview", "measured_torque_preview"}:
             raise ValueError("unsupported MPC actuation")
+        validate_comparison_torque(torque_config)
         self.actuation = actuation
         self.field_trial = bool(field_trial)
         self.zero_arm_neutral = bool(zero_arm_neutral)
+        self.align_accel_forecast = bool(align_accel_forecast)
+        if acceleration_pid_config is not None:
+            validate_acceleration_pid_selection(acceleration_pid_config, config, model_config,
+                torque_config, predictor_mode, actuation, assumed_command_delay_s,
+                zero_arm_neutral, left_pd_gain_scale)
+        if isinstance(config, (str, Path)):
+            validate_trial_config(config)
+        if self.align_accel_forecast:
+            validate_accel_forecast_alignment(config, torque_config, predictor_mode,
+                                              actuation, assumed_command_delay_s)
         self.left_pd_gain_scale = float(left_pd_gain_scale)
         if self.left_pd_gain_scale not in (1.,1.5,2.):
             raise ValueError('left PD gain scale must be 1, 1.5 or 2')
@@ -95,10 +112,10 @@ class MpcRuntime:
         if self.zero_arm_neutral:
             self.target_q[:10] = 0.
         if self.zero_arm_neutral and (actuation != 'measured_torque_preview'
-                or Path(config).resolve() != LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve()
-                or Path(torque_config or '').resolve() != LEARNED_TORQUE_CONFIG.resolve()
+                or Path(config).resolve() not in ZERO_NEUTRAL_MPC_CONFIGS
+                or Path(torque_config or '').resolve() not in LEARNED_FIELD_TORQUE_CONFIGS
                 or assumed_command_delay_s is not None):
-            raise ValueError('zero arm neutral requires the 164546 learned measured-torque configuration')
+            raise ValueError('zero arm neutral requires 164546 or a reviewed numbered weight candidate, with reviewed learned torque')
         self.host_scope = None
         self.handback = None
         if self.field_trial:
@@ -131,8 +148,15 @@ class MpcRuntime:
                 from hardware_mpc_learned import RightArmLearnedTorqueMpc
                 controller_type = RightArmLearnedTorqueMpc
         torque_options = {} if torque_config is None else dict(torque_config=torque_config)
+        if acceleration_pid_config is not None:
+            from hardware_acceleration_pid import RightArmAccelerationPid
+            controller_type = RightArmAccelerationPid
+            torque_options['pid_config'] = acceleration_pid_config
         self.controller = controller_type(self.target_q[5:10], config,
                                           model=EndpointModel(model_config), **torque_options)
+        if self.align_accel_forecast:
+            from hardware_mpc_forecast_timing import alignment_metadata
+            self.controller.metadata['acceleration_forecast_alignment'] = alignment_metadata()
         self.mpc_start_s = float(self.controller.config.get(
             'mpc_start_s', FIELD_MPC_START_S))
         self.configure_timing_grace()
@@ -160,7 +184,7 @@ class MpcRuntime:
 
     def configure_timing_grace(self):
         self.timing_grace = None
-        if self.controller.metadata.get('variant') == 'learned_yaw_aware_direct_v1':
+        if self.controller.metadata.get('variant') in ('learned_yaw_aware_direct_v1', 'feedforward_acceleration_pid_v1'):
             from mpc_timing_grace import BoundedTimingGrace
             self.timing_grace = BoundedTimingGrace()
             self.controller.metadata['timing_policy'] = self.timing_grace.metadata()
@@ -328,6 +352,9 @@ class MpcRuntime:
             query_ns=min(now_ns,low_ns,imu_ns)
         result = self.predictor.query(query_ns, yaw0,
                                       use_learned=not self.stationary and task_s >= 5. and heading_frozen)
+        if self.align_accel_forecast:
+            from hardware_mpc_forecast_timing import align_acceleration_preview
+            result = align_acceleration_preview(result)
         self.controller.set_disturbance_horizon(result.horizon, result.diagnostics)
         if self.assumed_command_delay_s is not None and self._plan is not None:
             if self._delay_origin_ns is None:
@@ -340,14 +367,16 @@ class MpcRuntime:
 def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
               mode="learned_filtered", bank=DEFAULT_BANK, cpu=None,
               actuation="measured_torque_preview", torque_config=None, *, zero_arm_neutral=False,
-              left_pd_gain_scale=1.):
+              left_pd_gain_scale=1., align_accel_forecast=False, acceleration_pid_config=None):
     """Local libraries/model/real QP/IDL/CRC only; no DDS factory or endpoint."""
     from types import SimpleNamespace
     from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.utils.crc import CRC
-    runtime = MpcRuntime(config, model_config, mode, bank, stationary=True, actuation=actuation,
+    runtime = MpcRuntime(config, model_config, mode, bank, stationary=not align_accel_forecast, actuation=actuation,
                          torque_config=torque_config,
-                         zero_arm_neutral=zero_arm_neutral,left_pd_gain_scale=left_pd_gain_scale)
+                         zero_arm_neutral=zero_arm_neutral,left_pd_gain_scale=left_pd_gain_scale,
+                         align_accel_forecast=align_accel_forecast,
+                         acceleration_pid_config=acceleration_pid_config)
     native = None
     try:
         native_metadata = None
@@ -365,7 +394,7 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
         for ns in range(0, 502_000_000, 2_000_000):
             runtime.observe_low(ns, q, np.zeros(35))
             runtime.observe_imu(ns, np.array([1., 0, 0, 0]), np.zeros(3), np.array([0., 0, 9.81]))
-        runtime.prepare(500_000_000, None, None, 0., .5)
+        runtime.prepare(500_000_000, None, None, 0., 5. if align_accel_forecast else .5)
         qr, dqr, diag = runtime.controller.step(runtime.target_q, [1, 0, 0, 0], 0, .006)
         frame = dict(q_rad=runtime.target_q.copy(), dq_rad_s=np.zeros(13),
                      kp=np.r_[np.full(11, 20), 0, 0], kd=np.r_[np.ones(11), 0, 0], weight=1.,
@@ -394,6 +423,7 @@ def preflight(config=DEFAULT_CONFIG, model_config=ROOT / "configs/g1.yaml",
             "offline_packet_right_tau_nm": [packet.motor_cmd[i].tau for i in range(22,27)],
             "field_output_supported": False,
             "core": runtime.controller.metadata,
+            "acceleration_forecast_alignment": diag.get('predictor', {}).get('acceleration_forecast_alignment'),
             "predictor_manifest": None if runtime.predictor.bank is None else runtime.predictor.bank.manifest,
             "limitations": "offline compatibility only; not a 6 ms field or closed-loop performance certificate"})
     finally:
@@ -432,12 +462,43 @@ def build_parser(*, learned=False):
     parser.add_argument("--pid-6ms-validated", action="store_true",
                         help="operator confirms current 6 ms PID trial passed; not software-generated evidence")
     if learned:
+        parser.add_argument('--acceleration-pid-config', type=Path,
+                            help='explicit C controller: task PID plus constrained acceleration allocation')
+        parser.add_argument('--align-accel-forecast', action='store_true',
+                            help='opt-in: align interval acc/alpha preview to estimated host write; measured state unchanged')
         parser.add_argument('--zero-arm-neutral', action='store_true',
                             help='experiment: both five-joint arm neutral targets are exactly zero')
         parser.add_argument('--left-pd-gain-scale',type=float,choices=(1.,1.5,2.),default=1.,
                             help='explicit experiment: scale only the five left-arm packet Kp/Kd gains')
         parser.set_defaults(mpc_config=LEARNED_MPC_CONFIG, torque_config=LEARNED_TORQUE_CONFIG)
     return parser
+
+
+def validate_acceleration_pid_selection(pid_config, config, model_config, torque_config,
+                                        predictor_mode, actuation, delay, zero_neutral, left_scale):
+    from hardware_acceleration_pid import CONFIG_PATH, load_pid_config
+    if (Path(pid_config).resolve() != CONFIG_PATH.resolve()
+            or Path(config).resolve() != COMPARISON_MPC_CONFIG.resolve()
+            or Path(model_config).resolve() != (ROOT/'configs/g1_payload75.yaml').resolve()
+            or Path(torque_config or '').resolve() != COMPARISON_TORQUE_CONFIG.resolve()
+            or predictor_mode != 'learned_filtered' or actuation != 'measured_torque_preview'
+            or delay is not None or not zero_neutral or left_scale != 1.):
+        raise ValueError('C requires its explicit config, comparison execution timing, payload75, zero neutral, normal left PD, comparison torque bounds and learned predictor')
+    validate_trial_config(config)
+    validate_comparison_torque(torque_config)
+    load_pid_config(pid_config)
+
+
+def validate_accel_forecast_alignment(config, torque_config, predictor_mode, actuation,
+                                     assumed_command_delay_s):
+    validate_trial_config(config)
+    validate_comparison_torque(torque_config)
+    if (Path(config).resolve() not in ZERO_NEUTRAL_MPC_CONFIGS
+            or Path(torque_config or '').resolve() not in LEARNED_FIELD_TORQUE_CONFIGS
+            or predictor_mode != 'learned_filtered' or actuation != 'measured_torque_preview'
+            or assumed_command_delay_s is not None):
+        raise ValueError('acceleration forecast alignment requires 164546 or a reviewed numbered weight candidate, '
+                         'learned_filtered and measured state; no delay-model combination')
 
 
 def apply_left_pd_gain_experiment(profile, scale=1.):
@@ -497,11 +558,22 @@ def main(argv=None, *, learned=False):
         select_cpu(args.cpu)  # fail before subscribers/threads if CPU unavailable
         zero_neutral = bool(getattr(args, 'zero_arm_neutral', False))
         left_gain_scale=float(getattr(args,'left_pd_gain_scale',1.))
+        align_accel = bool(getattr(args, 'align_accel_forecast', False))
+        acceleration_pid_config = getattr(args, 'acceleration_pid_config', None)
+        if acceleration_pid_config is not None:
+            validate_acceleration_pid_selection(acceleration_pid_config, args.mpc_config,
+                args.controller_config, args.torque_config, args.predictor, args.actuation,
+                args.assumed_command_delay_ms, zero_neutral, left_gain_scale)
+        validate_comparison_torque(args.torque_config)
+        validate_trial_config(args.mpc_config)
+        if align_accel:
+            validate_accel_forecast_alignment(args.mpc_config, args.torque_config, args.predictor,
+                                              args.actuation, args.assumed_command_delay_ms)
         if zero_neutral and (not learned
-                or args.mpc_config.resolve() != LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve()
-                or args.torque_config.resolve() != LEARNED_TORQUE_CONFIG.resolve()
+                or args.mpc_config.resolve() not in ZERO_NEUTRAL_MPC_CONFIGS
+                or args.torque_config.resolve() not in LEARNED_FIELD_TORQUE_CONFIGS
                 or args.assumed_command_delay_ms is not None):
-            raise ValueError('zero arm neutral requires exact 164546 MPC and no-roll torque configs')
+            raise ValueError('zero arm neutral requires 164546 or a reviewed numbered weight candidate and no-roll torque configs')
         if args.preflight and args.execute:
             raise ValueError("--preflight and --execute are mutually exclusive")
         if args.execute and args.actuation == "reference_servo":
@@ -525,7 +597,9 @@ def main(argv=None, *, learned=False):
                                       args.predictor, args.bank, args.cpu, args.actuation,
                                       args.torque_config,
                                       zero_arm_neutral=zero_neutral,
-                                      left_pd_gain_scale=left_gain_scale), indent=2))
+                                      left_pd_gain_scale=left_gain_scale,
+                                      align_accel_forecast=align_accel,
+                                      acceleration_pid_config=acceleration_pid_config), indent=2))
             return 0
         if not (args.nic and args.profile and args.output_dir and
                 args.permit_real_output == PERMIT and args.pid_6ms_validated):
@@ -537,9 +611,16 @@ def main(argv=None, *, learned=False):
         profile = load_profile(args.profile, profile_kind)
         profile = apply_zero_arm_neutral_experiment(profile,zero_neutral)
         profile = apply_left_pd_gain_experiment(profile,left_gain_scale)
+        if acceleration_pid_config is not None:
+            print('CONTROLLER C: feedforward task-space PID with one-step constrained acceleration allocation; '
+                  'shared MPC transport/torque lifecycle, no receding-horizon joint optimization.')
         if zero_neutral:
             print('EXPERIMENT: both five-joint arm neutral targets are exactly zero; '
-                  'right MPC uses measured body IMU; left arm keeps fixed joint targets with PD.')
+                  'right controller uses measured body IMU; left arm keeps fixed joint targets with PD.')
+        if align_accel:
+            print('EXPERIMENT: interval acc/alpha preview uses query time + 3.5 ms estimated host write; '
+                  'measured joint/attitude feedback and current dynamics unchanged. '
+                  'This is not identified actuator-delay compensation.')
         from field_performance import prepare as prepare_field_performance
         performance_setup = prepare_field_performance(
             args.cpu, compute_process=args.compute_process, rt_priority=args.rt_priority)
@@ -557,6 +638,8 @@ def main(argv=None, *, learned=False):
                              torque_config=field_config,
                              zero_arm_neutral=zero_neutral,
                              left_pd_gain_scale=left_gain_scale,
+                             align_accel_forecast=align_accel,
+                             acceleration_pid_config=acceleration_pid_config,
                              assumed_command_delay_s=(None if args.assumed_command_delay_ms is None
                                                       else args.assumed_command_delay_ms*.001),**compute_options)
         runtime.host_scope = scope
@@ -581,10 +664,17 @@ def main(argv=None, *, learned=False):
             ROOT / "arm_mpc.py", ROOT / "kinematics_helper.py"]
         if learned:
             source_paths += [Path(__file__).with_name(name) for name in
-                             ('g1_walk_mpc_learned.py', 'hardware_mpc_learned.py', 'mpc_timing_grace.py')]
+                             ('g1_walk_mpc_learned.py', 'hardware_mpc_learned.py', 'mpc_timing_grace.py',
+                              'hardware_mpc_forecast_timing.py', 'hardware_control_comparison.py',
+                              'g1_run_control_comparison.py')]
+        if acceleration_pid_config is not None:
+            shutil.copy2(acceleration_pid_config, args.output_dir/'acceleration_pid_config.yaml')
+            source_paths += [Path(__file__).with_name('hardware_acceleration_pid.py')]
         journal.record({"schema": "g1_mpc_session_v1", "event": "session_start",
             "program": 'g1_walk_mpc_learned.py' if learned else Path(__file__).name,
-            "controller_variant": 'learned_yaw_aware_direct_v1' if learned else 'legacy_baseline',
+            "controller_variant": runtime.controller.metadata.get('variant', 'legacy_baseline'),
+            "acceleration_pid_config_sha256": (None if acceleration_pid_config is None else
+                hashlib.sha256(acceleration_pid_config.read_bytes()).hexdigest()),
             "task": args.task, "required_fsm": 500,
             "publisher_created": False, "mode_setter_registered": False, "lowcmd_topic_created": False,
             "network_interface": args.nic, "control_nominal_period_ms": 6.,
@@ -594,6 +684,7 @@ def main(argv=None, *, learned=False):
             "requested_control_cpu": args.cpu, "requested_fifo_priority": args.rt_priority,
             "performance_setup": performance_setup,
             "assumed_command_delay_ms": args.assumed_command_delay_ms,
+            "align_accel_forecast": align_accel,
             "hardware_delay_identified": False, "profile_kind": profile_kind,
             "pid_6ms_validation": "operator_attestation_not_automatically_certified",
             "zero_arm_neutral_experiment": profile['zero_arm_neutral_experiment'],

@@ -101,6 +101,7 @@ class ProcessMpcRuntime(MpcRuntime):
         self.actuation='measured_torque_preview';self.field_trial=True
         self.stationary=kwargs.get('stationary',False)
         self.zero_arm_neutral=bool(kwargs.get('zero_arm_neutral',False))
+        self.align_accel_forecast=bool(kwargs.get('align_accel_forecast',False))
         self.left_pd_gain_scale=float(kwargs.get('left_pd_gain_scale',1.))
         self.target_q=EXPECTED_TARGET_Q.copy()
         if self.zero_arm_neutral:self.target_q[:10]=0.
