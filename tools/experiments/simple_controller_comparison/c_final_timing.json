@@ -1,0 +1,16 @@
+[
+  {
+    "name": "serial_c_field_final_unloaded",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 400,
+      "simple_apid_kd": 40,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 24,
+      "simple_apid_posture_kd": 8,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    }
+  }
+]

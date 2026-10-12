@@ -138,6 +138,24 @@ class FixedMpcResultDelayLineTest(unittest.TestCase):
         activation = tail.activate_ready(now=8.002, sample_index=4001)
         self.assertEqual(activation.packet.source_time, 7.998)
 
+    def test_accumulated_timestamp_roundoff_at_end_of_full_task(self):
+        line = self.line(0.004)
+        source_time = 0.0
+        for _ in range(3999):
+            source_time += .002
+        args = dict(source_time=source_time, source_sample_index=3999,
+            source_anchor_index=1333, q_ref=self.vector(0), dq_ref=self.vector(0),
+            ddq_raw=self.vector(0), ddq_des=self.vector(0),
+            source_right_arm_q=self.vector(0), source_right_arm_dq=self.vector(0),
+            source_torso_acc=self.vector(0,3), source_torso_omega=self.vector(0,3),
+            diagnostics={}, packet_ready_wall_ns=1)
+        packet = line.publish(**args)
+        self.assertEqual(packet.source_anchor_index, 1333)
+        for wrong in (dict(source_anchor_index=1332),
+                      dict(source_sample_index=4000, source_time=8.0)):
+            with self.assertRaisesRegex(ValueError, 'source_anchor_index'):
+                self.line(.004).publish(**dict(args, **wrong))
+
 
 class MpcLatencyTraceTest(unittest.TestCase):
     def test_no_safe_torque_candidate_trace_parser(self):

@@ -1,0 +1,98 @@
+{
+  "attempts": 163,
+  "completed": 145,
+  "tuning_attempts": 110,
+  "tuning_completed": 92,
+  "failures": [
+    {
+      "name": "r2_post_16_12",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r2_post_16_12.log"
+    },
+    {
+      "name": "r3_bounded_1",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_1.log"
+    },
+    {
+      "name": "r3_bounded_10",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_10.log"
+    },
+    {
+      "name": "r3_bounded_11",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_11.log"
+    },
+    {
+      "name": "r3_bounded_12",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_12.log"
+    },
+    {
+      "name": "r3_bounded_13",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_13.log"
+    },
+    {
+      "name": "r3_bounded_14",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_14.log"
+    },
+    {
+      "name": "r3_bounded_15",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_15.log"
+    },
+    {
+      "name": "r3_bounded_3",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_3.log"
+    },
+    {
+      "name": "r3_bounded_4",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_4.log"
+    },
+    {
+      "name": "r3_bounded_5",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_5.log"
+    },
+    {
+      "name": "r3_bounded_6",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_6.log"
+    },
+    {
+      "name": "r3_bounded_7",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_7.log"
+    },
+    {
+      "name": "r3_bounded_8",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_8.log"
+    },
+    {
+      "name": "r3_bounded_9",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r3_bounded_9.log"
+    },
+    {
+      "name": "r4_brake_1",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r4_brake_1.log"
+    },
+    {
+      "name": "r4_brake_11",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r4_brake_11.log"
+    },
+    {
+      "name": "r4_brake_9",
+      "returncode": 1,
+      "log": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/logs/r4_brake_9.log"
+    }
+  ]
+}

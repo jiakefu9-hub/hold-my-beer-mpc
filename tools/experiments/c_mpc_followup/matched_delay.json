@@ -1,0 +1,40 @@
+[
+  {
+    "name": "mpc_conservative_delay2",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 9
+    },
+    "latency_ms": 2
+  },
+  {
+    "name": "old6_delay2",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "research_resample_template": true
+    },
+    "latency_ms": 2
+  },
+  {
+    "name": "field6_delay2",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true
+    },
+    "latency_ms": 2
+  },
+  {
+    "name": "field6_post36_delay2",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 3,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    },
+    "latency_ms": 2
+  }
+]

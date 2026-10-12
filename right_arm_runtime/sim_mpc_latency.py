@@ -212,10 +212,13 @@ class FixedMpcResultDelayLine:
             raise ValueError("source_time must match source_sample_index on the 2 ms grid")
         if sample < 0 or anchor < 0 or sample * self.step_dt < -1e-12:
             raise ValueError("source indices must be non-negative")
-        if not np.isclose(source_time / self.mpc_dt, anchor, atol=1e-10, rtol=0.0):
+        # Validate the integer grids after the seconds-domain timestamp check.
+        # Dividing an accumulated simulation timestamp by 6 ms amplifies its
+        # roundoff enough to reject valid anchors near the end of an 8 s run.
+        expected_stride = int(round(self.mpc_dt / self.step_dt))
+        if sample % expected_stride != 0 or anchor != sample // expected_stride:
             raise ValueError("source_anchor_index does not match source_time")
         if self._last_source_sample is not None:
-            expected_stride = int(round(self.mpc_dt / self.step_dt))
             if sample != self._last_source_sample + expected_stride or anchor != self._last_source_anchor + 1:
                 raise ValueError("MPC source anchors must be strictly consecutive")
         wall_ns = int(packet_ready_wall_ns)

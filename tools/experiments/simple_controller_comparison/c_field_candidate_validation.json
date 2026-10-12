@@ -1,0 +1,120 @@
+[
+  {
+    "name": "val_c_field_moderate_nominal",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 400,
+      "simple_apid_kd": 40,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 16,
+      "simple_apid_posture_kd": 6,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    }
+  },
+  {
+    "name": "val_c_field_moderate_heldout",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 400,
+      "simple_apid_kd": 40,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 16,
+      "simple_apid_posture_kd": 6,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    },
+    "scenario": "heldout_pair_02_minus"
+  },
+  {
+    "name": "val_c_field_moderate_delay4",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 400,
+      "simple_apid_kd": 40,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 16,
+      "simple_apid_posture_kd": 6,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    },
+    "latency_ms": 4
+  },
+  {
+    "name": "val_c_field_moderate_payload75",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 400,
+      "simple_apid_kd": 40,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 16,
+      "simple_apid_posture_kd": 6,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    }
+  },
+  {
+    "name": "val_c_field_relaxed_nominal",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 150,
+      "simple_apid_kd": 25,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 24,
+      "simple_apid_posture_kd": 8,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    }
+  },
+  {
+    "name": "val_c_field_relaxed_heldout",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 150,
+      "simple_apid_kd": 25,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 24,
+      "simple_apid_posture_kd": 8,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    },
+    "scenario": "heldout_pair_02_minus"
+  },
+  {
+    "name": "val_c_field_relaxed_delay4",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 150,
+      "simple_apid_kd": 25,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 24,
+      "simple_apid_posture_kd": 8,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    },
+    "latency_ms": 4
+  },
+  {
+    "name": "val_c_field_relaxed_payload75",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 150,
+      "simple_apid_kd": 25,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_posture_kp": 24,
+      "simple_apid_posture_kd": 8,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    }
+  }
+]

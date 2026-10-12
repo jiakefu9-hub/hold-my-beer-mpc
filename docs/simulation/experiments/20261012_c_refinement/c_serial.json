@@ -1,0 +1,29 @@
+[
+  {
+    "name": "serial_c_original",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {}
+  },
+  {
+    "name": "serial_c_attitude",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012
+    }
+  },
+  {
+    "name": "serial_c_deploy",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012,
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    }
+  }
+]

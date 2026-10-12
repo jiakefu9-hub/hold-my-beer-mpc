@@ -1,0 +1,23 @@
+# Adaptive experiment decisions
+
+All runs are simulation only, with the walking command and left PD unchanged.
+The first pilot completed the physical task but hit an artifact export error; it is excluded from the successful-run count.
+
+1. Reproduce old nominal/held-out baseline and verify six physical metrics on identical 0..8 s windows.
+2. Stage 1 (42): acceleration versus gravity/angular costs and moderate motion boxes. Some narrow execution envelopes terminate with NO_SAFE_TORQUE; do not count these as completed tests or disable the physical torque limits. Acceleration-only gains increase angular motion.
+3. Stage 2 (51): strengthen angular acceleration/velocity costs jointly; test mapper regularization, causal acceleration innovations, and signed interval lead. Strong angular costs improve angular metrics; acceleration innovations show little effect; +3 ms interval lead is more promising than +6/+9 ms.
+4. Stage 3 (65): investigate gravity/posture/input regularization, terminal scaling, shortened QP windows, first-input-change cost, friction and mapping cadence. All preserve a 6 ms outer MPC period.
+5. New direction triggered by Stage 3: increasing gravity weight alone fails to remove the orientation bias. Pilot a current-IMU SO(3) innovation correction to future template rotations, retaining the template trend. The first pilot reduces mean tilt from 0.596 to 0.294 deg with almost unchanged acceleration. Higher gravity plus corrected rotations reduces it further to 0.164 deg. These are nominal observations requiring held-out validation.
+
+Screening gates: complete walk/stop, no fall/nonfinite/QP failure; displacement within ±5% of old nominal; right mean vertical tilt and mean-axis swing RMS no worse than left. These gates are not hardware certification. Ranking always reports individual metrics and tradeoffs. Batch timings are not real-time evidence.
+
+Hold-out manifests for seeds 101001..101004 were fixed before their first controller tests; initial leg perturbations are within existing protocol bounds. The template is never retrained on them.
+
+6. Stage 4/5: follow the causal orientation innovation evidence, test both decay and task tradeoffs, then narrow to actual field-like operating boxes and 15 rad/s² desired acceleration. No physical torque relaxation.
+7. Stage 6: focus on stronger posture regularization and corrected previews. Unlike the earlier suggestion to free the shoulder/elbow, a 3x posture regularizer preserves gait distance and improves the six-metric compromise. A separate right-PD impedance ablation finds softer gains reduce acceleration further; this cannot be sold as a fresh hardware gain because the real robot already uses lower gains than the simulation baseline.
+8. Delay verification exposed an existing floating-point timestamp/anchor validation bug near 8 seconds (seconds were divided by .006 and checked with a dimensionless 1e-10 tolerance). Fixed using the integer sample/anchor grids after validating timestamp in seconds; added regression tests. The three aborted pilot delay runs remain recorded and excluded. Existing latency activation semantics are unchanged.
+9. Promotion: optional simulation template rotation correction and interval-acceleration lead are now supported by the predictor factory. Default configuration still returns the original predictor instance. Tests cover sign, node zero, no future measurements, repeated prediction, skipped timestamps, reset and terminal hold. Validation2 repeats shortlisted cases with the maintained implementation, includes a new initial state, 4 ms activation delay and the current 75 mm payload.
+
+10. Stage 7/8: field-envelope and softened-PD finalists were retested with tighter OSQP convergence, polishing, scaled termination and rho. Polishing stabilized the conservative s213 family (s323), but did not eliminate soft-PD failures. Solver acceptance and physical constraints were never bypassed.
+11. Final candidates frozen before independent seeds 101003/101004. All three selected schemes passed both blind initial states, 4 ms result delay, old held-out state, new seed 101002 and the 75 mm payload. The soft-PD candidate failed multiple retests and is not promoted. Baseline fails the 101002 start and has QP/mapping fallbacks on some other retests; those records remain.
+12. Parallel experiments stopped before serial timing. Final configurations use the maintained predictor factory with no research launcher injection, 6 ms / 9-interval preview and unchanged physical contact/actuator models. Three exact repeats per configuration use run.sh on CPU 7. Deterministic repeats establish implementation parity and timing repeatability, not statistical generalization.

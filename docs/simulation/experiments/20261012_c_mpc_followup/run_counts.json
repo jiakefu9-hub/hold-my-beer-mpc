@@ -1,0 +1,18 @@
+{
+  "attempts": 68,
+  "complete": 64,
+  "initialization_rejections": [
+    "field4_kp600_delay3quant4",
+    "field4_kp600_delay4"
+  ],
+  "controller_failures": [
+    "field4_post12",
+    "field4fast"
+  ],
+  "physical_simulation_attempts": 66,
+  "complete_but_smoke_gate_failed": [
+    "mpc6_alpha0p01",
+    "mpc6_n1"
+  ],
+  "complete_and_smoke_gate_passed": 62
+}

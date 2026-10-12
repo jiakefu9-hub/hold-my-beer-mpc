@@ -1,0 +1,2577 @@
+{
+  "C_original": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_003956_val_c_original_nominal",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.685683284211607,
+            "tilt_rms": 4.847479667908439,
+            "tilt_max": 7.882011172255961,
+            "swing_rms": 2.5519319335315718,
+            "acc": 2.3533415447340547,
+            "alpha": 10.72223648221887,
+            "speed": 0.46160739516915805,
+            "speed_tracking_rms": 0.18713469767424762,
+            "omega": 0.36325172158550917
+          },
+          "right": {
+            "tilt_mean": 0.05814241595993421,
+            "tilt_rms": 0.0736345150911733,
+            "tilt_max": 0.4055603259946237,
+            "swing_rms": 0.07331605107803393,
+            "acc": 2.988361225683402,
+            "alpha": 5.76726084067878,
+            "speed": 0.4591324653376411,
+            "speed_tracking_rms": 0.17823378597597528,
+            "omega": 0.039632893367258316
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.177260104819646,
+            "tilt_rms": 4.22958314633531,
+            "tilt_max": 5.189233769907994,
+            "swing_rms": 2.2796174850652893,
+            "acc": 2.463627073642108,
+            "alpha": 11.092948498269445,
+            "speed": 0.5043849936380874,
+            "speed_tracking_rms": 0.17840048081707735,
+            "omega": 0.3678738719565541
+          },
+          "right": {
+            "tilt_mean": 0.05810850675616173,
+            "tilt_rms": 0.07487331005567235,
+            "tilt_max": 0.4055603259946237,
+            "swing_rms": 0.07453921334352585,
+            "acc": 3.0971660048568435,
+            "alpha": 6.066753786492357,
+            "speed": 0.4989912618611282,
+            "speed_tracking_rms": 0.15873911485247708,
+            "omega": 0.04169292970049155
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.719376001779455,
+            "tilt_rms": 6.7773742177095215,
+            "tilt_max": 7.882011172255961,
+            "swing_rms": 2.204486194093037,
+            "acc": 1.847497956406668,
+            "alpha": 9.089430695158695,
+            "speed": 0.21860935283080354,
+            "speed_tracking_rms": 0.21860935283080354,
+            "omega": 0.34414288239182367
+          },
+          "right": {
+            "tilt_mean": 0.05827805277502411,
+            "tilt_rms": 0.06845552445778035,
+            "tilt_max": 0.15075403250950048,
+            "swing_rms": 0.0672308099051408,
+            "acc": 2.5063449541666083,
+            "alpha": 4.368578944972514,
+            "speed": 0.24092319518895877,
+            "speed_tracking_rms": 0.24092319518895877,
+            "omega": 0.03001049208629909
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.223911766023553
+      },
+      "right_arm_q_absmax": [
+        0.2546870511949989,
+        0.07456604291238203,
+        0.10773229262540521,
+        0.2163348376578832,
+        0.11719144123478918
+      ],
+      "right_arm_dq_absmax": [
+        0.46890259109401167,
+        0.2230263755047762,
+        0.29984558658578725,
+        0.49275561637530185,
+        1.0420934440994751
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        12.259391904597834,
+        29.698642562456367,
+        77.97268365373746,
+        19.13075913295345
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.0,
+        10.24477701696441,
+        15.0,
+        15.0,
+        15.0
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.492456177537967,
+        2.445116170103002,
+        1.933544176166488,
+        4.156859030816177,
+        0.3940012659999193
+      ],
+      "policy_compute_ms": {
+        "p50": 0.6685949992970563,
+        "p95": 0.7237291476485552,
+        "p99": 0.8578038385894613,
+        "max": 3.7283410056261346
+      },
+      "name": "val_c_original_nominal",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {},
+      "returncode": 0,
+      "cpu": 0,
+      "wall_s": 19.601692816999275,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/val_c_original_nominal.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "bc84203447b5f5bb48559200fd4ec269af60f5ad62fef11b17640c5659a9fae4",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.492456177537967,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "C_original_with_constraints": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_004541_val_c_original_bounded_nominal",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.758127084261961,
+            "tilt_rms": 4.902409038310755,
+            "tilt_max": 7.902335920126599,
+            "swing_rms": 2.5173761531572305,
+            "acc": 2.355352605380273,
+            "alpha": 10.727169932637084,
+            "speed": 0.4639997430853214,
+            "speed_tracking_rms": 0.18686270110823944,
+            "omega": 0.3638308201585591
+          },
+          "right": {
+            "tilt_mean": 0.0676135624519335,
+            "tilt_rms": 0.08458196481613323,
+            "tilt_max": 0.4019273967626866,
+            "swing_rms": 0.08441452889823062,
+            "acc": 3.0262058939717993,
+            "alpha": 5.758658238737782,
+            "speed": 0.4607561919677413,
+            "speed_tracking_rms": 0.17599810765246707,
+            "omega": 0.03985173005679323
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.273682070494792,
+            "tilt_rms": 4.317153959151944,
+            "tilt_max": 5.2097245701942585,
+            "swing_rms": 2.2659893425877518,
+            "acc": 2.463855537173684,
+            "alpha": 11.097140723053332,
+            "speed": 0.5070687459488308,
+            "speed_tracking_rms": 0.17789350036158894,
+            "omega": 0.3685010093274941
+          },
+          "right": {
+            "tilt_mean": 0.06759977294678161,
+            "tilt_rms": 0.08613891665455388,
+            "tilt_max": 0.4019273967626866,
+            "swing_rms": 0.08588257707864198,
+            "acc": 3.1277048537900125,
+            "alpha": 6.072514620142263,
+            "speed": 0.5009894110734047,
+            "speed_tracking_rms": 0.15601032604757603,
+            "omega": 0.042216075798241
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.695907139330632,
+            "tilt_rms": 6.754020925824089,
+            "tilt_max": 7.902335920126599,
+            "swing_rms": 2.2130479210067735,
+            "acc": 1.8590570314308585,
+            "alpha": 9.098062700892475,
+            "speed": 0.21909804984011522,
+            "speed_tracking_rms": 0.21909804984011522,
+            "omega": 0.344517565567739
+          },
+          "right": {
+            "tilt_mean": 0.06766872047254106,
+            "tilt_rms": 0.07804416705370927,
+            "tilt_max": 0.15464121700378386,
+            "swing_rms": 0.0779896584264206,
+            "acc": 2.5805929461776547,
+            "alpha": 4.278900361722216,
+            "speed": 0.23983282125756467,
+            "speed_tracking_rms": 0.23983282125756467,
+            "omega": 0.028495854424569658
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.2424475519407454
+      },
+      "right_arm_q_absmax": [
+        0.24278044042994923,
+        0.1446333269423837,
+        0.10535628499575779,
+        0.1531899157489087,
+        0.17992944163786348
+      ],
+      "right_arm_dq_absmax": [
+        0.38461643859575806,
+        0.34498879145805783,
+        0.2688423486054079,
+        0.3622214009110922,
+        1.1442662698151684
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        15.212504940566008,
+        25.852426618018725,
+        77.97268365373746,
+        19.042518216415303
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.000000000000048,
+        15.000000000000005,
+        15.000000000000012,
+        15.00000000000001,
+        15.00000000000001
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.535280566149195,
+        12.08392891477681,
+        2.6346471756120593,
+        4.256130202612824,
+        0.398493834228107
+      ],
+      "policy_compute_ms": {
+        "p50": 0.7958230016811285,
+        "p95": 0.8597805994213559,
+        "p99": 1.1025881615933029,
+        "max": 5.912827000429388
+      },
+      "name": "val_c_original_bounded_nominal",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {
+        "simple_apid_bounded_allocation": true,
+        "simple_apid_predictive_brake": true
+      },
+      "returncode": 0,
+      "cpu": 0,
+      "wall_s": 19.0255273379953,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/val_c_original_bounded_nominal.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "7978b63121a2399db626b5dfb86e996bb8fade7948fdda1194c1931d6757e296",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "fdb34388010cdf75ea063fd97cc55354773153ce293e7abc25458a0b90c31195",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 41,
+      "pairs": {
+        "right_shoulder_yaw_link / torso_link": 41
+      },
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 12.08392891477681,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "C_attitude": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_004016_val_c_attitude_nominal",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.673950850909492,
+            "tilt_rms": 4.834666977759083,
+            "tilt_max": 7.90562594208934,
+            "swing_rms": 2.5490796068014183,
+            "acc": 2.3433799732393226,
+            "alpha": 10.637693497136151,
+            "speed": 0.461204943608884,
+            "speed_tracking_rms": 0.1868665702694527,
+            "omega": 0.36285319541243694
+          },
+          "right": {
+            "tilt_mean": 0.046591582696932976,
+            "tilt_rms": 0.05871099341942112,
+            "tilt_max": 0.32778823911684785,
+            "swing_rms": 0.05848566902714738,
+            "acc": 3.0118670842855666,
+            "alpha": 5.927745329274924,
+            "speed": 0.4585632818360134,
+            "speed_tracking_rms": 0.1783509657193961,
+            "omega": 0.038348077433871954
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.167877127121857,
+            "tilt_rms": 4.219188525679586,
+            "tilt_max": 5.195700982241092,
+            "swing_rms": 2.2777849070333933,
+            "acc": 2.4513292841445775,
+            "alpha": 10.98183802922997,
+            "speed": 0.5039828639525303,
+            "speed_tracking_rms": 0.17821369476428492,
+            "omega": 0.3673181436981564
+          },
+          "right": {
+            "tilt_mean": 0.04760757216866225,
+            "tilt_rms": 0.06032018303991986,
+            "tilt_max": 0.32778823911684785,
+            "swing_rms": 0.06008228113169004,
+            "acc": 3.10990254183374,
+            "alpha": 6.210961128998321,
+            "speed": 0.49831187632443713,
+            "speed_tracking_rms": 0.1588260227167254,
+            "omega": 0.03997399534452354
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.6982457460600315,
+            "tilt_rms": 6.757500770866817,
+            "tilt_max": 7.90562594208934,
+            "swing_rms": 2.2128173393479673,
+            "acc": 1.8496181924052797,
+            "alpha": 9.132335336270643,
+            "speed": 0.21807129892581154,
+            "speed_tracking_rms": 0.21807129892581154,
+            "omega": 0.34441505824461677
+          },
+          "right": {
+            "tilt_mean": 0.04252762481001583,
+            "tilt_rms": 0.05177649866106059,
+            "tilt_max": 0.12983017565051821,
+            "swing_rms": 0.051362822727411425,
+            "acc": 2.5827778433691058,
+            "alpha": 4.624572505647527,
+            "speed": 0.24112758634621403,
+            "speed_tracking_rms": 0.24112758634621403,
+            "omega": 0.03100312886073341
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.220148652920392
+      },
+      "right_arm_q_absmax": [
+        0.25638573556362376,
+        0.08357628587370873,
+        0.10950341979426141,
+        0.21370765963974891,
+        0.12986723149156232
+      ],
+      "right_arm_dq_absmax": [
+        0.46261647882662116,
+        0.21915188026822197,
+        0.2940255410770533,
+        0.4860908649385252,
+        1.053184079781537
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        16.611735098048495,
+        22.89883403071187,
+        77.97268365373746,
+        19.45183189806818
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.0,
+        13.141487826236073,
+        15.0,
+        15.0,
+        15.0
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.504504627955818,
+        2.5050290718821717,
+        1.9600257519092201,
+        4.13399661895873,
+        0.3963721046853653
+      ],
+      "policy_compute_ms": {
+        "p50": 0.6613514997297898,
+        "p95": 0.7063225064484868,
+        "p99": 0.8098803835309805,
+        "max": 1.1004830012097955
+      },
+      "name": "val_c_attitude_nominal",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {
+        "simple_apid_kp": 1600,
+        "simple_apid_kd": 80,
+        "simple_apid_acc_weight": 0.4,
+        "simple_apid_regularization": 0.012
+      },
+      "returncode": 0,
+      "cpu": 2,
+      "wall_s": 18.816741426999215,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/val_c_attitude_nominal.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "bc84203447b5f5bb48559200fd4ec269af60f5ad62fef11b17640c5659a9fae4",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.504504627955818,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "C_acceleration_tradeoff": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_004035_val_c_acceleration_nominal",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.616003987338374,
+            "tilt_rms": 4.795530877894058,
+            "tilt_max": 8.030532567285118,
+            "swing_rms": 2.587119971837997,
+            "acc": 2.3522107651653767,
+            "alpha": 10.663637004790978,
+            "speed": 0.4595584075540515,
+            "speed_tracking_rms": 0.18784981805609208,
+            "omega": 0.3628671357450165
+          },
+          "right": {
+            "tilt_mean": 0.10171531562637239,
+            "tilt_rms": 0.12374633534390975,
+            "tilt_max": 0.529688882849834,
+            "swing_rms": 0.1233680404638449,
+            "acc": 2.9248904778804166,
+            "alpha": 5.741755049105489,
+            "speed": 0.45535844637294676,
+            "speed_tracking_rms": 0.17623508915125372,
+            "omega": 0.046196963128438844
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.0828478701427615,
+            "tilt_rms": 4.138882045555865,
+            "tilt_max": 5.1779935205031755,
+            "swing_rms": 2.282624243094885,
+            "acc": 2.460620293140809,
+            "alpha": 11.006878010979191,
+            "speed": 0.5020922480015056,
+            "speed_tracking_rms": 0.17948163065010164,
+            "omega": 0.3673541448897717
+          },
+          "right": {
+            "tilt_mean": 0.09685423417165696,
+            "tilt_rms": 0.12061168900828637,
+            "tilt_max": 0.529688882849834,
+            "swing_rms": 0.12018100498862332,
+            "acc": 3.0035804059491293,
+            "alpha": 5.946426185324746,
+            "speed": 0.4942821515128525,
+            "speed_tracking_rms": 0.15475532385149973,
+            "omega": 0.04697905966720863
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.748628456120822,
+            "tilt_rms": 6.816465627880626,
+            "tilt_max": 8.030532567285118,
+            "swing_rms": 2.258670618685481,
+            "acc": 1.8563050694145058,
+            "alpha": 9.162986230232402,
+            "speed": 0.21813561780520035,
+            "speed_tracking_rms": 0.21813561780520035,
+            "omega": 0.34433489504867143
+          },
+          "right": {
+            "tilt_mean": 0.12115964144523404,
+            "tilt_rms": 0.13556201331313464,
+            "tilt_max": 0.3138912712285992,
+            "swing_rms": 0.13069239335792715,
+            "acc": 2.586298613457369,
+            "alpha": 4.837232443203311,
+            "speed": 0.24392046285463934,
+            "speed_tracking_rms": 0.24392046285463934,
+            "omega": 0.04292631853060657
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.204701619595134
+      },
+      "right_arm_q_absmax": [
+        0.26267807304346225,
+        0.11417579253845542,
+        0.10448301589662523,
+        0.2627334240320369,
+        0.16015616064032592
+      ],
+      "right_arm_dq_absmax": [
+        0.5886541894432383,
+        0.3727925975964872,
+        0.3465627321318879,
+        0.5809631940507124,
+        1.178038606230734
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        14.018719989017255,
+        34.867868490246096,
+        77.97268365373746,
+        19.42942520470336
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.0,
+        8.304389221072087,
+        15.0,
+        15.0,
+        15.0
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.466675449922001,
+        2.2922393926183706,
+        1.762450829637487,
+        4.3807286774122725,
+        0.39041791790767016
+      ],
+      "policy_compute_ms": {
+        "p50": 0.6596140010515228,
+        "p95": 0.700825850435649,
+        "p99": 0.7455813336855494,
+        "max": 0.9363409990328364
+      },
+      "name": "val_c_acceleration_nominal",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {
+        "simple_apid_kp": 400,
+        "simple_apid_kd": 40,
+        "simple_apid_acc_weight": 0.15
+      },
+      "returncode": 0,
+      "cpu": 4,
+      "wall_s": 18.507577456002764,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/val_c_acceleration_nominal.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "bc84203447b5f5bb48559200fd4ec269af60f5ad62fef11b17640c5659a9fae4",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.466675449922001,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "C_deployment_constraints_sim": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_004156_val_c_deploy_nominal",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.77408304620712,
+            "tilt_rms": 4.9227728712979415,
+            "tilt_max": 7.902913549498918,
+            "swing_rms": 2.5284953209256655,
+            "acc": 2.362901987388708,
+            "alpha": 10.769379314473776,
+            "speed": 0.4638827408214739,
+            "speed_tracking_rms": 0.18680934929951212,
+            "omega": 0.3636625455643354
+          },
+          "right": {
+            "tilt_mean": 0.05303430130152043,
+            "tilt_rms": 0.06570382253430532,
+            "tilt_max": 0.3194583306734253,
+            "swing_rms": 0.06561975704958939,
+            "acc": 3.0448478389516094,
+            "alpha": 5.94912769318509,
+            "speed": 0.46101263038962864,
+            "speed_tracking_rms": 0.1760773226189082,
+            "omega": 0.03797381287230665
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.277918021457321,
+            "tilt_rms": 4.322338055743109,
+            "tilt_max": 5.205220024084939,
+            "swing_rms": 2.2668530622393135,
+            "acc": 2.47457609486128,
+            "alpha": 11.159807035001782,
+            "speed": 0.5069907257578348,
+            "speed_tracking_rms": 0.177982487050093,
+            "omega": 0.36853226037370496
+          },
+          "right": {
+            "tilt_mean": 0.052990358368168164,
+            "tilt_rms": 0.0665073569011554,
+            "tilt_max": 0.3194583306734253,
+            "swing_rms": 0.06639773373336919,
+            "acc": 3.1619028165327348,
+            "alpha": 6.299812977870568,
+            "speed": 0.501180725549248,
+            "speed_tracking_rms": 0.1557894167278994,
+            "omega": 0.04041576609519886
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.758743145206316,
+            "tilt_rms": 6.814546106633546,
+            "tilt_max": 7.902913549498918,
+            "swing_rms": 2.2022986961980084,
+            "acc": 1.8499788142008329,
+            "alpha": 9.040601852818057,
+            "speed": 0.21858088238084675,
+            "speed_tracking_rms": 0.21858088238084675,
+            "omega": 0.34349399920093593
+          },
+          "right": {
+            "tilt_mean": 0.053210073034929445,
+            "tilt_rms": 0.06238627565568231,
+            "tilt_max": 0.12787798646671825,
+            "swing_rms": 0.062347155691906526,
+            "acc": 2.5228900346727094,
+            "alpha": 4.267320860273223,
+            "speed": 0.2406963818704781,
+            "speed_tracking_rms": 0.2406963818704781,
+            "omega": 0.02600607090772284
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.24233847825326
+      },
+      "right_arm_q_absmax": [
+        0.24379033233736347,
+        0.133568350780277,
+        0.10519691299457788,
+        0.16155915448565467,
+        0.1668375830686946
+      ],
+      "right_arm_dq_absmax": [
+        0.3976095979964297,
+        0.35504716564425387,
+        0.2831209299047802,
+        0.36755475965361256,
+        1.156622321233238
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        17.152305850476587,
+        24.075477982010053,
+        77.97268365373746,
+        19.655576746078733
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.000000000000021,
+        15.000000000000002,
+        15.000000000000007,
+        15.000000000000004,
+        15.000000000000004
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.430703826648302,
+        11.786737416628556,
+        2.661445633684333,
+        4.339190161224658,
+        0.393206539541628
+      ],
+      "policy_compute_ms": {
+        "p50": 1.4789704982831609,
+        "p95": 1.586565948673524,
+        "p99": 1.6696235202834941,
+        "max": 1.9423729972913861
+      },
+      "name": "val_c_deploy_nominal",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {
+        "simple_apid_bounded_allocation": true,
+        "simple_apid_predictive_brake": true,
+        "simple_apid_kp": 1600,
+        "simple_apid_kd": 80,
+        "simple_apid_acc_weight": 0.4,
+        "simple_apid_regularization": 0.012
+      },
+      "returncode": 0,
+      "cpu": 9,
+      "wall_s": 29.63778429100057,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/val_c_deploy_nominal.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "bc84203447b5f5bb48559200fd4ec269af60f5ad62fef11b17640c5659a9fae4",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 39,
+      "pairs": {
+        "right_shoulder_yaw_link / torso_link": 39
+      },
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 11.786737416628556,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "C_relaxed_clip_simulation_only": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_110028_r6_relaxed_post4",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.675367205360736,
+            "tilt_rms": 4.839113239979046,
+            "tilt_max": 7.9132147777370845,
+            "swing_rms": 2.5540126737652846,
+            "acc": 2.348590630309996,
+            "alpha": 10.711004308326745,
+            "speed": 0.4612547865116416,
+            "speed_tracking_rms": 0.18710690840631555,
+            "omega": 0.36281192399726236
+          },
+          "right": {
+            "tilt_mean": 0.19872244074786766,
+            "tilt_rms": 0.23033358053611866,
+            "tilt_max": 0.7726873183218338,
+            "swing_rms": 0.22973606629479723,
+            "acc": 2.8793706328179844,
+            "alpha": 5.54163995852979,
+            "speed": 0.4585713543926473,
+            "speed_tracking_rms": 0.17779051469827015,
+            "omega": 0.051702847300128946
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.164840037184657,
+            "tilt_rms": 4.21780420347429,
+            "tilt_max": 5.188278685115549,
+            "swing_rms": 2.279955571665056,
+            "acc": 2.4597293482936373,
+            "alpha": 11.07536983075023,
+            "speed": 0.5039676068778588,
+            "speed_tracking_rms": 0.1783244799488638,
+            "omega": 0.3674612385922897
+          },
+          "right": {
+            "tilt_mean": 0.19335759640641356,
+            "tilt_rms": 0.22567454259851352,
+            "tilt_max": 0.7726873183218338,
+            "swing_rms": 0.22539508304837927,
+            "acc": 2.984641464690399,
+            "alpha": 5.794387240330947,
+            "speed": 0.4983231554382472,
+            "speed_tracking_rms": 0.15804490597577836,
+            "omega": 0.052635704716810845
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.717475878065052,
+            "tilt_rms": 6.776842594551016,
+            "tilt_max": 7.9132147777370845,
+            "swing_rms": 2.2158003552078513,
+            "acc": 1.838019552798977,
+            "alpha": 9.108940603242552,
+            "speed": 0.21873841745499545,
+            "speed_tracking_rms": 0.21873841745499545,
+            "omega": 0.343586107841772
+          },
+          "right": {
+            "tilt_mean": 0.22018181811368406,
+            "tilt_rms": 0.24809634198179983,
+            "tilt_max": 0.48823992480104694,
+            "swing_rms": 0.23697960053701125,
+            "acc": 2.4127862554889097,
+            "alpha": 4.387387968510409,
+            "speed": 0.2411111079229005,
+            "speed_tracking_rms": 0.2411111079229005,
+            "omega": 0.04778966886850172
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.2213728754594433
+      },
+      "right_arm_q_absmax": [
+        0.251566031128368,
+        0.07016724089897736,
+        0.10077082327952912,
+        0.22603821174230576,
+        0.1135340913898213
+      ],
+      "right_arm_dq_absmax": [
+        0.4606952552399375,
+        0.27052559933688475,
+        0.2978594775579104,
+        0.5033253698625426,
+        0.9996090832927781
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        11.919526897187207,
+        37.4819903659597,
+        77.97268365373746,
+        17.46224201287312
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.0,
+        8.604327105170798,
+        15.0,
+        15.0,
+        15.0
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.45951720084183,
+        2.268903950522211,
+        1.8010060374962915,
+        4.098465056363059,
+        0.39078887359040787
+      ],
+      "policy_compute_ms": {
+        "p50": 0.6527310000024045,
+        "p95": 0.6926061499484604,
+        "p99": 0.7313497200266272,
+        "max": 1.7275589999599106
+      },
+      "name": "r6_relaxed_post4",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {
+        "simple_apid_kp": 150,
+        "simple_apid_kd": 25,
+        "simple_apid_acc_weight": 0.4,
+        "simple_apid_regularization": 0.012,
+        "simple_apid_posture_kp": 4,
+        "simple_apid_posture_kd": 2,
+        "simple_apid_bounded_allocation": false,
+        "simple_apid_predictive_brake": false
+      },
+      "returncode": 0,
+      "cpu": 2,
+      "wall_s": 18.317506626000068,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/r6_relaxed_post4.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "131ea1da0c3c384a376f0fc49efbc75fd63e2e9584d78d1a00e45d667c2aae61",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "333de771a9dc94d332460bf67045005c0e2efa6ffdbb5af1b69c5121f8d2b490",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.45951720084183,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "C_relaxed_not_field_selected": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_110220_val_c_field_relaxed_nominal",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.761042094582446,
+            "tilt_rms": 4.876912318069359,
+            "tilt_max": 7.369530439423385,
+            "swing_rms": 2.439208011447666,
+            "acc": 2.3610665448022465,
+            "alpha": 10.718864750044636,
+            "speed": 0.4653700582977372,
+            "speed_tracking_rms": 0.18615681602198955,
+            "omega": 0.36244490480942654
+          },
+          "right": {
+            "tilt_mean": 0.20093444291358978,
+            "tilt_rms": 0.23551731490080516,
+            "tilt_max": 0.8274917229910872,
+            "swing_rms": 0.23535120807127408,
+            "acc": 2.916554146072123,
+            "alpha": 5.629063142776547,
+            "speed": 0.46332615575070873,
+            "speed_tracking_rms": 0.17815569765120362,
+            "omega": 0.05324931950655307
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.3328112507951495,
+            "tilt_rms": 4.372205873014479,
+            "tilt_max": 5.184842243736087,
+            "swing_rms": 2.2480994372293313,
+            "acc": 2.4768660417925963,
+            "alpha": 11.123761604904905,
+            "speed": 0.5087399803624593,
+            "speed_tracking_rms": 0.17726450253350878,
+            "omega": 0.36689552261094854
+          },
+          "right": {
+            "tilt_mean": 0.20494823612817867,
+            "tilt_rms": 0.2413758436068524,
+            "tilt_max": 0.8274917229910872,
+            "swing_rms": 0.24066788628969205,
+            "acc": 3.0140424891804813,
+            "alpha": 5.926763061325255,
+            "speed": 0.504477085626553,
+            "speed_tracking_rms": 0.16072503671124738,
+            "omega": 0.05507543961611409
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.473965469731627,
+            "tilt_rms": 6.5158753829853175,
+            "tilt_max": 7.369530439423385,
+            "swing_rms": 2.153455276875565,
+            "acc": 1.8258462665243183,
+            "alpha": 8.917287630088039,
+            "speed": 0.21813066112634166,
+            "speed_tracking_rms": 0.21813066112634166,
+            "omega": 0.3440672130031096
+          },
+          "right": {
+            "tilt_mean": 0.18487927005523425,
+            "tilt_rms": 0.21045863389926875,
+            "tilt_max": 0.4228837316483854,
+            "swing_rms": 0.2079976557230092,
+            "acc": 2.4887008515511395,
+            "alpha": 4.233872670082185,
+            "speed": 0.23530217450038185,
+            "speed_tracking_rms": 0.23530217450038185,
+            "omega": 0.04521320541525396
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.2512215780518163
+      },
+      "right_arm_q_absmax": [
+        0.1004870479211846,
+        0.0512323678136562,
+        0.06772474957334797,
+        0.06849916714190542,
+        0.09457330445054841
+      ],
+      "right_arm_dq_absmax": [
+        0.3584220440188422,
+        0.3198314970837374,
+        0.2519121664901156,
+        0.29477983558697296,
+        0.8800357662919112
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        13.566923638067685,
+        36.29786490306705,
+        77.97268365373746,
+        17.698166838797942
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.00000000000001,
+        13.311412979017206,
+        15.000000000000007,
+        15.000000000000005,
+        15.000000000000004
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.270549743710152,
+        2.8181280838994325,
+        2.075310891595053,
+        4.086106867607392,
+        0.38661844075467955
+      ],
+      "policy_compute_ms": {
+        "p50": 0.7995319999736239,
+        "p95": 0.8587044498767682,
+        "p99": 0.9456502300122308,
+        "max": 6.034470000031433
+      },
+      "name": "val_c_field_relaxed_nominal",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {
+        "simple_apid_kp": 150,
+        "simple_apid_kd": 25,
+        "simple_apid_acc_weight": 0.4,
+        "simple_apid_regularization": 0.012,
+        "simple_apid_posture_kp": 24,
+        "simple_apid_posture_kd": 8,
+        "simple_apid_bounded_allocation": true,
+        "simple_apid_predictive_brake": true
+      },
+      "returncode": 0,
+      "cpu": 2,
+      "wall_s": 19.15043677199992,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/val_c_field_relaxed_nominal.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "131ea1da0c3c384a376f0fc49efbc75fd63e2e9584d78d1a00e45d667c2aae61",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "333de771a9dc94d332460bf67045005c0e2efa6ffdbb5af1b69c5121f8d2b490",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.270549743710152,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "C_field_candidate": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/20261012_111221_serial_c_field_final_unloaded",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.759286901551437,
+            "tilt_rms": 4.8737480048394985,
+            "tilt_max": 7.347493621626702,
+            "swing_rms": 2.435705866690768,
+            "acc": 2.361677450469225,
+            "alpha": 10.73338270482774,
+            "speed": 0.46550021084250304,
+            "speed_tracking_rms": 0.18602668203497838,
+            "omega": 0.3624994215679878
+          },
+          "right": {
+            "tilt_mean": 0.10296514989817357,
+            "tilt_rms": 0.12485759679891113,
+            "tilt_max": 0.5672490518156954,
+            "swing_rms": 0.12452605359186121,
+            "acc": 2.9640125984934302,
+            "alpha": 5.707437290681423,
+            "speed": 0.4634098946487953,
+            "speed_tracking_rms": 0.17767012665152535,
+            "omega": 0.044341602813352726
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.335351723668156,
+            "tilt_rms": 4.37458977248761,
+            "tilt_max": 5.193948370803093,
+            "swing_rms": 2.2491611052005998,
+            "acc": 2.472235602919328,
+            "alpha": 11.084651982481784,
+            "speed": 0.5089359617078121,
+            "speed_tracking_rms": 0.17722912652161832,
+            "omega": 0.36687630141497174
+          },
+          "right": {
+            "tilt_mean": 0.10395862459667306,
+            "tilt_rms": 0.12726311963739304,
+            "tilt_max": 0.5672490518156954,
+            "swing_rms": 0.12661436538296436,
+            "acc": 3.064766247927857,
+            "alpha": 6.0085922560451275,
+            "speed": 0.5049048097556911,
+            "speed_tracking_rms": 0.16109406016946287,
+            "omega": 0.046398839658613106
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.455027613084558,
+            "tilt_rms": 6.497611512176774,
+            "tilt_max": 7.347493621626702,
+            "swing_rms": 2.146526315667748,
+            "acc": 1.8546715059294219,
+            "alpha": 9.195079290061997,
+            "speed": 0.2176900985213879,
+            "speed_tracking_rms": 0.2176900985213879,
+            "omega": 0.3444361639344974
+          },
+          "right": {
+            "tilt_mean": 0.09899125110417559,
+            "tilt_rms": 0.11473225750690903,
+            "tilt_max": 0.229811756921694,
+            "swing_rms": 0.11457532439671696,
+            "acc": 2.521048353837685,
+            "alpha": 4.296682270971711,
+            "speed": 0.2324396365388553,
+            "speed_tracking_rms": 0.2324396365388553,
+            "omega": 0.03492104542568704
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.2510346752197306
+      },
+      "right_arm_q_absmax": [
+        0.0970396997834675,
+        0.05183889916405434,
+        0.06434366957288655,
+        0.07106575724917548,
+        0.09799365061784761
+      ],
+      "right_arm_dq_absmax": [
+        0.3584220440188422,
+        0.30900288622056793,
+        0.2694571905592568,
+        0.29479089269220843,
+        0.8904469204306315
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        13.888459579993823,
+        34.20008714838114,
+        77.97268365373746,
+        18.16300697574788
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.000000000000028,
+        13.336516514254814,
+        15.000000000000009,
+        15.000000000000005,
+        15.000000000000004
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.417710584464876,
+        2.7888519123465807,
+        2.057735495739309,
+        4.138709229091518,
+        0.3927412919966372
+      ],
+      "policy_compute_ms": {
+        "p50": 0.7296364999547222,
+        "p95": 0.7734393499049474,
+        "p99": 0.8214133200431204,
+        "max": 0.8773209999617393
+      },
+      "name": "serial_c_field_final_unloaded",
+      "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+      "overrides": {
+        "simple_apid_kp": 400,
+        "simple_apid_kd": 40,
+        "simple_apid_acc_weight": 0.4,
+        "simple_apid_regularization": 0.012,
+        "simple_apid_posture_kp": 24,
+        "simple_apid_posture_kd": 8,
+        "simple_apid_bounded_allocation": true,
+        "simple_apid_predictive_brake": true
+      },
+      "returncode": 0,
+      "cpu": 7,
+      "wall_s": 17.858412861999795,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/configs/serial_c_field_final_unloaded.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "131ea1da0c3c384a376f0fc49efbc75fd63e2e9584d78d1a00e45d667c2aae61",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1b1311792f66849533e02bc7b0ba493e60834e760a5fc7f901072f408a92dab6",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.417710584464876,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "MPC_original": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/20261011_230511_bench_mpc_original_exact",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.66455847908738,
+            "tilt_rms": 4.779515484771726,
+            "tilt_max": 7.2479002738220375,
+            "swing_rms": 2.445063363508471,
+            "acc": 2.299208088802952,
+            "alpha": 10.596247795672719,
+            "speed": 0.4614410153430995,
+            "speed_tracking_rms": 0.18350352165037861,
+            "omega": 0.3637898261906733
+          },
+          "right": {
+            "tilt_mean": 0.12473032494947096,
+            "tilt_rms": 0.1501039296700752,
+            "tilt_max": 0.43394013751511257,
+            "swing_rms": 0.15002310749695413,
+            "acc": 2.941508928403183,
+            "alpha": 7.045140289052242,
+            "speed": 0.46363317350780575,
+            "speed_tracking_rms": 0.187899145007095,
+            "omega": 0.0595799260781269
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.246681372310153,
+            "tilt_rms": 4.287121570380596,
+            "tilt_max": 5.285915745542647,
+            "swing_rms": 2.2629827577050925,
+            "acc": 2.4081890412531575,
+            "alpha": 10.946446696165363,
+            "speed": 0.504612875914634,
+            "speed_tracking_rms": 0.17483226049663514,
+            "omega": 0.3682606527718603
+          },
+          "right": {
+            "tilt_mean": 0.1055013343538354,
+            "tilt_rms": 0.12056231186834321,
+            "tilt_max": 0.3903668987090097,
+            "swing_rms": 0.11337951262250151,
+            "acc": 3.066422400852281,
+            "alpha": 7.45821634728218,
+            "speed": 0.5046033408756769,
+            "speed_tracking_rms": 0.1733853887146846,
+            "omega": 0.062305778553135585
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.336066906196287,
+            "tilt_rms": 6.379748890745868,
+            "tilt_max": 7.2479002738220375,
+            "swing_rms": 2.1620580405277536,
+            "acc": 1.7984135632377245,
+            "alpha": 9.061101238179411,
+            "speed": 0.21471477603789116,
+            "speed_tracking_rms": 0.21471477603789116,
+            "omega": 0.3453281840211925
+          },
+          "right": {
+            "tilt_mean": 0.20164628733201326,
+            "tilt_rms": 0.23348418434625462,
+            "tilt_max": 0.43394013751511257,
+            "swing_rms": 0.15734684786002426,
+            "acc": 2.3770966571815144,
+            "alpha": 5.06656137144977,
+            "speed": 0.23723505515209475,
+            "speed_tracking_rms": 0.23723505515209475,
+            "omega": 0.047125341303017085
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 3,
+        "xy_displacement_m": 3.222744384939758
+      },
+      "right_arm_q_absmax": [
+        0.06986120853385182,
+        0.034999672869484036,
+        0.05158299336413182,
+        0.07337600112599979,
+        0.057444357853772075
+      ],
+      "right_arm_dq_absmax": [
+        0.3584220440188422,
+        0.3658006368460602,
+        0.13592662912648448,
+        0.2940538991030981,
+        0.5098947348215014
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        10.835397417057928,
+        25.366424315625597,
+        77.97268365373746,
+        10.305897106885777
+      ],
+      "right_arm_ddq_des_absmax": [
+        8.0,
+        8.0,
+        8.0,
+        6.429106712341309,
+        8.0
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.620823630085831,
+        2.4555147022313375,
+        2.10257147964255,
+        3.7626982717906756,
+        0.29337737781716305
+      ],
+      "policy_compute_ms": {
+        "p50": 1.4383444977283943,
+        "p95": 1.5539231462753378,
+        "p99": 1.6320646397070955,
+        "max": 7.433849998051301
+      },
+      "name": "bench_mpc_original_exact",
+      "base_config": "configs/g1.yaml",
+      "overrides": {
+        "simple_controller": "acceleration_mpc"
+      },
+      "returncode": 0,
+      "cpu": 4,
+      "wall_s": 18.40652264599339,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/configs/bench_mpc_original_exact.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/study.py": "9ba47284ed7d13e635e4d2c19c35672d7e03a77c43f16fe7921d7879fc987e4f",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "a1d1293589906a3ebf7cde2fe36d362fa611a291c7bb729ecec02c5b8791e630",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.620823630085831,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "MPC_conservative": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/20261011_230743_final_mpc_conservative",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.602473862679747,
+            "tilt_rms": 4.751915301467443,
+            "tilt_max": 7.66689074029479,
+            "swing_rms": 2.5121085532001124,
+            "acc": 2.3457741639339216,
+            "alpha": 10.78141363678569,
+            "speed": 0.45953847596544023,
+            "speed_tracking_rms": 0.18559835768273306,
+            "omega": 0.3629827206512262
+          },
+          "right": {
+            "tilt_mean": 0.09950978611759681,
+            "tilt_rms": 0.11658660519089548,
+            "tilt_max": 0.37493087213057086,
+            "swing_rms": 0.11506095815590568,
+            "acc": 2.7617541270778534,
+            "alpha": 6.096920693114654,
+            "speed": 0.4564781646964036,
+            "speed_tracking_rms": 0.178010696158345,
+            "omega": 0.04757736912996018
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.11967970527158,
+            "tilt_rms": 4.166958070057359,
+            "tilt_max": 5.218263943295209,
+            "swing_rms": 2.264459670097575,
+            "acc": 2.4555871120281116,
+            "alpha": 11.116765861997303,
+            "speed": 0.5024271345545229,
+            "speed_tracking_rms": 0.17754421953144206,
+            "omega": 0.36757883158863125
+          },
+          "right": {
+            "tilt_mean": 0.09002528145718834,
+            "tilt_rms": 0.10499224181341346,
+            "tilt_max": 0.37493087213057086,
+            "swing_rms": 0.09733640269508659,
+            "acc": 2.87489007683019,
+            "alpha": 6.407791977369199,
+            "speed": 0.4963429082550791,
+            "speed_tracking_rms": 0.15968922616393663,
+            "omega": 0.04919369501102193
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.5336504923124155,
+            "tilt_rms": 6.591611102844093,
+            "tilt_max": 7.66689074029479,
+            "swing_rms": 2.205474249469064,
+            "acc": 1.8421861691656498,
+            "alpha": 9.32011089609279,
+            "speed": 0.21481608951967027,
+            "speed_tracking_rms": 0.21481608951967027,
+            "omega": 0.3439847201963735
+          },
+          "right": {
+            "tilt_mean": 0.1374478047592306,
+            "tilt_rms": 0.15449498110185828,
+            "tilt_max": 0.27067182184496036,
+            "swing_rms": 0.10507930261925279,
+            "acc": 2.2530995265924236,
+            "alpha": 4.650055654473404,
+            "speed": 0.23756355764835962,
+            "speed_tracking_rms": 0.23756355764835962,
+            "omega": 0.040471616613284286
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.2035813480473423
+      },
+      "right_arm_q_absmax": [
+        0.19959085973642854,
+        0.08079965592935295,
+        0.08133702133229945,
+        0.18187760871359862,
+        0.11305770027109727
+      ],
+      "right_arm_dq_absmax": [
+        0.3584220440188422,
+        0.1670775330787776,
+        0.23846652225396675,
+        0.35437309160389646,
+        0.8214917041906343
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        11.963256956377531,
+        41.909532853930955,
+        77.97268365373746,
+        15.911894422219637
+      ],
+      "right_arm_ddq_des_absmax": [
+        15.0,
+        10.035287857055664,
+        15.0,
+        9.60280704498291,
+        15.0
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        6.255230417743557,
+        2.2624553557444806,
+        1.7395825039333326,
+        3.860402072054627,
+        0.3673231973347322
+      ],
+      "policy_compute_ms": {
+        "p50": 1.5614830008416902,
+        "p95": 1.7012165513733635,
+        "p99": 1.9280370285559907,
+        "max": 3.438904997892678
+      },
+      "name": "final_mpc_conservative",
+      "overrides": {
+        "simple_controller": "acceleration_mpc"
+      },
+      "returncode": 0,
+      "cpu": 2,
+      "wall_s": 18.79988306499581,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/configs/final_mpc_conservative.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/study.py": "9ba47284ed7d13e635e4d2c19c35672d7e03a77c43f16fe7921d7879fc987e4f",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "a1d1293589906a3ebf7cde2fe36d362fa611a291c7bb729ecec02c5b8791e630",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "866bc6c707d5069ce710770b2d42243b2ca71dd6af4a15680ad8672796e62dcc"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 6.255230417743557,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "MPC_acceleration": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/20261011_230329_bench_mpc_acceleration",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.63008565721345,
+            "tilt_rms": 4.80025246313469,
+            "tilt_max": 7.89072193931498,
+            "swing_rms": 2.564040206709161,
+            "acc": 2.355034539826251,
+            "alpha": 10.758044290923976,
+            "speed": 0.46034963922739686,
+            "speed_tracking_rms": 0.18734942628932075,
+            "omega": 0.36244296903953954
+          },
+          "right": {
+            "tilt_mean": 0.12116362928248567,
+            "tilt_rms": 0.139983455583755,
+            "tilt_max": 0.49209147321338675,
+            "swing_rms": 0.13811242094482623,
+            "acc": 2.5214464726157257,
+            "alpha": 6.254232864272611,
+            "speed": 0.45627933415716226,
+            "speed_tracking_rms": 0.17563304774414484,
+            "omega": 0.05634454853818568
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.115399507849926,
+            "tilt_rms": 4.172719261885315,
+            "tilt_max": 5.162965617731587,
+            "swing_rms": 2.285585537752368,
+            "acc": 2.4691868962121015,
+            "alpha": 11.128766649638107,
+            "speed": 0.5030215146601951,
+            "speed_tracking_rms": 0.17889428639203608,
+            "omega": 0.3672189094735669
+          },
+          "right": {
+            "tilt_mean": 0.11707097835170653,
+            "tilt_rms": 0.1384385801108931,
+            "tilt_max": 0.49209147321338675,
+            "swing_rms": 0.1382620130927556,
+            "acc": 2.6331960276332684,
+            "alpha": 6.510060437237213,
+            "speed": 0.49585578041993067,
+            "speed_tracking_rms": 0.15554139586328983,
+            "omega": 0.057484333066240415
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.688830254667543,
+            "tilt_rms": 6.7502425434289695,
+            "tilt_max": 7.89072193931498,
+            "swing_rms": 2.222699110765154,
+            "acc": 1.8284973899820072,
+            "alpha": 9.12577647430729,
+            "speed": 0.2179136866739325,
+            "speed_tracking_rms": 0.2179136866739325,
+            "omega": 0.3426742171963922
+          },
+          "right": {
+            "tilt_mean": 0.13753423300560222,
+            "tilt_rms": 0.14599957990817947,
+            "tilt_max": 0.26937373698036826,
+            "swing_rms": 0.11791321651905551,
+            "acc": 2.0133495204650695,
+            "alpha": 5.104272329805029,
+            "speed": 0.23971302424166027,
+            "speed_tracking_rms": 0.23971302424166027,
+            "omega": 0.051533935979876065
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.2130991243464915
+      },
+      "right_arm_q_absmax": [
+        0.2690880361449567,
+        0.07440387072999079,
+        0.10126624279500736,
+        0.2673349011210614,
+        0.11728564552697048
+      ],
+      "right_arm_dq_absmax": [
+        0.5360229616492488,
+        0.2505937967474171,
+        0.32310949768034897,
+        0.5828465031717286,
+        0.9752432134009275
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        12.710343019129606,
+        43.132521314740565,
+        77.97268365373746,
+        20.565523578874313
+      ],
+      "right_arm_ddq_des_absmax": [
+        23.720130920410156,
+        9.963133811950684,
+        25.0,
+        15.863606452941895,
+        20.55919647216797
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        5.806959879228006,
+        2.197616217424581,
+        1.6428891464238293,
+        3.8607466071265817,
+        0.4030847323881178
+      ],
+      "policy_compute_ms": {
+        "p50": 1.6540305005037226,
+        "p95": 1.8536899500759316,
+        "p99": 2.4067254259716697,
+        "max": 8.878958004061133
+      },
+      "name": "bench_mpc_acceleration",
+      "overrides": {
+        "policy_path": "policy/motion.pt",
+        "xml_path": "resources/g1_description/scene.xml",
+        "simulation_dt": 0.002,
+        "control_decimation": 10,
+        "arm_control_decimation": 3,
+        "arm_controller": "mpc",
+        "viewer_enabled": true,
+        "record_video": true,
+        "warmup_cycles": 3,
+        "evaluation_cycles": 8,
+        "cooldown_cycles": 2,
+        "performance_measure_evaluation_only": true,
+        "performance_disable_gc_during_control": true,
+        "pid_kp_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_kd_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_ki_pose": [
+          0.0,
+          0.0
+        ],
+        "pid_posture_gain": [
+          1.15,
+          1.15,
+          2.1,
+          1.15,
+          0.95
+        ],
+        "pid_finite_diff_eps": 0.0001,
+        "pid_damping": 0.15,
+        "pid_integral_limit": 0.2,
+        "pid_max_dq": 0.48,
+        "pid_de_g_alpha": 0.07,
+        "hardware_pid_max_dq": 0.07,
+        "hardware_pid_max_ddq": 0.2,
+        "lqr_horizon": 12,
+        "lqr_q_ee_acc": 1.0,
+        "lqr_q_ee_alpha": 0.075,
+        "lqr_q_position": 60.0,
+        "lqr_q_gravity": 30.0,
+        "lqr_q_posture": [
+          40.0,
+          50.0,
+          30.0,
+          10.0,
+          1.0
+        ],
+        "lqr_q_vel": 0.02,
+        "lqr_r_ddq": 0.25,
+        "lqr_max_dq": 1.0,
+        "lqr_max_ddq": 3.0,
+        "lqr_ddq_rate_limit": 350.0,
+        "lqr_ddq_smoothing_alpha": 0.45,
+        "lqr_joint_limit_margin": 0.25,
+        "lqr_joint_limit_stiffness": 8.0,
+        "lqr_joint_limit_damping": 2.0,
+        "ddq_torso_acc_filter_alpha": 0.2,
+        "ddq_torso_alpha_filter_alpha": 0.2,
+        "ddq_torso_acc_limit": 30.0,
+        "ddq_torso_alpha_limit": 40.0,
+        "mpc_horizon": 9,
+        "mpc_prediction_kinematics_backend": "cpp_pinocchio",
+        "mpc_q_ee_acc": 0.1,
+        "mpc_q_ee_alpha": 0.003,
+        "mpc_q_ee_omega": 32.0,
+        "mpc_q_gravity": [
+          100.0,
+          100.0
+        ],
+        "mpc_q_posture": [
+          12.0,
+          12.0,
+          4.5,
+          0.6000000000000001,
+          0.6000000000000001
+        ],
+        "mpc_q_vel": 0.08,
+        "mpc_r_ddq": 0.0025,
+        "mpc_terminal_scale": 2.0,
+        "mpc_q_min_deg": [
+          -20,
+          -15,
+          -25,
+          -45,
+          -45
+        ],
+        "mpc_q_max_deg": [
+          20,
+          12,
+          20,
+          45,
+          45
+        ],
+        "mpc_q_operating_margin_deg": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "mpc_max_dq": 2.0,
+        "mpc_max_ddq": 25.0,
+        "mpc_qp_regularization": 1e-06,
+        "mpc_osqp_max_iter": 4000,
+        "mpc_osqp_check_termination": 25,
+        "mpc_osqp_eps_abs": 1e-05,
+        "mpc_osqp_eps_rel": 1e-05,
+        "mpc_osqp_rho": 0.1,
+        "mpc_osqp_adaptive_rho": true,
+        "mpc_osqp_scaled_termination": false,
+        "mpc_osqp_polishing": false,
+        "mpc_failure_braking_gain": 4.0,
+        "mpc_failure_posture_gain": 4.0,
+        "mpc_failure_max_ddq_scale": 0.5,
+        "disturbance_predictor": "full_task_template",
+        "full_task_template_path": "disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+        "full_task_template_manifest_path": "disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+        "full_task_template_sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+        "full_task_template_manifest_sha256": "6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6",
+        "full_task_template_schema_version": "full_task_template_v2",
+        "full_task_heading_frame_version": "full_task_continuous_heading_v2",
+        "mpc_torso_acc_filter_alpha": 0.5,
+        "mpc_torso_alpha_filter_alpha": 0.5,
+        "mpc_command_delay_ms": 0.0,
+        "ddq_nominal_inverse_dynamics_backend": "cpp_pinocchio",
+        "ddq_rnea_other_qacc_mode": "measured",
+        "ddq_rnea_other_qacc_blend": 0.75,
+        "ddq_rnea_other_qacc_filter_alpha": 0.5,
+        "ddq_rnea_other_qacc_trend_window": 4,
+        "ddq_rnea_other_qacc_trend_lead_steps": 1.0,
+        "ddq_rnea_other_qacc_limit": 100.0,
+        "ddq_forward_dynamics_backend": "cpp",
+        "ddq_pinocchio_friction_breakaway_steps": 5.0,
+        "ddq_execution_perturbation": 0.1,
+        "ddq_execution_regularization": 5.0,
+        "ddq_execution_second_pass_error_threshold": 5.0,
+        "ddq_execution_max_joint_error": 8.0,
+        "ddq_execution_max_abs_qacc": 50.0,
+        "lqr_execution_enable_second_pass": true,
+        "lqr_execution_safety_rescue_passes": 2,
+        "mpc_execution_enable_second_pass": true,
+        "mpc_execution_safety_rescue_passes": 2,
+        "mpc_ddq_execution_mode": "twice_per_interval",
+        "mpc_execution_hold_last_safe": true,
+        "right_arm_execution_runtime": "process",
+        "right_arm_executor_backend": "cpp",
+        "right_arm_executor_output_semantics": "host_full_torque",
+        "right_arm_executor_command_timeout_ms": 30.0,
+        "right_arm_executor_state_timeout_ms": 10.0,
+        "right_arm_executor_timeout_damping": [
+          5.0,
+          5.0,
+          3.0,
+          2.0,
+          1.0
+        ],
+        "right_arm_executor_dq_ref_abs_max": [
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        "kps": [
+          100,
+          100,
+          100,
+          150,
+          40,
+          40,
+          100,
+          100,
+          100,
+          150,
+          40,
+          40
+        ],
+        "kds": [
+          2,
+          2,
+          2,
+          4,
+          2,
+          2,
+          2,
+          2,
+          2,
+          4,
+          2,
+          2
+        ],
+        "default_angles": [
+          -0.1,
+          0.0,
+          0.0,
+          0.3,
+          -0.2,
+          0.0,
+          -0.1,
+          0.0,
+          0.0,
+          0.3,
+          -0.2,
+          0.0
+        ],
+        "arm_waist_kps": [
+          100,
+          80,
+          80,
+          60,
+          80,
+          30,
+          80,
+          80,
+          60,
+          80,
+          30
+        ],
+        "arm_waist_kds": [
+          15,
+          5,
+          5,
+          3,
+          2,
+          1,
+          5,
+          5,
+          3,
+          2,
+          1
+        ],
+        "arm_waist_target": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "ang_vel_scale": 0.25,
+        "dof_pos_scale": 1.0,
+        "dof_vel_scale": 0.05,
+        "action_scale": 0.25,
+        "cmd_scale": [
+          2.0,
+          2.0,
+          0.25
+        ],
+        "num_actions": 12,
+        "num_obs": 47,
+        "heading_control_enabled": true,
+        "heading_filter_cycles": 1.0,
+        "heading_kp": 0.6,
+        "heading_kd": 0.1,
+        "heading_max_yaw_rate": 0.25,
+        "cmd_init": [
+          0.5,
+          0,
+          0.0127
+        ],
+        "mpc_preview_rotation_correction_gain": 1.0,
+        "mpc_preview_interval_lead_s": 0.003,
+        "mpc_preview_rotation_decay_s": 1.0,
+        "simple_controller": "acceleration_mpc"
+      },
+      "returncode": 0,
+      "cpu": 2,
+      "wall_s": 20.345047037000768,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/configs/bench_mpc_acceleration.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/study.py": "79d8022f63214b6f06aa0b33c948537ebf62c3f4ef6f67f891831f9e601b9aec",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "c7cf75c300f96a8c1a08c37b8b591c16175392da19503169a9943b1c01ea7c1a",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "f8894f742fdca0b39d6aed10a4ffc4bf02a9c3f5c3247ce9abfdf4c5ae361d63"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 5.806959879228006,
+      "actuator_limit_nm": 25.0
+    }
+  },
+  "MPC_attitude": {
+    "result": {
+      "complete": true,
+      "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/20261011_230356_bench_mpc_attitude",
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 4.612887662743462,
+            "tilt_rms": 4.793746414032768,
+            "tilt_max": 7.994924453468838,
+            "swing_rms": 2.5887820844069123,
+            "acc": 2.354338079212949,
+            "alpha": 10.767635912256297,
+            "speed": 0.45933449290197326,
+            "speed_tracking_rms": 0.1872605243153677,
+            "omega": 0.36271104370802515
+          },
+          "right": {
+            "tilt_mean": 0.06315930656978823,
+            "tilt_rms": 0.07450758906577552,
+            "tilt_max": 0.27896071111232346,
+            "swing_rms": 0.07416937793010767,
+            "acc": 2.628429849866283,
+            "alpha": 6.203104363729145,
+            "speed": 0.4563199460706358,
+            "speed_tracking_rms": 0.178634147309395,
+            "omega": 0.04995478343873042
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 4.079476891133342,
+            "tilt_rms": 4.137895172389721,
+            "tilt_max": 5.164139942958696,
+            "swing_rms": 2.287867515046096,
+            "acc": 2.4709678635640646,
+            "alpha": 11.148074447287621,
+            "speed": 0.5019400937925668,
+            "speed_tracking_rms": 0.1790021431524847,
+            "omega": 0.3675153814601325
+          },
+          "right": {
+            "tilt_mean": 0.06018287238292805,
+            "tilt_rms": 0.07266611826988431,
+            "tilt_max": 0.27896071111232346,
+            "swing_rms": 0.07241464129152873,
+            "acc": 2.7350244322965946,
+            "alpha": 6.480281432780158,
+            "speed": 0.49516132675213104,
+            "speed_tracking_rms": 0.15744069126099222,
+            "omega": 0.05067358521010009
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 6.7465307491839415,
+            "tilt_rms": 6.81258523466059,
+            "tilt_max": 7.994924453468838,
+            "swing_rms": 2.2454913025828507,
+            "acc": 1.81433465080044,
+            "alpha": 9.087995387624755,
+            "speed": 0.2171760825266023,
+            "speed_tracking_rms": 0.2171760825266023,
+            "omega": 0.3428210665925853
+          },
+          "right": {
+            "tilt_mean": 0.07506504331722891,
+            "tilt_rms": 0.08145824184403382,
+            "tilt_max": 0.1624427012879455,
+            "swing_rms": 0.06241790571118632,
+            "acc": 2.1498332022050475,
+            "alpha": 4.941288186742078,
+            "speed": 0.24576514778506925,
+            "speed_tracking_rms": 0.24576514778506925,
+            "omega": 0.04696970289315419
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.2051793902906693
+      },
+      "right_arm_q_absmax": [
+        0.30630301721891173,
+        0.09597518205853767,
+        0.11006799068751304,
+        0.2784180992985696,
+        0.12590926026094484
+      ],
+      "right_arm_dq_absmax": [
+        0.5484523676756807,
+        0.2357665261974186,
+        0.3196619620877876,
+        0.5924468859112005,
+        0.9895212102844176
+      ],
+      "right_arm_qacc_absmax": [
+        78.72287702302245,
+        10.584827324769345,
+        42.93393906707826,
+        77.97268365373746,
+        24.329573019880783
+      ],
+      "right_arm_ddq_des_absmax": [
+        24.092687606811523,
+        9.107580184936523,
+        25.0,
+        14.115772247314453,
+        23.962299346923828
+      ],
+      "right_arm_cpp_executor_actuator_tau_absmax": [
+        5.677252048958117,
+        1.8631912127730508,
+        1.6363799234428504,
+        4.221765644661689,
+        0.4160567766579619
+      ],
+      "policy_compute_ms": {
+        "p50": 1.5789624994795304,
+        "p95": 1.883379099672311,
+        "p99": 2.2383905321476028,
+        "max": 3.1121459978749044
+      },
+      "name": "bench_mpc_attitude",
+      "overrides": {
+        "policy_path": "policy/motion.pt",
+        "xml_path": "resources/g1_description/scene.xml",
+        "simulation_dt": 0.002,
+        "control_decimation": 10,
+        "arm_control_decimation": 3,
+        "arm_controller": "mpc",
+        "viewer_enabled": true,
+        "record_video": true,
+        "warmup_cycles": 3,
+        "evaluation_cycles": 8,
+        "cooldown_cycles": 2,
+        "performance_measure_evaluation_only": true,
+        "performance_disable_gc_during_control": true,
+        "pid_kp_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_kd_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_ki_pose": [
+          0.0,
+          0.0
+        ],
+        "pid_posture_gain": [
+          1.15,
+          1.15,
+          2.1,
+          1.15,
+          0.95
+        ],
+        "pid_finite_diff_eps": 0.0001,
+        "pid_damping": 0.15,
+        "pid_integral_limit": 0.2,
+        "pid_max_dq": 0.48,
+        "pid_de_g_alpha": 0.07,
+        "hardware_pid_max_dq": 0.07,
+        "hardware_pid_max_ddq": 0.2,
+        "lqr_horizon": 12,
+        "lqr_q_ee_acc": 1.0,
+        "lqr_q_ee_alpha": 0.075,
+        "lqr_q_position": 60.0,
+        "lqr_q_gravity": 30.0,
+        "lqr_q_posture": [
+          40.0,
+          50.0,
+          30.0,
+          10.0,
+          1.0
+        ],
+        "lqr_q_vel": 0.02,
+        "lqr_r_ddq": 0.25,
+        "lqr_max_dq": 1.0,
+        "lqr_max_ddq": 3.0,
+        "lqr_ddq_rate_limit": 350.0,
+        "lqr_ddq_smoothing_alpha": 0.45,
+        "lqr_joint_limit_margin": 0.25,
+        "lqr_joint_limit_stiffness": 8.0,
+        "lqr_joint_limit_damping": 2.0,
+        "ddq_torso_acc_filter_alpha": 0.2,
+        "ddq_torso_alpha_filter_alpha": 0.2,
+        "ddq_torso_acc_limit": 30.0,
+        "ddq_torso_alpha_limit": 40.0,
+        "mpc_horizon": 9,
+        "mpc_prediction_kinematics_backend": "cpp_pinocchio",
+        "mpc_q_ee_acc": 0.1,
+        "mpc_q_ee_alpha": 0.003,
+        "mpc_q_ee_omega": 32.0,
+        "mpc_q_gravity": [
+          1000.0,
+          1000.0
+        ],
+        "mpc_q_posture": [
+          12.0,
+          12.0,
+          4.5,
+          0.6000000000000001,
+          0.6000000000000001
+        ],
+        "mpc_q_vel": 0.08,
+        "mpc_r_ddq": 0.0025,
+        "mpc_terminal_scale": 2.0,
+        "mpc_q_min_deg": [
+          -20,
+          -15,
+          -25,
+          -45,
+          -45
+        ],
+        "mpc_q_max_deg": [
+          20,
+          12,
+          20,
+          45,
+          45
+        ],
+        "mpc_q_operating_margin_deg": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "mpc_max_dq": 2.0,
+        "mpc_max_ddq": 25.0,
+        "mpc_qp_regularization": 1e-06,
+        "mpc_osqp_max_iter": 4000,
+        "mpc_osqp_check_termination": 25,
+        "mpc_osqp_eps_abs": 1e-05,
+        "mpc_osqp_eps_rel": 1e-05,
+        "mpc_osqp_rho": 0.1,
+        "mpc_osqp_adaptive_rho": true,
+        "mpc_osqp_scaled_termination": false,
+        "mpc_osqp_polishing": false,
+        "mpc_failure_braking_gain": 4.0,
+        "mpc_failure_posture_gain": 4.0,
+        "mpc_failure_max_ddq_scale": 0.5,
+        "disturbance_predictor": "full_task_template",
+        "full_task_template_path": "disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz",
+        "full_task_template_manifest_path": "disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json",
+        "full_task_template_sha256": "d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4",
+        "full_task_template_manifest_sha256": "6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6",
+        "full_task_template_schema_version": "full_task_template_v2",
+        "full_task_heading_frame_version": "full_task_continuous_heading_v2",
+        "mpc_torso_acc_filter_alpha": 0.5,
+        "mpc_torso_alpha_filter_alpha": 0.5,
+        "mpc_command_delay_ms": 0.0,
+        "ddq_nominal_inverse_dynamics_backend": "cpp_pinocchio",
+        "ddq_rnea_other_qacc_mode": "measured",
+        "ddq_rnea_other_qacc_blend": 0.75,
+        "ddq_rnea_other_qacc_filter_alpha": 0.5,
+        "ddq_rnea_other_qacc_trend_window": 4,
+        "ddq_rnea_other_qacc_trend_lead_steps": 1.0,
+        "ddq_rnea_other_qacc_limit": 100.0,
+        "ddq_forward_dynamics_backend": "cpp",
+        "ddq_pinocchio_friction_breakaway_steps": 5.0,
+        "ddq_execution_perturbation": 0.1,
+        "ddq_execution_regularization": 5.0,
+        "ddq_execution_second_pass_error_threshold": 5.0,
+        "ddq_execution_max_joint_error": 8.0,
+        "ddq_execution_max_abs_qacc": 50.0,
+        "lqr_execution_enable_second_pass": true,
+        "lqr_execution_safety_rescue_passes": 2,
+        "mpc_execution_enable_second_pass": true,
+        "mpc_execution_safety_rescue_passes": 2,
+        "mpc_ddq_execution_mode": "twice_per_interval",
+        "mpc_execution_hold_last_safe": true,
+        "right_arm_execution_runtime": "process",
+        "right_arm_executor_backend": "cpp",
+        "right_arm_executor_output_semantics": "host_full_torque",
+        "right_arm_executor_command_timeout_ms": 30.0,
+        "right_arm_executor_state_timeout_ms": 10.0,
+        "right_arm_executor_timeout_damping": [
+          5.0,
+          5.0,
+          3.0,
+          2.0,
+          1.0
+        ],
+        "right_arm_executor_dq_ref_abs_max": [
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        "kps": [
+          100,
+          100,
+          100,
+          150,
+          40,
+          40,
+          100,
+          100,
+          100,
+          150,
+          40,
+          40
+        ],
+        "kds": [
+          2,
+          2,
+          2,
+          4,
+          2,
+          2,
+          2,
+          2,
+          2,
+          4,
+          2,
+          2
+        ],
+        "default_angles": [
+          -0.1,
+          0.0,
+          0.0,
+          0.3,
+          -0.2,
+          0.0,
+          -0.1,
+          0.0,
+          0.0,
+          0.3,
+          -0.2,
+          0.0
+        ],
+        "arm_waist_kps": [
+          100,
+          80,
+          80,
+          60,
+          80,
+          30,
+          80,
+          80,
+          60,
+          80,
+          30
+        ],
+        "arm_waist_kds": [
+          15,
+          5,
+          5,
+          3,
+          2,
+          1,
+          5,
+          5,
+          3,
+          2,
+          1
+        ],
+        "arm_waist_target": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "ang_vel_scale": 0.25,
+        "dof_pos_scale": 1.0,
+        "dof_vel_scale": 0.05,
+        "action_scale": 0.25,
+        "cmd_scale": [
+          2.0,
+          2.0,
+          0.25
+        ],
+        "num_actions": 12,
+        "num_obs": 47,
+        "heading_control_enabled": true,
+        "heading_filter_cycles": 1.0,
+        "heading_kp": 0.6,
+        "heading_kd": 0.1,
+        "heading_max_yaw_rate": 0.25,
+        "cmd_init": [
+          0.5,
+          0,
+          0.0127
+        ],
+        "mpc_preview_rotation_correction_gain": 1.0,
+        "mpc_preview_interval_lead_s": 0.003,
+        "mpc_preview_rotation_decay_s": 1.0,
+        "simple_controller": "acceleration_mpc"
+      },
+      "returncode": 0,
+      "cpu": 4,
+      "wall_s": 19.494507080002222,
+      "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simple_controller_comparison_20261011/configs/bench_mpc_attitude.yaml",
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/experiments/simple_controller_comparison/study.py": "79d8022f63214b6f06aa0b33c948537ebf62c3f4ef6f67f891831f9e601b9aec",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "303ebe44b11b096d58cee4e317fbfa0c30bf93eb5ab4f6b66f54811f4fa2c7b8",
+        "tools/experiments/simple_controller_comparison/controllers.py": "c7cf75c300f96a8c1a08c37b8b591c16175392da19503169a9943b1c01ea7c1a",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "f8894f742fdca0b39d6aed10a4ffc4bf02a9c3f5c3247ce9abfdf4c5ae361d63"
+      }
+    },
+    "physical_audit": {
+      "sample_count": 4000,
+      "sample_period_s": 0.002,
+      "arm_contact_frames": 0,
+      "pairs": {},
+      "max_physical_joint_limit_violation_rad": 0.0,
+      "max_abs_actuator_torque_nm": 5.677252048958117,
+      "actuator_limit_nm": 25.0
+    }
+  }
+}

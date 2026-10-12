@@ -1,0 +1,37 @@
+[
+  {
+    "name": "val_c_original_bounded_nominal",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    }
+  },
+  {
+    "name": "val_c_original_bounded_heldout",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    },
+    "scenario": "heldout_pair_02_minus"
+  },
+  {
+    "name": "val_c_original_bounded_delay4",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true
+    },
+    "latency_ms": 4
+  },
+  {
+    "name": "val_c_original_bounded_payload75",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    }
+  }
+]

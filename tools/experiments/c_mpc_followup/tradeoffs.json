@@ -1,0 +1,123 @@
+[
+  {
+    "name": "mpc_conservative_angular",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "mpc_q_ee_alpha": 0.02,
+      "mpc_q_gravity": [
+        1000,
+        1000
+      ]
+    }
+  },
+  {
+    "name": "mpc_conservative_angular_omega64",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "mpc_q_ee_alpha": 0.02,
+      "mpc_q_gravity": [
+        1000,
+        1000
+      ],
+      "mpc_q_ee_omega": 64.0
+    }
+  },
+  {
+    "name": "mpc_attitude_alpha01",
+    "base_config": "configs/simulation_optimization_20261010/attitude_balanced.yaml",
+    "overrides": {
+      "mpc_q_ee_alpha": 0.01
+    }
+  },
+  {
+    "name": "mpc_attitude_alpha02",
+    "base_config": "configs/simulation_optimization_20261010/attitude_balanced.yaml",
+    "overrides": {
+      "mpc_q_ee_alpha": 0.02
+    }
+  },
+  {
+    "name": "field6_kp600",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    }
+  },
+  {
+    "name": "field6_kp900",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60
+    }
+  },
+  {
+    "name": "field4_kp600_heldout",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    },
+    "scenario": "heldout_pair_02_minus"
+  },
+  {
+    "name": "field6_kp600_heldout",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 3,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    },
+    "scenario": "heldout_pair_02_minus"
+  },
+  {
+    "name": "field4_kp600_payload75",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    }
+  },
+  {
+    "name": "field6_kp600_payload75",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 3,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    }
+  },
+  {
+    "name": "field4_kp600_delay4",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    },
+    "latency_ms": 4
+  },
+  {
+    "name": "field6_kp600_delay4",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 3,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    },
+    "latency_ms": 4
+  }
+]

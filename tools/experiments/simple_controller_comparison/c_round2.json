@@ -1,0 +1,226 @@
+[
+  {
+    "name": "r2_mix_0",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.06,
+      "simple_apid_regularization": 0.0015
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_1",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.08,
+      "simple_apid_regularization": 0.002
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_2",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.1,
+      "simple_apid_regularization": 0.002
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_3",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.12,
+      "simple_apid_regularization": 0.003
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_4",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.15,
+      "simple_apid_regularization": 0.0045
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_5",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.2,
+      "simple_apid_regularization": 0.006
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_6",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.3,
+      "simple_apid_regularization": 0.009
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_7",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_regularization": 0.012
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_8",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.6,
+      "simple_apid_regularization": 0.018
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_9",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 1,
+      "simple_apid_regularization": 0.03
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_10",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.2,
+      "simple_apid_regularization": 0.0045
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_mix_11",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.15,
+      "simple_apid_regularization": 0.003
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_post_2_4",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_posture_kp": 2,
+      "simple_apid_posture_kd": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_post_4_4",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_posture_kp": 4,
+      "simple_apid_posture_kd": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_post_4_8",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_posture_kp": 4,
+      "simple_apid_posture_kd": 8
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_post_8_8",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_posture_kp": 8,
+      "simple_apid_posture_kd": 8
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_post_16_12",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_posture_kp": 16,
+      "simple_apid_posture_kd": 12
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_post_32_16",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_posture_kp": 32,
+      "simple_apid_posture_kd": 16
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_lead_0",
+    "overrides": {
+      "mpc_preview_interval_lead_s": 0
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_lead_1.5",
+    "overrides": {
+      "mpc_preview_interval_lead_s": 0.0015
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_lead_4.5",
+    "overrides": {
+      "mpc_preview_interval_lead_s": 0.0045
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_lead_6",
+    "overrides": {
+      "mpc_preview_interval_lead_s": 0.006
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_pd_1600_60",
+    "overrides": {
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 60
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r2_pd_2500_60",
+    "overrides": {
+      "simple_apid_kp": 2500,
+      "simple_apid_kd": 60
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  }
+]

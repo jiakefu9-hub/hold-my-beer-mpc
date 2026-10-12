@@ -1,0 +1,12 @@
+{
+  "metric_difference": {
+    "tilt_mean": 2.0421441440654498e-08,
+    "swing_rms": 1.499281088168658e-08,
+    "acc": -2.391636666487784e-09,
+    "alpha": 2.854423541975848e-08,
+    "speed": 7.666226542468735e-10,
+    "omega": 1.0190245314234403e-09
+  },
+  "mathematical_algorithm_unchanged": true,
+  "bitwise_equal_trajectory": false
+}

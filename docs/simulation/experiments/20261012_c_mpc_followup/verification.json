@@ -1,0 +1,18 @@
+{
+  "new_unit_tests_passed": 5,
+  "existing_controller_tests_passed": 7,
+  "hardware_sha256_parity": true,
+  "verified_paths": [
+    "configs/hardware_acceleration_pid_20261012.yaml",
+    "configs/hardware_mpc_learned_acc001_alpha0005_omega1.yaml",
+    "configs/hardware_mpc_torque_learned.yaml",
+    "configs/g1_payload75.yaml",
+    "tools/g1_commissioning/hardware_acceleration_pid.py",
+    "tools/g1_commissioning/g1_run_control_comparison.py",
+    "tools/g1_commissioning/hardware_control_comparison.py",
+    "tools/g1_commissioning/hardware_mpc_learned.py"
+  ],
+  "selected_contact_checks_passed": true,
+  "link_and_python_syntax_checks_passed": true,
+  "hardware_output": false
+}

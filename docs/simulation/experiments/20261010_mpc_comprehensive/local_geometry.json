@@ -1,0 +1,15 @@
+{
+  "explanation": "Two remaining joint velocity directions after cancelling full 3D angular velocity; linear Jacobian singular values in m/rad. This is local geometry, not acceleration lower-bound proof.",
+  "mean_singular_values": [
+    0.13748773144815077,
+    0.13617373221643114
+  ],
+  "min": [
+    0.13702315423135475,
+    0.1350682867693052
+  ],
+  "max": [
+    0.13767356820966606,
+    0.13716256301661758
+  ]
+}

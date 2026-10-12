@@ -1,0 +1,146 @@
+[
+  {
+    "name": "r4_brake_0",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.06,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_1",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.06,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_2",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.06,
+      "simple_apid_posture_kp": 16
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_3",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.1,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_4",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.1,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_5",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.1,
+      "simple_apid_posture_kp": 16
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_6",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.2,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_7",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.2,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_8",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.2,
+      "simple_apid_posture_kp": 16
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_9",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_10",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 1600,
+      "simple_apid_kd": 80,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_posture_kp": 4
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  },
+  {
+    "name": "r4_brake_11",
+    "overrides": {
+      "simple_apid_bounded_allocation": true,
+      "simple_apid_predictive_brake": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60,
+      "simple_apid_acc_weight": 0.4,
+      "simple_apid_posture_kp": 16
+    },
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"
+  }
+]

@@ -1,0 +1,48 @@
+[
+  {
+    "name": "field4_kp600_delay3quant4",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    },
+    "latency_ms": 3
+  },
+  {
+    "name": "field4_post36",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    }
+  },
+  {
+    "name": "field4_post48",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 48,
+      "simple_apid_posture_kd": 12
+    }
+  },
+  {
+    "name": "field4_reg024",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_regularization": 0.024
+    }
+  }
+]

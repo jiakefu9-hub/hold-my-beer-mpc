@@ -1,0 +1,19 @@
+{
+  "head": "50907c986cd475e3d44c03cb6fb4974350955bfc",
+  "source_sha256": {
+    "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+    "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+    "sim_support.py": "8e7a7471660c155e9e2d7ce3fcde7f648b99f419fe444a1adfc4315e45a5b78e",
+    "configs/g1.yaml": "f1e9d049d25fe92fd8cc673a196acc22e7df9dec2d47bb2532415c3080432465",
+    "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+    "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+    "resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+    "resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+  },
+  "simulation_only": true,
+  "evaluation_window": "0 <= t < 8 s",
+  "physics_dt_s": 0.002,
+  "control_dt_s": 0.006,
+  "batch_timing_is_not_realtime_evidence": true,
+  "fixed": "left PD; legs policy/command; neutral; payload; contacts; physical actuator limits"
+}

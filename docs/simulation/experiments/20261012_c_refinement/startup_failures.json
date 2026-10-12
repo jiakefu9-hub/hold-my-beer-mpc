@@ -1,0 +1,6 @@
+{
+  "count": 18,
+  "included_in_simulation_counts": false,
+  "reason": "missing /tmp native library; no simulation initialized; rebuilt and reran same cases",
+  "retained_directory": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/acceleration_pid_refinement_20261012/startup_failures_missing_tmp_builds"
+}

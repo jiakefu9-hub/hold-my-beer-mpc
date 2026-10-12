@@ -1,0 +1,158 @@
+[
+  {
+    "name": "mpc6_n3",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 3
+    }
+  },
+  {
+    "name": "mpc6_n6",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 6
+    }
+  },
+  {
+    "name": "mpc6_n9",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 9
+    }
+  },
+  {
+    "name": "mpc6_current_hold",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_hold_future_disturbance": true
+    }
+  },
+  {
+    "name": "mpc6_no_rotation_correction",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "mpc_preview_rotation_correction_gain": 0.0
+    }
+  },
+  {
+    "name": "mpc6_no_interval_lead",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "mpc_preview_interval_lead_s": 0.0
+    }
+  },
+  {
+    "name": "mpc6_alpha0p01",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "mpc_q_ee_alpha": 0.01
+    }
+  },
+  {
+    "name": "mpc6_alpha0p02",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "mpc_q_ee_alpha": 0.02
+    }
+  },
+  {
+    "name": "old6_noff",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "simple_feedforward": false
+    }
+  },
+  {
+    "name": "old6_bounded",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "simple_apid_bounded_allocation": true
+    }
+  },
+  {
+    "name": "old4_kp600",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    }
+  },
+  {
+    "name": "old4_kp400",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 400,
+      "simple_apid_kd": 40
+    }
+  },
+  {
+    "name": "field4_kp900",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60
+    }
+  },
+  {
+    "name": "field4_kp600",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49
+    }
+  },
+  {
+    "name": "field4_post12",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_posture_kp": 12,
+      "simple_apid_posture_kd": 4
+    }
+  },
+  {
+    "name": "field4_reg006",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_regularization": 0.006
+    }
+  },
+  {
+    "name": "old4_acc02",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_acc_weight": 0.2
+    }
+  },
+  {
+    "name": "old2fast",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 1
+    }
+  },
+  {
+    "name": "field2fast",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 1
+    }
+  }
+]

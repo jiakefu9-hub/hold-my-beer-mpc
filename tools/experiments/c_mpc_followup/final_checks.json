@@ -1,0 +1,203 @@
+[
+  {
+    "name": "field4_post36_heldout",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    },
+    "scenario": "heldout_pair_02_minus"
+  },
+  {
+    "name": "field4_post36_payload75",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10,
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    }
+  },
+  {
+    "name": "field4_post36_delay2",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    },
+    "latency_ms": 2
+  },
+  {
+    "name": "field6_post36",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 3,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    }
+  },
+  {
+    "name": "old6_current_hold",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "research_resample_template": true,
+      "research_hold_future_disturbance": true
+    }
+  },
+  {
+    "name": "serial_old6_1",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {}
+  },
+  {
+    "name": "serial_old6fast_1",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "research_resample_template": true
+    }
+  },
+  {
+    "name": "serial_field6fast_1",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true
+    }
+  },
+  {
+    "name": "serial_field4_post36_1",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    }
+  },
+  {
+    "name": "serial_field2fast_1",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 1
+    }
+  },
+  {
+    "name": "serial_mpc6_n9_1",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 9
+    }
+  },
+  {
+    "name": "serial_old6_2",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {}
+  },
+  {
+    "name": "serial_old6fast_2",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "research_resample_template": true
+    }
+  },
+  {
+    "name": "serial_field6fast_2",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true
+    }
+  },
+  {
+    "name": "serial_field4_post36_2",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    }
+  },
+  {
+    "name": "serial_field2fast_2",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 1
+    }
+  },
+  {
+    "name": "serial_mpc6_n9_2",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 9
+    }
+  },
+  {
+    "name": "serial_old6_3",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {}
+  },
+  {
+    "name": "serial_old6fast_3",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "research_resample_template": true
+    }
+  },
+  {
+    "name": "serial_field6fast_3",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true
+    }
+  },
+  {
+    "name": "serial_field4_post36_3",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2,
+      "simple_apid_kp": 600,
+      "simple_apid_kd": 49,
+      "simple_apid_posture_kp": 36,
+      "simple_apid_posture_kd": 10
+    }
+  },
+  {
+    "name": "serial_field2fast_3",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 1
+    }
+  },
+  {
+    "name": "serial_mpc6_n9_3",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 9
+    }
+  }
+]

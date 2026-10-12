@@ -1,0 +1,74 @@
+[
+  {
+    "name": "f001_baseline_repeat1",
+    "config": "configs/simulation_optimization_20261010/baseline.yaml",
+    "candidate": "baseline",
+    "repeat": 1
+  },
+  {
+    "name": "f002_baseline_repeat2",
+    "config": "configs/simulation_optimization_20261010/baseline.yaml",
+    "candidate": "baseline",
+    "repeat": 2
+  },
+  {
+    "name": "f003_baseline_repeat3",
+    "config": "configs/simulation_optimization_20261010/baseline.yaml",
+    "candidate": "baseline",
+    "repeat": 3
+  },
+  {
+    "name": "f004_conservative_repeat1",
+    "config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "candidate": "conservative",
+    "repeat": 1
+  },
+  {
+    "name": "f005_conservative_repeat2",
+    "config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "candidate": "conservative",
+    "repeat": 2
+  },
+  {
+    "name": "f006_conservative_repeat3",
+    "config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "candidate": "conservative",
+    "repeat": 3
+  },
+  {
+    "name": "f007_acceleration_balanced_repeat1",
+    "config": "configs/simulation_optimization_20261010/acceleration_balanced.yaml",
+    "candidate": "acceleration_balanced",
+    "repeat": 1
+  },
+  {
+    "name": "f008_acceleration_balanced_repeat2",
+    "config": "configs/simulation_optimization_20261010/acceleration_balanced.yaml",
+    "candidate": "acceleration_balanced",
+    "repeat": 2
+  },
+  {
+    "name": "f009_acceleration_balanced_repeat3",
+    "config": "configs/simulation_optimization_20261010/acceleration_balanced.yaml",
+    "candidate": "acceleration_balanced",
+    "repeat": 3
+  },
+  {
+    "name": "f010_attitude_balanced_repeat1",
+    "config": "configs/simulation_optimization_20261010/attitude_balanced.yaml",
+    "candidate": "attitude_balanced",
+    "repeat": 1
+  },
+  {
+    "name": "f011_attitude_balanced_repeat2",
+    "config": "configs/simulation_optimization_20261010/attitude_balanced.yaml",
+    "candidate": "attitude_balanced",
+    "repeat": 2
+  },
+  {
+    "name": "f012_attitude_balanced_repeat3",
+    "config": "configs/simulation_optimization_20261010/attitude_balanced.yaml",
+    "candidate": "attitude_balanced",
+    "repeat": 3
+  }
+]

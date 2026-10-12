@@ -1091,7 +1091,7 @@ def create_disturbance_predictor(
             template_path = os.path.join(repo_dir, template_path)
         if not os.path.isabs(manifest_path):
             manifest_path = os.path.join(repo_dir, manifest_path)
-        return FullTaskTemplatePredictor(
+        predictor = FullTaskTemplatePredictor(
             template_path=template_path,
             manifest_path=manifest_path,
             expected_sha256=str(config["full_task_template_sha256"]),
@@ -1108,6 +1108,8 @@ def create_disturbance_predictor(
                 config["full_task_heading_frame_version"]
             ),
         )
+        from disturbance_template.preview_correction import correct_template_preview
+        return correct_template_preview(predictor, config)
 
     template_dir = str(
         config.get(

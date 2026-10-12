@@ -1,0 +1,45 @@
+[
+  {
+    "name": "old6",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {}
+  },
+  {
+    "name": "old6fast",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "research_resample_template": true
+    }
+  },
+  {
+    "name": "old4fast",
+    "base_config": "configs/simulation_simple_controllers_20261011/acceleration_pid.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2
+    }
+  },
+  {
+    "name": "field6fast",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true
+    }
+  },
+  {
+    "name": "field4fast",
+    "base_config": "configs/simulation_acceleration_pid_20261012/C_field_candidate.yaml",
+    "overrides": {
+      "research_c_single_terms": true,
+      "arm_control_decimation": 2
+    }
+  },
+  {
+    "name": "mpc6_n1",
+    "base_config": "configs/simulation_optimization_20261010/conservative.yaml",
+    "overrides": {
+      "research_optimization_horizon": 1
+    }
+  }
+]

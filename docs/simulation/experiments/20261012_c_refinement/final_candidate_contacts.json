@@ -1,0 +1,25 @@
+{
+  "val_c_field_final_delay4": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 21,
+    "pairs": {
+      "right_shoulder_yaw_link / torso_link": 21
+    },
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "val_c_field_final_heldout": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 0,
+    "pairs": {},
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "val_c_field_final_payload75": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 0,
+    "pairs": {},
+    "max_physical_joint_limit_violation_rad": 0.0
+  }
+}

@@ -1,0 +1,140 @@
+[
+  {
+    "name": "p2_pid_0",
+    "overrides": {
+      "simple_controller": "ff_pid",
+      "simple_pid_kp": 8,
+      "simple_pid_preview_steps": 3
+    }
+  },
+  {
+    "name": "p2_pid_1",
+    "overrides": {
+      "simple_controller": "ff_pid",
+      "simple_pid_kp": 8,
+      "simple_pid_preview_steps": 3,
+      "simple_pid_full_rotation": true
+    }
+  },
+  {
+    "name": "p2_pid_2",
+    "overrides": {
+      "simple_controller": "ff_pid",
+      "simple_pid_kp": 16,
+      "simple_pid_full_rotation": true
+    }
+  },
+  {
+    "name": "p2_pid_3",
+    "overrides": {
+      "simple_controller": "ff_pid",
+      "simple_pid_kp": 8,
+      "simple_pid_full_rotation": true
+    }
+  },
+  {
+    "name": "p2_pos_0",
+    "overrides": {
+      "simple_controller": "position_mpc",
+      "simple_position_beta": 0.1,
+      "simple_servo_bias_gain": 0.2,
+      "simple_r_rate": 0.001
+    }
+  },
+  {
+    "name": "p2_pos_1",
+    "overrides": {
+      "simple_controller": "position_mpc",
+      "simple_position_beta": 0.2,
+      "simple_servo_bias_gain": 0.5,
+      "simple_r_rate": 0.001
+    }
+  },
+  {
+    "name": "p2_pos_2",
+    "overrides": {
+      "simple_controller": "position_mpc",
+      "simple_position_beta": 0.2,
+      "simple_servo_bias_gain": 0.2,
+      "simple_r_rate": 0.003
+    }
+  },
+  {
+    "name": "p2_pos_3",
+    "overrides": {
+      "simple_controller": "position_mpc",
+      "simple_position_beta": 0.2,
+      "simple_servo_bias_gain": 0.2,
+      "simple_r_rate": 0.001,
+      "simple_q_omega": 0.01
+    }
+  },
+  {
+    "name": "p2_pos_4",
+    "overrides": {
+      "simple_controller": "position_mpc",
+      "simple_position_beta": 0.2,
+      "simple_servo_bias_gain": 0.2,
+      "simple_r_rate": 0.001,
+      "simple_q_posture": 0.02
+    }
+  },
+  {
+    "name": "p2_pos_5",
+    "overrides": {
+      "simple_controller": "position_mpc",
+      "simple_position_beta": 0.1,
+      "simple_servo_bias_gain": 0.5,
+      "simple_r_rate": 0.001
+    }
+  },
+  {
+    "name": "p2_apid_0",
+    "overrides": {
+      "simple_controller": "acceleration_pid",
+      "simple_apid_full_rotation": true
+    }
+  },
+  {
+    "name": "p2_apid_1",
+    "overrides": {
+      "simple_controller": "acceleration_pid",
+      "simple_apid_full_rotation": true,
+      "simple_apid_kp": 900,
+      "simple_apid_kd": 60
+    }
+  },
+  {
+    "name": "p2_apid_2",
+    "overrides": {
+      "simple_controller": "acceleration_pid",
+      "simple_apid_full_rotation": true,
+      "simple_apid_kp": 100,
+      "simple_apid_kd": 20
+    }
+  },
+  {
+    "name": "p2_apid_3",
+    "overrides": {
+      "simple_controller": "acceleration_pid",
+      "simple_apid_full_rotation": true,
+      "simple_apid_acc_weight": 0.3
+    }
+  },
+  {
+    "name": "p2_apid_4",
+    "overrides": {
+      "simple_controller": "acceleration_pid",
+      "simple_apid_full_rotation": true,
+      "simple_apid_acc_weight": 1
+    }
+  },
+  {
+    "name": "p2_apid_5",
+    "overrides": {
+      "simple_controller": "acceleration_pid",
+      "simple_apid_full_rotation": true,
+      "simple_apid_acc_weight": 0.03
+    }
+  }
+]

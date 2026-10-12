@@ -6618,10 +6618,11 @@ def compute_right_arm_trajectory_diagnostics(trajectory_data):
         if tau_nominal.shape == tau_mapping_correction.shape
         else np.zeros_like(tau_nominal)
     )
-    torque_gap_values = {}
+    torque_gap_values = {"execution_call_count": 0}
     if (
         execution_mask.shape == (tau_nominal.shape[0],)
         and ctrl.shape == tau_nominal.shape
+        and np.any(execution_mask)
     ):
         nominal_execution = tau_nominal[execution_mask]
         selected_execution = tau_selected[execution_mask]

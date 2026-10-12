@@ -1,0 +1,6 @@
+[
+  {"name":"reproduce_ff_pid","base_config":"configs/simulation_simple_controllers_20261011/ff_pid.yaml"},
+  {"name":"reproduce_position_mpc","base_config":"configs/simulation_simple_controllers_20261011/position_mpc.yaml"},
+  {"name":"reproduce_acceleration_pid","base_config":"configs/simulation_simple_controllers_20261011/acceleration_pid.yaml"},
+  {"name":"reproduce_mpc_conservative","base_config":"configs/simulation_simple_controllers_20261011/mpc_conservative.yaml"}
+]

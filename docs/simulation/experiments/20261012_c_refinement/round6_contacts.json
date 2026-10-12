@@ -1,0 +1,64 @@
+{
+  "r6_moderate_post12": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 15,
+    "pairs": {
+      "right_shoulder_yaw_link / torso_link": 15
+    },
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "r6_moderate_post16": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 0,
+    "pairs": {},
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "r6_moderate_post24": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 0,
+    "pairs": {},
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "r6_moderate_post4": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 0,
+    "pairs": {},
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "r6_relaxed_post12": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 27,
+    "pairs": {
+      "right_shoulder_yaw_link / torso_link": 27
+    },
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "r6_relaxed_post16": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 22,
+    "pairs": {
+      "right_shoulder_yaw_link / torso_link": 22
+    },
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "r6_relaxed_post24": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 0,
+    "pairs": {},
+    "max_physical_joint_limit_violation_rad": 0.0
+  },
+  "r6_relaxed_post4": {
+    "sample_count": 4000,
+    "sample_period_s": 0.002,
+    "arm_contact_frames": 0,
+    "pairs": {},
+    "max_physical_joint_limit_violation_rad": 0.0
+  }
+}

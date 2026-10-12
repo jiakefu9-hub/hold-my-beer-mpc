@@ -1,0 +1,20 @@
+{
+  "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+  "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+  "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+  "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c",
+  "tools/experiments/mpc_comprehensive/report.py": "f565a92be7c20c6cfcdafcb407879bf15f2d534ec518313cd474f975c0a53e94",
+  "tools/experiments/mpc_comprehensive/contact_audit.py": "18a7098fe4bbe330027afa187b1c8ebe127dfbeb7e9c297cb54675d34d38ff21",
+  "tools/experiments/mpc_comprehensive/study.py": "0314a18fb582718c40d216fabec51777243eb4d4ce9035e306c946176e5e65e9",
+  "tools/experiments/mpc_comprehensive/test_preview.py": "14d4b1bdefe25da90704f087d692f46b3509299b0d5a2adfb7063f01c13a2c8f",
+  "tools/experiments/mpc_comprehensive/serial_validation.py": "370323ee16d5a9228e9388c0a919a0c37c3e6d41701dd99a2b241a8aa548e3e9",
+  "tools/experiments/mpc_comprehensive/preview.py": "dad5671da35e36de64eafae6ce5481e04d0ccb88cc7180a9cb7eb8ad72c8ffcd",
+  "tools/experiments/mpc_comprehensive/metrics.py": "2ab20e6d4613e351104f0f9540a6b101d6977ab23f4e25d8e85546a789472195",
+  "tools/experiments/mpc_comprehensive/test_strategy.py": "0092c524ea164b107b303ef1f461253c84388c2649e654dd11575f6c91806e69",
+  "tools/experiments/mpc_comprehensive/analyze.py": "3fda172038d57fa7ba60615a91a4f517562b06bd1964de2cee564e9f557b1725",
+  "tools/experiments/mpc_comprehensive/simulation_entry.py": "3c4066ede91ebe66f22a23fed83e930c6433bbeb86a3b6875c420bf7db4fee15",
+  "configs/simulation_optimization_20261010/acceleration_balanced.yaml": "d550391ddd94785a4df9f702d1092d12da745a8f97651345c1cca0f168324e3d",
+  "configs/simulation_optimization_20261010/attitude_balanced.yaml": "4c3d9195721c9657dbafddb9e3f92ac67a2b52db874c87d40d8f2e11bd60ed8b",
+  "configs/simulation_optimization_20261010/conservative.yaml": "efb93cbc5bcf84aabc53732e5003d2a1334cc1efbaa0208fae40b99be86dad2f",
+  "configs/simulation_optimization_20261010/baseline.yaml": "e281b59cdaaee105869f6abac32fa37d679830b088103d0ed70b7755756b3ab5"
+}

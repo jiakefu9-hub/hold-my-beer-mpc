@@ -1,0 +1,11 @@
+{
+  "core_tests_passed": 35,
+  "research_tests_passed": 6,
+  "frozen_baseline_hashes_unchanged": 8,
+  "formal_repeat_metric_parity": true,
+  "contact_audits": 22,
+  "contact_frames_per_audit": 4000,
+  "formal_intervals": 15948,
+  "formal_overruns": 0,
+  "no_robot_output": true
+}

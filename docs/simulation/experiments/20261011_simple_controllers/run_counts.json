@@ -1,0 +1,5 @@
+{
+  "attempts": 81,
+  "completed_exports": 62,
+  "note": "Includes integration/debug attempts and repeated validation; not all successful exports pass quality gates."
+}
