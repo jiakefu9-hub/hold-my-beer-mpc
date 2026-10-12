@@ -62,7 +62,7 @@ def main(argv=None):
         return 0
     command = build_command(args.trial, execute=args.execute, nic=args.nic, cpu=args.cpu)
     print(f'{args.trial}: {TRIALS[args.trial]["purpose"]}', flush=True)
-    print('共同：零中立位、75 mm/250 g、左PD 20/1、6 ms、原力矩限值；右肩 roll 正常 -15～+1°、外边界 -17～+3°（不是防碰撞保证）。', flush=True)
+    print('共同：零中立位、75 mm/250 g、左PD 20/1、6 ms；保留成功基线的力矩、关节边界和 1.5 s 接管时序。', flush=True)
     print(shlex.join(command), flush=True)
     if not (args.execute or args.preflight):
         print('只显示命令；加 --execute 运行一组，原现场确认和停车退权保持。')

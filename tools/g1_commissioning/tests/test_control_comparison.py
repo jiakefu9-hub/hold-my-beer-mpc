@@ -24,7 +24,7 @@ BASELINE_OVERLAY = {
     'q_ee_alpha': .0005,
     'q_ee_omega': 1.,
     'mpc_start_s': 3.3,
-    'mpc_handoff_duration_s': 1.2,
+    'mpc_handoff_duration_s': 1.5,
     'q_gravity': [30., 30.],
     'q_posture': [4., 4., 1.5, .2, .2],
     'q_vel': .08,
@@ -61,7 +61,7 @@ class TrialSeriesTests(unittest.TestCase):
                     self.assertEqual(trial['config'].resolve(), BASELINE_CONFIG.resolve())
         self.assertEqual(set(CANDIDATE_CONFIGS), candidates | {BASELINE_CONFIG.resolve()})
         self.assertEqual(set(ZERO_NEUTRAL_MPC_CONFIGS),
-                         candidates | {BASELINE_CONFIG.resolve(), ORIGINAL_MPC_CONFIG.resolve()})
+                         candidates | {BASELINE_CONFIG.resolve()})
 
     def test_each_named_comparison_changes_only_one_factor(self):
         factors = {'T06': 'q_ee_acc'}
@@ -104,20 +104,16 @@ class TrialSeriesTests(unittest.TestCase):
                     g1_walk_mpc.validate_accel_forecast_alignment(
                         config, TORQUE_CONFIG, 'learned_filtered', 'measured_torque_preview', None)
 
-    def test_common_roll_limits_and_original_torque_are_separate(self):
+    def test_common_torque_matches_successful_baseline(self):
+        self.assertEqual(TORQUE_CONFIG.resolve(), ORIGINAL_TORQUE_CONFIG.resolve())
         original = yaml.safe_load(ORIGINAL_TORQUE_CONFIG.read_text())
         current = yaml.safe_load(TORQUE_CONFIG.read_text())
-        self.assertEqual(original['q_max_deg'][1], 20)
-        self.assertEqual(current['q_min_deg'][1], -17)
-        self.assertEqual(current['q_max_deg'][1], 3)
-        self.assertEqual(current['q_margin_deg'][1], 2)
-        changed = {k for k in current if current[k] != original[k]}
-        self.assertEqual(changed, {'q_min_deg','q_max_deg','q_margin_deg'})
+        self.assertEqual(current, original)
         validate_comparison_torque(TORQUE_CONFIG)
-        real_read = Path.read_text
+        real_read = Path.read_bytes
         def read(path, *args, **kwargs):
-            return yaml.safe_dump(original) if path.resolve() == TORQUE_CONFIG else real_read(path, *args, **kwargs)
-        with mock.patch.object(Path, 'read_text', read):
+            return b'tampered' if path.resolve() == TORQUE_CONFIG else real_read(path, *args, **kwargs)
+        with mock.patch.object(Path, 'read_bytes', read):
             with self.assertRaises(ValueError):
                 launcher.build_command('T03')
             with self.assertRaises(ValueError):

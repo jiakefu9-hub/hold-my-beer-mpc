@@ -1,4 +1,5 @@
 """One authoritative field schedule. Historical controller defaults stay separate."""
+import hashlib
 from pathlib import Path
 import yaml
 
@@ -6,9 +7,10 @@ ROOT = Path(__file__).resolve().parents[2]
 ORIGINAL_MPC_CONFIG = ROOT / 'configs/hardware_mpc_learned_acc001_alpha0005_omega1.yaml'
 MODEL_CONFIG = ROOT / 'configs/g1_payload75.yaml'
 CONFIG_DIR = ROOT / 'configs/hardware_control_comparison_20261012'
-BASELINE_CONFIG = CONFIG_DIR / 'mpc_baseline.yaml'
-TORQUE_CONFIG = CONFIG_DIR / 'torque_common.yaml'
 ORIGINAL_TORQUE_CONFIG = ROOT / 'configs/hardware_mpc_torque_learned.yaml'
+BASELINE_CONFIG = ORIGINAL_MPC_CONFIG
+TORQUE_CONFIG = ORIGINAL_TORQUE_CONFIG
+ORIGINAL_TORQUE_SHA256 = '41e153ca138147e2dc006bb7f15a511872a69e5299f925c401322234f703b879'
 CONFIG_PATH = ROOT / 'configs/hardware_acceleration_pid_20261012.yaml'
 BASELINE_VALUES = dict(
     schema='g1_hardware_mpc_config_v1', q_ee_acc=.01, q_ee_alpha=.0005,
@@ -32,9 +34,9 @@ TRIALS = {
                 pid_config=None, purpose='可选：MPC 仅线加速度权重 0.02；对照 T02/T04'),
 }
 
-COMMON_VALUES = dict(BASELINE_VALUES, mpc_handoff_duration_s=1.2)
+COMMON_VALUES = dict(BASELINE_VALUES)
 CANDIDATE_CONFIGS = frozenset((BASELINE_CONFIG.resolve(), TRIALS['T06']['config'].resolve()))
-ZERO_NEUTRAL_MPC_CONFIGS = CANDIDATE_CONFIGS | {ORIGINAL_MPC_CONFIG.resolve()}
+ZERO_NEUTRAL_MPC_CONFIGS = CANDIDATE_CONFIGS
 
 
 def validate_trial_config(config):
@@ -48,11 +50,9 @@ def validate_trial_config(config):
 def validate_comparison_torque(config):
     if not isinstance(config, (str, Path)) or Path(config).resolve() != TORQUE_CONFIG.resolve():
         return  # historical paths retain their original admission rules
-    expected = yaml.safe_load(ORIGINAL_TORQUE_CONFIG.read_text())
-    expected.update(q_min_deg=[-20, -17, -25, -40, -40],
-                    q_max_deg=[20, 3, 20, 40, 40], q_margin_deg=[5, 2, 5, 0, 0])
-    if yaml.safe_load(TORQUE_CONFIG.read_text()) != expected:
-        raise ValueError('comparison torque config differs from the reviewed common bounds')
+    actual = hashlib.sha256(TORQUE_CONFIG.read_bytes()).hexdigest()
+    if actual != ORIGINAL_TORQUE_SHA256:
+        raise ValueError('comparison torque config differs from the successful field baseline')
 
 
 def validate_series():
