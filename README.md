@@ -1,24 +1,26 @@
 # hold-my-beer-mpc
 
-`hold-my-beer-mpc` 研究 Unitree G1 行走时的躯干扰动预测与右臂 MPC 稳杯控制。
-当前冻结候选只有一条：**MPC + `FullTaskTemplatePredictor` v2**。模板按固定任务的
-绝对时间查询；神经扰动预测路线已经冻结并从当前源码移除。下肢行走仍使用仓库内
-的 Torch RL policy，这与已删除的 neural disturbance predictor 是两件不同的事。
+`hold-my-beer-mpc` 研究 Unitree G1 行走及起停时的躯干扰动预测与右臂末端稳定控制。
+截至 2026-10-14，已完成学习 MPC、当前扰动保持 MPC、位置 PID 和前馈加速度 PID（C）的
+真机实验，以及主对照录像。本阶段实验已结束，当前工作是硕士论文和面试准备。
 
-当前正式 MPC 稳杯结论来自受控 MuJoCo 仿真，不是真机 MPC 闭环或硬实时证据。
-另已完成 G1 的只读状态采集、A2 静态响应、A3 平衡控臂和 IMU 零点观察；
-这些独立现场结果不等于生产 MPC 输出链已经开放。
+**手机或新窗口从[项目交接](docs/PROJECT_HANDOFF_FOR_MOBILE.md)开始，再读
+[关键真机数据归档](docs/g1_field_validation/evidence/20261014_final_archive/README.md)。**
+归档包含可直接阅读的结果、逐轮配置与数据，以及20轮无损压缩原始日志；不是整个本机数据盘的备份。
+
+真机为6 ms右臂加速度MPC、H0学习扰动预测及带实测移动基座输入的五关节逆动力学；
+腿部使用机器人内置行走控制。MuJoCo仿真使用独立的`FullTaskTemplatePredictor` v2及Torch腿部策略，
+两条预测链不能混用结论。真机姿态收益较明确，线加速度和冲击抑制没有全面优势；
+完整结果、失败和强对照均保留。现场独立入口成功不表示旧production adapter已开放，也不等于硬实时认证。
 
 ## 从哪里开始
 
 - 查文件放在哪里：[文档总导航](docs/README.md)。
 - 准备做真机实验：[G1 现场入口](docs/g1_field_validation/README.md)。
-- 回顾这两天的成果：[已知结论](docs/g1_field_validation/KNOWN_RESULTS.md)、
+- 当前实验结论：[实验状态](docs/g1_field_validation/EXPERIMENT_STATUS.md)、
   [按日期查实验记录](docs/g1_field_validation/sessions/README.md)。
-- 下一步采真实扰动：[30 秒相位观察与 21 秒原始行走采集](docs/g1_field_validation/RAW_WALK_CAPTURE.md)
-  （五条有效原始轨迹已采齐，尚未构建模板）。
-- 首次真机 PID：[左臂固定、右臂 PID 的 H0 实验](docs/g1_field_validation/HARDWARE_PID.md)
-  （程序和完整 `[5,18)` 指标已离线就绪，尚未真机运行）。
+- 身体扰动预测：[十二条 H0 轨迹研究](docs/g1_field_validation/H0_WALK_PREDICTOR_STUDY.md)。
+- 位置 PID 原理与历史操作：[左臂固定、右臂 PID 的 H0 实验](docs/g1_field_validation/HARDWARE_PID.md)。
 - 查程序／运行边界：[工具导航](tools/README.md)、[运行时架构](ARCHITECTURE.md)。
 
 以下是当前冻结的**仿真**方案，与真机原始采集的时间表和坐标系约定分开使用。

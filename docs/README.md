@@ -1,7 +1,9 @@
 # 项目文档导航
 
 从这里找文档；运行命令仍从仓库根目录执行，代码、配置和实验原始数据没有迁移。
-第一次阅读项目看 [仓库说明](../README.md) 和 [架构](../ARCHITECTURE.md)；
+手机端、论文和面试准备优先读[项目交接](PROJECT_HANDOFF_FOR_MOBILE.md)与
+[关键真机数据归档](g1_field_validation/evidence/20261014_final_archive/README.md)。
+实验已完成，历史计划不自动成为待办。第一次阅读项目也可看 [仓库说明](../README.md) 和 [架构](../ARCHITECTURE.md)；
 准备上真机，直接看 [G1 现场实验入口](g1_field_validation/README.md)。
 
 ## 文档按用途分区
@@ -24,7 +26,7 @@
 ```text
 仓库根目录
 ├── README.md / ARCHITECTURE.md       项目入口、运行时地图
-├── docs/                            设计、手册、结论与实验摘要
+├── docs/                            设计、手册、结论与选定真机数据归档
 ├── run.sh / main_sim.py / arm_*.py   现有仿真入口与控制算法（保持路径）
 ├── configs/                         仿真与 hardware shadow 的 YAML
 ├── tools/
@@ -32,7 +34,7 @@
 │   └── realtime/                     H1/shadow launcher 与离线审计
 ├── right_arm_runtime/ / cpp/         共享运行时、模型执行与硬件边界
 ├── disturbance_template/            仿真扰动模板代码及选定资产
-├── evaluation/                      本地原始实验数据，不提交 Git
+├── evaluation/                      完整本机实验目录仍忽略；选定证据复制到 docs 归档
 ├── evaluation_summary/              可提交的轻量证据，现有仿真路径不变
 └── local_reference/unitree_g1/       本地官方资料，不提交 Git
 ```
