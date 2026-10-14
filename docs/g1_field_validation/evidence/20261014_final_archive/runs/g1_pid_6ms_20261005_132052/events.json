@@ -1,0 +1,377 @@
+{
+  "source_sha256": "5e88c70a3cf67b23e0e48354bc054ae94a9ecd2f3f8fafff872c04eeb08431f1",
+  "schema_counts": {
+    "session_start": 1,
+    "unitree_sdk2_python_provenance": 1,
+    "g1_lowstate_raw_v1": 1526,
+    "g1_torso_imu_raw_v1": 5141,
+    "fsm_reply": 550,
+    "arm_publisher_created": 1,
+    "task_epoch": 1,
+    "control_runtime": 1,
+    "task_stage": 7,
+    "dds_write": 3477,
+    "g1_pid_timing_v1": 3477,
+    "velocity_reply": 397,
+    "heading_reference_frozen": 1,
+    "normal_weight_release_started": 1,
+    "velocity_final_zero": 1,
+    "session_end": 1,
+    "control_timing_summary": 1,
+    "sdk_shutdown": 1,
+    "capture_drained": 1
+  },
+  "selection": "Selected lifecycle events; not the full log",
+  "events": [
+    {
+      "schema": "g1_pid_session_v1",
+      "event": "session_start",
+      "program": "g1_walk_pid.py",
+      "publisher_created": false,
+      "mode_setter_registered": false,
+      "lowcmd_topic_created": false,
+      "network_interface": "enx6c1ff701509c",
+      "required_fsm": 500,
+      "walk_start_s": 5.0,
+      "walk_stop_s": 15.0,
+      "release_start_s": 18.0,
+      "end_s": 21.0,
+      "primary_metric_window_s": [
+        5.0,
+        18.0
+      ],
+      "primary_metric_scope": "walk_start_through_stop_settle_end",
+      "forward_speed_m_s": 0.5,
+      "heading_target": "fixed_run_h0_positive_x",
+      "heading_hold_start_s": 5.0,
+      "heading_hold_stop_s": 18.0,
+      "forward_walk_stop_s": 15.0,
+      "pid_parameters": {
+        "pid_kp_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_kd_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_ki_pose": [
+          0.0,
+          0.0
+        ],
+        "pid_posture_gain": [
+          1.15,
+          1.15,
+          2.1,
+          1.15,
+          0.95
+        ],
+        "pid_finite_diff_eps": 0.0001,
+        "pid_damping": 0.15,
+        "pid_integral_limit": 0.2,
+        "pid_max_dq": 0.48,
+        "pid_de_g_alpha": 0.07,
+        "hardware_pid_max_dq": 0.07,
+        "hardware_pid_max_ddq": 0.2,
+        "pid_q_offset_limit_deg": [
+          5.0,
+          5.0,
+          5.0,
+          5.0,
+          5.0
+        ]
+      },
+      "control_nominal_period_ms": 6.0,
+      "profile_declared_period_ms": 20.0,
+      "first_6ms_field_trial_opt_in": true,
+      "pid_physical_reference_period_ms": 20.0,
+      "derivative_alpha_at_nominal_period": 0.021535925657277022,
+      "jacobian_method": "analytic_mujoco_site",
+      "control_source_sha256": {
+        "tools/g1_commissioning/g1_walk_pid.py": "819b59c4c0c8762be223d0a058990f2bb454e8c1100547763f564e2e91d9ea71",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "tools/g1_commissioning/hardware_pid_control.py": "6fac37cb52ea3fbaa41f30d5c9f7410a16cfd82d2f5cb8881781f1b14ef2938e",
+        "tools/g1_commissioning/endpoint_pose.py": "14262a6b0ef9d617b00bfa12cac3865750e2ccff9f17ebc50095c9fc3b894270",
+        "tools/g1_commissioning/pid_timing.py": "5362c1f43c704eb02cd9e5da411ade8cc11226af1ff0f1086351b23faae32c28"
+      },
+      "profile_sha256": "3411f143f6651dadbe48d6c12e237ea5dd57cb4d86d8a519498a71b371aa3e04",
+      "controller_config_sha256": "f1e9d049d25fe92fd8cc673a196acc22e7df9dec2d47bb2532415c3080432465",
+      "monotonic_ns": 267624838452
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "unitree_sdk2_python_provenance",
+      "package_root": "/home/fjk/g1_ws/unitree_sdk2_python/unitree_sdk2py",
+      "critical_file_sha256": {
+        "core/channel.py": "8a58eea2bc6bb8792e5b5fa76949407bd8c2ef8af07172d1a3a465bcc544e247",
+        "rpc/client.py": "20840192dee42525b64ecc3a3e8d5ec5d1d7e122b7bfc4236c482cb2b0f6e186",
+        "rpc/client_base.py": "2a815a5c798be95df1c8a4af525873c2ee47d5e0bbfbcc8a4ccf2d991a341321",
+        "utils/crc.py": "b95a530423f72c5acc96811f75677699cb3a185b6327353e7c44b355a425a20e",
+        "g1/loco/g1_loco_api.py": "8443f5450ade69de7d454b40c8f6c1b0f4c66573bb35eac9251840885cb4c2c4",
+        "idl/unitree_hg/msg/dds_/_LowCmd_.py": "a23cec88e4bf782263ac2bea29d3908c9d21a44a14361ffc0bf3424cd36597ae",
+        "idl/unitree_hg/msg/dds_/_LowState_.py": "97f746a693aff14a8a1c2ea2bbd7790722bb784554e0402173ed491ad9d957f2"
+      },
+      "monotonic_ns": 267806676716
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_epoch",
+      "task_epoch_monotonic_ns": 279155103775,
+      "monotonic_ns": 279155361079
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "control_runtime",
+      "control_cpu": 2,
+      "control_thread_affinity": [
+        2
+      ],
+      "original_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "scheduler_policy": 0,
+      "scheduler_priority": 0,
+      "blas_threads": "1",
+      "monotonic_ns": 279156021685
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "arm_ramp_in",
+      "task_elapsed_s": 0.0009477550000000001,
+      "monotonic_ns": 279156320285
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "stationary_baseline",
+      "task_elapsed_s": 3.00117964,
+      "monotonic_ns": 282161210833
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "heading_reference_frozen",
+      "task_elapsed_s": 5.0041318210000005,
+      "yaw0_rad": 0.13553792595866365,
+      "h0_from_navigation_world_yaw_rad": -0.13553792595866365,
+      "requested_reference_start_s": 3.0,
+      "requested_reference_end_s": 5.0,
+      "reference_frozen": true,
+      "reference_samples": 780,
+      "reference_first_s": 3.002210673,
+      "reference_last_s": 4.998616975,
+      "reference_span_s": 1.996406302,
+      "reference_rad": 0.13553792595866365,
+      "filtered_yaw_rad": 0.13524401164464153,
+      "relative_yaw_rad": -0.0002939143140221201,
+      "error_rad": 0.0002939143140221201,
+      "filtered_vertical_rate_rad_s": -0.004744446896158184,
+      "correction_rad_s": 0.0007683590036379386,
+      "h0_definition": "fixed_run_frame_x_along_pre_walk_mean_yaw_z_vertical",
+      "monotonic_ns": 284159607789
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "forward_walk",
+      "task_elapsed_s": 5.005222812,
+      "monotonic_ns": 284162489992
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "stop_settle",
+      "task_elapsed_s": 15.001710873,
+      "monotonic_ns": 294159333461
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "normal_stop_wait",
+      "task_elapsed_s": 18.001226289,
+      "monotonic_ns": 297156502299
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "normal_weight_release_started",
+      "task_elapsed_s": 18.061700954000003,
+      "duration_s": 3.0,
+      "zero_velocity_reply_ns": 297213492869,
+      "zero_velocity_acknowledged": true,
+      "zero_velocity_ack_wait_s": 0.06170095400000264,
+      "monotonic_ns": 297217027058
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "arm_ramp_out",
+      "task_elapsed_s": 18.061700954000003,
+      "monotonic_ns": 297217067333
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "complete",
+      "task_elapsed_s": 21.074172736,
+      "monotonic_ns": 300229525873
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "velocity_final_zero",
+      "request_ns": 300232467418,
+      "reply_ns": 300243651911,
+      "return_code": 0,
+      "raw_reply": "",
+      "physical_stop_verified": false,
+      "monotonic_ns": 300243686838
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "session_end",
+      "outcome": "normal_release_completed",
+      "final_weight": 0.0,
+      "physical_stop_verified": false,
+      "monotonic_ns": 300243754180
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "control_timing_summary",
+      "all_normal_loop_stages": {
+        "available": true,
+        "samples": 3477,
+        "actual_period_ms": {
+          "p50": 5.9950975,
+          "p95": 6.79170925,
+          "p99": 7.88252825,
+          "max": 32.600569
+        },
+        "wake_lateness_ms": {
+          "p50": 0.37215699999999996,
+          "p95": 1.0973167999999998,
+          "p99": 1.7156385999999952,
+          "max": 21.28635
+        },
+        "work_ms": {
+          "p50": 2.145972,
+          "p95": 4.1042394,
+          "p99": 5.122366399999997,
+          "max": 16.673019
+        },
+        "state_age_at_write_ms": {
+          "p50": 3.7382999999999997,
+          "p95": 6.235995799999998,
+          "p99": 7.396652599999991,
+          "max": 17.710404999999998
+        },
+        "imu_age_at_write_ms": {
+          "p50": 3.306444,
+          "p95": 5.483675399999998,
+          "p99": 6.647695119999996,
+          "max": 16.696022
+        },
+        "state_imu_skew_ms": {
+          "p50": 0.57387,
+          "p95": 2.6913355999999995,
+          "p99": 3.659857399999985,
+          "max": 6.362322
+        },
+        "write_ms": {
+          "p50": 0.246561,
+          "p95": 0.2852656,
+          "p99": 0.3518211999999999,
+          "max": 0.537756
+        },
+        "deadline_misses": 29,
+        "skipped_slots": 36,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.008340523439746908,
+        "scope": "host loop including command enqueue; excludes timing-row enqueue and physical motor/network latency"
+      },
+      "primary_5_18": {
+        "available": true,
+        "samples": 2141,
+        "actual_period_ms": {
+          "p50": 5.9943800000000005,
+          "p95": 6.801121,
+          "p99": 8.040926599999992,
+          "max": 32.600569
+        },
+        "wake_lateness_ms": {
+          "p50": 0.38217799999999996,
+          "p95": 1.1210179999999998,
+          "p99": 1.8155437999999975,
+          "max": 21.28635
+        },
+        "work_ms": {
+          "p50": 2.5695699999999997,
+          "p95": 4.268445,
+          "p99": 5.285564999999999,
+          "max": 15.225582
+        },
+        "state_age_at_write_ms": {
+          "p50": 4.053697,
+          "p95": 6.430518999999999,
+          "p99": 7.493051599999992,
+          "max": 17.710404999999998
+        },
+        "imu_age_at_write_ms": {
+          "p50": 3.5892649999999997,
+          "p95": 5.6971,
+          "p99": 6.743472399999998,
+          "max": 16.240033
+        },
+        "state_imu_skew_ms": {
+          "p50": 0.607961,
+          "p95": 2.748541,
+          "p99": 3.662787199999989,
+          "max": 4.936974
+        },
+        "write_ms": {
+          "p50": 0.24373099999999998,
+          "p95": 0.278233,
+          "p99": 0.3187021999999997,
+          "max": 0.46812
+        },
+        "deadline_misses": 20,
+        "skipped_slots": 25,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.009341429238673517,
+        "scope": "host loop including command enqueue; excludes timing-row enqueue and physical motor/network latency"
+      },
+      "monotonic_ns": 300270939383
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "sdk_shutdown",
+      "endpoints": {
+        "low_subscriber": "listener_detached_then_closed",
+        "imu_subscriber": "listener_detached_then_closed",
+        "arm_publisher": "listener_detached_then_closed"
+      },
+      "monotonic_ns": 300273569572
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "capture_drained",
+      "queue_dropped": 0,
+      "monotonic_ns": 300277864208
+    }
+  ]
+}

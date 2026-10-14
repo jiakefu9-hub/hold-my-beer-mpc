@@ -1,0 +1,495 @@
+{
+  "source_sha256": "3626b6d2b9e9f6847e1d183cb29f459864ca105c1f049ca84b5170654abb1cf7",
+  "schema_counts": {
+    "session_start": 1,
+    "unitree_sdk2_python_provenance": 1,
+    "g1_torso_imu_raw_v1": 4713,
+    "g1_lowstate_raw_v1": 1395,
+    "fsm_reply": 2,
+    "fsm_runtime_latched": 1,
+    "arm_publisher_created": 1,
+    "task_epoch": 1,
+    "control_runtime": 1,
+    "task_stage": 7,
+    "dds_write": 3495,
+    "g1_pid_timing_v1": 3495,
+    "heading_reference_frozen": 1,
+    "velocity_reply": 159,
+    "normal_weight_release_started": 1,
+    "velocity_final_zero": 1,
+    "session_end": 1,
+    "control_timing_summary": 1,
+    "sdk_shutdown": 1,
+    "capture_drained": 1
+  },
+  "selection": "Selected lifecycle events; not the full log",
+  "events": [
+    {
+      "schema": "g1_pid_session_v1",
+      "event": "session_start",
+      "program": "g1_walk_pid.py",
+      "publisher_created": false,
+      "mode_setter_registered": false,
+      "lowcmd_topic_created": false,
+      "network_interface": "enx6c1ff701509c",
+      "required_fsm": 500,
+      "walk_start_s": 5.0,
+      "walk_stop_s": 15.0,
+      "release_start_s": 18.0,
+      "end_s": 21.0,
+      "primary_metric_window_s": [
+        5.0,
+        18.0
+      ],
+      "primary_metric_scope": "walk_start_through_stop_settle_end",
+      "forward_speed_m_s": 0.5,
+      "heading_target": "fixed_run_h0_positive_x",
+      "heading_hold_start_s": 5.0,
+      "heading_hold_stop_s": 18.0,
+      "forward_walk_stop_s": 15.0,
+      "pid_parameters": {
+        "pid_kp_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_kd_pose": [
+          1.2,
+          1.2
+        ],
+        "pid_ki_pose": [
+          0.0,
+          0.0
+        ],
+        "pid_posture_gain": [
+          1.15,
+          1.15,
+          2.1,
+          1.15,
+          0.95
+        ],
+        "pid_finite_diff_eps": 0.0001,
+        "pid_damping": 0.15,
+        "pid_integral_limit": 0.2,
+        "pid_max_dq": 0.48,
+        "pid_de_g_alpha": 0.07,
+        "hardware_pid_max_dq": 0.07,
+        "hardware_pid_max_ddq": 0.2,
+        "pid_q_offset_limit_deg": [
+          5.0,
+          5.0,
+          5.0,
+          5.0,
+          5.0
+        ],
+        "position_pid_reference_experiment": {
+          "schema": "g1_position_pid_zero_v1",
+          "q_reference_min_deg": [
+            -9.0,
+            -5.0,
+            -5.0,
+            -12.8,
+            -5.0
+          ],
+          "q_reference_max_deg": [
+            5.0,
+            6.0,
+            5.0,
+            5.0,
+            5.0
+          ],
+          "config_path": "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_position_pid_zero_20261013.yaml",
+          "definition": "absolute command-reference box; union of old nonzero +/-5 deg and zero +/-5 deg",
+          "measured_joint_bound": false,
+          "nominal_posture_deg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "feedback_gains_unchanged": true,
+          "reference_governor_unchanged": true
+        }
+      },
+      "control_nominal_period_ms": 6.0,
+      "profile_declared_period_ms": 20.0,
+      "first_6ms_field_trial_opt_in": true,
+      "performance_setup": {
+        "before": {
+          "governors": {
+            "6": "performance",
+            "7": "performance"
+          },
+          "platform_profile": "performance",
+          "rt_priority_limits": [
+            0,
+            0
+          ]
+        },
+        "after": {
+          "governors": {
+            "6": "performance",
+            "7": "performance"
+          },
+          "platform_profile": "performance",
+          "rt_priority_limits": [
+            0,
+            0
+          ]
+        },
+        "actions": [],
+        "cpus": [
+          6,
+          7
+        ],
+        "password_handled": false,
+        "robot_contacted": false,
+        "limitations": "fixed policy is not guaranteed frequency, no thermal or deadline guarantee"
+      },
+      "pid_physical_reference_period_ms": 20.0,
+      "derivative_alpha_at_nominal_period": 0.021535925657277022,
+      "jacobian_method": "analytic_mujoco_site",
+      "control_source_sha256": {
+        "tools/g1_commissioning/g1_walk_pid.py": "b55270ce824aa0863c4ffb2dace51bfbeb0ad05a90994df7902f4271707fc90d",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "tools/g1_commissioning/hardware_pid_control.py": "60f950ef2c98cd327366bbacc10f1674d75680a4b4ee5ec65e8ff2ee75ee354f",
+        "tools/g1_commissioning/endpoint_pose.py": "14262a6b0ef9d617b00bfa12cac3865750e2ccff9f17ebc50095c9fc3b894270",
+        "tools/g1_commissioning/pid_timing.py": "5362c1f43c704eb02cd9e5da411ade8cc11226af1ff0f1086351b23faae32c28",
+        "tools/g1_commissioning/field_performance.py": "36837b3c1fa76bf421d42c54e13356180a7ec95e5cc9c944ae30696da69b1df6"
+      },
+      "profile_sha256": "3411f143f6651dadbe48d6c12e237ea5dd57cb4d86d8a519498a71b371aa3e04",
+      "controller_config_sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+      "zero_arm_neutral_experiment": {
+        "enabled": true,
+        "target_q_rad": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "left_uses_body_imu": false,
+        "right_pid_uses_measured_body_imu": true,
+        "reviewed_profile_file_unchanged": true,
+        "gains_unchanged": true
+      },
+      "position_pid_reference_experiment": {
+        "schema": "g1_position_pid_zero_v1",
+        "q_reference_min_deg": [
+          -9.0,
+          -5.0,
+          -5.0,
+          -12.8,
+          -5.0
+        ],
+        "q_reference_max_deg": [
+          5.0,
+          6.0,
+          5.0,
+          5.0,
+          5.0
+        ],
+        "config_path": "/home/fjk/g1_ws/hold-my-beer-mpc/configs/hardware_position_pid_zero_20261013.yaml",
+        "definition": "absolute command-reference box; union of old nonzero +/-5 deg and zero +/-5 deg",
+        "measured_joint_bound": false,
+        "nominal_posture_deg": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "feedback_gains_unchanged": true,
+        "reference_governor_unchanged": true
+      },
+      "position_pid_config_sha256": "515f73558b3aa08eae2eca25f4cf590f9d9c11621686483e3dacdb4d94f5c383",
+      "zero_position_pid_source_sha256": "a866648282c9ca6770576061154c9456ce794e48234bfe2d63040af6e6fca252",
+      "monotonic_ns": 5454852121543
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "unitree_sdk2_python_provenance",
+      "package_root": "/home/fjk/g1_ws/unitree_sdk2_python/unitree_sdk2py",
+      "critical_file_sha256": {
+        "core/channel.py": "8a58eea2bc6bb8792e5b5fa76949407bd8c2ef8af07172d1a3a465bcc544e247",
+        "rpc/client.py": "20840192dee42525b64ecc3a3e8d5ec5d1d7e122b7bfc4236c482cb2b0f6e186",
+        "rpc/client_base.py": "2a815a5c798be95df1c8a4af525873c2ee47d5e0bbfbcc8a4ccf2d991a341321",
+        "utils/crc.py": "b95a530423f72c5acc96811f75677699cb3a185b6327353e7c44b355a425a20e",
+        "g1/loco/g1_loco_api.py": "8443f5450ade69de7d454b40c8f6c1b0f4c66573bb35eac9251840885cb4c2c4",
+        "idl/unitree_hg/msg/dds_/_LowCmd_.py": "a23cec88e4bf782263ac2bea29d3908c9d21a44a14361ffc0bf3424cd36597ae",
+        "idl/unitree_hg/msg/dds_/_LowState_.py": "97f746a693aff14a8a1c2ea2bbd7790722bb784554e0402173ed491ad9d957f2"
+      },
+      "monotonic_ns": 5454990505756
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_epoch",
+      "task_epoch_monotonic_ns": 5463570094671,
+      "monotonic_ns": 5463570904815
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "control_runtime",
+      "control_cpu": 7,
+      "control_thread_affinity": [
+        7
+      ],
+      "original_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "scheduler_policy": 0,
+      "scheduler_priority": 0,
+      "blas_threads": "1",
+      "monotonic_ns": 5463573087805
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "arm_ramp_in",
+      "task_elapsed_s": 0.0030349080000000002,
+      "monotonic_ns": 5463573249972
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "stationary_baseline",
+      "task_elapsed_s": 3.0034534600000002,
+      "monotonic_ns": 5466574223142
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "heading_reference_frozen",
+      "task_elapsed_s": 5.000224427,
+      "yaw0_rad": 0.1474602956278411,
+      "h0_from_navigation_world_yaw_rad": -0.1474602956278411,
+      "requested_reference_start_s": 3.0,
+      "requested_reference_end_s": 5.0,
+      "reference_frozen": true,
+      "reference_samples": 785,
+      "reference_first_s": 3.0004508870000004,
+      "reference_last_s": 4.998268128,
+      "reference_span_s": 1.997817241,
+      "reference_rad": 0.1474602956278411,
+      "filtered_yaw_rad": 0.14746393148455966,
+      "relative_yaw_rad": 3.6358567185590385e-06,
+      "error_rad": -3.6358567185590385e-06,
+      "filtered_vertical_rate_rad_s": -0.007571972684824009,
+      "correction_rad_s": 0.0007535614117638419,
+      "h0_definition": "fixed_run_frame_x_along_pre_walk_mean_yaw_z_vertical",
+      "monotonic_ns": 5468570488722
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "forward_walk",
+      "task_elapsed_s": 5.001294593,
+      "monotonic_ns": 5468571873080
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "stop_settle",
+      "task_elapsed_s": 15.003537365000001,
+      "monotonic_ns": 5478575477390
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "normal_stop_wait",
+      "task_elapsed_s": 18.005267036000003,
+      "monotonic_ns": 5481575497001
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "normal_weight_release_started",
+      "task_elapsed_s": 18.093868422,
+      "duration_s": 3.0,
+      "zero_velocity_reply_ns": 5481660869651,
+      "zero_velocity_acknowledged": true,
+      "zero_velocity_ack_wait_s": 0.0938684219999999,
+      "monotonic_ns": 5481664111709
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "arm_ramp_out",
+      "task_elapsed_s": 18.093868422,
+      "monotonic_ns": 5481664156195
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "task_stage",
+      "stage": "complete",
+      "task_elapsed_s": 21.117888592,
+      "monotonic_ns": 5484688199115
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "velocity_final_zero",
+      "request_ns": 5484690693004,
+      "reply_ns": 5484704883352,
+      "return_code": 0,
+      "raw_reply": "",
+      "physical_stop_verified": false,
+      "monotonic_ns": 5484704890987
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "session_end",
+      "outcome": "normal_release_completed",
+      "final_weight": 0.0,
+      "physical_stop_verified": false,
+      "monotonic_ns": 5484710420739
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "control_timing_summary",
+      "all_normal_loop_stages": {
+        "available": true,
+        "samples": 3495,
+        "actual_period_ms": {
+          "p50": 5.9988875,
+          "p95": 6.91069225,
+          "p99": 8.660607910000003,
+          "max": 12.998124
+        },
+        "wake_lateness_ms": {
+          "p50": 0.307618,
+          "p95": 1.1953371999999993,
+          "p99": 2.445898339999998,
+          "max": 5.391374
+        },
+        "work_ms": {
+          "p50": 1.5491119999999998,
+          "p95": 3.7729833999999984,
+          "p99": 4.806320219999999,
+          "max": 8.393742999999999
+        },
+        "state_age_at_write_ms": {
+          "p50": 3.185393,
+          "p95": 5.887834299999996,
+          "p99": 6.968135119999999,
+          "max": 9.060514999999999
+        },
+        "imu_age_at_write_ms": {
+          "p50": 2.596145,
+          "p95": 5.0003602,
+          "p99": 6.264139519999999,
+          "max": 12.660286
+        },
+        "state_imu_skew_ms": {
+          "p50": 0.423181,
+          "p95": 2.7326319999999997,
+          "p99": 3.38307708,
+          "max": 8.360064
+        },
+        "write_ms": {
+          "p50": 0.22844799999999998,
+          "p95": 0.263462,
+          "p99": 0.28142314,
+          "max": 0.360072
+        },
+        "deadline_misses": 25,
+        "skipped_slots": 25,
+        "reused_lowstate": 4,
+        "reused_imu": 1,
+        "deadline_miss_fraction": 0.00715307582260372,
+        "scope": "host loop including command enqueue; excludes timing-row enqueue and physical motor/network latency"
+      },
+      "primary_5_18": {
+        "available": true,
+        "samples": 2151,
+        "actual_period_ms": {
+          "p50": 5.999295,
+          "p95": 6.8509235,
+          "p99": 7.716575000000001,
+          "max": 12.13949
+        },
+        "wake_lateness_ms": {
+          "p50": 0.302235,
+          "p95": 1.1297004999999998,
+          "p99": 1.5765514999999999,
+          "max": 4.399248
+        },
+        "work_ms": {
+          "p50": 1.911835,
+          "p95": 4.0898965,
+          "p99": 5.036443,
+          "max": 8.393742999999999
+        },
+        "state_age_at_write_ms": {
+          "p50": 3.544823,
+          "p95": 6.198029,
+          "p99": 7.242909999999999,
+          "max": 9.060514999999999
+        },
+        "imu_age_at_write_ms": {
+          "p50": 2.9762299999999997,
+          "p95": 5.3965935,
+          "p99": 6.4121945,
+          "max": 12.660286
+        },
+        "state_imu_skew_ms": {
+          "p50": 0.43358399999999997,
+          "p95": 2.8988255,
+          "p99": 3.5479925,
+          "max": 8.360064
+        },
+        "write_ms": {
+          "p50": 0.226346,
+          "p95": 0.2639645,
+          "p99": 0.28064849999999997,
+          "max": 0.360072
+        },
+        "deadline_misses": 16,
+        "skipped_slots": 16,
+        "reused_lowstate": 0,
+        "reused_imu": 1,
+        "deadline_miss_fraction": 0.007438400743840074,
+        "scope": "host loop including command enqueue; excludes timing-row enqueue and physical motor/network latency"
+      },
+      "monotonic_ns": 5484722391183
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "sdk_shutdown",
+      "endpoints": {
+        "low_subscriber": "listener_detached_then_closed",
+        "imu_subscriber": "listener_detached_then_closed",
+        "arm_publisher": "listener_detached_then_closed"
+      },
+      "monotonic_ns": 5484725401577
+    },
+    {
+      "schema": "g1_pid_event_v1",
+      "event": "capture_drained",
+      "queue_dropped": 0,
+      "monotonic_ns": 5484729731603
+    }
+  ]
+}

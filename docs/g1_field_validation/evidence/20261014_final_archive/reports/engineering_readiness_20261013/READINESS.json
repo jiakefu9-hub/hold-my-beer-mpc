@@ -1,0 +1,31 @@
+{
+  "robot_connected": false,
+  "real_commands_sent": false,
+  "controller_parameters_changed": false,
+  "morning_tests_passed": 9,
+  "fault_and_worker_tests_passed": 17,
+  "recorded_input_replay_passed": true,
+  "historical_runs_audited": 12,
+  "evaluation_windows_ms": [
+    75,
+    105,
+    135
+  ],
+  "baseline_hashes_unchanged": true,
+  "source_sha256": {
+    "tools/g1_commissioning/g1_run_morning_20261013.py": "a0b800cf45349d8c95516f91d4f3e70427574e78da5e0aa25e26108f921cab4d",
+    "tools/g1_commissioning/analyze_field_readiness_20261013.py": "8bb42719462491988777b6dace8a35abedf2717cd3c6028b3cf3b36513b036d2",
+    "tools/g1_commissioning/validate_morning_20261013.py": "78ee2b864f847538d2c193ceef32c63916ea13bdfb49d3674aad176155013919",
+    "tools/g1_commissioning/hardware_position_pid_zero.py": "a866648282c9ca6770576061154c9456ce794e48234bfe2d63040af6e6fca252",
+    "configs/hardware_position_pid_zero_20261013.yaml": "515f73558b3aa08eae2eca25f4cf590f9d9c11621686483e3dacdb4d94f5c383"
+  },
+  "trial_order": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M05",
+    "M06"
+  ],
+  "limitations": "Offline compatibility and historical data audit; not new closed-loop or hardware timing validation."
+}

@@ -1,0 +1,268 @@
+[
+  {
+    "id": "M01",
+    "directory": "morning_M01_mpc_learned_zero_payload75_walk_20261013_150426_750630_999f",
+    "raw": true,
+    "cohort": "morning",
+    "status": "included",
+    "raw_sha256": "b0b2ce6b627512e810d3460b0537f15ae9ea319917820def4abd63d242d4fdaf",
+    "raw_bytes": 90455171
+  },
+  {
+    "id": "M02",
+    "directory": "morning_M02_mpc_hold_zero_payload75_walk_20261013_150615_501041_a64a",
+    "raw": true,
+    "cohort": "morning",
+    "status": "included",
+    "raw_sha256": "80e88bac3409797a0e352265c44a34b3d4adf92294e6aeae95102aec02084d97",
+    "raw_bytes": 83117677
+  },
+  {
+    "id": "M03",
+    "directory": "morning_M03_position_pid_zero_zero_payload75_walk_20261013_150734_982806_6eea",
+    "raw": true,
+    "cohort": "morning",
+    "status": "included",
+    "raw_sha256": "3626b6d2b9e9f6847e1d183cb29f459864ca105c1f049ca84b5170654abb1cf7",
+    "raw_bytes": 29240758
+  },
+  {
+    "id": "M04",
+    "directory": "morning_M04_position_pid_zero_repeat_zero_payload75_walk_20261013_150910_347989_77e3",
+    "raw": true,
+    "cohort": "morning",
+    "status": "included",
+    "raw_sha256": "c82eded1d84134aabeb6763321e932acdebf29fceb22e8a7ddf95916adc15ea0",
+    "raw_bytes": 115520576
+  },
+  {
+    "id": "M05",
+    "directory": "morning_M05_mpc_hold_repeat_zero_payload75_walk_20261013_151453_637007_fa6e",
+    "raw": true,
+    "cohort": "morning",
+    "status": "included",
+    "raw_sha256": "c2dcdf3650697cae163b01678fadc07083fdbcba68f4e60ea682dbabdea006cc",
+    "raw_bytes": 81802286
+  },
+  {
+    "id": "M06",
+    "directory": "morning_M06_mpc_learned_repeat_zero_payload75_walk_20261013_151617_849525_70f1",
+    "raw": true,
+    "cohort": "morning",
+    "status": "included",
+    "raw_sha256": "e0190a0b1dcc200c2d4ce1ed34b9ec503675cdc7119782015896b2608e283617",
+    "raw_bytes": 87119169
+  },
+  {
+    "id": "V01_PID",
+    "directory": "morning_M03_position_pid_zero_zero_payload75_walk_20261013_164407_686365_5c1c",
+    "raw": true,
+    "cohort": "final_video",
+    "status": "included",
+    "raw_sha256": "9afcf3ffa8cb7391881513b4d2ac40980935c4cb8e3e0014237eb5c1525604c1",
+    "raw_bytes": 29454796
+  },
+  {
+    "id": "V02_HOLD",
+    "directory": "morning_M02_mpc_hold_zero_payload75_walk_20261013_164656_767428_c0d8",
+    "raw": true,
+    "cohort": "final_video",
+    "status": "included",
+    "raw_sha256": "3dfbd2744cea41d220134402511ee6463f9a0b470c217cd982bfdd5a2ae00d12",
+    "raw_bytes": 93721192
+  },
+  {
+    "id": "V03_LEARNED",
+    "directory": "morning_M01_mpc_learned_zero_payload75_walk_20261013_164838_063152_fd65",
+    "raw": true,
+    "cohort": "final_video",
+    "status": "included",
+    "raw_sha256": "aa9c7018af50dd35053b88ce31d212e72ba200a79d576b06cb9785cabbc3fe60",
+    "raw_bytes": 97019226
+  },
+  {
+    "id": "V04_PID_RELAXED",
+    "directory": "morning_M07_position_pid_zero_relaxed_zero_payload75_walk_20261013_165125_196608_32b3",
+    "raw": true,
+    "cohort": "final_video",
+    "status": "included",
+    "raw_sha256": "c91896a43aef221aa1fe9ac4eabd1a0209493b69b9652b93b34c77433f1be8a9",
+    "raw_bytes": 49295712
+  },
+  {
+    "id": "T01_162329",
+    "directory": "comparison_T01_mpc_original_timing_zero_payload75_walk_20261012_162329_534656_3347",
+    "raw": true,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "58beb6aa917bb7c9d75cd2921cc33ec06c733659ac0de916350d97af017a7256",
+    "raw_bytes": 114748112
+  },
+  {
+    "id": "T02_163351",
+    "directory": "comparison_T02_mpc_aligned_zero_payload75_walk_20261012_163351_662781_5116",
+    "raw": false,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "8f05944c3a78e48dc0d95a00163e8c9fc8af07c6f047c595f0424592f159c500",
+    "raw_bytes": 118888907,
+    "validity_note": "Legacy INVALID_RUN.md conflicts with final inclusion and user identifying T03 as cable-interfered. Both records retained; see README."
+  },
+  {
+    "id": "T03_164534",
+    "directory": "comparison_T03_c_aligned_zero_payload75_walk_20261012_164534_985570_5b96",
+    "raw": true,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "b7d6231bd94679d186991076627cbea27fbc63b3af8ebb05ce000808f39d2d01",
+    "raw_bytes": 77903240
+  },
+  {
+    "id": "T04_165151",
+    "directory": "comparison_T04_mpc_aligned_repeat_zero_payload75_walk_20261012_165151_346352_46b8",
+    "raw": false,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "7486f344d2282202c29c51dfb9e45ec9f94fbbcfd4eecb0729572251fac914f3",
+    "raw_bytes": 92970192
+  },
+  {
+    "id": "T05_165900",
+    "directory": "comparison_T05_c_aligned_repeat_zero_payload75_walk_20261012_165900_620491_edf7",
+    "raw": true,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "f5c246bfc1071d45eec756ffed7dc19fd354386b19f1a054919a0c818d5deb7b",
+    "raw_bytes": 111355123,
+    "validity_note": "Operator observed shoulder/torso contact; retained by agreed task-evaluation scope, not a no-contact trial."
+  },
+  {
+    "id": "T07_172138",
+    "directory": "comparison_T07_mpc_original_timing_repeat_zero_payload75_walk_20261012_172138_027726_897e",
+    "raw": true,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "af7b32d36140a07e99cfb239c1cd1ca0c28c963b200f09c38566c3170e33dafd",
+    "raw_bytes": 85855031
+  },
+  {
+    "id": "T08_172328",
+    "directory": "comparison_T08_c_attitude600_50_aligned_zero_payload75_walk_20261012_172328_285795_46fb",
+    "raw": false,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "507644bc1c672f495fd4b17c12068dde7bf17249b6a7e31ebde05735a056377c",
+    "raw_bytes": 76144616
+  },
+  {
+    "id": "T10_173715",
+    "directory": "comparison_T10_mpc_acc002_original_timing_zero_payload75_walk_20261012_173715_779721_f3c5",
+    "raw": false,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "9b1ffdf0be5ea45ac92f32e3755386043620f2e4b65840aaaeb9a4d534aa3630",
+    "raw_bytes": 83981539
+  },
+  {
+    "id": "T11_174034",
+    "directory": "comparison_T11_c_original_timing_zero_payload75_walk_20261012_174034_866230_b2fc",
+    "raw": false,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "d865749a2c4cd4d78d642de611b7a05e8484366be792f886812d76d5ab2de0df",
+    "raw_bytes": 72127660
+  },
+  {
+    "id": "T12_174355",
+    "directory": "comparison_T12_c_regularization0024_aligned_zero_payload75_walk_20261012_174355_032082_c286",
+    "raw": false,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "3e4e49fc6f9b0b6cb5d850e8966aa45ecf2f60360007bcbdf98af41fa6527e0c",
+    "raw_bytes": 79138448
+  },
+  {
+    "id": "T01_174738",
+    "directory": "comparison_T01_mpc_original_timing_zero_payload75_walk_20261012_174738_286024_948b",
+    "raw": true,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "5b57633e52eb6b30b27d25148d4e1dc73521be6fc1f7eb0efb709ac549041534",
+    "raw_bytes": 85279057
+  },
+  {
+    "id": "T03_175013",
+    "directory": "comparison_T03_c_aligned_zero_payload75_walk_20261012_175013_388749_4bdd",
+    "raw": true,
+    "cohort": "T_series",
+    "status": "included",
+    "raw_sha256": "1ca8fa1b4aca3bf0db3edfcca18e180d1e2d5de60104feb30918c00a0ceab77c",
+    "raw_bytes": 76786196
+  },
+  {
+    "id": "HIST_MPC_164546",
+    "directory": "mpc_learned_acc001_alpha0005_omega1_walk_20261008_164546",
+    "raw": true,
+    "cohort": "historical",
+    "status": "included",
+    "raw_sha256": "c1400bd114cba1890278a4d27d4726e95c9c670fe92d0941eb83974a80b90919",
+    "raw_bytes": 87559337
+  },
+  {
+    "id": "HIST_PID_132052",
+    "directory": "g1_pid_6ms_20261005_132052",
+    "raw": true,
+    "cohort": "historical",
+    "status": "included",
+    "raw_sha256": "5e88c70a3cf67b23e0e48354bc054ae94a9ecd2f3f8fafff872c04eeb08431f1",
+    "raw_bytes": 30931916
+  },
+  {
+    "id": "SPIKE_124321",
+    "directory": "morning_M01_mpc_learned_zero_payload75_walk_20261014_124321_974583_1119",
+    "raw": true,
+    "cohort": "spike",
+    "status": "included",
+    "raw_sha256": "cb5e61bfa5deab195aae8d092adbb76b3f8dee997ccfed260219c72d6095e57f",
+    "raw_bytes": 112711659
+  },
+  {
+    "id": "SPIKE_125333",
+    "directory": "morning_M01_mpc_learned_zero_payload75_walk_20261014_125333_831147_ee9f",
+    "raw": true,
+    "cohort": "spike",
+    "status": "included",
+    "raw_sha256": "b2b6afcf6e6180da8a97357e6908aca866e7081f86cc54bdb3a23edac4084243",
+    "raw_bytes": 102234568
+  },
+  {
+    "id": "EXCLUDED_1",
+    "directory": "comparison_T01_mpc_original_timing_zero_payload75_walk_20261012_160554_112639_685d",
+    "raw": false,
+    "cohort": "excluded",
+    "status": "excluded",
+    "reason": "earlier narrowed bounds; stopped; not current configuration",
+    "raw_sha256": "b81849b777383579e5ca9d228b05609dfaf3154834faf949619deb4d34f1494a",
+    "raw_bytes": 36510351
+  },
+  {
+    "id": "EXCLUDED_2",
+    "directory": "comparison_T03_c_aligned_zero_payload75_walk_20261012_163955_035771_4062",
+    "raw": false,
+    "cohort": "excluded",
+    "status": "excluded",
+    "reason": "operator reported cable interference; entire run excluded",
+    "raw_sha256": "02748c0d9bcbd9cbde807ebf24aa80324937410baa606e4b2d49ff71a6707581",
+    "raw_bytes": 130443887
+  },
+  {
+    "id": "EXCLUDED_3",
+    "directory": "comparison_T12_c_regularization0024_aligned_zero_payload75_walk_20261012_174249_381685_75cc",
+    "raw": false,
+    "cohort": "excluded",
+    "status": "excluded",
+    "reason": "DDS initialization failure before any control output",
+    "raw_sha256": "d6ff86576b9d084a9e76ce9e5f30c6103c0d5de241e6cc28ae8b78c759bcf65f",
+    "raw_bytes": 17823
+  }
+]

@@ -1,0 +1,308 @@
+{
+  "purpose": "Numerical provenance audit of withdrawn tethered trials; NOT new H0 model/evidence",
+  "source_archive": "evaluation/hardware_shadow/commissioning/walk_predictor_study_20260918/benchmark",
+  "archival_artifact_sha256": {
+    "protocol.json": "88235fcf3d6ae743bd1cc8582f226397e765bf0f05512883b2e0b91159f957ac",
+    "selection.json": "1d9ed82f779eba6efde6ead821c6bee61fef4aab06c8c959980f2bb495bc997e",
+    "metrics.json": "b2ed4f53de6886aded6e5e3811066364bf89e8d72fe13f924a387a2e06c3f0f5",
+    "steady_predictions.npz": "49d060c2c086eac0d966d15a472a0750fc53f6f520ab7bdd16d2c4287f98b40d"
+  },
+  "verifier_sha256": "805dbcb7fe250469cb6c1f923379fd3808fbb4cd3516376ea5dd2687d1d053a0",
+  "input_hash_checks": {
+    "trial01.npz": {
+      "recorded_sha256": "d407b225796f308d9a8ced244e879435959c7512e52bde082023ce1a83f968f6",
+      "actual_sha256": "d407b225796f308d9a8ced244e879435959c7512e52bde082023ce1a83f968f6",
+      "matches": true
+    },
+    "trial02.npz": {
+      "recorded_sha256": "6d5c25da9927078a958fa17e6785d040ce34fa5f7760f17d100fd938539e3a18",
+      "actual_sha256": "6d5c25da9927078a958fa17e6785d040ce34fa5f7760f17d100fd938539e3a18",
+      "matches": true
+    },
+    "trial03.npz": {
+      "recorded_sha256": "c56c09281aa7450b349eb4fedad5131bdcc3cf33ee7540cea8f0432511535720",
+      "actual_sha256": "c56c09281aa7450b349eb4fedad5131bdcc3cf33ee7540cea8f0432511535720",
+      "matches": true
+    },
+    "trial04.npz": {
+      "recorded_sha256": "b370486decbcd988b6acf9da16847242c408127c9b4ed583e119a2b6085c98b3",
+      "actual_sha256": "b370486decbcd988b6acf9da16847242c408127c9b4ed583e119a2b6085c98b3",
+      "matches": true
+    },
+    "trial05.npz": {
+      "recorded_sha256": "b5e006c8eaf9412be4e428b47ac22b55dde703eff3256d62aa6a42d00bfc2ad7",
+      "actual_sha256": "b5e006c8eaf9412be4e428b47ac22b55dde703eff3256d62aa6a42d00bfc2ad7",
+      "matches": true
+    }
+  },
+  "raw_log_hash_checks": [
+    {
+      "trial": 1,
+      "path": "evaluation/hardware_shadow/commissioning/g1_walk_trial02_20260917_1443/raw.jsonl",
+      "recorded_sha256": "0d2cdef8b79aa41781248cff39e64a51b6c9c03407ee42b0279d17d7c330a1aa",
+      "actual_sha256": "0d2cdef8b79aa41781248cff39e64a51b6c9c03407ee42b0279d17d7c330a1aa",
+      "matches": true
+    },
+    {
+      "trial": 2,
+      "path": "evaluation/hardware_shadow/commissioning/g1_walk_trial03_20260917_1455/raw.jsonl",
+      "recorded_sha256": "77e6ce8fedf79afb29fbdf416a9c5651e36b3f5f9cbaec86f8f93a8e47b55a58",
+      "actual_sha256": "77e6ce8fedf79afb29fbdf416a9c5651e36b3f5f9cbaec86f8f93a8e47b55a58",
+      "matches": true
+    },
+    {
+      "trial": 3,
+      "path": "evaluation/hardware_shadow/commissioning/g1_walk_20260917_150150/raw.jsonl",
+      "recorded_sha256": "6585919ba9b645ee2fe81cf68f259d8a98054f6057cff8b56ffdd3fcd76a7683",
+      "actual_sha256": "6585919ba9b645ee2fe81cf68f259d8a98054f6057cff8b56ffdd3fcd76a7683",
+      "matches": true
+    },
+    {
+      "trial": 4,
+      "path": "evaluation/hardware_shadow/commissioning/g1_walk_20260917_150634/raw.jsonl",
+      "recorded_sha256": "4d94ca932eade54fef5493b4cea03d24eb51d51325211c825261bb02b57c1c40",
+      "actual_sha256": "4d94ca932eade54fef5493b4cea03d24eb51d51325211c825261bb02b57c1c40",
+      "matches": true
+    },
+    {
+      "trial": 5,
+      "path": "evaluation/hardware_shadow/commissioning/g1_walk_20260917_151055/raw.jsonl",
+      "recorded_sha256": "ef47dc421703c96d019b9ea2edc28b7bb19986be5bf394b2a9337e091cce095c",
+      "actual_sha256": "ef47dc421703c96d019b9ea2edc28b7bb19986be5bf394b2a9337e091cce095c",
+      "matches": true
+    }
+  ],
+  "original_predictor_sha256_matches": true,
+  "current_dependency_sha256_matches": false,
+  "original_dependency_git_commit": "3625712",
+  "original_dependency_sha256_matches": true,
+  "dependency_difference": "Only zeros_after audit selection gained yaw_rate == 0; no preprocessing/labels/model change",
+  "train_trials": [
+    1,
+    2,
+    3
+  ],
+  "evaluation_trials": [
+    4,
+    5
+  ],
+  "hyperparameter_provenance": {
+    "method": "knn_legs_qdq",
+    "features": 24,
+    "chosen": {
+      "param": 8,
+      "fold_scores": [
+        0.2704211722580456,
+        0.2908585944547305,
+        0.29563276441557274
+      ],
+      "mean": 0.28563751037611623
+    },
+    "all_candidates": [
+      {
+        "param": 8,
+        "fold_scores": [
+          0.2704211722580456,
+          0.2908585944547305,
+          0.29563276441557274
+        ],
+        "mean": 0.28563751037611623
+      },
+      {
+        "param": 24,
+        "fold_scores": [
+          0.29599695503753953,
+          0.3330009367018386,
+          0.33215927143043156
+        ],
+        "mean": 0.32038572105660323
+      },
+      {
+        "param": 64,
+        "fold_scores": [
+          0.4217273043647285,
+          0.46090203431218185,
+          0.4585178156009379
+        ],
+        "mean": 0.4470490514259495
+      }
+    ]
+  },
+  "model": "24 standardized leg q/dq features, Euclidean eight-neighbour inverse-distance lookup",
+  "distance_weight": "w_i=(1/max(distance_i,0.001))/sum_j(1/max(distance_j,0.001))",
+  "train_samples": 3852,
+  "standardization_fit": "training trials only",
+  "frame": "legacy IMU navigation world, NOT new fixed H0 frame",
+  "preprocessing": "past-asof 2ms grid, causal15Hz first order filter; acceleration subtracts gravity",
+  "alpha": "backward difference of filtered world omega, then causal15Hz filter",
+  "horizons_ms": [
+    6,
+    24,
+    54
+  ],
+  "target_intervals_ms": [
+    [
+      0,
+      6
+    ],
+    [
+      18,
+      24
+    ],
+    [
+      48,
+      54
+    ]
+  ],
+  "target_discrete_offsets_ms": [
+    [
+      2,
+      4,
+      6
+    ],
+    [
+      20,
+      22,
+      24
+    ],
+    [
+      50,
+      52,
+      54
+    ]
+  ],
+  "scope": "steady anchors7 <= t <14.7s sampled every6ms; not startup/stop or closed-loop MPC",
+  "rmse_formula": "sqrt(sum((prediction-truth)^2)/(number_of_anchors*3_axes)), pool complete trials4/5",
+  "units": "m/s^2, three scalar components pooled; not vector norm RMSE",
+  "per_trial": [
+    {
+      "trial": 4,
+      "anchor_count": 1284,
+      "first_last_anchor_s": [
+        7.000000000000007,
+        14.698000000000013
+      ],
+      "acc_rmse_m_s2": [
+        0.4822322995702973,
+        0.5004585492379645,
+        0.5406345297021586
+      ],
+      "rebuilt_truth_max_abs_difference": 0.0,
+      "rebuilt_prediction_max_abs_difference": 0.0
+    },
+    {
+      "trial": 5,
+      "anchor_count": 1284,
+      "first_last_anchor_s": [
+        7.000000000000007,
+        14.698000000000013
+      ],
+      "acc_rmse_m_s2": [
+        0.43981538631002776,
+        0.45977460972432793,
+        0.4646846944521961
+      ],
+      "rebuilt_truth_max_abs_difference": 0.0,
+      "rebuilt_prediction_max_abs_difference": 0.0
+    }
+  ],
+  "pooled_acc_rmse_m_s2": [
+    0.46151141090112596,
+    0.48054731882121976,
+    0.5040920352298806
+  ],
+  "published_rounded": [
+    0.462,
+    0.481,
+    0.504
+  ],
+  "all_archived_methods_acc_rmse_m_s2": {
+    "zoh": [
+      0.5435846348230348,
+      1.351575310797399,
+      1.69854232655361
+    ],
+    "clock": [
+      0.9709812375826561,
+      0.9784649020532463,
+      0.9890837763705557
+    ],
+    "phase": [
+      0.8328770567459981,
+      0.8349871439787404,
+      0.8390812865630267
+    ],
+    "phase_delta": [
+      0.5068582847177621,
+      1.113116066624072,
+      1.2670689552320387
+    ],
+    "ridge_knees_q": [
+      1.1346071518052623,
+      1.1314394975075368,
+      1.142776978188764
+    ],
+    "ridge_knees_qdq": [
+      1.0130113320068077,
+      1.0355058510995456,
+      1.0740821474830962
+    ],
+    "ridge_knees_clock": [
+      1.1341866323341423,
+      1.131312899401632,
+      1.1429009716567458
+    ],
+    "ridge_legs_qdq": [
+      0.6101566647818528,
+      0.7686019613868318,
+      0.8498898789825543
+    ],
+    "ridge_legs_history": [
+      0.5254790204844607,
+      0.6483913430901651,
+      0.7982095743800568
+    ],
+    "ridge_imu_history": [
+      0.4716383621171387,
+      0.8725508899628349,
+      0.9917406625116332
+    ],
+    "ridge_imu_legs_history": [
+      0.3761886144491085,
+      0.6169925306882672,
+      0.7831804404332205
+    ],
+    "ridge_imu_phase": [
+      0.45819546093748026,
+      0.7606992223993225,
+      0.8627376756773032
+    ],
+    "knn_knees_q": [
+      0.9034285626219013,
+      0.9940354397541656,
+      0.9473489369409333
+    ],
+    "knn_knees_qdq": [
+      0.525400396074622,
+      0.5287494468804584,
+      0.5295962735206843
+    ],
+    "knn_legs_qdq": [
+      0.46151141090112596,
+      0.48054731882121976,
+      0.5040920352298806
+    ],
+    "knn_imu_legs_history": [
+      0.42837945332786553,
+      0.46748433603457423,
+      0.5153922320649811
+    ]
+  },
+  "conclusion": "Stored numbers and independent re-fit agree to1e-12; old trial physical validity remains withdrawn",
+  "limitations": [
+    "Raw-to-NPZ extraction is hash-traced, not re-executed in this verifier",
+    "Filtered targets, not raw impact truth",
+    "Same-day exploratory trials, not fresh blind validation",
+    "Reproducibility does not establish model generalisation or hardware closed-loop benefit"
+  ]
+}

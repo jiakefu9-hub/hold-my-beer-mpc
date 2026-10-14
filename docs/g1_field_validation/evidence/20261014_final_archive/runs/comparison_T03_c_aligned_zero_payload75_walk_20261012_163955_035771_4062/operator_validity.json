@@ -1,0 +1,6 @@
+{
+  "valid_for_controller_comparison": false,
+  "operator_reported_reason": "External cable interference during the run.",
+  "disposition": "Retain raw evidence, but exclude all endpoint and controller-performance metrics from comparisons. Repeat T03 under unobstructed conditions.",
+  "reported_date": "2026-10-12"
+}

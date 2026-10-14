@@ -1,0 +1,5 @@
+{
+  "legacy_pid_200_samples_max_output_difference": 0.0,
+  "legacy_pid_diagnostics_identical": true,
+  "mpc_baseline_files_unchanged": 10
+}

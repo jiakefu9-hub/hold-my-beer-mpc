@@ -1,0 +1,420 @@
+{
+  "source": "evaluation/hardware_shadow/commissioning/morning_M01_mpc_learned_zero_payload75_walk_20261014_125333_831147_ee9f/raw.jsonl",
+  "recorded_state_counterfactual": true,
+  "limitation": "States are held to the recorded baseline trajectory, so this identifies immediate command sensitivity, not closed-loop performance.",
+  "event_count": 20,
+  "replay_reports": {
+    "baseline": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.7601319330681235e-07
+    },
+    "gravity_20": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.7625732690903533e-07
+    },
+    "gravity_15": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.762573215799648e-07
+    },
+    "gravity_10": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.7674560299526547e-07
+    },
+    "no_gravity": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.749145432469959e-07
+    },
+    "no_omega": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.7662353885868924e-07
+    },
+    "no_alpha": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.768066350635536e-07
+    },
+    "no_linear_acc": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.7680664216898094e-07
+    },
+    "no_joint_posture": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.7644042133754283e-07
+    },
+    "no_angular_objectives": {
+      "status": "passed",
+      "errors": [],
+      "active_commands": 2447,
+      "planned_vs_final_acceleration_max_error_rad_s2": 4.6868896497187507e-07
+    }
+  },
+  "metrics": {
+    "baseline": {
+      "ddq_norm_rms": 11.29732978174547,
+      "ddq_step_norm_rms": 8.945750640188368,
+      "torque_step_norm_rms": 1.1687509572362964,
+      "event_max_ddq_norm_median": 24.9378563912602,
+      "event_max_ddq_step_median": 34.68635615626744,
+      "event_max_torque_step_median": 3.879053307925454,
+      "saturation_fraction": 0.04149128081779916,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.08352851964345367,
+        "angular_acceleration": 0.0697557463614911,
+        "angular_velocity": 0.04460351769539857,
+        "gravity": 0.2465584074429637,
+        "posture": 0.04031475720384256,
+        "velocity": 0.001890889765475734,
+        "control": 0.21949833500344573
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.280129754193959,
+        "angular_acceleration": 0.23916317769559892,
+        "angular_velocity": 0.19415971447696836,
+        "gravity": 0.8799492062084616,
+        "posture": 0.05982322748683374,
+        "velocity": 0.019926090148490137,
+        "control": 0.6274775285457019
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": 0.0,
+        "ddq_step_norm_rms": 0.0,
+        "torque_step_norm_rms": 0.0,
+        "event_max_ddq_norm_median": 0.0,
+        "event_max_ddq_step_median": 0.0,
+        "event_max_torque_step_median": 0.0
+      }
+    },
+    "gravity_20": {
+      "ddq_norm_rms": 9.875859546710121,
+      "ddq_step_norm_rms": 8.196467557828392,
+      "torque_step_norm_rms": 1.0824201293613627,
+      "event_max_ddq_norm_median": 24.163482140388133,
+      "event_max_ddq_step_median": 31.525649771925508,
+      "event_max_torque_step_median": 3.5773541734592493,
+      "saturation_fraction": 0.030667468430547205,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.06449304492675066,
+        "angular_acceleration": 0.0480191602190213,
+        "angular_velocity": 0.0453946172283496,
+        "gravity": 0.1656115474557954,
+        "posture": 0.04031137557594126,
+        "velocity": 0.0017675858226840523,
+        "control": 0.16026781086784822
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.23555132653529193,
+        "angular_acceleration": 0.16873542562514496,
+        "angular_velocity": 0.19766411579308285,
+        "gravity": 0.5911946981421178,
+        "posture": 0.05981863536853786,
+        "velocity": 0.02006534934710219,
+        "control": 0.4509877212838999
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": -12.582355853081307,
+        "ddq_step_norm_rms": -8.375854777282266,
+        "torque_step_norm_rms": -7.3865888485838855,
+        "event_max_ddq_norm_median": -3.105215776057868,
+        "event_max_ddq_step_median": -9.112246815729097,
+        "event_max_torque_step_median": -7.7776485785794875
+      }
+    },
+    "gravity_15": {
+      "ddq_norm_rms": 9.019998759945864,
+      "ddq_step_norm_rms": 7.65880954859185,
+      "torque_step_norm_rms": 1.0220307403618671,
+      "event_max_ddq_norm_median": 23.282714469593625,
+      "event_max_ddq_step_median": 29.86444201719807,
+      "event_max_torque_step_median": 3.4075846936768874,
+      "saturation_fraction": 0.025255562236921228,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.05426405991453901,
+        "angular_acceleration": 0.03767141757264962,
+        "angular_velocity": 0.045599445037216316,
+        "gravity": 0.12473192815249354,
+        "posture": 0.04030935307498617,
+        "velocity": 0.0017125667083392525,
+        "control": 0.1302986071120767
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.21005113090326827,
+        "angular_acceleration": 0.13505169291979788,
+        "angular_velocity": 0.19853472810717163,
+        "gravity": 0.4457066513805483,
+        "posture": 0.05981587631843917,
+        "velocity": 0.02006702610245684,
+        "control": 0.3749422032218001
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": -20.15813529210574,
+        "ddq_step_norm_rms": -14.386060414147872,
+        "torque_step_norm_rms": -12.55359116208754,
+        "event_max_ddq_norm_median": -6.637065735315739,
+        "event_max_ddq_step_median": -13.901472144683924,
+        "event_max_torque_step_median": -12.154218486384028
+      }
+    },
+    "gravity_10": {
+      "ddq_norm_rms": 8.054526813904696,
+      "ddq_step_norm_rms": 6.965018775012364,
+      "torque_step_norm_rms": 0.9471465798870687,
+      "event_max_ddq_norm_median": 21.96442421457536,
+      "event_max_ddq_step_median": 28.478661371933256,
+      "event_max_torque_step_median": 3.205551082113355,
+      "saturation_fraction": 0.01803968731208659,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.04533175956371716,
+        "angular_acceleration": 0.026162193712149395,
+        "angular_velocity": 0.045972950315725736,
+        "gravity": 0.0835700746268555,
+        "posture": 0.040307003433549794,
+        "velocity": 0.0016444546704921764,
+        "control": 0.10006734358037568
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.18598378572713795,
+        "angular_acceleration": 0.10647241633697357,
+        "angular_velocity": 0.20291356561487703,
+        "gravity": 0.29881345271334986,
+        "posture": 0.05981268803254113,
+        "velocity": 0.020211513455106262,
+        "control": 0.3071051018777691
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": -28.704154260244596,
+        "ddq_step_norm_rms": -22.141594873857294,
+        "torque_step_norm_rms": -18.960786810669028,
+        "event_max_ddq_norm_median": -11.923367149258745,
+        "event_max_ddq_step_median": -17.896647189942794,
+        "event_max_torque_step_median": -17.362541124042785
+      }
+    },
+    "no_gravity": {
+      "ddq_norm_rms": 6.216791716958808,
+      "ddq_step_norm_rms": 4.916532308261652,
+      "torque_step_norm_rms": 0.7349868611533248,
+      "event_max_ddq_norm_median": 17.886055431152855,
+      "event_max_ddq_step_median": 20.039908498036148,
+      "event_max_torque_step_median": 2.3972608328795353,
+      "saturation_fraction": 0.014431749849669273,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.03788088983351111,
+        "angular_acceleration": 0.00967950892362799,
+        "angular_velocity": 0.05031271161293534,
+        "gravity": 0.0,
+        "posture": 0.04029062004521676,
+        "velocity": 0.0015046467278243727,
+        "control": 0.06273375999037138
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.131962471245217,
+        "angular_acceleration": 0.06255463570972947,
+        "angular_velocity": 0.22694495701912787,
+        "gravity": 0.0,
+        "posture": 0.05980439857277652,
+        "velocity": 0.020138514467071735,
+        "control": 0.19402624828291665
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": -44.97114064064884,
+        "ddq_step_norm_rms": -45.04058400449528,
+        "torque_step_norm_rms": -37.11347515031586,
+        "event_max_ddq_norm_median": -28.277494462510187,
+        "event_max_ddq_step_median": -42.22538565955665,
+        "event_max_torque_step_median": -38.199848195393635
+      }
+    },
+    "no_omega": {
+      "ddq_norm_rms": 11.33944999616739,
+      "ddq_step_norm_rms": 8.148021336964458,
+      "torque_step_norm_rms": 1.0828163529155683,
+      "event_max_ddq_norm_median": 24.11532588154956,
+      "event_max_ddq_step_median": 33.20244934393908,
+      "event_max_torque_step_median": 3.7496164980527977,
+      "saturation_fraction": 0.03487672880336741,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.08514944621721705,
+        "angular_acceleration": 0.07443821486808365,
+        "angular_velocity": 0.0,
+        "gravity": 0.2458216045470869,
+        "posture": 0.04030892370831874,
+        "velocity": 0.0019505055704400313,
+        "control": 0.22380615597304798
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.24786818800701083,
+        "angular_acceleration": 0.2533428859296152,
+        "angular_velocity": 0.0,
+        "gravity": 0.8763123530931026,
+        "posture": 0.05983340217778505,
+        "velocity": 0.020704028163447043,
+        "control": 0.634583136934277
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": 0.37283336182660776,
+        "ddq_step_norm_rms": -8.917410458996567,
+        "torque_step_norm_rms": -7.352687395776303,
+        "event_max_ddq_norm_median": -3.298320821186973,
+        "event_max_ddq_step_median": -4.278070621321916,
+        "event_max_torque_step_median": -3.3368144131507127
+      }
+    },
+    "no_alpha": {
+      "ddq_norm_rms": 12.412487996964554,
+      "ddq_step_norm_rms": 9.57978482175229,
+      "torque_step_norm_rms": 1.2275224067090458,
+      "event_max_ddq_norm_median": 26.290169892770457,
+      "event_max_ddq_step_median": 36.11454009016117,
+      "event_max_torque_step_median": 3.989119509232127,
+      "saturation_fraction": 0.05592303066746843,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.09832867278089011,
+        "angular_acceleration": 0.0,
+        "angular_velocity": 0.04388723589611308,
+        "gravity": 0.24546431754430292,
+        "posture": 0.04030674795821193,
+        "velocity": 0.0020003342804413796,
+        "control": 0.2707469141060488
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.3187253483966435,
+        "angular_acceleration": 0.0,
+        "angular_velocity": 0.19175996525129657,
+        "gravity": 0.874321406237383,
+        "posture": 0.05982341724508309,
+        "velocity": 0.019799291834962433,
+        "control": 0.7961459841942871
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": 9.870989311305989,
+        "ddq_step_norm_rms": 7.087545887044433,
+        "torque_step_norm_rms": 5.028569098392355,
+        "event_max_ddq_norm_median": 5.4227335352857065,
+        "event_max_ddq_step_median": 4.117422791427083,
+        "event_max_torque_step_median": 2.837450083034243
+      }
+    },
+    "no_linear_acc": {
+      "ddq_norm_rms": 12.27863734132402,
+      "ddq_step_norm_rms": 9.756172976648715,
+      "torque_step_norm_rms": 1.3918915581249154,
+      "event_max_ddq_norm_median": 27.433117612230713,
+      "event_max_ddq_step_median": 36.60369363938641,
+      "event_max_torque_step_median": 4.693956467739547,
+      "saturation_fraction": 0.04930847865303668,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.0,
+        "angular_acceleration": 0.09069735633707086,
+        "angular_velocity": 0.041803542186100065,
+        "gravity": 0.24500640252170464,
+        "posture": 0.04030811576608337,
+        "velocity": 0.0019184906838988674,
+        "control": 0.270504156606991
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.0,
+        "angular_acceleration": 0.27431163585341384,
+        "angular_velocity": 0.18715217430742329,
+        "gravity": 0.8769882169792674,
+        "posture": 0.05981588515324991,
+        "velocity": 0.019229984505205102,
+        "control": 0.7192355677162475
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": 8.686190263863702,
+        "ddq_step_norm_rms": 9.059299426697208,
+        "torque_step_norm_rms": 19.09222828927315,
+        "event_max_ddq_norm_median": 10.00591703561582,
+        "event_max_ddq_step_median": 5.52764168851021,
+        "event_max_torque_step_median": 21.007784506315772
+      }
+    },
+    "no_joint_posture": {
+      "ddq_norm_rms": 11.296585430710865,
+      "ddq_step_norm_rms": 8.944598781447292,
+      "torque_step_norm_rms": 1.1682615508737832,
+      "event_max_ddq_norm_median": 24.933698204256196,
+      "event_max_ddq_step_median": 34.66499435182884,
+      "event_max_torque_step_median": 3.882063697020884,
+      "saturation_fraction": 0.04269392663860493,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.08410939690579855,
+        "angular_acceleration": 0.06972934974811948,
+        "angular_velocity": 0.044660723335105665,
+        "gravity": 0.24652667713061444,
+        "posture": 0.0,
+        "velocity": 0.0018824664528609143,
+        "control": 0.22002127325389872
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.2777173790478682,
+        "angular_acceleration": 0.23971026762751307,
+        "angular_velocity": 0.19391329031931498,
+        "gravity": 0.8799458312161057,
+        "posture": 0.0,
+        "velocity": 0.01991178856638896,
+        "control": 0.6284899085697264
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": -0.00658873423176054,
+        "ddq_step_norm_rms": -0.012876043469201015,
+        "torque_step_norm_rms": -0.04187430688146199,
+        "event_max_ddq_norm_median": -0.01667419580402285,
+        "event_max_ddq_step_median": -0.06158561119066208,
+        "event_max_torque_step_median": 0.0776062831949087
+      }
+    },
+    "no_angular_objectives": {
+      "ddq_norm_rms": 5.794992731031906,
+      "ddq_step_norm_rms": 2.466291307890748,
+      "torque_step_norm_rms": 0.517438587365071,
+      "event_max_ddq_norm_median": 14.337961360727961,
+      "event_max_ddq_step_median": 9.12993267721529,
+      "event_max_torque_step_median": 1.77746612956252,
+      "saturation_fraction": 0.0072158749248346366,
+      "baseline_cost_term_medians": {
+        "linear_acceleration": 0.023584247733603226,
+        "angular_acceleration": 0.0,
+        "angular_velocity": 0.0,
+        "gravity": 0.0,
+        "posture": 0.04026338982579498,
+        "velocity": 0.0014925436887897818,
+        "control": 0.07880535847755264
+      },
+      "baseline_cost_term_p90": {
+        "linear_acceleration": 0.07619697906361543,
+        "angular_acceleration": 0.0,
+        "angular_velocity": 0.0,
+        "gravity": 0.0,
+        "posture": 0.059817588127125454,
+        "velocity": 0.021738136439685064,
+        "control": 0.13080018792068737
+      },
+      "relative_to_baseline_percent": {
+        "ddq_norm_rms": -48.70475729233282,
+        "ddq_step_norm_rms": -72.43058288690666,
+        "torque_step_norm_rms": -55.72721595123742,
+        "event_max_ddq_norm_median": -42.50523727551464,
+        "event_max_ddq_step_median": -73.67860539722443,
+        "event_max_torque_step_median": -54.177837001339846
+      }
+    }
+  }
+}

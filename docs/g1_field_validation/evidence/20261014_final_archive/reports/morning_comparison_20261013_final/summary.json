@@ -1,0 +1,4139 @@
+{
+  "window_s": [
+    5,
+    18
+  ],
+  "sample_hz": 200,
+  "derivative_window_ms": 105,
+  "runs": {
+    "M01": {
+      "directory": "morning_M01_mpc_learned_zero_payload75_walk_20261013_150426_750630_999f",
+      "windows": {
+        "primary": {
+          "torso": {
+            "acc_rms_m_s2": 2.034976337849776
+          },
+          "left": {
+            "tilt_mean_deg": 12.975280234805496,
+            "tilt_rms_deg": 13.005592705714948,
+            "tilt_max_deg": 17.53880832614276,
+            "swing_rms_deg": 1.1084726058651329,
+            "acc_rms_m_s2": 1.8995662720940012,
+            "alpha_rms_rad_s2": 5.428298963038619,
+            "relative_speed_demeaned_rms_m_s": 0.11468077667368128,
+            "omega_rms_rad_s": 0.3289725302125721
+          },
+          "right": {
+            "tilt_mean_deg": 0.6316511768586335,
+            "tilt_rms_deg": 0.7049566738670129,
+            "tilt_max_deg": 1.9933991827599276,
+            "swing_rms_deg": 0.5909545643835449,
+            "acc_rms_m_s2": 1.9864017132594618,
+            "alpha_rms_rad_s2": 5.346944322049013,
+            "relative_speed_demeaned_rms_m_s": 0.10395399063559693,
+            "omega_rms_rad_s": 0.28523253314012204
+          }
+        },
+        "walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.0238404462108393
+          },
+          "left": {
+            "tilt_mean_deg": 13.008614537560327,
+            "tilt_rms_deg": 13.0229052867702,
+            "tilt_max_deg": 14.201965792435246,
+            "swing_rms_deg": 0.7718093115927166,
+            "acc_rms_m_s2": 1.8289360375846828,
+            "alpha_rms_rad_s2": 5.362106919991201,
+            "relative_speed_demeaned_rms_m_s": 0.10386572735623711,
+            "omega_rms_rad_s": 0.30548875499352274
+          },
+          "right": {
+            "tilt_mean_deg": 0.6201238228879338,
+            "tilt_rms_deg": 0.690496885385917,
+            "tilt_max_deg": 1.7729255190300686,
+            "swing_rms_deg": 0.5645106473862611,
+            "acc_rms_m_s2": 1.9343747238744584,
+            "alpha_rms_rad_s2": 5.3555445867193825,
+            "relative_speed_demeaned_rms_m_s": 0.09497427393823869,
+            "omega_rms_rad_s": 0.26349714277207104
+          }
+        },
+        "stop": {
+          "torso": {
+            "acc_rms_m_s2": 2.071663705472925
+          },
+          "left": {
+            "tilt_mean_deg": 12.864165892289392,
+            "tilt_rms_deg": 12.947716916744096,
+            "tilt_max_deg": 17.53880832614276,
+            "swing_rms_deg": 1.8165408030595438,
+            "acc_rms_m_s2": 2.118057757415403,
+            "alpha_rms_rad_s2": 5.643334682126187,
+            "relative_speed_demeaned_rms_m_s": 0.1449775343476233,
+            "omega_rms_rad_s": 0.3973513302578614
+          },
+          "right": {
+            "tilt_mean_deg": 0.670075690094299,
+            "tilt_rms_deg": 0.7511483140518532,
+            "tilt_max_deg": 1.9933991827599276,
+            "swing_rms_deg": 0.6490993578372963,
+            "acc_rms_m_s2": 2.1507546923562852,
+            "alpha_rms_rad_s2": 5.318176328304203,
+            "relative_speed_demeaned_rms_m_s": 0.12941359177201373,
+            "omega_rms_rad_s": 0.3480140471348099
+          }
+        },
+        "later_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.0383155185385773
+          },
+          "left": {
+            "tilt_mean_deg": 13.069389827886326,
+            "tilt_rms_deg": 13.078205191008212,
+            "tilt_max_deg": 14.026422400483089,
+            "swing_rms_deg": 0.6247879265709894,
+            "acc_rms_m_s2": 1.8086706921294498,
+            "alpha_rms_rad_s2": 5.0066954167652105,
+            "relative_speed_demeaned_rms_m_s": 0.09948725939419804,
+            "omega_rms_rad_s": 0.2880951502160264
+          },
+          "right": {
+            "tilt_mean_deg": 0.57446646733213,
+            "tilt_rms_deg": 0.6375602456489071,
+            "tilt_max_deg": 1.1877901197181127,
+            "swing_rms_deg": 0.5154514355145253,
+            "acc_rms_m_s2": 1.851743365142182,
+            "alpha_rms_rad_s2": 5.043430066461632,
+            "relative_speed_demeaned_rms_m_s": 0.0933961060550587,
+            "omega_rms_rad_s": 0.2559853943072269
+          }
+        },
+        "late_walk": {
+          "torso": {
+            "acc_rms_m_s2": 1.996446563885263
+          },
+          "left": {
+            "tilt_mean_deg": 13.135129728262841,
+            "tilt_rms_deg": 13.142122877144732,
+            "tilt_max_deg": 14.026422400483089,
+            "swing_rms_deg": 0.5797873338773807,
+            "acc_rms_m_s2": 1.7689214552045653,
+            "alpha_rms_rad_s2": 4.954534093370504,
+            "relative_speed_demeaned_rms_m_s": 0.097137359906943,
+            "omega_rms_rad_s": 0.283105511230538
+          },
+          "right": {
+            "tilt_mean_deg": 0.5737236459708902,
+            "tilt_rms_deg": 0.6353143110490689,
+            "tilt_max_deg": 1.1877901197181127,
+            "swing_rms_deg": 0.5131831487801549,
+            "acc_rms_m_s2": 1.8480134091299363,
+            "alpha_rms_rad_s2": 4.957226687046604,
+            "relative_speed_demeaned_rms_m_s": 0.09334419864361926,
+            "omega_rms_rad_s": 0.25338225414735194
+          }
+        }
+      },
+      "sensitivity": {
+        "75": {
+          "torso": {
+            "acc_rms_m_s2": 2.2510260860413602
+          },
+          "left": {
+            "tilt_mean_deg": 12.975280234805496,
+            "tilt_rms_deg": 13.005592705714948,
+            "tilt_max_deg": 17.53880832614276,
+            "swing_rms_deg": 1.1084726058651329,
+            "acc_rms_m_s2": 2.107023006638674,
+            "alpha_rms_rad_s2": 6.519450854605658,
+            "relative_speed_demeaned_rms_m_s": 0.11561054523522168,
+            "omega_rms_rad_s": 0.3333817358564253
+          },
+          "right": {
+            "tilt_mean_deg": 0.6316511768586335,
+            "tilt_rms_deg": 0.7049566738670129,
+            "tilt_max_deg": 1.9933991827599276,
+            "swing_rms_deg": 0.5909545643835449,
+            "acc_rms_m_s2": 2.365086575014483,
+            "alpha_rms_rad_s2": 7.014107600906894,
+            "relative_speed_demeaned_rms_m_s": 0.10602509582119589,
+            "omega_rms_rad_s": 0.29254334683313993
+          }
+        },
+        "135": {
+          "torso": {
+            "acc_rms_m_s2": 1.8851043399740761
+          },
+          "left": {
+            "tilt_mean_deg": 12.975280234805496,
+            "tilt_rms_deg": 13.005592705714948,
+            "tilt_max_deg": 17.53880832614276,
+            "swing_rms_deg": 1.1084726058651329,
+            "acc_rms_m_s2": 1.7720398590921154,
+            "alpha_rms_rad_s2": 4.7005044374267015,
+            "relative_speed_demeaned_rms_m_s": 0.11382338731576132,
+            "omega_rms_rad_s": 0.3243915875282857
+          },
+          "right": {
+            "tilt_mean_deg": 0.6316511768586335,
+            "tilt_rms_deg": 0.7049566738670129,
+            "tilt_max_deg": 1.9933991827599276,
+            "swing_rms_deg": 0.5909545643835449,
+            "acc_rms_m_s2": 1.8116101131179558,
+            "alpha_rms_rad_s2": 4.430329740596721,
+            "relative_speed_demeaned_rms_m_s": 0.10251081526827399,
+            "omega_rms_rad_s": 0.2791119352918616
+          }
+        }
+      },
+      "execution": {
+        "right_q_min_deg": [
+          -8.906478739011064,
+          -1.0018158620775046,
+          2.1622468593726882,
+          -0.9922027977075348,
+          -2.07298290366638
+        ],
+        "right_q_max_deg": [
+          -1.3877105578475295,
+          4.262008586897161,
+          7.250976634209726,
+          2.014617869991563,
+          -1.6246032894915512
+        ],
+        "right_q_command_min_deg": [
+          -9.376511013350184,
+          -1.1954213093612185,
+          0.0,
+          -1.0207224660303347,
+          -2.0894515569723384
+        ],
+        "right_q_command_max_deg": [
+          -1.361120097800141,
+          4.28684358160615,
+          0.0,
+          2.2132495894524657,
+          -1.611285060940261
+        ],
+        "q_outer_margin_deg": [
+          11.093521260988936,
+          15.73799141310284,
+          12.749023365790274,
+          37.98538213000844,
+          37.92701709633362
+        ],
+        "torque_model_max_abs_nm": [
+          6.2966436975199365,
+          3.914202034386515,
+          1.9725507315931758,
+          5.435364479770081,
+          0.34158541838954076
+        ],
+        "torque_model_margin_nm": [
+          3.7033563024800635,
+          2.085797965613485,
+          2.027449268406824,
+          1.5646355202299187,
+          1.1584145816104592
+        ],
+        "feedforward_margin_nm": [
+          3.8005971908569336,
+          2.054736614227295,
+          2.094340443611145,
+          1.5529022216796875,
+          1.2286567687988281
+        ],
+        "solved_count": 2154,
+        "fallback_count": 0,
+        "brake_latched_percent": 0.6035283194057568
+      },
+      "right_tilt_at_task_time_deg": {
+        "5": 0.7131955575689919,
+        "7": 0.8229102377980746,
+        "10": 0.9362135143445811,
+        "15": 0.962353499657719,
+        "17.9": 0.5842079454573165
+      },
+      "timing": {
+        "available": true,
+        "samples": 2154,
+        "actual_period_ms": {
+          "mean": 6.036217429897865,
+          "p50": 5.999817500000001,
+          "p95": 6.47185475,
+          "p99": 6.78801964,
+          "max": 12.337723
+        },
+        "complete_work_ms": {
+          "mean": 4.256290693593315,
+          "p50": 4.2313095,
+          "p95": 4.99861695,
+          "p99": 5.357991379999997,
+          "max": 7.192933
+        },
+        "full_work_ms": {
+          "mean": 4.256290693593315,
+          "p50": 4.2313095,
+          "p95": 4.99861695,
+          "p99": 5.357991379999997,
+          "max": 7.192933
+        },
+        "imu_age_at_write_ms": {
+          "mean": 5.323456637418755,
+          "p50": 5.349453499999999,
+          "p95": 6.5340520999999985,
+          "p99": 7.157202989999999,
+          "max": 9.181065
+        },
+        "nominal_period_ms": {
+          "mean": 6.0,
+          "p50": 6.0,
+          "p95": 6.0,
+          "p99": 6.0,
+          "max": 6.0
+        },
+        "state_age_at_write_ms": {
+          "mean": 5.247838989322191,
+          "p50": 5.1844719999999995,
+          "p95": 6.6715225,
+          "p99": 7.505930549999997,
+          "max": 10.107498
+        },
+        "state_imu_skew_ms": {
+          "mean": 0.8211064605385329,
+          "p50": 0.755225,
+          "p95": 1.802588599999999,
+          "p99": 2.664010909999999,
+          "max": 4.915493
+        },
+        "wake_lateness_ms": {
+          "mean": 0.25729588486536675,
+          "p50": 0.2266845,
+          "p95": 0.5530225999999998,
+          "p99": 0.7968455799999998,
+          "max": 1.537142
+        },
+        "work_ms": {
+          "mean": 4.236419616991643,
+          "p50": 4.215218500000001,
+          "p95": 4.9689706,
+          "p99": 5.320061409999996,
+          "max": 7.183189
+        },
+        "write_ms": {
+          "mean": 0.28128601532033426,
+          "p50": 0.2384565,
+          "p95": 0.6450444499999999,
+          "p99": 1.04947014,
+          "max": 1.568361
+        },
+        "deadline_misses": 13,
+        "skipped_slots": 13,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.0060352831940575676,
+        "scope": "through timing-row enqueue; final audit-row enqueue excluded"
+      },
+      "lifecycle": {
+        "status": "normal_release_recorded",
+        "session_end_records": 1,
+        "session_end_outcome": "normal_release_completed",
+        "release_completed": true,
+        "final_weight": 0.0,
+        "faults": [],
+        "physical_stop_verified": false,
+        "scope": "recorded software outcome only; not physical stop or field-validation certification"
+      },
+      "capture_quality": {
+        "lowstate_records_total": 1483,
+        "lowstate_crc_invalid_total": 0,
+        "lowstate_crc_invalid_primary_window": 0,
+        "torso_imu_records_total": 5055,
+        "successful_command_records_total": 3504,
+        "primary_stream_coverage": {
+          "LowState": {
+            "first_task_s": -10.457026027000001,
+            "last_task_s": 21.115204138000003,
+            "max_primary_gap_ms": 23.477204999998946,
+            "covers_primary_window": true
+          },
+          "IMU": {
+            "first_task_s": -10.456160655000001,
+            "last_task_s": 21.127074333000003,
+            "max_primary_gap_ms": 9.090711000000695,
+            "covers_primary_window": true
+          },
+          "commands": {
+            "first_task_s": 0.005463919,
+            "last_task_s": 21.107468108000003,
+            "max_primary_gap_ms": 12.337722999999912,
+            "covers_primary_window": true
+          }
+        },
+        "capture_drain_marker_recorded": true,
+        "journal_queue_dropped": 0,
+        "sdk_shutdown_endpoints": {
+          "low_subscriber": "listener_detached_then_closed",
+          "imu_subscriber": "listener_detached_then_closed",
+          "arm_publisher": "listener_detached_then_closed"
+        },
+        "warnings": [],
+        "status": "recorded_checks_passed",
+        "scope": "recorded coverage and lifecycle evidence; drain marker precedes journal close"
+      },
+      "provenance": {
+        "raw_sha256": "b0b2ce6b627512e810d3460b0537f15ae9ea319917820def4abd63d242d4fdaf",
+        "arrays_sha256": "89c5811ccf92ec99111db82edc7a4692853e3bf8f4e0a95cf3fbb05b2f95402b",
+        "analysis_source_sha256": "4c9c30c799cde40f5e49ae7a0602428dfcefd6f0c76b6c3155ebb7f279799474",
+        "endpoint_analysis_source_sha256": "118cb0aba24695464c8fcee800a4b6f45f7a90ddaad2e8634478d7b368f97ad6",
+        "model_config_sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+        "control_source_sha256": {
+          "tools/g1_commissioning/g1_walk_mpc.py": "f043dcba1375b0c419a5f0fa35392bab370f7a80dfc5951962cd5d000c3b794e",
+          "tools/g1_commissioning/g1_walk_pid.py": "b55270ce824aa0863c4ffb2dace51bfbeb0ad05a90994df7902f4271707fc90d",
+          "tools/g1_commissioning/hardware_mpc_control.py": "401fe36b71b6e5b7d3a8ee1b1afbd197f684fb3072d8a1607745fea35c209c4e",
+          "tools/g1_commissioning/hardware_mpc_solver.py": "ed274f78d5ed768186df940fa359eefd240e806f6639168bb680ee7de2ea982b",
+          "tools/g1_commissioning/hardware_mpc_predictor.py": "86a43dcafc09f047d01dd7b5e873cd9f32b5a47be418bc9b225d0fa43a0bc159",
+          "tools/g1_commissioning/hardware_mpc_field.py": "66de91ea78faa6bc85ff8d8406fbc0984e32177f424d51f616e2977b2e9cfcc3",
+          "tools/g1_commissioning/hardware_mpc_torque_control.py": "d23707d9e4200e8a2ead83d39a7fae551ff007cee64af230d11e7dcd0b3b8f59",
+          "tools/g1_commissioning/hardware_arm_inverse_dynamics.py": "00b362b7b4aaf49530045b5cf13bfd803e0b4bc370f86d58428fbf31472f8b41",
+          "tools/g1_commissioning/hardware_torque_mapper.py": "36b769f55f4d5560f3caff2a34c5ca3c98fd98b212c1e7b53dff47de630d48d2",
+          "tools/g1_commissioning/hardware_mpc_delay_plan.py": "ce11a24c6132015763cc6b041ca4687131d5d5ca4e6be198b6c70813bd0ddf47",
+          "tools/g1_commissioning/hardware_mpc_delay_preview.py": "643a555bcd009f0333744d15bbfa3f14d0ddf447ed7a846c832631b457d7e4ec",
+          "tools/g1_commissioning/mpc_host.py": "c002e3f41ac2d0ca4f2e744156050e59ce16dbe4f0d0760e9e4e4e6fd72712f9",
+          "tools/g1_commissioning/arm_execution_record.py": "329358335eebea7c9149a9d6cfa16d5df7306e48228ac9e14938a1c64e023631",
+          "tools/g1_commissioning/native_arm_delay.py": "12ef802d84286ba235c220afa010fd497265916a4df19704c9296e10fd611865",
+          "tools/g1_commissioning/mpc_compute_process.py": "cb278e84329ca39db865f5330735450d580b1617b9931860e5176121bccb950f",
+          "tools/g1_commissioning/mpc_crc.py": "63d35953c73269ff73f2a37a8d269d26ea98a28ec04cb3b8f80f807063f4b3db",
+          "tools/g1_commissioning/hardware_mpc_recovery.py": "b6989856d8d89a7a9a2aa0d14b18f84a9b2a74eda70e8a636426a33d93211ad2",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/g1_commissioning/field_performance.py": "36837b3c1fa76bf421d42c54e13356180a7ec95e5cc9c944ae30696da69b1df6",
+          "cpp/g1_arm_delay/delay.cpp": "97a19cbd213a6c718b37a510aab7ed761a6d11643b54d5cc238c43d8e3941a42",
+          "cpp/g1_arm_delay/CMakeLists.txt": "62aa9bb8387f92b76f1d31c1609527927104bf5a0397b667ed6b4a58b32d7182",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "tools/g1_commissioning/g1_walk_mpc_learned.py": "ff57a3b3c3175a8a78a499e59fa0400caccecef3d2a887b6748672a7980746ea",
+          "tools/g1_commissioning/hardware_mpc_learned.py": "c1ae0500aa77cdca7ba993102942ded4726f29b68af4de8dac744e53b25625ec",
+          "tools/g1_commissioning/mpc_timing_grace.py": "8c4c00f87e2b6bac63f2addbae9bac7c6cb8935ceb54fd952904e165ab6e4cfd",
+          "tools/g1_commissioning/hardware_mpc_forecast_timing.py": "97ed1f55a2e199ab3550ffff2ebd65069ceb3cd43491f5750cbf1fd092881a22",
+          "tools/g1_commissioning/hardware_control_comparison.py": "b0defc9fcb5eb38ae200c9374681b26432ae407a3c6d67ee4889ea0c1d73fae2",
+          "tools/g1_commissioning/g1_run_control_comparison.py": "f838105c34217bf2055afd039fc81275fddef5b3268bd04ad8e31d7307296f44"
+        },
+        "predictor": "learned_filtered",
+        "mpc_config_sha256": "2d2da5ee5ce12f173af4cd76a445acfb77c06f644fa330aa3aa28a60a7852cb0",
+        "torque_config_sha256": "41e153ca138147e2dc006bb7f15a511872a69e5299f925c401322234f703b879",
+        "position_pid_config_sha256": null
+      }
+    },
+    "M02": {
+      "directory": "morning_M02_mpc_hold_zero_payload75_walk_20261013_150615_501041_a64a",
+      "windows": {
+        "primary": {
+          "torso": {
+            "acc_rms_m_s2": 2.101706922802195
+          },
+          "left": {
+            "tilt_mean_deg": 12.949921949326123,
+            "tilt_rms_deg": 12.987936200144267,
+            "tilt_max_deg": 18.037639223606522,
+            "swing_rms_deg": 1.2219831767657185,
+            "acc_rms_m_s2": 1.9730970373696377,
+            "alpha_rms_rad_s2": 5.429170799956694,
+            "relative_speed_demeaned_rms_m_s": 0.11407462196187787,
+            "omega_rms_rad_s": 0.3260589685798006
+          },
+          "right": {
+            "tilt_mean_deg": 0.6144355221415313,
+            "tilt_rms_deg": 0.6931142303253519,
+            "tilt_max_deg": 1.7665213560686022,
+            "swing_rms_deg": 0.5771090166443266,
+            "acc_rms_m_s2": 2.1593725476352525,
+            "alpha_rms_rad_s2": 6.07251604136658,
+            "relative_speed_demeaned_rms_m_s": 0.10407203411129093,
+            "omega_rms_rad_s": 0.28926368258156815
+          }
+        },
+        "walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.1142600715903894
+          },
+          "left": {
+            "tilt_mean_deg": 12.96702005741081,
+            "tilt_rms_deg": 12.986284002667146,
+            "tilt_max_deg": 14.209897473936763,
+            "swing_rms_deg": 0.8662424571756011,
+            "acc_rms_m_s2": 1.9259052667543328,
+            "alpha_rms_rad_s2": 5.246402002870637,
+            "relative_speed_demeaned_rms_m_s": 0.10327883974734312,
+            "omega_rms_rad_s": 0.3024032901963907
+          },
+          "right": {
+            "tilt_mean_deg": 0.6051608991907659,
+            "tilt_rms_deg": 0.6849985095997745,
+            "tilt_max_deg": 1.565281108207533,
+            "swing_rms_deg": 0.5654528091872276,
+            "acc_rms_m_s2": 2.115315903972287,
+            "alpha_rms_rad_s2": 6.15650090126185,
+            "relative_speed_demeaned_rms_m_s": 0.09622564279752385,
+            "omega_rms_rad_s": 0.2737113109349083
+          }
+        },
+        "stop": {
+          "torso": {
+            "acc_rms_m_s2": 2.0593105123152866
+          },
+          "left": {
+            "tilt_mean_deg": 12.892928255710506,
+            "tilt_rms_deg": 12.993442007771288,
+            "tilt_max_deg": 18.037639223606522,
+            "swing_rms_deg": 1.9885594376872768,
+            "acc_rms_m_s2": 2.122839606146931,
+            "alpha_rms_rad_s2": 5.998313727459326,
+            "relative_speed_demeaned_rms_m_s": 0.1443110750138929,
+            "omega_rms_rad_s": 0.39480390223974055
+          },
+          "right": {
+            "tilt_mean_deg": 0.6453509319774163,
+            "tilt_rms_deg": 0.7195058003227957,
+            "tilt_max_deg": 1.7665213560686022,
+            "swing_rms_deg": 0.6072249863637313,
+            "acc_rms_m_s2": 2.300141565010652,
+            "alpha_rms_rad_s2": 5.783765511386965,
+            "relative_speed_demeaned_rms_m_s": 0.12672092697145715,
+            "omega_rms_rad_s": 0.33594463703185384
+          }
+        },
+        "later_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.142037844730092
+          },
+          "left": {
+            "tilt_mean_deg": 13.076951379041994,
+            "tilt_rms_deg": 13.088721639228313,
+            "tilt_max_deg": 14.198251389014517,
+            "swing_rms_deg": 0.6683932748501034,
+            "acc_rms_m_s2": 1.9347055029594036,
+            "alpha_rms_rad_s2": 4.858762636626944,
+            "relative_speed_demeaned_rms_m_s": 0.10000004468569118,
+            "omega_rms_rad_s": 0.28832215187127586
+          },
+          "right": {
+            "tilt_mean_deg": 0.5716761324179901,
+            "tilt_rms_deg": 0.64545525189479,
+            "tilt_max_deg": 1.349976655824161,
+            "swing_rms_deg": 0.5139057360362377,
+            "acc_rms_m_s2": 2.0616998848827217,
+            "alpha_rms_rad_s2": 5.810317080795472,
+            "relative_speed_demeaned_rms_m_s": 0.0953125141668633,
+            "omega_rms_rad_s": 0.2665766848098401
+          }
+        },
+        "late_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.2266765217324234
+          },
+          "left": {
+            "tilt_mean_deg": 13.156149679929275,
+            "tilt_rms_deg": 13.165245976555417,
+            "tilt_max_deg": 14.120340237152194,
+            "swing_rms_deg": 0.6134450789274838,
+            "acc_rms_m_s2": 1.9989362381303972,
+            "alpha_rms_rad_s2": 4.8105970972294445,
+            "relative_speed_demeaned_rms_m_s": 0.10227745397548559,
+            "omega_rms_rad_s": 0.2944380598261545
+          },
+          "right": {
+            "tilt_mean_deg": 0.6021624894523716,
+            "tilt_rms_deg": 0.669215231562339,
+            "tilt_max_deg": 1.349976655824161,
+            "swing_rms_deg": 0.518117620703265,
+            "acc_rms_m_s2": 2.0744371670758976,
+            "alpha_rms_rad_s2": 5.957954026757607,
+            "relative_speed_demeaned_rms_m_s": 0.09898277286533125,
+            "omega_rms_rad_s": 0.27807664410771854
+          }
+        }
+      },
+      "sensitivity": {
+        "75": {
+          "torso": {
+            "acc_rms_m_s2": 2.3145449761800503
+          },
+          "left": {
+            "tilt_mean_deg": 12.949921949326123,
+            "tilt_rms_deg": 12.987936200144267,
+            "tilt_max_deg": 18.037639223606522,
+            "swing_rms_deg": 1.2219831767657185,
+            "acc_rms_m_s2": 2.1850453744642966,
+            "alpha_rms_rad_s2": 6.597209051470546,
+            "relative_speed_demeaned_rms_m_s": 0.11504214240856023,
+            "omega_rms_rad_s": 0.3307653356925263
+          },
+          "right": {
+            "tilt_mean_deg": 0.6144355221415313,
+            "tilt_rms_deg": 0.6931142303253519,
+            "tilt_max_deg": 1.7665213560686022,
+            "swing_rms_deg": 0.5771090166443266,
+            "acc_rms_m_s2": 2.528978127379962,
+            "alpha_rms_rad_s2": 7.890026281585105,
+            "relative_speed_demeaned_rms_m_s": 0.10611018295511851,
+            "omega_rms_rad_s": 0.2983087744480321
+          }
+        },
+        "135": {
+          "torso": {
+            "acc_rms_m_s2": 1.9387971421961774
+          },
+          "left": {
+            "tilt_mean_deg": 12.949921949326123,
+            "tilt_rms_deg": 12.987936200144267,
+            "tilt_max_deg": 18.037639223606522,
+            "swing_rms_deg": 1.2219831767657185,
+            "acc_rms_m_s2": 1.8344589344764648,
+            "alpha_rms_rad_s2": 4.650659024910543,
+            "relative_speed_demeaned_rms_m_s": 0.11315768609182479,
+            "omega_rms_rad_s": 0.32125779007480687
+          },
+          "right": {
+            "tilt_mean_deg": 0.6144355221415313,
+            "tilt_rms_deg": 0.6931142303253519,
+            "tilt_max_deg": 1.7665213560686022,
+            "swing_rms_deg": 0.5771090166443266,
+            "acc_rms_m_s2": 1.955821601625281,
+            "alpha_rms_rad_s2": 4.918068932077198,
+            "relative_speed_demeaned_rms_m_s": 0.10243032611967245,
+            "omega_rms_rad_s": 0.2809343854555684
+          }
+        }
+      },
+      "execution": {
+        "right_q_min_deg": [
+          -10.6649783889489,
+          -0.8363342523098473,
+          2.1800994797592206,
+          -0.6481933832489668,
+          -2.0791627307613605
+        ],
+        "right_q_max_deg": [
+          -0.9709167266026016,
+          4.083481102371367,
+          8.071517995054624,
+          2.4108123843082616,
+          -1.6685486198897075
+        ],
+        "right_q_command_min_deg": [
+          -11.31554366210886,
+          -0.8532441998692121,
+          0.0,
+          -0.6800341243339795,
+          -2.106499922584102
+        ],
+        "right_q_command_max_deg": [
+          -0.9432162540933802,
+          4.101080365428375,
+          0.0,
+          2.500448798767747,
+          -1.6559372091958078
+        ],
+        "q_outer_margin_deg": [
+          9.3350216110511,
+          15.916518897628633,
+          11.928482004945376,
+          37.58918761569174,
+          37.92083726923864
+        ],
+        "torque_model_max_abs_nm": [
+          8.02133308163555,
+          3.871684809705021,
+          1.6213042125067547,
+          5.332396770280762,
+          0.3254268395837425
+        ],
+        "torque_model_margin_nm": [
+          1.9786669183644499,
+          2.128315190294979,
+          2.3786957874932453,
+          1.667603229719238,
+          1.1745731604162575
+        ],
+        "feedforward_margin_nm": [
+          2.1079373359680176,
+          2.164994478225708,
+          2.4506947994232178,
+          1.626049518585205,
+          1.2629503160715103
+        ],
+        "solved_count": 2161,
+        "fallback_count": 0,
+        "brake_latched_percent": 0.3239241092086997
+      },
+      "right_tilt_at_task_time_deg": {
+        "5": 0.6346957190328318,
+        "7": 0.8630314530346516,
+        "10": 0.7771772568650043,
+        "15": 0.9878911371585882,
+        "17.9": 0.773893648701356
+      },
+      "timing": {
+        "available": true,
+        "samples": 2161,
+        "actual_period_ms": {
+          "mean": 6.016632712170292,
+          "p50": 5.994317000000001,
+          "p95": 6.437142000000001,
+          "p99": 6.677383800000001,
+          "max": 12.253121
+        },
+        "complete_work_ms": {
+          "mean": 3.775177533086534,
+          "p50": 3.685851,
+          "p95": 4.617338999999999,
+          "p99": 5.088804800000001,
+          "max": 6.566586
+        },
+        "full_work_ms": {
+          "mean": 3.775177533086534,
+          "p50": 3.685851,
+          "p95": 4.617338999999999,
+          "p99": 5.088804800000001,
+          "max": 6.566586
+        },
+        "imu_age_at_write_ms": {
+          "mean": 4.848817174919019,
+          "p50": 4.916092,
+          "p95": 6.240284,
+          "p99": 6.6661914000000015,
+          "max": 7.784408999999999
+        },
+        "nominal_period_ms": {
+          "mean": 6.0,
+          "p50": 6.0,
+          "p95": 6.0,
+          "p99": 6.0,
+          "max": 6.0
+        },
+        "state_age_at_write_ms": {
+          "mean": 4.720815637204997,
+          "p50": 4.729329,
+          "p95": 6.094047,
+          "p99": 6.815820200000004,
+          "max": 8.403345999999999
+        },
+        "state_imu_skew_ms": {
+          "mean": 0.8789506899583526,
+          "p50": 0.788171,
+          "p95": 2.034055,
+          "p99": 2.635630800000001,
+          "max": 4.591111
+        },
+        "wake_lateness_ms": {
+          "mean": 0.21609954604349838,
+          "p50": 0.173849,
+          "p95": 0.531899,
+          "p99": 0.724925400000002,
+          "max": 1.2549679999999999
+        },
+        "work_ms": {
+          "mean": 3.754523844053679,
+          "p50": 3.660101,
+          "p95": 4.572235,
+          "p99": 5.025390400000001,
+          "max": 6.546294
+        },
+        "write_ms": {
+          "mean": 0.2628045488199907,
+          "p50": 0.233229,
+          "p95": 0.478384,
+          "p99": 1.0443792000000032,
+          "max": 1.640623
+        },
+        "deadline_misses": 6,
+        "skipped_slots": 6,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.002776492364645997,
+        "scope": "through timing-row enqueue; final audit-row enqueue excluded"
+      },
+      "lifecycle": {
+        "status": "normal_release_recorded",
+        "session_end_records": 1,
+        "session_end_outcome": "normal_release_completed",
+        "release_completed": true,
+        "final_weight": 0.0,
+        "faults": [],
+        "physical_stop_verified": false,
+        "scope": "recorded software outcome only; not physical stop or field-validation certification"
+      },
+      "capture_quality": {
+        "lowstate_records_total": 1221,
+        "lowstate_crc_invalid_total": 0,
+        "lowstate_crc_invalid_primary_window": 0,
+        "torso_imu_records_total": 4172,
+        "successful_command_records_total": 3510,
+        "primary_stream_coverage": {
+          "LowState": {
+            "first_task_s": -4.862115217,
+            "last_task_s": 21.104121745,
+            "max_primary_gap_ms": 23.97614100000034,
+            "covers_primary_window": true
+          },
+          "IMU": {
+            "first_task_s": -4.857991014,
+            "last_task_s": 21.119811418,
+            "max_primary_gap_ms": 9.434643000002296,
+            "covers_primary_window": true
+          },
+          "commands": {
+            "first_task_s": 0.0055861980000000006,
+            "last_task_s": 21.095924329000002,
+            "max_primary_gap_ms": 12.253120999999645,
+            "covers_primary_window": true
+          }
+        },
+        "capture_drain_marker_recorded": true,
+        "journal_queue_dropped": 0,
+        "sdk_shutdown_endpoints": {
+          "low_subscriber": "listener_detached_then_closed",
+          "imu_subscriber": "listener_detached_then_closed",
+          "arm_publisher": "listener_detached_then_closed"
+        },
+        "warnings": [],
+        "status": "recorded_checks_passed",
+        "scope": "recorded coverage and lifecycle evidence; drain marker precedes journal close"
+      },
+      "provenance": {
+        "raw_sha256": "80e88bac3409797a0e352265c44a34b3d4adf92294e6aeae95102aec02084d97",
+        "arrays_sha256": "0a2350829685d078a612fde003a1da27f90cb46cfa3544539b0bd5c315734bb8",
+        "analysis_source_sha256": "4c9c30c799cde40f5e49ae7a0602428dfcefd6f0c76b6c3155ebb7f279799474",
+        "endpoint_analysis_source_sha256": "118cb0aba24695464c8fcee800a4b6f45f7a90ddaad2e8634478d7b368f97ad6",
+        "model_config_sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+        "control_source_sha256": {
+          "tools/g1_commissioning/g1_walk_mpc.py": "f043dcba1375b0c419a5f0fa35392bab370f7a80dfc5951962cd5d000c3b794e",
+          "tools/g1_commissioning/g1_walk_pid.py": "b55270ce824aa0863c4ffb2dace51bfbeb0ad05a90994df7902f4271707fc90d",
+          "tools/g1_commissioning/hardware_mpc_control.py": "401fe36b71b6e5b7d3a8ee1b1afbd197f684fb3072d8a1607745fea35c209c4e",
+          "tools/g1_commissioning/hardware_mpc_solver.py": "ed274f78d5ed768186df940fa359eefd240e806f6639168bb680ee7de2ea982b",
+          "tools/g1_commissioning/hardware_mpc_predictor.py": "86a43dcafc09f047d01dd7b5e873cd9f32b5a47be418bc9b225d0fa43a0bc159",
+          "tools/g1_commissioning/hardware_mpc_field.py": "66de91ea78faa6bc85ff8d8406fbc0984e32177f424d51f616e2977b2e9cfcc3",
+          "tools/g1_commissioning/hardware_mpc_torque_control.py": "d23707d9e4200e8a2ead83d39a7fae551ff007cee64af230d11e7dcd0b3b8f59",
+          "tools/g1_commissioning/hardware_arm_inverse_dynamics.py": "00b362b7b4aaf49530045b5cf13bfd803e0b4bc370f86d58428fbf31472f8b41",
+          "tools/g1_commissioning/hardware_torque_mapper.py": "36b769f55f4d5560f3caff2a34c5ca3c98fd98b212c1e7b53dff47de630d48d2",
+          "tools/g1_commissioning/hardware_mpc_delay_plan.py": "ce11a24c6132015763cc6b041ca4687131d5d5ca4e6be198b6c70813bd0ddf47",
+          "tools/g1_commissioning/hardware_mpc_delay_preview.py": "643a555bcd009f0333744d15bbfa3f14d0ddf447ed7a846c832631b457d7e4ec",
+          "tools/g1_commissioning/mpc_host.py": "c002e3f41ac2d0ca4f2e744156050e59ce16dbe4f0d0760e9e4e4e6fd72712f9",
+          "tools/g1_commissioning/arm_execution_record.py": "329358335eebea7c9149a9d6cfa16d5df7306e48228ac9e14938a1c64e023631",
+          "tools/g1_commissioning/native_arm_delay.py": "12ef802d84286ba235c220afa010fd497265916a4df19704c9296e10fd611865",
+          "tools/g1_commissioning/mpc_compute_process.py": "cb278e84329ca39db865f5330735450d580b1617b9931860e5176121bccb950f",
+          "tools/g1_commissioning/mpc_crc.py": "63d35953c73269ff73f2a37a8d269d26ea98a28ec04cb3b8f80f807063f4b3db",
+          "tools/g1_commissioning/hardware_mpc_recovery.py": "b6989856d8d89a7a9a2aa0d14b18f84a9b2a74eda70e8a636426a33d93211ad2",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/g1_commissioning/field_performance.py": "36837b3c1fa76bf421d42c54e13356180a7ec95e5cc9c944ae30696da69b1df6",
+          "cpp/g1_arm_delay/delay.cpp": "97a19cbd213a6c718b37a510aab7ed761a6d11643b54d5cc238c43d8e3941a42",
+          "cpp/g1_arm_delay/CMakeLists.txt": "62aa9bb8387f92b76f1d31c1609527927104bf5a0397b667ed6b4a58b32d7182",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "tools/g1_commissioning/g1_walk_mpc_learned.py": "ff57a3b3c3175a8a78a499e59fa0400caccecef3d2a887b6748672a7980746ea",
+          "tools/g1_commissioning/hardware_mpc_learned.py": "c1ae0500aa77cdca7ba993102942ded4726f29b68af4de8dac744e53b25625ec",
+          "tools/g1_commissioning/mpc_timing_grace.py": "8c4c00f87e2b6bac63f2addbae9bac7c6cb8935ceb54fd952904e165ab6e4cfd",
+          "tools/g1_commissioning/hardware_mpc_forecast_timing.py": "97ed1f55a2e199ab3550ffff2ebd65069ceb3cd43491f5750cbf1fd092881a22",
+          "tools/g1_commissioning/hardware_control_comparison.py": "b0defc9fcb5eb38ae200c9374681b26432ae407a3c6d67ee4889ea0c1d73fae2",
+          "tools/g1_commissioning/g1_run_control_comparison.py": "f838105c34217bf2055afd039fc81275fddef5b3268bd04ad8e31d7307296f44"
+        },
+        "predictor": "hold_current",
+        "mpc_config_sha256": "2d2da5ee5ce12f173af4cd76a445acfb77c06f644fa330aa3aa28a60a7852cb0",
+        "torque_config_sha256": "41e153ca138147e2dc006bb7f15a511872a69e5299f925c401322234f703b879",
+        "position_pid_config_sha256": null
+      }
+    },
+    "M03": {
+      "directory": "morning_M03_position_pid_zero_zero_payload75_walk_20261013_150734_982806_6eea",
+      "windows": {
+        "primary": {
+          "torso": {
+            "acc_rms_m_s2": 2.0137986940766694
+          },
+          "left": {
+            "tilt_mean_deg": 12.921042340079945,
+            "tilt_rms_deg": 12.950666758566845,
+            "tilt_max_deg": 16.41253410326073,
+            "swing_rms_deg": 1.084237868256773,
+            "acc_rms_m_s2": 1.8725913610155942,
+            "alpha_rms_rad_s2": 5.750316920419921,
+            "relative_speed_demeaned_rms_m_s": 0.10972389799251099,
+            "omega_rms_rad_s": 0.3223129809948581
+          },
+          "right": {
+            "tilt_mean_deg": 2.482098311160365,
+            "tilt_rms_deg": 3.2669809746711285,
+            "tilt_max_deg": 12.735173444871638,
+            "swing_rms_deg": 3.091439545190432,
+            "acc_rms_m_s2": 1.9190002118563985,
+            "alpha_rms_rad_s2": 5.9008842355186,
+            "relative_speed_demeaned_rms_m_s": 0.12233122184225763,
+            "omega_rms_rad_s": 0.3518265712330642
+          }
+        },
+        "walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.1364752623717846
+          },
+          "left": {
+            "tilt_mean_deg": 12.911426869079422,
+            "tilt_rms_deg": 12.932941210504765,
+            "tilt_max_deg": 14.671902733530597,
+            "swing_rms_deg": 0.9282605750373775,
+            "acc_rms_m_s2": 1.963551628827418,
+            "alpha_rms_rad_s2": 5.99495187557953,
+            "relative_speed_demeaned_rms_m_s": 0.10860672550968342,
+            "omega_rms_rad_s": 0.3259935825641972
+          },
+          "right": {
+            "tilt_mean_deg": 2.653458982089035,
+            "tilt_rms_deg": 3.4909923749625977,
+            "tilt_max_deg": 12.735173444871638,
+            "swing_rms_deg": 3.1178782623617702,
+            "acc_rms_m_s2": 1.9896352361342835,
+            "alpha_rms_rad_s2": 5.884997574652538,
+            "relative_speed_demeaned_rms_m_s": 0.11835302895326326,
+            "omega_rms_rad_s": 0.3431565316301751
+          }
+        },
+        "stop": {
+          "torso": {
+            "acc_rms_m_s2": 1.5356585857733074
+          },
+          "left": {
+            "tilt_mean_deg": 12.953093910081696,
+            "tilt_rms_deg": 13.009577495638906,
+            "tilt_max_deg": 16.41253410326073,
+            "swing_rms_deg": 1.477014085296289,
+            "acc_rms_m_s2": 1.530841737829768,
+            "alpha_rms_rad_s2": 4.846490173425649,
+            "relative_speed_demeaned_rms_m_s": 0.11333261521283831,
+            "omega_rms_rad_s": 0.30972858634665523
+          },
+          "right": {
+            "tilt_mean_deg": 1.9108960747314638,
+            "tilt_rms_deg": 2.3721202425081325,
+            "tilt_max_deg": 4.914114669770199,
+            "swing_rms_deg": 2.2740862497728704,
+            "acc_rms_m_s2": 1.6620088088106373,
+            "alpha_rms_rad_s2": 5.953533610560833,
+            "relative_speed_demeaned_rms_m_s": 0.13464810985659456,
+            "omega_rms_rad_s": 0.3792980881085806
+          }
+        },
+        "later_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.1062245183632093
+          },
+          "left": {
+            "tilt_mean_deg": 12.970199357033884,
+            "tilt_rms_deg": 12.984959853213772,
+            "tilt_max_deg": 14.671902733530597,
+            "swing_rms_deg": 0.7393675110359952,
+            "acc_rms_m_s2": 1.941812559096181,
+            "alpha_rms_rad_s2": 5.756856262953254,
+            "relative_speed_demeaned_rms_m_s": 0.10415358837132135,
+            "omega_rms_rad_s": 0.30704539288424126
+          },
+          "right": {
+            "tilt_mean_deg": 1.8076123870068117,
+            "tilt_rms_deg": 2.055046489874855,
+            "tilt_max_deg": 4.974582406300439,
+            "swing_rms_deg": 1.9923781257958177,
+            "acc_rms_m_s2": 1.903057187196728,
+            "alpha_rms_rad_s2": 5.448491196900796,
+            "relative_speed_demeaned_rms_m_s": 0.1128709876224388,
+            "omega_rms_rad_s": 0.31835777213094446
+          }
+        },
+        "late_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.1835527602203264
+          },
+          "left": {
+            "tilt_mean_deg": 13.076493938838208,
+            "tilt_rms_deg": 13.092002418339657,
+            "tilt_max_deg": 14.671902733530597,
+            "swing_rms_deg": 0.7590630993320533,
+            "acc_rms_m_s2": 2.029505176038351,
+            "alpha_rms_rad_s2": 6.081726733030206,
+            "relative_speed_demeaned_rms_m_s": 0.10506912091580084,
+            "omega_rms_rad_s": 0.30811117530319504
+          },
+          "right": {
+            "tilt_mean_deg": 1.4425208515445351,
+            "tilt_rms_deg": 1.593107828360226,
+            "tilt_max_deg": 3.6165745833580036,
+            "swing_rms_deg": 1.5309468382410678,
+            "acc_rms_m_s2": 1.964152762211386,
+            "alpha_rms_rad_s2": 5.690630556474677,
+            "relative_speed_demeaned_rms_m_s": 0.11307735103959077,
+            "omega_rms_rad_s": 0.31559532837110243
+          }
+        }
+      },
+      "sensitivity": {
+        "75": {
+          "torso": {
+            "acc_rms_m_s2": 2.222993324747795
+          },
+          "left": {
+            "tilt_mean_deg": 12.921042340079945,
+            "tilt_rms_deg": 12.950666758566845,
+            "tilt_max_deg": 16.41253410326073,
+            "swing_rms_deg": 1.084237868256773,
+            "acc_rms_m_s2": 2.117819002700514,
+            "alpha_rms_rad_s2": 6.880665333810254,
+            "relative_speed_demeaned_rms_m_s": 0.11094750744619016,
+            "omega_rms_rad_s": 0.3273107387693518
+          },
+          "right": {
+            "tilt_mean_deg": 2.482098311160365,
+            "tilt_rms_deg": 3.2669809746711285,
+            "tilt_max_deg": 12.735173444871638,
+            "swing_rms_deg": 3.091439545190432,
+            "acc_rms_m_s2": 2.168166466748724,
+            "alpha_rms_rad_s2": 7.22836269334437,
+            "relative_speed_demeaned_rms_m_s": 0.1233174147471251,
+            "omega_rms_rad_s": 0.3571637588363017
+          }
+        },
+        "135": {
+          "torso": {
+            "acc_rms_m_s2": 1.8630864583019184
+          },
+          "left": {
+            "tilt_mean_deg": 12.921042340079945,
+            "tilt_rms_deg": 12.950666758566845,
+            "tilt_max_deg": 16.41253410326073,
+            "swing_rms_deg": 1.084237868256773,
+            "acc_rms_m_s2": 1.726222728761312,
+            "alpha_rms_rad_s2": 4.9571871224776,
+            "relative_speed_demeaned_rms_m_s": 0.10856983539234387,
+            "omega_rms_rad_s": 0.3168989144489068
+          },
+          "right": {
+            "tilt_mean_deg": 2.482098311160365,
+            "tilt_rms_deg": 3.2669809746711285,
+            "tilt_max_deg": 12.735173444871638,
+            "swing_rms_deg": 3.091439545190432,
+            "acc_rms_m_s2": 1.7695920339311269,
+            "alpha_rms_rad_s2": 5.02453473894424,
+            "relative_speed_demeaned_rms_m_s": 0.12135457027781145,
+            "omega_rms_rad_s": 0.34642223017738355
+          }
+        }
+      },
+      "execution": {
+        "right_q_min_deg": [
+          -4.288101190187079,
+          -1.4680480966388658,
+          -1.7083740655578765,
+          -4.715881487433678,
+          -1.5518188727051911
+        ],
+        "right_q_max_deg": [
+          4.33273348820535,
+          3.264312822993055,
+          4.4837955014180535,
+          5.768509261181023,
+          0.4943847802162728
+        ],
+        "right_q_command_min_deg": [
+          -8.997728974124644,
+          -1.672769553116,
+          -1.3425760859524325,
+          -11.408260778746618,
+          -1.5588017932189764
+        ],
+        "right_q_command_max_deg": [
+          -2.1688106394369733,
+          3.0038384036139094,
+          3.6811156337792204,
+          -2.1688106394369733,
+          2.1938626962864753
+        ],
+        "reference_min_margin_deg": [
+          0.002271025875355548,
+          2.9961615963860906,
+          1.3188843662207796,
+          1.391739221253383,
+          2.8061373037135247
+        ],
+        "reference_within_0_1deg_of_limit_percent": [
+          4.137610413761041,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "governor": {
+          "samples": 2151,
+          "raw_max_abs_dq_rad_s_per_joint": [
+            0.47999998927116394,
+            0.47999998927116394,
+            0.47999998927116394,
+            0.47999998927116394,
+            0.47999998927116394
+          ],
+          "sent_max_abs_dq_rad_s_per_joint": [
+            0.07000000000000267,
+            0.07000000000000055,
+            0.07000000000000058,
+            0.07000000000000298,
+            0.07000000000000019
+          ],
+          "sent_max_abs_ddq_rad_s2_per_joint": [
+            0.200000000000678,
+            0.20000000000010332,
+            0.20000000000022497,
+            0.2000000000005376,
+            0.2000000000001135
+          ],
+          "raw_velocity_limited_fraction_per_joint": [
+            0.9804741980474198,
+            0.9814039981403998,
+            0.5518363551836355,
+            0.9804741980474198,
+            0.9800092980009298
+          ]
+        }
+      },
+      "right_tilt_at_task_time_deg": {
+        "5": 12.735173444871638,
+        "7": 4.785549241397643,
+        "10": 1.9737283079564092,
+        "15": 0.38974787646786785,
+        "17.9": 0.2744754348323533
+      },
+      "timing": {
+        "available": true,
+        "samples": 2151,
+        "actual_period_ms": {
+          "p50": 5.999295,
+          "p95": 6.8509235,
+          "p99": 7.716575000000001,
+          "max": 12.13949
+        },
+        "wake_lateness_ms": {
+          "p50": 0.302235,
+          "p95": 1.1297004999999998,
+          "p99": 1.5765514999999999,
+          "max": 4.399248
+        },
+        "work_ms": {
+          "p50": 1.911835,
+          "p95": 4.0898965,
+          "p99": 5.036443,
+          "max": 8.393742999999999
+        },
+        "state_age_at_write_ms": {
+          "p50": 3.544823,
+          "p95": 6.198029,
+          "p99": 7.242909999999999,
+          "max": 9.060514999999999
+        },
+        "imu_age_at_write_ms": {
+          "p50": 2.9762299999999997,
+          "p95": 5.3965935,
+          "p99": 6.4121945,
+          "max": 12.660286
+        },
+        "state_imu_skew_ms": {
+          "p50": 0.43358399999999997,
+          "p95": 2.8988255,
+          "p99": 3.5479925,
+          "max": 8.360064
+        },
+        "write_ms": {
+          "p50": 0.226346,
+          "p95": 0.2639645,
+          "p99": 0.28064849999999997,
+          "max": 0.360072
+        },
+        "deadline_misses": 16,
+        "skipped_slots": 16,
+        "reused_lowstate": 0,
+        "reused_imu": 1,
+        "deadline_miss_fraction": 0.007438400743840074,
+        "scope": "host loop including command enqueue; excludes timing-row enqueue and physical motor/network latency"
+      },
+      "lifecycle": {
+        "status": "normal_release_recorded",
+        "session_end_records": 1,
+        "session_end_outcome": "normal_release_completed",
+        "release_completed": true,
+        "final_weight": 0.0,
+        "faults": [],
+        "physical_stop_verified": false,
+        "scope": "recorded software outcome only; not physical stop or field-validation certification"
+      },
+      "capture_quality": {
+        "lowstate_records_total": 1395,
+        "lowstate_crc_invalid_total": 0,
+        "lowstate_crc_invalid_primary_window": 0,
+        "torso_imu_records_total": 4713,
+        "successful_command_records_total": 3495,
+        "primary_stream_coverage": {
+          "LowState": {
+            "first_task_s": -8.536241687,
+            "last_task_s": 21.151354692,
+            "max_primary_gap_ms": 23.706366000000756,
+            "covers_primary_window": true
+          },
+          "IMU": {
+            "first_task_s": -8.53570891,
+            "last_task_s": 21.149671136000002,
+            "max_primary_gap_ms": 11.886886000000985,
+            "covers_primary_window": true
+          },
+          "commands": {
+            "first_task_s": 0.0030349080000000002,
+            "last_task_s": 21.117888592,
+            "max_primary_gap_ms": 12.139489999999142,
+            "covers_primary_window": true
+          }
+        },
+        "capture_drain_marker_recorded": true,
+        "journal_queue_dropped": 0,
+        "sdk_shutdown_endpoints": {
+          "low_subscriber": "listener_detached_then_closed",
+          "imu_subscriber": "listener_detached_then_closed",
+          "arm_publisher": "listener_detached_then_closed"
+        },
+        "warnings": [],
+        "status": "recorded_checks_passed",
+        "scope": "recorded coverage and lifecycle evidence; drain marker precedes journal close"
+      },
+      "provenance": {
+        "raw_sha256": "3626b6d2b9e9f6847e1d183cb29f459864ca105c1f049ca84b5170654abb1cf7",
+        "arrays_sha256": "b244572cbadf75bcdc73df7c5d415900fcf3caa6ae2e160dbe35b76e35d80628",
+        "analysis_source_sha256": "4c9c30c799cde40f5e49ae7a0602428dfcefd6f0c76b6c3155ebb7f279799474",
+        "endpoint_analysis_source_sha256": "118cb0aba24695464c8fcee800a4b6f45f7a90ddaad2e8634478d7b368f97ad6",
+        "model_config_sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+        "control_source_sha256": {
+          "tools/g1_commissioning/g1_walk_pid.py": "b55270ce824aa0863c4ffb2dace51bfbeb0ad05a90994df7902f4271707fc90d",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "tools/g1_commissioning/hardware_pid_control.py": "60f950ef2c98cd327366bbacc10f1674d75680a4b4ee5ec65e8ff2ee75ee354f",
+          "tools/g1_commissioning/endpoint_pose.py": "14262a6b0ef9d617b00bfa12cac3865750e2ccff9f17ebc50095c9fc3b894270",
+          "tools/g1_commissioning/pid_timing.py": "5362c1f43c704eb02cd9e5da411ade8cc11226af1ff0f1086351b23faae32c28",
+          "tools/g1_commissioning/field_performance.py": "36837b3c1fa76bf421d42c54e13356180a7ec95e5cc9c944ae30696da69b1df6"
+        },
+        "predictor": null,
+        "mpc_config_sha256": null,
+        "torque_config_sha256": null,
+        "position_pid_config_sha256": "515f73558b3aa08eae2eca25f4cf590f9d9c11621686483e3dacdb4d94f5c383"
+      }
+    },
+    "M04": {
+      "directory": "morning_M04_position_pid_zero_repeat_zero_payload75_walk_20261013_150910_347989_77e3",
+      "windows": {
+        "primary": {
+          "torso": {
+            "acc_rms_m_s2": 2.033492208522585
+          },
+          "left": {
+            "tilt_mean_deg": 13.035057391656505,
+            "tilt_rms_deg": 13.062473895655884,
+            "tilt_max_deg": 17.252586268207153,
+            "swing_rms_deg": 1.0913273300056157,
+            "acc_rms_m_s2": 1.8541096236034695,
+            "alpha_rms_rad_s2": 5.404719627971668,
+            "relative_speed_demeaned_rms_m_s": 0.10981389892839113,
+            "omega_rms_rad_s": 0.32598933040120537
+          },
+          "right": {
+            "tilt_mean_deg": 2.227965321123835,
+            "tilt_rms_deg": 3.1167928116914596,
+            "tilt_max_deg": 12.377320936120608,
+            "swing_rms_deg": 2.823814183549514,
+            "acc_rms_m_s2": 1.8108486318045582,
+            "alpha_rms_rad_s2": 5.372311661329621,
+            "relative_speed_demeaned_rms_m_s": 0.12033926778332657,
+            "omega_rms_rad_s": 0.34274004830380456
+          }
+        },
+        "walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.116111616301231
+          },
+          "left": {
+            "tilt_mean_deg": 12.963190438789065,
+            "tilt_rms_deg": 12.982414145657408,
+            "tilt_max_deg": 14.464074030889874,
+            "swing_rms_deg": 0.9083677108328808,
+            "acc_rms_m_s2": 1.894696813580893,
+            "alpha_rms_rad_s2": 5.67047285813439,
+            "relative_speed_demeaned_rms_m_s": 0.10978903161706258,
+            "omega_rms_rad_s": 0.3318082999980536
+          },
+          "right": {
+            "tilt_mean_deg": 2.360380478433092,
+            "tilt_rms_deg": 3.3339390308000096,
+            "tilt_max_deg": 12.377320936120608,
+            "swing_rms_deg": 2.8859694099553037,
+            "acc_rms_m_s2": 1.8359782826008175,
+            "alpha_rms_rad_s2": 5.450863532841885,
+            "relative_speed_demeaned_rms_m_s": 0.11593856743072974,
+            "omega_rms_rad_s": 0.3342662285783754
+          }
+        },
+        "stop": {
+          "torso": {
+            "acc_rms_m_s2": 1.7298259624537073
+          },
+          "left": {
+            "tilt_mean_deg": 13.27461390121465,
+            "tilt_rms_deg": 13.325866389311344,
+            "tilt_max_deg": 17.252586268207153,
+            "swing_rms_deg": 1.5306630673950845,
+            "acc_rms_m_s2": 1.7118832026427409,
+            "alpha_rms_rad_s2": 4.404554498560952,
+            "relative_speed_demeaned_rms_m_s": 0.10989173967742916,
+            "omega_rms_rad_s": 0.30579409547632813
+          },
+          "right": {
+            "tilt_mean_deg": 1.7865814634263097,
+            "tilt_rms_deg": 2.246157607428973,
+            "tilt_max_deg": 6.07610890639502,
+            "swing_rms_deg": 2.240145741771867,
+            "acc_rms_m_s2": 1.7244403375386514,
+            "alpha_rms_rad_s2": 5.101744508410885,
+            "relative_speed_demeaned_rms_m_s": 0.13395135022636892,
+            "omega_rms_rad_s": 0.3695855848409668
+          }
+        },
+        "later_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.0399972703646694
+          },
+          "left": {
+            "tilt_mean_deg": 13.021011177346175,
+            "tilt_rms_deg": 13.031384449344294,
+            "tilt_max_deg": 14.082606690860043,
+            "swing_rms_deg": 0.6755226152618612,
+            "acc_rms_m_s2": 1.8085990182566916,
+            "alpha_rms_rad_s2": 5.101289705662886,
+            "relative_speed_demeaned_rms_m_s": 0.10112335656083404,
+            "omega_rms_rad_s": 0.3005390198943231
+          },
+          "right": {
+            "tilt_mean_deg": 1.4004767168580736,
+            "tilt_rms_deg": 1.6478902548035592,
+            "tilt_max_deg": 5.054694561996167,
+            "swing_rms_deg": 1.5313959564629012,
+            "acc_rms_m_s2": 1.7092536701121912,
+            "alpha_rms_rad_s2": 4.741540815644384,
+            "relative_speed_demeaned_rms_m_s": 0.10828796938396316,
+            "omega_rms_rad_s": 0.30181012075256347
+          }
+        },
+        "late_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.0249794769766196
+          },
+          "left": {
+            "tilt_mean_deg": 13.05881918170045,
+            "tilt_rms_deg": 13.068215234526631,
+            "tilt_max_deg": 14.014044968432339,
+            "swing_rms_deg": 0.649362718287994,
+            "acc_rms_m_s2": 1.7599118642392682,
+            "alpha_rms_rad_s2": 5.021592551423777,
+            "relative_speed_demeaned_rms_m_s": 0.09853742806047652,
+            "omega_rms_rad_s": 0.29313530783165526
+          },
+          "right": {
+            "tilt_mean_deg": 1.1805522880077643,
+            "tilt_rms_deg": 1.2910262889961257,
+            "tilt_max_deg": 2.2702777989313225,
+            "swing_rms_deg": 1.2666900175385707,
+            "acc_rms_m_s2": 1.6817061956085917,
+            "alpha_rms_rad_s2": 4.729619078501104,
+            "relative_speed_demeaned_rms_m_s": 0.10663583242330073,
+            "omega_rms_rad_s": 0.29736769574358546
+          }
+        }
+      },
+      "sensitivity": {
+        "75": {
+          "torso": {
+            "acc_rms_m_s2": 2.2447406007878326
+          },
+          "left": {
+            "tilt_mean_deg": 13.035057391656505,
+            "tilt_rms_deg": 13.062473895655884,
+            "tilt_max_deg": 17.252586268207153,
+            "swing_rms_deg": 1.0913273300056157,
+            "acc_rms_m_s2": 2.0509585260732996,
+            "alpha_rms_rad_s2": 6.331152904016083,
+            "relative_speed_demeaned_rms_m_s": 0.11057946904428372,
+            "omega_rms_rad_s": 0.32987972721374775
+          },
+          "right": {
+            "tilt_mean_deg": 2.227965321123835,
+            "tilt_rms_deg": 3.1167928116914596,
+            "tilt_max_deg": 12.377320936120608,
+            "swing_rms_deg": 2.823814183549514,
+            "acc_rms_m_s2": 2.000943598350848,
+            "alpha_rms_rad_s2": 6.529460898464458,
+            "relative_speed_demeaned_rms_m_s": 0.12102864087377381,
+            "omega_rms_rad_s": 0.3470983413981993
+          }
+        },
+        "135": {
+          "torso": {
+            "acc_rms_m_s2": 1.8714923614347994
+          },
+          "left": {
+            "tilt_mean_deg": 13.035057391656505,
+            "tilt_rms_deg": 13.062473895655884,
+            "tilt_max_deg": 17.252586268207153,
+            "swing_rms_deg": 1.0913273300056157,
+            "acc_rms_m_s2": 1.716397426495157,
+            "alpha_rms_rad_s2": 4.7540830603225235,
+            "relative_speed_demeaned_rms_m_s": 0.10904351754617687,
+            "omega_rms_rad_s": 0.32167782272643974
+          },
+          "right": {
+            "tilt_mean_deg": 2.227965321123835,
+            "tilt_rms_deg": 3.1167928116914596,
+            "tilt_max_deg": 12.377320936120608,
+            "swing_rms_deg": 2.823814183549514,
+            "acc_rms_m_s2": 1.677358864743484,
+            "alpha_rms_rad_s2": 4.611279041840303,
+            "relative_speed_demeaned_rms_m_s": 0.11960551561573962,
+            "omega_rms_rad_s": 0.33831657123089065
+          }
+        }
+      },
+      "execution": {
+        "right_q_min_deg": [
+          -3.672866778056303,
+          -1.4563751966256082,
+          -1.1171723143520251,
+          -3.4517671513206434,
+          -1.5545654625251826
+        ],
+        "right_q_max_deg": [
+          4.510574538719557,
+          3.0617524640989253,
+          4.616317819902402,
+          5.714263898792782,
+          0.5657959020926371
+        ],
+        "right_q_command_min_deg": [
+          -8.99044008691387,
+          -1.786919422979309,
+          -1.049813561039167,
+          -10.441286964186373,
+          -1.2357152447792406
+        ],
+        "right_q_command_max_deg": [
+          -2.1113961575130786,
+          2.7884239943388964,
+          4.0717017117263925,
+          -2.1113961575130786,
+          2.3788571614040395
+        ],
+        "reference_min_margin_deg": [
+          0.009559913086130578,
+          3.2115760056611036,
+          0.9282982882736075,
+          2.3587130358136275,
+          2.6211428385959605
+        ],
+        "reference_within_0_1deg_of_limit_percent": [
+          1.989819527996298,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "governor": {
+          "samples": 2161,
+          "raw_max_abs_dq_rad_s_per_joint": [
+            0.47999998927116394,
+            0.47999998927116394,
+            0.47999998927116394,
+            0.47999998927116394,
+            0.47999998927116394
+          ],
+          "sent_max_abs_dq_rad_s_per_joint": [
+            0.07000000000000249,
+            0.07000000000000055,
+            0.07000000000000059,
+            0.07000000000000246,
+            0.0700000000000003
+          ],
+          "sent_max_abs_ddq_rad_s2_per_joint": [
+            0.20000000000058757,
+            0.20000000000019472,
+            0.2000000000002099,
+            0.20000000000074464,
+            0.20000000000009419
+          ],
+          "raw_velocity_limited_fraction_per_joint": [
+            0.980101804720037,
+            0.976399814900509,
+            0.46274872744099954,
+            0.978713558537714,
+            0.982878297084683
+          ]
+        }
+      },
+      "right_tilt_at_task_time_deg": {
+        "5": 12.409752740061945,
+        "7": 4.82064657110842,
+        "10": 1.345897340320623,
+        "15": 1.0840725094688854,
+        "17.9": 0.04682089138622528
+      },
+      "timing": {
+        "available": true,
+        "samples": 2161,
+        "actual_period_ms": {
+          "p50": 5.999415,
+          "p95": 6.620974000000001,
+          "p99": 7.412201600000002,
+          "max": 13.056474
+        },
+        "wake_lateness_ms": {
+          "p50": 0.155084,
+          "p95": 0.768177,
+          "p99": 1.4629584000000009,
+          "max": 3.8665879999999997
+        },
+        "work_ms": {
+          "p50": 1.431686,
+          "p95": 2.794046,
+          "p99": 3.8939954,
+          "max": 6.3024119999999995
+        },
+        "state_age_at_write_ms": {
+          "p50": 2.8579529999999997,
+          "p95": 4.892418999999999,
+          "p99": 6.226875000000004,
+          "max": 8.780673
+        },
+        "imu_age_at_write_ms": {
+          "p50": 2.472502,
+          "p95": 4.402181,
+          "p99": 5.4799792,
+          "max": 8.354282
+        },
+        "state_imu_skew_ms": {
+          "p50": 0.227037,
+          "p95": 2.016495,
+          "p99": 3.1192226000000005,
+          "max": 4.839405
+        },
+        "write_ms": {
+          "p50": 0.21331799999999998,
+          "p95": 0.238368,
+          "p99": 0.2550210000000001,
+          "max": 0.307948
+        },
+        "deadline_misses": 5,
+        "skipped_slots": 5,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.0023137436372049976,
+        "scope": "host loop including command enqueue; excludes timing-row enqueue and physical motor/network latency"
+      },
+      "lifecycle": {
+        "status": "normal_release_recorded",
+        "session_end_records": 1,
+        "session_end_outcome": "normal_release_completed",
+        "release_completed": true,
+        "final_weight": 0.0,
+        "faults": [],
+        "physical_stop_verified": false,
+        "scope": "recorded software outcome only; not physical stop or field-validation certification"
+      },
+      "capture_quality": {
+        "lowstate_records_total": 10580,
+        "lowstate_crc_invalid_total": 0,
+        "lowstate_crc_invalid_primary_window": 0,
+        "torso_imu_records_total": 36300,
+        "successful_command_records_total": 3506,
+        "primary_stream_coverage": {
+          "LowState": {
+            "first_task_s": -203.778230341,
+            "last_task_s": 21.185320845,
+            "max_primary_gap_ms": 23.184298000000325,
+            "covers_primary_window": true
+          },
+          "IMU": {
+            "first_task_s": -203.77761401400002,
+            "last_task_s": 21.193082196000002,
+            "max_primary_gap_ms": 9.162882000000039,
+            "covers_primary_window": true
+          },
+          "commands": {
+            "first_task_s": 0.001438194,
+            "last_task_s": 21.091920716,
+            "max_primary_gap_ms": 13.056473999998985,
+            "covers_primary_window": true
+          }
+        },
+        "capture_drain_marker_recorded": true,
+        "journal_queue_dropped": 0,
+        "sdk_shutdown_endpoints": {
+          "low_subscriber": "listener_detached_then_closed",
+          "imu_subscriber": "listener_detached_then_closed",
+          "arm_publisher": "listener_detached_then_closed"
+        },
+        "warnings": [],
+        "status": "recorded_checks_passed",
+        "scope": "recorded coverage and lifecycle evidence; drain marker precedes journal close"
+      },
+      "provenance": {
+        "raw_sha256": "c82eded1d84134aabeb6763321e932acdebf29fceb22e8a7ddf95916adc15ea0",
+        "arrays_sha256": "43b3abdf61b5ff79b487dcc20fa83fbe7732d75600691e8f139b427de95b85f8",
+        "analysis_source_sha256": "4c9c30c799cde40f5e49ae7a0602428dfcefd6f0c76b6c3155ebb7f279799474",
+        "endpoint_analysis_source_sha256": "118cb0aba24695464c8fcee800a4b6f45f7a90ddaad2e8634478d7b368f97ad6",
+        "model_config_sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+        "control_source_sha256": {
+          "tools/g1_commissioning/g1_walk_pid.py": "b55270ce824aa0863c4ffb2dace51bfbeb0ad05a90994df7902f4271707fc90d",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "tools/g1_commissioning/hardware_pid_control.py": "60f950ef2c98cd327366bbacc10f1674d75680a4b4ee5ec65e8ff2ee75ee354f",
+          "tools/g1_commissioning/endpoint_pose.py": "14262a6b0ef9d617b00bfa12cac3865750e2ccff9f17ebc50095c9fc3b894270",
+          "tools/g1_commissioning/pid_timing.py": "5362c1f43c704eb02cd9e5da411ade8cc11226af1ff0f1086351b23faae32c28",
+          "tools/g1_commissioning/field_performance.py": "36837b3c1fa76bf421d42c54e13356180a7ec95e5cc9c944ae30696da69b1df6"
+        },
+        "predictor": null,
+        "mpc_config_sha256": null,
+        "torque_config_sha256": null,
+        "position_pid_config_sha256": "515f73558b3aa08eae2eca25f4cf590f9d9c11621686483e3dacdb4d94f5c383"
+      }
+    },
+    "M05": {
+      "directory": "morning_M05_mpc_hold_repeat_zero_payload75_walk_20261013_151453_637007_fa6e",
+      "windows": {
+        "primary": {
+          "torso": {
+            "acc_rms_m_s2": 2.0884295493577145
+          },
+          "left": {
+            "tilt_mean_deg": 12.670169367967711,
+            "tilt_rms_deg": 12.704138133319908,
+            "tilt_max_deg": 15.53465616534121,
+            "swing_rms_deg": 1.190669211032001,
+            "acc_rms_m_s2": 1.9821830635035593,
+            "alpha_rms_rad_s2": 5.921265931605349,
+            "relative_speed_demeaned_rms_m_s": 0.1129922482509044,
+            "omega_rms_rad_s": 0.33414433382160597
+          },
+          "right": {
+            "tilt_mean_deg": 0.6380938819705286,
+            "tilt_rms_deg": 0.7144585418627286,
+            "tilt_max_deg": 1.7828134533234155,
+            "swing_rms_deg": 0.5712065556101135,
+            "acc_rms_m_s2": 2.076176885286318,
+            "alpha_rms_rad_s2": 6.364567807646262,
+            "relative_speed_demeaned_rms_m_s": 0.09954692969802233,
+            "omega_rms_rad_s": 0.2870464697849259
+          }
+        },
+        "walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.1263785060399916
+          },
+          "left": {
+            "tilt_mean_deg": 12.704650597204528,
+            "tilt_rms_deg": 12.726237902347407,
+            "tilt_max_deg": 13.932987357214255,
+            "swing_rms_deg": 1.0182955104876745,
+            "acc_rms_m_s2": 1.9522451615708272,
+            "alpha_rms_rad_s2": 5.349897192129784,
+            "relative_speed_demeaned_rms_m_s": 0.10823634973326147,
+            "omega_rms_rad_s": 0.3235138207411035
+          },
+          "right": {
+            "tilt_mean_deg": 0.6012277986936688,
+            "tilt_rms_deg": 0.6757615142195089,
+            "tilt_max_deg": 1.334243089385262,
+            "swing_rms_deg": 0.5254995162715619,
+            "acc_rms_m_s2": 2.0347973456270116,
+            "alpha_rms_rad_s2": 5.73617821812031,
+            "relative_speed_demeaned_rms_m_s": 0.09843180660558279,
+            "omega_rms_rad_s": 0.2795119502039441
+          }
+        },
+        "stop": {
+          "torso": {
+            "acc_rms_m_s2": 1.956624496823325
+          },
+          "left": {
+            "tilt_mean_deg": 12.555231937178307,
+            "tilt_rms_deg": 12.630192961903001,
+            "tilt_max_deg": 15.53465616534121,
+            "swing_rms_deg": 1.6151730860758664,
+            "acc_rms_m_s2": 2.0788646224447915,
+            "alpha_rms_rad_s2": 7.518512117050169,
+            "relative_speed_demeaned_rms_m_s": 0.12730202153016917,
+            "omega_rms_rad_s": 0.3673643711725613
+          },
+          "right": {
+            "tilt_mean_deg": 0.7609808262267282,
+            "tilt_rms_deg": 0.8305273151288837,
+            "tilt_max_deg": 1.7828134533234155,
+            "swing_rms_deg": 0.6979107677241749,
+            "acc_rms_m_s2": 2.2085163639312424,
+            "alpha_rms_rad_s2": 8.115068256342106,
+            "relative_speed_demeaned_rms_m_s": 0.10311273700449916,
+            "omega_rms_rad_s": 0.3108453433996438
+          }
+        },
+        "later_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.01997739170006
+          },
+          "left": {
+            "tilt_mean_deg": 12.794885044256901,
+            "tilt_rms_deg": 12.805652418492786,
+            "tilt_max_deg": 13.925527585606696,
+            "swing_rms_deg": 0.6637697281913278,
+            "acc_rms_m_s2": 1.8093073956158081,
+            "alpha_rms_rad_s2": 4.799809237179895,
+            "relative_speed_demeaned_rms_m_s": 0.09816152891143336,
+            "omega_rms_rad_s": 0.28281209722293704
+          },
+          "right": {
+            "tilt_mean_deg": 0.5796868183152494,
+            "tilt_rms_deg": 0.6522620897910386,
+            "tilt_max_deg": 1.334243089385262,
+            "swing_rms_deg": 0.4954485353558342,
+            "acc_rms_m_s2": 1.9125874590829495,
+            "alpha_rms_rad_s2": 5.68135799286557,
+            "relative_speed_demeaned_rms_m_s": 0.09317054951478446,
+            "omega_rms_rad_s": 0.261695561106519
+          }
+        },
+        "late_walk": {
+          "torso": {
+            "acc_rms_m_s2": 1.9903088952255548
+          },
+          "left": {
+            "tilt_mean_deg": 12.809410186680893,
+            "tilt_rms_deg": 12.819030477774351,
+            "tilt_max_deg": 13.767866907821828,
+            "swing_rms_deg": 0.6083335286932423,
+            "acc_rms_m_s2": 1.7821497409024398,
+            "alpha_rms_rad_s2": 4.771087983579451,
+            "relative_speed_demeaned_rms_m_s": 0.10059262540535006,
+            "omega_rms_rad_s": 0.2884413984667554
+          },
+          "right": {
+            "tilt_mean_deg": 0.5656830045753461,
+            "tilt_rms_deg": 0.6395352218361681,
+            "tilt_max_deg": 1.334243089385262,
+            "swing_rms_deg": 0.48764966780561564,
+            "acc_rms_m_s2": 1.8918574436396873,
+            "alpha_rms_rad_s2": 5.613711287853761,
+            "relative_speed_demeaned_rms_m_s": 0.09503920685458939,
+            "omega_rms_rad_s": 0.26644571623801594
+          }
+        }
+      },
+      "sensitivity": {
+        "75": {
+          "torso": {
+            "acc_rms_m_s2": 2.3306756201993526
+          },
+          "left": {
+            "tilt_mean_deg": 12.670169367967711,
+            "tilt_rms_deg": 12.704138133319908,
+            "tilt_max_deg": 15.53465616534121,
+            "swing_rms_deg": 1.190669211032001,
+            "acc_rms_m_s2": 2.2088340130590676,
+            "alpha_rms_rad_s2": 7.2330890384888775,
+            "relative_speed_demeaned_rms_m_s": 0.11400044880887718,
+            "omega_rms_rad_s": 0.3397766250592629
+          },
+          "right": {
+            "tilt_mean_deg": 0.6380938819705286,
+            "tilt_rms_deg": 0.7144585418627286,
+            "tilt_max_deg": 1.7828134533234155,
+            "swing_rms_deg": 0.5712065556101135,
+            "acc_rms_m_s2": 2.4465217182944365,
+            "alpha_rms_rad_s2": 8.160958234542674,
+            "relative_speed_demeaned_rms_m_s": 0.10138173140355122,
+            "omega_rms_rad_s": 0.2965801079920413
+          }
+        },
+        "135": {
+          "torso": {
+            "acc_rms_m_s2": 1.9211121192820164
+          },
+          "left": {
+            "tilt_mean_deg": 12.670169367967711,
+            "tilt_rms_deg": 12.704138133319908,
+            "tilt_max_deg": 15.53465616534121,
+            "swing_rms_deg": 1.190669211032001,
+            "acc_rms_m_s2": 1.838760347398322,
+            "alpha_rms_rad_s2": 5.02031175114699,
+            "relative_speed_demeaned_rms_m_s": 0.11208538754156795,
+            "omega_rms_rad_s": 0.3283523668371217
+          },
+          "right": {
+            "tilt_mean_deg": 0.6380938819705286,
+            "tilt_rms_deg": 0.7144585418627286,
+            "tilt_max_deg": 1.7828134533234155,
+            "swing_rms_deg": 0.5712065556101135,
+            "acc_rms_m_s2": 1.8682883088487503,
+            "alpha_rms_rad_s2": 5.099780545851666,
+            "relative_speed_demeaned_rms_m_s": 0.0979352372559533,
+            "omega_rms_rad_s": 0.2775354083437332
+          }
+        }
+      },
+      "execution": {
+        "right_q_min_deg": [
+          -7.234497095289778,
+          -0.12565613741906173,
+          0.8102417023807821,
+          -0.4518127447281122,
+          -2.0846559104013433
+        ],
+        "right_q_max_deg": [
+          -0.4497528023631187,
+          4.139099332782782,
+          9.014969463787546,
+          1.9068146464437248,
+          -1.5181732541320025
+        ],
+        "right_q_command_min_deg": [
+          -7.245372463995731,
+          -0.13398324525500477,
+          0.0,
+          -0.47507236697720884,
+          -2.1083709675298623
+        ],
+        "right_q_command_max_deg": [
+          -0.40417166833917084,
+          4.17410447916592,
+          0.0,
+          2.035963278364911,
+          -1.5138323487493421
+        ],
+        "q_outer_margin_deg": [
+          12.765502904710221,
+          15.86090066721722,
+          10.985030536212454,
+          38.09318535355627,
+          37.915344089598655
+        ],
+        "torque_model_max_abs_nm": [
+          8.20225363160678,
+          3.319854084975863,
+          1.872706397124725,
+          5.126003128786731,
+          0.36869892419622874
+        ],
+        "torque_model_margin_nm": [
+          1.79774636839322,
+          2.680145915024137,
+          2.127293602875275,
+          1.8739968712132686,
+          1.1313010758037714
+        ],
+        "feedforward_margin_nm": [
+          1.864614486694336,
+          2.6775901317596436,
+          2.3831450939178467,
+          1.9281635284423828,
+          1.22872593998909
+        ],
+        "solved_count": 2166,
+        "fallback_count": 0,
+        "brake_latched_percent": 0.8771929824561403
+      },
+      "right_tilt_at_task_time_deg": {
+        "5": 0.7354262138629014,
+        "7": 0.2471926970412307,
+        "10": 0.08994761537712319,
+        "15": 0.22457189137075712,
+        "17.9": 0.8434515695793666
+      },
+      "timing": {
+        "available": true,
+        "samples": 2166,
+        "actual_period_ms": {
+          "mean": 6.00269178578024,
+          "p50": 5.998219000000001,
+          "p95": 6.358559,
+          "p99": 6.5133814999999995,
+          "max": 12.093946
+        },
+        "complete_work_ms": {
+          "mean": 3.3852090960295476,
+          "p50": 3.337549,
+          "p95": 3.82404975,
+          "p99": 4.322863549999999,
+          "max": 5.949138
+        },
+        "full_work_ms": {
+          "mean": 3.3852090960295476,
+          "p50": 3.337549,
+          "p95": 3.82404975,
+          "p99": 4.322863549999999,
+          "max": 5.949138
+        },
+        "imu_age_at_write_ms": {
+          "mean": 4.553944484302862,
+          "p50": 4.4882824999999995,
+          "p95": 6.069699,
+          "p99": 6.384154799999999,
+          "max": 7.220356
+        },
+        "nominal_period_ms": {
+          "mean": 6.0,
+          "p50": 6.0,
+          "p95": 6.0,
+          "p99": 6.0,
+          "max": 6.0
+        },
+        "state_age_at_write_ms": {
+          "mean": 4.190809778393352,
+          "p50": 3.795775,
+          "p95": 5.54161125,
+          "p99": 6.182082649999999,
+          "max": 7.846521999999999
+        },
+        "state_imu_skew_ms": {
+          "mean": 1.0508561380424746,
+          "p50": 0.8997145,
+          "p95": 2.54959225,
+          "p99": 2.805026399999998,
+          "max": 3.3045229999999997
+        },
+        "wake_lateness_ms": {
+          "mean": 0.1127683485687904,
+          "p50": 0.033097,
+          "p95": 0.39553049999999995,
+          "p99": 0.5350355499999996,
+          "max": 0.740124
+        },
+        "work_ms": {
+          "mean": 3.3694364506001846,
+          "p50": 3.3259635,
+          "p95": 3.80206,
+          "p99": 4.3126545499999995,
+          "max": 5.932792
+        },
+        "write_ms": {
+          "mean": 0.22390784949215142,
+          "p50": 0.2216285,
+          "p95": 0.23736324999999997,
+          "p99": 0.25630224999999984,
+          "max": 1.268856
+        },
+        "deadline_misses": 1,
+        "skipped_slots": 1,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.0004616805170821791,
+        "scope": "through timing-row enqueue; final audit-row enqueue excluded"
+      },
+      "lifecycle": {
+        "status": "normal_release_recorded",
+        "session_end_records": 1,
+        "session_end_outcome": "normal_release_completed",
+        "release_completed": true,
+        "final_weight": 0.0,
+        "faults": [],
+        "physical_stop_verified": false,
+        "scope": "recorded software outcome only; not physical stop or field-validation certification"
+      },
+      "capture_quality": {
+        "lowstate_records_total": 1163,
+        "lowstate_crc_invalid_total": 0,
+        "lowstate_crc_invalid_primary_window": 0,
+        "torso_imu_records_total": 3989,
+        "successful_command_records_total": 3509,
+        "primary_stream_coverage": {
+          "LowState": {
+            "first_task_s": -3.692196833,
+            "last_task_s": 21.075911349000002,
+            "max_primary_gap_ms": 23.230721000000898,
+            "covers_primary_window": true
+          },
+          "IMU": {
+            "first_task_s": -3.6914337090000005,
+            "last_task_s": 21.080151235000002,
+            "max_primary_gap_ms": 9.548065000000605,
+            "covers_primary_window": true
+          },
+          "commands": {
+            "first_task_s": 0.00544035,
+            "last_task_s": 21.059470802,
+            "max_primary_gap_ms": 12.093946000000244,
+            "covers_primary_window": true
+          }
+        },
+        "capture_drain_marker_recorded": true,
+        "journal_queue_dropped": 0,
+        "sdk_shutdown_endpoints": {
+          "low_subscriber": "listener_detached_then_closed",
+          "imu_subscriber": "listener_detached_then_closed",
+          "arm_publisher": "listener_detached_then_closed"
+        },
+        "warnings": [],
+        "status": "recorded_checks_passed",
+        "scope": "recorded coverage and lifecycle evidence; drain marker precedes journal close"
+      },
+      "provenance": {
+        "raw_sha256": "c2dcdf3650697cae163b01678fadc07083fdbcba68f4e60ea682dbabdea006cc",
+        "arrays_sha256": "9d64b83c0ef245afdab9edd2ca839b50b2fed080d1a50b2d3724528d34ef3a87",
+        "analysis_source_sha256": "4c9c30c799cde40f5e49ae7a0602428dfcefd6f0c76b6c3155ebb7f279799474",
+        "endpoint_analysis_source_sha256": "118cb0aba24695464c8fcee800a4b6f45f7a90ddaad2e8634478d7b368f97ad6",
+        "model_config_sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+        "control_source_sha256": {
+          "tools/g1_commissioning/g1_walk_mpc.py": "f043dcba1375b0c419a5f0fa35392bab370f7a80dfc5951962cd5d000c3b794e",
+          "tools/g1_commissioning/g1_walk_pid.py": "b55270ce824aa0863c4ffb2dace51bfbeb0ad05a90994df7902f4271707fc90d",
+          "tools/g1_commissioning/hardware_mpc_control.py": "401fe36b71b6e5b7d3a8ee1b1afbd197f684fb3072d8a1607745fea35c209c4e",
+          "tools/g1_commissioning/hardware_mpc_solver.py": "ed274f78d5ed768186df940fa359eefd240e806f6639168bb680ee7de2ea982b",
+          "tools/g1_commissioning/hardware_mpc_predictor.py": "86a43dcafc09f047d01dd7b5e873cd9f32b5a47be418bc9b225d0fa43a0bc159",
+          "tools/g1_commissioning/hardware_mpc_field.py": "66de91ea78faa6bc85ff8d8406fbc0984e32177f424d51f616e2977b2e9cfcc3",
+          "tools/g1_commissioning/hardware_mpc_torque_control.py": "d23707d9e4200e8a2ead83d39a7fae551ff007cee64af230d11e7dcd0b3b8f59",
+          "tools/g1_commissioning/hardware_arm_inverse_dynamics.py": "00b362b7b4aaf49530045b5cf13bfd803e0b4bc370f86d58428fbf31472f8b41",
+          "tools/g1_commissioning/hardware_torque_mapper.py": "36b769f55f4d5560f3caff2a34c5ca3c98fd98b212c1e7b53dff47de630d48d2",
+          "tools/g1_commissioning/hardware_mpc_delay_plan.py": "ce11a24c6132015763cc6b041ca4687131d5d5ca4e6be198b6c70813bd0ddf47",
+          "tools/g1_commissioning/hardware_mpc_delay_preview.py": "643a555bcd009f0333744d15bbfa3f14d0ddf447ed7a846c832631b457d7e4ec",
+          "tools/g1_commissioning/mpc_host.py": "c002e3f41ac2d0ca4f2e744156050e59ce16dbe4f0d0760e9e4e4e6fd72712f9",
+          "tools/g1_commissioning/arm_execution_record.py": "329358335eebea7c9149a9d6cfa16d5df7306e48228ac9e14938a1c64e023631",
+          "tools/g1_commissioning/native_arm_delay.py": "12ef802d84286ba235c220afa010fd497265916a4df19704c9296e10fd611865",
+          "tools/g1_commissioning/mpc_compute_process.py": "cb278e84329ca39db865f5330735450d580b1617b9931860e5176121bccb950f",
+          "tools/g1_commissioning/mpc_crc.py": "63d35953c73269ff73f2a37a8d269d26ea98a28ec04cb3b8f80f807063f4b3db",
+          "tools/g1_commissioning/hardware_mpc_recovery.py": "b6989856d8d89a7a9a2aa0d14b18f84a9b2a74eda70e8a636426a33d93211ad2",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/g1_commissioning/field_performance.py": "36837b3c1fa76bf421d42c54e13356180a7ec95e5cc9c944ae30696da69b1df6",
+          "cpp/g1_arm_delay/delay.cpp": "97a19cbd213a6c718b37a510aab7ed761a6d11643b54d5cc238c43d8e3941a42",
+          "cpp/g1_arm_delay/CMakeLists.txt": "62aa9bb8387f92b76f1d31c1609527927104bf5a0397b667ed6b4a58b32d7182",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "tools/g1_commissioning/g1_walk_mpc_learned.py": "ff57a3b3c3175a8a78a499e59fa0400caccecef3d2a887b6748672a7980746ea",
+          "tools/g1_commissioning/hardware_mpc_learned.py": "c1ae0500aa77cdca7ba993102942ded4726f29b68af4de8dac744e53b25625ec",
+          "tools/g1_commissioning/mpc_timing_grace.py": "8c4c00f87e2b6bac63f2addbae9bac7c6cb8935ceb54fd952904e165ab6e4cfd",
+          "tools/g1_commissioning/hardware_mpc_forecast_timing.py": "97ed1f55a2e199ab3550ffff2ebd65069ceb3cd43491f5750cbf1fd092881a22",
+          "tools/g1_commissioning/hardware_control_comparison.py": "b0defc9fcb5eb38ae200c9374681b26432ae407a3c6d67ee4889ea0c1d73fae2",
+          "tools/g1_commissioning/g1_run_control_comparison.py": "f838105c34217bf2055afd039fc81275fddef5b3268bd04ad8e31d7307296f44"
+        },
+        "predictor": "hold_current",
+        "mpc_config_sha256": "2d2da5ee5ce12f173af4cd76a445acfb77c06f644fa330aa3aa28a60a7852cb0",
+        "torque_config_sha256": "41e153ca138147e2dc006bb7f15a511872a69e5299f925c401322234f703b879",
+        "position_pid_config_sha256": null
+      }
+    },
+    "M06": {
+      "directory": "morning_M06_mpc_learned_repeat_zero_payload75_walk_20261013_151617_849525_70f1",
+      "windows": {
+        "primary": {
+          "torso": {
+            "acc_rms_m_s2": 2.1473395178963894
+          },
+          "left": {
+            "tilt_mean_deg": 12.820814610509428,
+            "tilt_rms_deg": 12.854943498757821,
+            "tilt_max_deg": 17.439786132318947,
+            "swing_rms_deg": 1.1569467368933308,
+            "acc_rms_m_s2": 2.021459650226142,
+            "alpha_rms_rad_s2": 5.384574670595683,
+            "relative_speed_demeaned_rms_m_s": 0.11381442828952047,
+            "omega_rms_rad_s": 0.3252868720687167
+          },
+          "right": {
+            "tilt_mean_deg": 0.6299185360313081,
+            "tilt_rms_deg": 0.7003883045934647,
+            "tilt_max_deg": 1.5883382812946092,
+            "swing_rms_deg": 0.5729355170107194,
+            "acc_rms_m_s2": 2.201100469962474,
+            "alpha_rms_rad_s2": 5.5421200976833696,
+            "relative_speed_demeaned_rms_m_s": 0.10170786259510185,
+            "omega_rms_rad_s": 0.2799198999206682
+          }
+        },
+        "walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.1640185718944744
+          },
+          "left": {
+            "tilt_mean_deg": 12.871706882327159,
+            "tilt_rms_deg": 12.888296435375837,
+            "tilt_max_deg": 14.25884392444042,
+            "swing_rms_deg": 0.8077355872391888,
+            "acc_rms_m_s2": 1.9982856920674201,
+            "alpha_rms_rad_s2": 5.1390143442466245,
+            "relative_speed_demeaned_rms_m_s": 0.09973470183885191,
+            "omega_rms_rad_s": 0.29510389831029704
+          },
+          "right": {
+            "tilt_mean_deg": 0.621040217422803,
+            "tilt_rms_deg": 0.69541319305332,
+            "tilt_max_deg": 1.5020730005498686,
+            "swing_rms_deg": 0.5654596265676154,
+            "acc_rms_m_s2": 2.1227691555326453,
+            "alpha_rms_rad_s2": 5.20248196460166,
+            "relative_speed_demeaned_rms_m_s": 0.09164167059667695,
+            "omega_rms_rad_s": 0.25552460771672036
+          }
+        },
+        "stop": {
+          "torso": {
+            "acc_rms_m_s2": 2.0907819327954353
+          },
+          "left": {
+            "tilt_mean_deg": 12.651173704450333,
+            "tilt_rms_deg": 12.743136591516137,
+            "tilt_max_deg": 17.439786132318947,
+            "swing_rms_deg": 1.8872488601510418,
+            "acc_rms_m_s2": 2.096857287799011,
+            "alpha_rms_rad_s2": 6.13250065030958,
+            "relative_speed_demeaned_rms_m_s": 0.15151174548371094,
+            "omega_rms_rad_s": 0.4101572994368154
+          },
+          "right": {
+            "tilt_mean_deg": 0.6595129313929915,
+            "tilt_rms_deg": 0.716722636501472,
+            "tilt_max_deg": 1.5883382812946092,
+            "swing_rms_deg": 0.5938363910992966,
+            "acc_rms_m_s2": 2.444140868041333,
+            "alpha_rms_rad_s2": 6.548232621169413,
+            "relative_speed_demeaned_rms_m_s": 0.12970991700490656,
+            "omega_rms_rad_s": 0.34913641237722587
+          }
+        },
+        "later_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.1080620776558785
+          },
+          "left": {
+            "tilt_mean_deg": 12.94838493398935,
+            "tilt_rms_deg": 12.958707177832487,
+            "tilt_max_deg": 14.2161771265117,
+            "swing_rms_deg": 0.6444027368947576,
+            "acc_rms_m_s2": 1.919419575140365,
+            "alpha_rms_rad_s2": 4.749625852200137,
+            "relative_speed_demeaned_rms_m_s": 0.09542959565173996,
+            "omega_rms_rad_s": 0.27744997678152933
+          },
+          "right": {
+            "tilt_mean_deg": 0.5798890517103243,
+            "tilt_rms_deg": 0.6480380647944566,
+            "tilt_max_deg": 1.23384121538922,
+            "swing_rms_deg": 0.5201672059365281,
+            "acc_rms_m_s2": 1.9645123818578427,
+            "alpha_rms_rad_s2": 4.672833598144269,
+            "relative_speed_demeaned_rms_m_s": 0.0898487413550788,
+            "omega_rms_rad_s": 0.24621645605898615
+          }
+        },
+        "late_walk": {
+          "torso": {
+            "acc_rms_m_s2": 2.0933007375937422
+          },
+          "left": {
+            "tilt_mean_deg": 13.02763062041681,
+            "tilt_rms_deg": 13.039335282993568,
+            "tilt_max_deg": 14.2161771265117,
+            "swing_rms_deg": 0.6735987417547049,
+            "acc_rms_m_s2": 1.8944662564931456,
+            "alpha_rms_rad_s2": 4.904045882864921,
+            "relative_speed_demeaned_rms_m_s": 0.097378477939236,
+            "omega_rms_rad_s": 0.2842991107022818
+          },
+          "right": {
+            "tilt_mean_deg": 0.5614316913417783,
+            "tilt_rms_deg": 0.6309820296646315,
+            "tilt_max_deg": 1.2159857204852083,
+            "swing_rms_deg": 0.506029122048045,
+            "acc_rms_m_s2": 1.9376322555540026,
+            "alpha_rms_rad_s2": 4.588563608646551,
+            "relative_speed_demeaned_rms_m_s": 0.08910889510038839,
+            "omega_rms_rad_s": 0.24375703066193188
+          }
+        }
+      },
+      "sensitivity": {
+        "75": {
+          "torso": {
+            "acc_rms_m_s2": 2.3679687776495153
+          },
+          "left": {
+            "tilt_mean_deg": 12.820814610509428,
+            "tilt_rms_deg": 12.854943498757821,
+            "tilt_max_deg": 17.439786132318947,
+            "swing_rms_deg": 1.1569467368933308,
+            "acc_rms_m_s2": 2.215550658265459,
+            "alpha_rms_rad_s2": 6.486193492150299,
+            "relative_speed_demeaned_rms_m_s": 0.1147275944386819,
+            "omega_rms_rad_s": 0.32970811866220684
+          },
+          "right": {
+            "tilt_mean_deg": 0.6299185360313081,
+            "tilt_rms_deg": 0.7003883045934647,
+            "tilt_max_deg": 1.5883382812946092,
+            "swing_rms_deg": 0.5729355170107194,
+            "acc_rms_m_s2": 2.576167411260437,
+            "alpha_rms_rad_s2": 7.392143844358312,
+            "relative_speed_demeaned_rms_m_s": 0.10390092616810315,
+            "omega_rms_rad_s": 0.2884031003753142
+          }
+        },
+        "135": {
+          "torso": {
+            "acc_rms_m_s2": 1.9843551487351274
+          },
+          "left": {
+            "tilt_mean_deg": 12.820814610509428,
+            "tilt_rms_deg": 12.854943498757821,
+            "tilt_max_deg": 17.439786132318947,
+            "swing_rms_deg": 1.1569467368933308,
+            "acc_rms_m_s2": 1.8908611049552424,
+            "alpha_rms_rad_s2": 4.674501236707167,
+            "relative_speed_demeaned_rms_m_s": 0.1129358998000849,
+            "omega_rms_rad_s": 0.32079913973011587
+          },
+          "right": {
+            "tilt_mean_deg": 0.6299185360313081,
+            "tilt_rms_deg": 0.7003883045934647,
+            "tilt_max_deg": 1.5883382812946092,
+            "swing_rms_deg": 0.5729355170107194,
+            "acc_rms_m_s2": 1.9962634044516876,
+            "alpha_rms_rad_s2": 4.472107373709727,
+            "relative_speed_demeaned_rms_m_s": 0.09998483806237339,
+            "omega_rms_rad_s": 0.27263064503396206
+          }
+        }
+      },
+      "execution": {
+        "right_q_min_deg": [
+          -9.53475966623021,
+          -0.8782196403430099,
+          2.2329713337940547,
+          -0.45524598200310146,
+          -2.067489724026397
+        ],
+        "right_q_max_deg": [
+          -1.272354212294715,
+          3.9633180111901565,
+          8.387374970579986,
+          2.2192383846940977,
+          -1.5216064914069918
+        ],
+        "right_q_command_min_deg": [
+          -9.81019728979473,
+          -0.8874330319248283,
+          0.0,
+          -0.5285719047245965,
+          -2.0982373146790905
+        ],
+        "right_q_command_max_deg": [
+          -1.2274503075352297,
+          3.971005389101006,
+          0.0,
+          2.4548335938392283,
+          -1.511161317897044
+        ],
+        "q_outer_margin_deg": [
+          10.46524033376979,
+          16.036681988809843,
+          11.612625029420014,
+          37.780761615305906,
+          37.932510275973605
+        ],
+        "torque_model_max_abs_nm": [
+          6.404504738697822,
+          2.8453925086897818,
+          1.7446298517876175,
+          5.275677908321044,
+          0.32434570031178084
+        ],
+        "torque_model_margin_nm": [
+          3.595495261302178,
+          3.1546074913102182,
+          2.2553701482123825,
+          1.724322091678956,
+          1.175654299688219
+        ],
+        "feedforward_margin_nm": [
+          3.675405502319336,
+          3.104954242706299,
+          2.3828985691070557,
+          1.7378439903259277,
+          1.2340096235275269
+        ],
+        "solved_count": 2150,
+        "fallback_count": 0,
+        "brake_latched_percent": 0.9767441860465116
+      },
+      "right_tilt_at_task_time_deg": {
+        "5": 0.7208525767458166,
+        "7": 0.9393013084602323,
+        "10": 0.9940276357460109,
+        "15": 0.9664587860077082,
+        "17.9": 0.4540762310613847
+      },
+      "timing": {
+        "available": true,
+        "samples": 2150,
+        "actual_period_ms": {
+          "mean": 6.044862937209303,
+          "p50": 5.999892000000001,
+          "p95": 6.456692350000001,
+          "p99": 6.889435239999999,
+          "max": 12.154399000000002
+        },
+        "complete_work_ms": {
+          "mean": 4.257774250232558,
+          "p50": 4.2124065,
+          "p95": 5.011981799999999,
+          "p99": 5.520210929999996,
+          "max": 9.153464999999999
+        },
+        "full_work_ms": {
+          "mean": 4.257774250232558,
+          "p50": 4.2124065,
+          "p95": 5.011981799999999,
+          "p99": 5.520210929999996,
+          "max": 9.153464999999999
+        },
+        "imu_age_at_write_ms": {
+          "mean": 5.369466147441861,
+          "p50": 5.416593,
+          "p95": 6.526842,
+          "p99": 7.106711799999997,
+          "max": 9.493554999999999
+        },
+        "nominal_period_ms": {
+          "mean": 6.0,
+          "p50": 6.0,
+          "p95": 6.0,
+          "p99": 6.0,
+          "max": 6.0
+        },
+        "state_age_at_write_ms": {
+          "mean": 5.222518541395349,
+          "p50": 5.1761894999999996,
+          "p95": 6.599527,
+          "p99": 7.223737099999999,
+          "max": 9.645686
+        },
+        "state_imu_skew_ms": {
+          "mean": 0.8393694395348836,
+          "p50": 0.766435,
+          "p95": 1.8329091499999997,
+          "p99": 2.570788059999998,
+          "max": 4.993806
+        },
+        "wake_lateness_ms": {
+          "mean": 0.24681857674418606,
+          "p50": 0.21359,
+          "p95": 0.5321593499999999,
+          "p99": 0.8404548999999972,
+          "max": 1.571643
+        },
+        "work_ms": {
+          "mean": 4.241107306976744,
+          "p50": 4.1954294999999995,
+          "p95": 4.999743,
+          "p99": 5.467947889999995,
+          "max": 9.140502999999999
+        },
+        "write_ms": {
+          "mean": 0.25830363255813954,
+          "p50": 0.233898,
+          "p95": 0.3476111999999996,
+          "p99": 0.9674169599999994,
+          "max": 1.460415
+        },
+        "deadline_misses": 16,
+        "skipped_slots": 16,
+        "reused_lowstate": 0,
+        "reused_imu": 0,
+        "deadline_miss_fraction": 0.0074418604651162795,
+        "scope": "through timing-row enqueue; final audit-row enqueue excluded"
+      },
+      "lifecycle": {
+        "status": "normal_release_recorded",
+        "session_end_records": 1,
+        "session_end_outcome": "normal_release_completed",
+        "release_completed": true,
+        "final_weight": 0.0,
+        "faults": [],
+        "physical_stop_verified": false,
+        "scope": "recorded software outcome only; not physical stop or field-validation certification"
+      },
+      "capture_quality": {
+        "lowstate_records_total": 1333,
+        "lowstate_crc_invalid_total": 0,
+        "lowstate_crc_invalid_primary_window": 0,
+        "torso_imu_records_total": 4545,
+        "successful_command_records_total": 3501,
+        "primary_stream_coverage": {
+          "LowState": {
+            "first_task_s": -7.2599892210000005,
+            "last_task_s": 21.113106118,
+            "max_primary_gap_ms": 24.01486200000047,
+            "covers_primary_window": true
+          },
+          "IMU": {
+            "first_task_s": -7.258865935,
+            "last_task_s": 21.129320077000003,
+            "max_primary_gap_ms": 9.42799900000324,
+            "covers_primary_window": true
+          },
+          "commands": {
+            "first_task_s": 0.005831062000000001,
+            "last_task_s": 21.108152691,
+            "max_primary_gap_ms": 12.154398999999927,
+            "covers_primary_window": true
+          }
+        },
+        "capture_drain_marker_recorded": true,
+        "journal_queue_dropped": 0,
+        "sdk_shutdown_endpoints": {
+          "low_subscriber": "listener_detached_then_closed",
+          "imu_subscriber": "listener_detached_then_closed",
+          "arm_publisher": "listener_detached_then_closed"
+        },
+        "warnings": [],
+        "status": "recorded_checks_passed",
+        "scope": "recorded coverage and lifecycle evidence; drain marker precedes journal close"
+      },
+      "provenance": {
+        "raw_sha256": "e0190a0b1dcc200c2d4ce1ed34b9ec503675cdc7119782015896b2608e283617",
+        "arrays_sha256": "17dfbfbe33f2ab74c106c5122658949cbd54e069578438d2fa8a27f64fa9fbe5",
+        "analysis_source_sha256": "4c9c30c799cde40f5e49ae7a0602428dfcefd6f0c76b6c3155ebb7f279799474",
+        "endpoint_analysis_source_sha256": "118cb0aba24695464c8fcee800a4b6f45f7a90ddaad2e8634478d7b368f97ad6",
+        "model_config_sha256": "7c7e7995612c2a441c901745102ec9b57fa09d40b0a81e6c488f74be8cda29cb",
+        "control_source_sha256": {
+          "tools/g1_commissioning/g1_walk_mpc.py": "f043dcba1375b0c419a5f0fa35392bab370f7a80dfc5951962cd5d000c3b794e",
+          "tools/g1_commissioning/g1_walk_pid.py": "b55270ce824aa0863c4ffb2dace51bfbeb0ad05a90994df7902f4271707fc90d",
+          "tools/g1_commissioning/hardware_mpc_control.py": "401fe36b71b6e5b7d3a8ee1b1afbd197f684fb3072d8a1607745fea35c209c4e",
+          "tools/g1_commissioning/hardware_mpc_solver.py": "ed274f78d5ed768186df940fa359eefd240e806f6639168bb680ee7de2ea982b",
+          "tools/g1_commissioning/hardware_mpc_predictor.py": "86a43dcafc09f047d01dd7b5e873cd9f32b5a47be418bc9b225d0fa43a0bc159",
+          "tools/g1_commissioning/hardware_mpc_field.py": "66de91ea78faa6bc85ff8d8406fbc0984e32177f424d51f616e2977b2e9cfcc3",
+          "tools/g1_commissioning/hardware_mpc_torque_control.py": "d23707d9e4200e8a2ead83d39a7fae551ff007cee64af230d11e7dcd0b3b8f59",
+          "tools/g1_commissioning/hardware_arm_inverse_dynamics.py": "00b362b7b4aaf49530045b5cf13bfd803e0b4bc370f86d58428fbf31472f8b41",
+          "tools/g1_commissioning/hardware_torque_mapper.py": "36b769f55f4d5560f3caff2a34c5ca3c98fd98b212c1e7b53dff47de630d48d2",
+          "tools/g1_commissioning/hardware_mpc_delay_plan.py": "ce11a24c6132015763cc6b041ca4687131d5d5ca4e6be198b6c70813bd0ddf47",
+          "tools/g1_commissioning/hardware_mpc_delay_preview.py": "643a555bcd009f0333744d15bbfa3f14d0ddf447ed7a846c832631b457d7e4ec",
+          "tools/g1_commissioning/mpc_host.py": "c002e3f41ac2d0ca4f2e744156050e59ce16dbe4f0d0760e9e4e4e6fd72712f9",
+          "tools/g1_commissioning/arm_execution_record.py": "329358335eebea7c9149a9d6cfa16d5df7306e48228ac9e14938a1c64e023631",
+          "tools/g1_commissioning/native_arm_delay.py": "12ef802d84286ba235c220afa010fd497265916a4df19704c9296e10fd611865",
+          "tools/g1_commissioning/mpc_compute_process.py": "cb278e84329ca39db865f5330735450d580b1617b9931860e5176121bccb950f",
+          "tools/g1_commissioning/mpc_crc.py": "63d35953c73269ff73f2a37a8d269d26ea98a28ec04cb3b8f80f807063f4b3db",
+          "tools/g1_commissioning/hardware_mpc_recovery.py": "b6989856d8d89a7a9a2aa0d14b18f84a9b2a74eda70e8a636426a33d93211ad2",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/g1_commissioning/field_performance.py": "36837b3c1fa76bf421d42c54e13356180a7ec95e5cc9c944ae30696da69b1df6",
+          "cpp/g1_arm_delay/delay.cpp": "97a19cbd213a6c718b37a510aab7ed761a6d11643b54d5cc238c43d8e3941a42",
+          "cpp/g1_arm_delay/CMakeLists.txt": "62aa9bb8387f92b76f1d31c1609527927104bf5a0397b667ed6b4a58b32d7182",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "tools/g1_commissioning/g1_walk_mpc_learned.py": "ff57a3b3c3175a8a78a499e59fa0400caccecef3d2a887b6748672a7980746ea",
+          "tools/g1_commissioning/hardware_mpc_learned.py": "c1ae0500aa77cdca7ba993102942ded4726f29b68af4de8dac744e53b25625ec",
+          "tools/g1_commissioning/mpc_timing_grace.py": "8c4c00f87e2b6bac63f2addbae9bac7c6cb8935ceb54fd952904e165ab6e4cfd",
+          "tools/g1_commissioning/hardware_mpc_forecast_timing.py": "97ed1f55a2e199ab3550ffff2ebd65069ceb3cd43491f5750cbf1fd092881a22",
+          "tools/g1_commissioning/hardware_control_comparison.py": "b0defc9fcb5eb38ae200c9374681b26432ae407a3c6d67ee4889ea0c1d73fae2",
+          "tools/g1_commissioning/g1_run_control_comparison.py": "f838105c34217bf2055afd039fc81275fddef5b3268bd04ad8e31d7307296f44"
+        },
+        "predictor": "learned_filtered",
+        "mpc_config_sha256": "2d2da5ee5ce12f173af4cd76a445acfb77c06f644fa330aa3aa28a60a7852cb0",
+        "torque_config_sha256": "41e153ca138147e2dc006bb7f15a511872a69e5299f925c401322234f703b879",
+        "position_pid_config_sha256": null
+      }
+    }
+  },
+  "groups": {
+    "learned_mpc": {
+      "ids": [
+        "M01",
+        "M06"
+      ],
+      "n": 2,
+      "windows": {
+        "primary": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.898047422657463,
+              "min": 12.820814610509428,
+              "max": 12.975280234805496,
+              "sample_std": 0.10922369039996276
+            },
+            "tilt_rms_deg": {
+              "mean": 12.930268102236385,
+              "min": 12.854943498757821,
+              "max": 13.005592705714948,
+              "sample_std": 0.10652507581975983
+            },
+            "tilt_max_deg": {
+              "mean": 17.489297229230854,
+              "min": 17.439786132318947,
+              "max": 17.53880832614276,
+              "sample_std": 0.07001926474078728
+            },
+            "swing_rms_deg": {
+              "mean": 1.132709671379232,
+              "min": 1.1084726058651329,
+              "max": 1.1569467368933308,
+              "sample_std": 0.03427638676216402
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9605129611600716,
+              "min": 1.8995662720940012,
+              "max": 2.021459650226142,
+              "sample_std": 0.08619163425897274
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.406436816817151,
+              "min": 5.384574670595683,
+              "max": 5.428298963038619,
+              "sample_std": 0.030917743688984204
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.11424760248160087,
+              "min": 0.11381442828952047,
+              "max": 0.11468077667368128,
+              "sample_std": 0.0006126008173101122
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.32712970114064444,
+              "min": 0.3252868720687167,
+              "max": 0.3289725302125721,
+              "sample_std": 0.002606153866655583
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.6307848564449707,
+              "min": 0.6299185360313081,
+              "max": 0.6316511768586335,
+              "sample_std": 0.0012251620783624477
+            },
+            "tilt_rms_deg": {
+              "mean": 0.7026724892302387,
+              "min": 0.7003883045934647,
+              "max": 0.7049566738670129,
+              "sample_std": 0.0032303248922901946
+            },
+            "tilt_max_deg": {
+              "mean": 1.7908687320272683,
+              "min": 1.5883382812946092,
+              "max": 1.9933991827599276,
+              "sample_std": 0.2864213102196626
+            },
+            "swing_rms_deg": {
+              "mean": 0.5819450406971322,
+              "min": 0.5729355170107194,
+              "max": 0.5909545643835449,
+              "sample_std": 0.012741390587846518
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.093751091610968,
+              "min": 1.9864017132594618,
+              "max": 2.201100469962474,
+              "sample_std": 0.15181494677702073
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.444532209866191,
+              "min": 5.346944322049013,
+              "max": 5.5421200976833696,
+              "sample_std": 0.1380101144743977
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.1028309266153494,
+              "min": 0.10170786259510185,
+              "max": 0.10395399063559693,
+              "sample_std": 0.001588252368847323
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.2825762165303951,
+              "min": 0.2799198999206682,
+              "max": 0.28523253314012204,
+              "sample_std": 0.0037565989754327405
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.0911579278730827,
+              "min": 2.034976337849776,
+              "max": 2.1473395178963894,
+              "sample_std": 0.0794527665666453
+            }
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.940160709943743,
+              "min": 12.871706882327159,
+              "max": 13.008614537560327,
+              "sample_std": 0.09680833141172306
+            },
+            "tilt_rms_deg": {
+              "mean": 12.95560086107302,
+              "min": 12.888296435375837,
+              "max": 13.0229052867702,
+              "sample_std": 0.09518283162868638
+            },
+            "tilt_max_deg": {
+              "mean": 14.230404858437833,
+              "min": 14.201965792435246,
+              "max": 14.25884392444042,
+              "sample_std": 0.04021891284208221
+            },
+            "swing_rms_deg": {
+              "mean": 0.7897724494159527,
+              "min": 0.7718093115927166,
+              "max": 0.8077355872391888,
+              "sample_std": 0.025403713132397622
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9136108648260515,
+              "min": 1.8289360375846828,
+              "max": 1.9982856920674201,
+              "sample_std": 0.11974828907634236
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.250560632118913,
+              "min": 5.1390143442466245,
+              "max": 5.362106919991201,
+              "sample_std": 0.15775027314136372
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.10180021459754451,
+              "min": 0.09973470183885191,
+              "max": 0.10386572735623711,
+              "sample_std": 0.002921076156597741
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.30029632665190986,
+              "min": 0.29510389831029704,
+              "max": 0.30548875499352274,
+              "sample_std": 0.0073432025823593275
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.6205820201553685,
+              "min": 0.6201238228879338,
+              "max": 0.621040217422803,
+              "sample_std": 0.0006479887898483366
+            },
+            "tilt_rms_deg": {
+              "mean": 0.6929550392196184,
+              "min": 0.690496885385917,
+              "max": 0.69541319305332,
+              "sample_std": 0.003476354490020022
+            },
+            "tilt_max_deg": {
+              "mean": 1.6374992597899687,
+              "min": 1.5020730005498686,
+              "max": 1.7729255190300686,
+              "sample_std": 0.19152165251880407
+            },
+            "swing_rms_deg": {
+              "mean": 0.5649851369769383,
+              "min": 0.5645106473862611,
+              "max": 0.5654596265676154,
+              "sample_std": 0.0006710296143404708
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.0285719397035518,
+              "min": 1.9343747238744584,
+              "max": 2.1227691555326453,
+              "sample_std": 0.13321498016328956
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.279013275660521,
+              "min": 5.20248196460166,
+              "max": 5.3555445867193825,
+              "sample_std": 0.10823161804563591
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09330797226745782,
+              "min": 0.09164167059667695,
+              "max": 0.09497427393823869,
+              "sample_std": 0.002356506421823255
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.2595108752443957,
+              "min": 0.25552460771672036,
+              "max": 0.26349714277207104,
+              "sample_std": 0.005637433600885927
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.093929509052657,
+              "min": 2.0238404462108393,
+              "max": 2.1640185718944744,
+              "sample_std": 0.09912090324491858
+            }
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.757669798369863,
+              "min": 12.651173704450333,
+              "max": 12.864165892289392,
+              "sample_std": 0.15060822036075802
+            },
+            "tilt_rms_deg": {
+              "mean": 12.845426754130116,
+              "min": 12.743136591516137,
+              "max": 12.947716916744096,
+              "sample_std": 0.14466013526603866
+            },
+            "tilt_max_deg": {
+              "mean": 17.489297229230854,
+              "min": 17.439786132318947,
+              "max": 17.53880832614276,
+              "sample_std": 0.07001926474078728
+            },
+            "swing_rms_deg": {
+              "mean": 1.8518948316052928,
+              "min": 1.8165408030595438,
+              "max": 1.8872488601510418,
+              "sample_std": 0.04999814665392376
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.107457522607207,
+              "min": 2.096857287799011,
+              "max": 2.118057757415403,
+              "sample_std": 0.014990995830090378
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.887917666217883,
+              "min": 5.643334682126187,
+              "max": 6.13250065030958,
+              "sample_std": 0.34589257322816
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.1482446399156671,
+              "min": 0.1449775343476233,
+              "max": 0.15151174548371094,
+              "sample_std": 0.004620385004032215
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.40375431484733837,
+              "min": 0.3973513302578614,
+              "max": 0.4101572994368154,
+              "sample_std": 0.00905518764610429
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.6647943107436453,
+              "min": 0.6595129313929915,
+              "max": 0.670075690094299,
+              "sample_std": 0.007468998305731756
+            },
+            "tilt_rms_deg": {
+              "mean": 0.7339354752766627,
+              "min": 0.716722636501472,
+              "max": 0.7511483140518532,
+              "sample_std": 0.024342630042816022
+            },
+            "tilt_max_deg": {
+              "mean": 1.7908687320272683,
+              "min": 1.5883382812946092,
+              "max": 1.9933991827599276,
+              "sample_std": 0.2864213102196626
+            },
+            "swing_rms_deg": {
+              "mean": 0.6214678744682964,
+              "min": 0.5938363910992966,
+              "max": 0.6490993578372963,
+              "sample_std": 0.0390768185289262
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.297447780198809,
+              "min": 2.1507546923562852,
+              "max": 2.444140868041333,
+              "sample_std": 0.20745535433328505
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.933204474736808,
+              "min": 5.318176328304203,
+              "max": 6.548232621169413,
+              "sample_std": 0.8697811459261763
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.12956175438846013,
+              "min": 0.12941359177201373,
+              "max": 0.12970991700490656,
+              "sample_std": 0.00020953358161520313
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.34857522975601785,
+              "min": 0.3480140471348099,
+              "max": 0.34913641237722587,
+              "sample_std": 0.00079363207388043
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.0812228191341804,
+              "min": 2.071663705472925,
+              "max": 2.0907819327954353,
+              "sample_std": 0.013518628184012994
+            }
+          }
+        },
+        "later_walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 13.00888738093784,
+              "min": 12.94838493398935,
+              "max": 13.069389827886326,
+              "sample_std": 0.08556338103130985
+            },
+            "tilt_rms_deg": {
+              "mean": 13.01845618442035,
+              "min": 12.958707177832487,
+              "max": 13.078205191008212,
+              "sample_std": 0.08449785545487491
+            },
+            "tilt_max_deg": {
+              "mean": 14.121299763497394,
+              "min": 14.026422400483089,
+              "max": 14.2161771265117,
+              "sample_std": 0.1341768535370271
+            },
+            "swing_rms_deg": {
+              "mean": 0.6345953317328734,
+              "min": 0.6247879265709894,
+              "max": 0.6444027368947576,
+              "sample_std": 0.013869765391624406
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8640451336349075,
+              "min": 1.8086706921294498,
+              "max": 1.919419575140365,
+              "sample_std": 0.07831128618585387
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 4.878160634482674,
+              "min": 4.749625852200137,
+              "max": 5.0066954167652105,
+              "sample_std": 0.18177563234063637
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.097458427522969,
+              "min": 0.09542959565173996,
+              "max": 0.09948725939419804,
+              "sample_std": 0.0028692015480668957
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.2827725634987779,
+              "min": 0.27744997678152933,
+              "max": 0.2880951502160264,
+              "sample_std": 0.007527274322439759
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.5771777595212272,
+              "min": 0.57446646733213,
+              "max": 0.5798890517103243,
+              "sample_std": 0.00383434618537744
+            },
+            "tilt_rms_deg": {
+              "mean": 0.6427991552216819,
+              "min": 0.6375602456489071,
+              "max": 0.6480380647944566,
+              "sample_std": 0.007408936969864261
+            },
+            "tilt_max_deg": {
+              "mean": 1.2108156675536663,
+              "min": 1.1877901197181127,
+              "max": 1.23384121538922,
+              "sample_std": 0.03256304203011045
+            },
+            "swing_rms_deg": {
+              "mean": 0.5178093207255268,
+              "min": 0.5154514355145253,
+              "max": 0.5201672059365281,
+              "sample_std": 0.0033345532439171084
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9081278735000122,
+              "min": 1.851743365142182,
+              "max": 1.9645123818578427,
+              "sample_std": 0.07973973642738284
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 4.85813183230295,
+              "min": 4.672833598144269,
+              "max": 5.043430066461632,
+              "sample_std": 0.2620512758309926
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09162242370506875,
+              "min": 0.0898487413550788,
+              "max": 0.0933961060550587,
+              "sample_std": 0.0025083656346975734
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.2511009251831065,
+              "min": 0.24621645605898615,
+              "max": 0.2559853943072269,
+              "sample_std": 0.0069076824803236585
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.073188798097228,
+              "min": 2.0383155185385773,
+              "max": 2.1080620776558785,
+              "sample_std": 0.04931826491627211
+            }
+          }
+        },
+        "late_walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 13.081380174339825,
+              "min": 13.02763062041681,
+              "max": 13.135129728262841,
+              "sample_std": 0.07601334812943283
+            },
+            "tilt_rms_deg": {
+              "mean": 13.09072908006915,
+              "min": 13.039335282993568,
+              "max": 13.142122877144732,
+              "sample_std": 0.07268180484613941
+            },
+            "tilt_max_deg": {
+              "mean": 14.121299763497394,
+              "min": 14.026422400483089,
+              "max": 14.2161771265117,
+              "sample_std": 0.1341768535370271
+            },
+            "swing_rms_deg": {
+              "mean": 0.6266930378160428,
+              "min": 0.5797873338773807,
+              "max": 0.6735987417547049,
+              "sample_std": 0.06633468266271306
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8316938558488554,
+              "min": 1.7689214552045653,
+              "max": 1.8944662564931456,
+              "sample_std": 0.0887735803338727
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 4.929289988117713,
+              "min": 4.904045882864921,
+              "max": 4.954534093370504,
+              "sample_std": 0.03570055601847182
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09725791892308949,
+              "min": 0.097137359906943,
+              "max": 0.097378477939236,
+              "sample_std": 0.00017049619570073734
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.2837023109664099,
+              "min": 0.283105511230538,
+              "max": 0.2842991107022818,
+              "sample_std": 0.0008440022804907221
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.5675776686563343,
+              "min": 0.5614316913417783,
+              "max": 0.5737236459708902,
+              "sample_std": 0.008691724472282414
+            },
+            "tilt_rms_deg": {
+              "mean": 0.6331481703568502,
+              "min": 0.6309820296646315,
+              "max": 0.6353143110490689,
+              "sample_std": 0.0030633855449439438
+            },
+            "tilt_max_deg": {
+              "mean": 1.2018879201016603,
+              "min": 1.1877901197181127,
+              "max": 1.2159857204852083,
+              "sample_std": 0.019937300502041917
+            },
+            "swing_rms_deg": {
+              "mean": 0.5096061354140999,
+              "min": 0.506029122048045,
+              "max": 0.5131831487801549,
+              "sample_std": 0.005058660815064792
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8928228323419694,
+              "min": 1.8480134091299363,
+              "max": 1.9376322555540026,
+              "sample_std": 0.0633700940285731
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 4.772895147846578,
+              "min": 4.588563608646551,
+              "max": 4.957226687046604,
+              "sample_std": 0.2606841627097855
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09122654687200382,
+              "min": 0.08910889510038839,
+              "max": 0.09334419864361926,
+              "sample_std": 0.0029948118558019623
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.2485696424046419,
+              "min": 0.24375703066193188,
+              "max": 0.25338225414735194,
+              "sample_std": 0.006806060796976536
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.0448736507395027,
+              "min": 1.996446563885263,
+              "max": 2.0933007375937422,
+              "sample_std": 0.06848624301548543
+            }
+          }
+        }
+      }
+    },
+    "hold_mpc": {
+      "ids": [
+        "M02",
+        "M05"
+      ],
+      "n": 2,
+      "windows": {
+        "primary": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.810045658646917,
+              "min": 12.670169367967711,
+              "max": 12.949921949326123,
+              "sample_std": 0.19781494733297467
+            },
+            "tilt_rms_deg": {
+              "mean": 12.846037166732089,
+              "min": 12.704138133319908,
+              "max": 12.987936200144267,
+              "sample_std": 0.20067553753913683
+            },
+            "tilt_max_deg": {
+              "mean": 16.786147694473865,
+              "min": 15.53465616534121,
+              "max": 18.037639223606522,
+              "sample_std": 1.769876293694446
+            },
+            "swing_rms_deg": {
+              "mean": 1.2063261938988599,
+              "min": 1.190669211032001,
+              "max": 1.2219831767657185,
+              "sample_std": 0.022142317516154888
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9776400504365985,
+              "min": 1.9730970373696377,
+              "max": 1.9821830635035593,
+              "sample_std": 0.006424790693334168
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.675218365781022,
+              "min": 5.429170799956694,
+              "max": 5.921265931605349,
+              "sample_std": 0.34796380457765114
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.11353343510639113,
+              "min": 0.1129922482509044,
+              "max": 0.11407462196187787,
+              "sample_std": 0.0007653537908073904
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.3301016512007033,
+              "min": 0.3260589685798006,
+              "max": 0.33414433382160597,
+              "sample_std": 0.005717216590850583
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.6262647020560299,
+              "min": 0.6144355221415313,
+              "max": 0.6380938819705286,
+              "sample_std": 0.01672898666683542
+            },
+            "tilt_rms_deg": {
+              "mean": 0.7037863860940403,
+              "min": 0.6931142303253519,
+              "max": 0.7144585418627286,
+              "sample_std": 0.01509270742783733
+            },
+            "tilt_max_deg": {
+              "mean": 1.7746674046960087,
+              "min": 1.7665213560686022,
+              "max": 1.7828134533234155,
+              "sample_std": 0.01152025244862921
+            },
+            "swing_rms_deg": {
+              "mean": 0.57415778612722,
+              "min": 0.5712065556101135,
+              "max": 0.5771090166443266,
+              "sample_std": 0.0041736702229814475
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.117774716460785,
+              "min": 2.076176885286318,
+              "max": 2.1593725476352525,
+              "sample_std": 0.058828217012238074
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 6.218541924506421,
+              "min": 6.07251604136658,
+              "max": 6.364567807646262,
+              "sample_std": 0.20651178439387197
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.10180948190465663,
+              "min": 0.09954692969802233,
+              "max": 0.10407203411129093,
+              "sample_std": 0.003199732016199402
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.288155076183247,
+              "min": 0.2870464697849259,
+              "max": 0.28926368258156815,
+              "sample_std": 0.0015678062038393431
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.095068236079955,
+              "min": 2.0884295493577145,
+              "max": 2.101706922802195,
+              "sample_std": 0.00938852079893846
+            }
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.83583532730767,
+              "min": 12.704650597204528,
+              "max": 12.96702005741081,
+              "sample_std": 0.18552322448811576
+            },
+            "tilt_rms_deg": {
+              "mean": 12.856260952507277,
+              "min": 12.726237902347407,
+              "max": 12.986284002667146,
+              "sample_std": 0.1838803609572048
+            },
+            "tilt_max_deg": {
+              "mean": 14.07144241557551,
+              "min": 13.932987357214255,
+              "max": 14.209897473936763,
+              "sample_std": 0.19580502131364386
+            },
+            "swing_rms_deg": {
+              "mean": 0.9422689838316378,
+              "min": 0.8662424571756011,
+              "max": 1.0182955104876745,
+              "sample_std": 0.10751774509708674
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.93907521416258,
+              "min": 1.9259052667543328,
+              "max": 1.9522451615708272,
+              "sample_std": 0.018625118240483546
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.298149597500211,
+              "min": 5.246402002870637,
+              "max": 5.349897192129784,
+              "sample_std": 0.07318215014532839
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.1057575947403023,
+              "min": 0.10327883974734312,
+              "max": 0.10823634973326147,
+              "sample_std": 0.0035054889288428977
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.31295855546874707,
+              "min": 0.3024032901963907,
+              "max": 0.3235138207411035,
+              "sample_std": 0.014927399302612195
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.6031943489422174,
+              "min": 0.6012277986936688,
+              "max": 0.6051608991907659,
+              "sample_std": 0.0027811220325855072
+            },
+            "tilt_rms_deg": {
+              "mean": 0.6803800119096417,
+              "min": 0.6757615142195089,
+              "max": 0.6849985095997745,
+              "sample_std": 0.006531542071174594
+            },
+            "tilt_max_deg": {
+              "mean": 1.4497620987963975,
+              "min": 1.334243089385262,
+              "max": 1.565281108207533,
+              "sample_std": 0.16336854982113314
+            },
+            "swing_rms_deg": {
+              "mean": 0.5454761627293947,
+              "min": 0.5254995162715619,
+              "max": 0.5654528091872276,
+              "sample_std": 0.028251244351399692
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.0750566247996494,
+              "min": 2.0347973456270116,
+              "max": 2.115315903972287,
+              "sample_std": 0.056935218617308936
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.94633955969108,
+              "min": 5.73617821812031,
+              "max": 6.15650090126185,
+              "sample_std": 0.2972130195359077
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09732872470155332,
+              "min": 0.09622564279752385,
+              "max": 0.09843180660558279,
+              "sample_std": 0.0015599933890868107
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.27661163056942617,
+              "min": 0.2737113109349083,
+              "max": 0.2795119502039441,
+              "sample_std": 0.004101671362352185
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.1203192888151907,
+              "min": 2.1142600715903894,
+              "max": 2.1263785060399916,
+              "sample_std": 0.008569027176678344
+            }
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.724080096444407,
+              "min": 12.555231937178307,
+              "max": 12.892928255710506,
+              "sample_std": 0.23878735681585034
+            },
+            "tilt_rms_deg": {
+              "mean": 12.811817484837144,
+              "min": 12.630192961903001,
+              "max": 12.993442007771288,
+              "sample_std": 0.2568558635930087
+            },
+            "tilt_max_deg": {
+              "mean": 16.786147694473865,
+              "min": 15.53465616534121,
+              "max": 18.037639223606522,
+              "sample_std": 1.769876293694446
+            },
+            "swing_rms_deg": {
+              "mean": 1.8018662618815715,
+              "min": 1.6151730860758664,
+              "max": 1.9885594376872768,
+              "sample_std": 0.2640240212269329
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.1008521142958614,
+              "min": 2.0788646224447915,
+              "max": 2.122839606146931,
+              "sample_std": 0.031095009178350577
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 6.758412922254747,
+              "min": 5.998313727459326,
+              "max": 7.518512117050169,
+              "sample_std": 1.074942590028554
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.13580654827203104,
+              "min": 0.12730202153016917,
+              "max": 0.1443110750138929,
+              "sample_std": 0.012027217059905716
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.38108413670615093,
+              "min": 0.3673643711725613,
+              "max": 0.39480390223974055,
+              "sample_std": 0.01940267849018137
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.7031658791020723,
+              "min": 0.6453509319774163,
+              "max": 0.7609808262267282,
+              "sample_std": 0.08176268233157183
+            },
+            "tilt_rms_deg": {
+              "mean": 0.7750165577258397,
+              "min": 0.7195058003227957,
+              "max": 0.8305273151288837,
+              "sample_std": 0.07850406597698753
+            },
+            "tilt_max_deg": {
+              "mean": 1.7746674046960087,
+              "min": 1.7665213560686022,
+              "max": 1.7828134533234155,
+              "sample_std": 0.01152025244862921
+            },
+            "swing_rms_deg": {
+              "mean": 0.6525678770439531,
+              "min": 0.6072249863637313,
+              "max": 0.6979107677241749,
+              "sample_std": 0.06412453095717027
+            },
+            "acc_rms_m_s2": {
+              "mean": 2.254328964470947,
+              "min": 2.2085163639312424,
+              "max": 2.300141565010652,
+              "sample_std": 0.06478880101083152
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 6.949416883864535,
+              "min": 5.783765511386965,
+              "max": 8.115068256342106,
+              "sample_std": 1.6484799799565926
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.11491683198797815,
+              "min": 0.10311273700449916,
+              "max": 0.12672092697145715,
+              "sample_std": 0.01669351121717621
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.3233949902157488,
+              "min": 0.3108453433996438,
+              "max": 0.33594463703185384,
+              "sample_std": 0.01774788073032804
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.0079675045693057,
+              "min": 1.956624496823325,
+              "max": 2.0593105123152866,
+              "sample_std": 0.07260997788739289
+            }
+          }
+        },
+        "later_walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.935918211649447,
+              "min": 12.794885044256901,
+              "max": 13.076951379041994,
+              "sample_std": 0.19945101807097385
+            },
+            "tilt_rms_deg": {
+              "mean": 12.947187028860549,
+              "min": 12.805652418492786,
+              "max": 13.088721639228313,
+              "sample_std": 0.2001601655272828
+            },
+            "tilt_max_deg": {
+              "mean": 14.061889487310607,
+              "min": 13.925527585606696,
+              "max": 14.198251389014517,
+              "sample_std": 0.19284485078065722
+            },
+            "swing_rms_deg": {
+              "mean": 0.6660815015207155,
+              "min": 0.6637697281913278,
+              "max": 0.6683932748501034,
+              "sample_std": 0.003269341195552569
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8720064492876058,
+              "min": 1.8093073956158081,
+              "max": 1.9347055029594036,
+              "sample_std": 0.08866985205061495
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 4.829285936903419,
+              "min": 4.799809237179895,
+              "max": 4.858762636626944,
+              "sample_std": 0.041686348523007316
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09908078679856228,
+              "min": 0.09816152891143336,
+              "max": 0.10000004468569118,
+              "sample_std": 0.0013000269712961428
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.2855671245471064,
+              "min": 0.28281209722293704,
+              "max": 0.28832215187127586,
+              "sample_std": 0.0038961970065488323
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.5756814753666197,
+              "min": 0.5716761324179901,
+              "max": 0.5796868183152494,
+              "sample_std": 0.005664410319907483
+            },
+            "tilt_rms_deg": {
+              "mean": 0.6488586708429143,
+              "min": 0.64545525189479,
+              "max": 0.6522620897910386,
+              "sample_std": 0.0048131612348749474
+            },
+            "tilt_max_deg": {
+              "mean": 1.3421098726047114,
+              "min": 1.334243089385262,
+              "max": 1.349976655824161,
+              "sample_std": 0.011125311521194645
+            },
+            "swing_rms_deg": {
+              "mean": 0.504677135696036,
+              "min": 0.4954485353558342,
+              "max": 0.5139057360362377,
+              "sample_std": 0.013051211762834247
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9871436719828357,
+              "min": 1.9125874590829495,
+              "max": 2.0616998848827217,
+              "sample_std": 0.10543840744219486
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.745837536830521,
+              "min": 5.68135799286557,
+              "max": 5.810317080795472,
+              "sample_std": 0.09118784557086569
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09424153184082387,
+              "min": 0.09317054951478446,
+              "max": 0.0953125141668633,
+              "sample_std": 0.0015145977305468354
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.26413612295817956,
+              "min": 0.261695561106519,
+              "max": 0.2665766848098401,
+              "sample_std": 0.003451475670428751
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.081007618215076,
+              "min": 2.01997739170006,
+              "max": 2.142037844730092,
+              "sample_std": 0.08630977405223769
+            }
+          }
+        },
+        "late_walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.982779933305084,
+              "min": 12.809410186680893,
+              "max": 13.156149679929275,
+              "sample_std": 0.24518184698111806
+            },
+            "tilt_rms_deg": {
+              "mean": 12.992138227164883,
+              "min": 12.819030477774351,
+              "max": 13.165245976555417,
+              "sample_std": 0.24481132693997415
+            },
+            "tilt_max_deg": {
+              "mean": 13.94410357248701,
+              "min": 13.767866907821828,
+              "max": 14.120340237152194,
+              "sample_std": 0.24923628135690062
+            },
+            "swing_rms_deg": {
+              "mean": 0.6108893038103631,
+              "min": 0.6083335286932423,
+              "max": 0.6134450789274838,
+              "sample_std": 0.0036144118330078356
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8905429895164185,
+              "min": 1.7821497409024398,
+              "max": 1.9989362381303972,
+              "sample_std": 0.15329120225956736
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 4.790842540404448,
+              "min": 4.771087983579451,
+              "max": 4.8105970972294445,
+              "sample_std": 0.027937162180580188
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.10143503969041782,
+              "min": 0.10059262540535006,
+              "max": 0.10227745397548559,
+              "sample_std": 0.001191353707079662
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.291439729146455,
+              "min": 0.2884413984667554,
+              "max": 0.2944380598261545,
+              "sample_std": 0.00424027991171043
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 0.5839227470138588,
+              "min": 0.5656830045753461,
+              "max": 0.6021624894523716,
+              "sample_std": 0.02579489113073681
+            },
+            "tilt_rms_deg": {
+              "mean": 0.6543752266992535,
+              "min": 0.6395352218361681,
+              "max": 0.669215231562339,
+              "sample_std": 0.020986936143058136
+            },
+            "tilt_max_deg": {
+              "mean": 1.3421098726047114,
+              "min": 1.334243089385262,
+              "max": 1.349976655824161,
+              "sample_std": 0.011125311521194645
+            },
+            "swing_rms_deg": {
+              "mean": 0.5028836442544403,
+              "min": 0.48764966780561564,
+              "max": 0.518117620703265,
+              "sample_std": 0.021544096102800146
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9831473053577926,
+              "min": 1.8918574436396873,
+              "max": 2.0744371670758976,
+              "sample_std": 0.12910336054890875
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.785832657305684,
+              "min": 5.613711287853761,
+              "max": 5.957954026757607,
+              "sample_std": 0.24341637505313968
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.09701098985996032,
+              "min": 0.09503920685458939,
+              "max": 0.09898277286533125,
+              "sample_std": 0.0027885222682523516
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.27226118017286727,
+              "min": 0.26644571623801594,
+              "max": 0.27807664410771854,
+              "sample_std": 0.008224307968158314
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.1084927084789893,
+              "min": 1.9903088952255548,
+              "max": 2.2266765217324234,
+              "sample_std": 0.16713715155597592
+            }
+          }
+        }
+      }
+    },
+    "position_pid": {
+      "ids": [
+        "M03",
+        "M04"
+      ],
+      "n": 2,
+      "windows": {
+        "primary": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.978049865868226,
+              "min": 12.921042340079945,
+              "max": 13.035057391656505,
+              "sample_std": 0.08062081612711962
+            },
+            "tilt_rms_deg": {
+              "mean": 13.006570327111366,
+              "min": 12.950666758566845,
+              "max": 13.062473895655884,
+              "sample_std": 0.07905958482071374
+            },
+            "tilt_max_deg": {
+              "mean": 16.83256018573394,
+              "min": 16.41253410326073,
+              "max": 17.252586268207153,
+              "sample_std": 0.5940065823840569
+            },
+            "swing_rms_deg": {
+              "mean": 1.0877825991311942,
+              "min": 1.084237868256773,
+              "max": 1.0913273300056157,
+              "sample_std": 0.005013006477569255
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8633504923095319,
+              "min": 1.8541096236034695,
+              "max": 1.8725913610155942,
+              "sample_std": 0.013068561852222466
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.5775182741957945,
+              "min": 5.404719627971668,
+              "max": 5.750316920419921,
+              "sample_std": 0.24437418904987065
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.10976889846045107,
+              "min": 0.10972389799251099,
+              "max": 0.10981389892839113,
+              "sample_std": 6.364027207398549e-05
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.32415115569803177,
+              "min": 0.3223129809948581,
+              "max": 0.32598933040120537,
+              "sample_std": 0.002599571595239284
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 2.3550318161421,
+              "min": 2.227965321123835,
+              "max": 2.482098311160365,
+              "sample_std": 0.17969916057804391
+            },
+            "tilt_rms_deg": {
+              "mean": 3.191886893181294,
+              "min": 3.1167928116914596,
+              "max": 3.2669809746711285,
+              "sample_std": 0.10619906849687424
+            },
+            "tilt_max_deg": {
+              "mean": 12.556247190496123,
+              "min": 12.377320936120608,
+              "max": 12.735173444871638,
+              "sample_std": 0.2530399356024717
+            },
+            "swing_rms_deg": {
+              "mean": 2.9576268643699732,
+              "min": 2.823814183549514,
+              "max": 3.091439545190432,
+              "sample_std": 0.18923970803379547
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8649244218304784,
+              "min": 1.8108486318045582,
+              "max": 1.9190002118563985,
+              "sample_std": 0.07647471565069597
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.636597948424111,
+              "min": 5.372311661329621,
+              "max": 5.9008842355186,
+              "sample_std": 0.3737572515582563
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.12133524481279209,
+              "min": 0.12033926778332657,
+              "max": 0.12233122184225763,
+              "sample_std": 0.0014085242228822194
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.34728330976843436,
+              "min": 0.34274004830380456,
+              "max": 0.3518265712330642,
+              "sample_std": 0.006425141980686553
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.023645451299627,
+              "min": 2.0137986940766694,
+              "max": 2.033492208522585,
+              "sample_std": 0.013925417610102001
+            }
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.937308653934243,
+              "min": 12.911426869079422,
+              "max": 12.963190438789065,
+              "sample_std": 0.036602371160110676
+            },
+            "tilt_rms_deg": {
+              "mean": 12.957677678081087,
+              "min": 12.932941210504765,
+              "max": 12.982414145657408,
+              "sample_std": 0.03498264793163623
+            },
+            "tilt_max_deg": {
+              "mean": 14.567988382210235,
+              "min": 14.464074030889874,
+              "max": 14.671902733530597,
+              "sample_std": 0.14695708496245813
+            },
+            "swing_rms_deg": {
+              "mean": 0.9183141429351291,
+              "min": 0.9083677108328808,
+              "max": 0.9282605750373775,
+              "sample_std": 0.014066379176222717
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9291242212041555,
+              "min": 1.894696813580893,
+              "max": 1.963551628827418,
+              "sample_std": 0.048687706778164655
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.83271236685696,
+              "min": 5.67047285813439,
+              "max": 5.99495187557953,
+              "sample_std": 0.22944131358820635
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.109197878563373,
+              "min": 0.10860672550968342,
+              "max": 0.10978903161706258,
+              "sample_std": 0.000836016665966071
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.3289009412811254,
+              "min": 0.3259935825641972,
+              "max": 0.3318082999980536,
+              "sample_std": 0.004111626128163515
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 2.5069197302610635,
+              "min": 2.360380478433092,
+              "max": 2.653458982089035,
+              "sample_std": 0.20723779735512374
+            },
+            "tilt_rms_deg": {
+              "mean": 3.4124657028813035,
+              "min": 3.3339390308000096,
+              "max": 3.4909923749625977,
+              "sample_std": 0.11105348466539072
+            },
+            "tilt_max_deg": {
+              "mean": 12.556247190496123,
+              "min": 12.377320936120608,
+              "max": 12.735173444871638,
+              "sample_std": 0.2530399356024717
+            },
+            "swing_rms_deg": {
+              "mean": 3.0019238361585368,
+              "min": 2.8859694099553037,
+              "max": 3.1178782623617702,
+              "sample_std": 0.16398432215380268
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.9128067593675504,
+              "min": 1.8359782826008175,
+              "max": 1.9896352361342835,
+              "sample_std": 0.10865187381998002
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.667930553747212,
+              "min": 5.450863532841885,
+              "max": 5.884997574652538,
+              "sample_std": 0.30697912490823687
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.1171457981919965,
+              "min": 0.11593856743072974,
+              "max": 0.11835302895326326,
+              "sample_std": 0.0017072821154974504
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.33871138010427526,
+              "min": 0.3342662285783754,
+              "max": 0.3431565316301751,
+              "sample_std": 0.00628639357473104
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.126293439336508,
+              "min": 2.116111616301231,
+              "max": 2.1364752623717846,
+              "sample_std": 0.014399272226171265
+            }
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 13.113853905648174,
+              "min": 12.953093910081696,
+              "max": 13.27461390121465,
+              "sample_std": 0.2273489660171503
+            },
+            "tilt_rms_deg": {
+              "mean": 13.167721942475126,
+              "min": 13.009577495638906,
+              "max": 13.325866389311344,
+              "sample_std": 0.22365002152977148
+            },
+            "tilt_max_deg": {
+              "mean": 16.83256018573394,
+              "min": 16.41253410326073,
+              "max": 17.252586268207153,
+              "sample_std": 0.5940065823840569
+            },
+            "swing_rms_deg": {
+              "mean": 1.5038385763456867,
+              "min": 1.477014085296289,
+              "max": 1.5306630673950845,
+              "sample_std": 0.03793555904581402
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.6213624702362543,
+              "min": 1.530841737829768,
+              "max": 1.7118832026427409,
+              "sample_std": 0.12801564744519878
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 4.625522335993301,
+              "min": 4.404554498560952,
+              "max": 4.846490173425649,
+              "sample_std": 0.3124957125450808
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.11161217744513374,
+              "min": 0.10989173967742916,
+              "max": 0.11333261521283831,
+              "sample_std": 0.0024330664243067076
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.30776134091149165,
+              "min": 0.30579409547632813,
+              "max": 0.30972858634665523,
+              "sample_std": 0.0027821051749248545
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 1.8487387690788868,
+              "min": 1.7865814634263097,
+              "max": 1.9108960747314638,
+              "sample_std": 0.0879037046544443
+            },
+            "tilt_rms_deg": {
+              "mean": 2.3091389249685528,
+              "min": 2.246157607428973,
+              "max": 2.3721202425081325,
+              "sample_std": 0.08906903344060009
+            },
+            "tilt_max_deg": {
+              "mean": 5.4951117880826095,
+              "min": 4.914114669770199,
+              "max": 6.07610890639502,
+              "sample_std": 0.8216540044170967
+            },
+            "swing_rms_deg": {
+              "mean": 2.2571159957723688,
+              "min": 2.240145741771867,
+              "max": 2.2740862497728704,
+              "sample_std": 0.023999563364425738
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.6932245731746445,
+              "min": 1.6620088088106373,
+              "max": 1.7244403375386514,
+              "sample_std": 0.04414575732342157
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.527639059485859,
+              "min": 5.101744508410885,
+              "max": 5.953533610560833,
+              "sample_std": 0.6023058502710292
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.13429973004148174,
+              "min": 0.13395135022636892,
+              "max": 0.13464810985659456,
+              "sample_std": 0.0004926834593895819
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.3744418364747737,
+              "min": 0.3695855848409668,
+              "max": 0.3792980881085806,
+              "sample_std": 0.006867776922826222
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 1.6327422741135074,
+              "min": 1.5356585857733074,
+              "max": 1.7298259624537073,
+              "sample_std": 0.13729706873591352
+            }
+          }
+        },
+        "later_walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 12.99560526719003,
+              "min": 12.970199357033884,
+              "max": 13.021011177346175,
+              "sample_std": 0.03592938270725295
+            },
+            "tilt_rms_deg": {
+              "mean": 13.008172151279034,
+              "min": 12.984959853213772,
+              "max": 13.031384449344294,
+              "sample_std": 0.032827146737739385
+            },
+            "tilt_max_deg": {
+              "mean": 14.37725471219532,
+              "min": 14.082606690860043,
+              "max": 14.671902733530597,
+              "sample_std": 0.41669522789874597
+            },
+            "swing_rms_deg": {
+              "mean": 0.7074450631489282,
+              "min": 0.6755226152618612,
+              "max": 0.7393675110359952,
+              "sample_std": 0.0451451587460385
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8752057886764364,
+              "min": 1.8085990182566916,
+              "max": 1.941812559096181,
+              "sample_std": 0.09419619807347407
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.429072984308069,
+              "min": 5.101289705662886,
+              "max": 5.756856262953254,
+              "sample_std": 0.46355555817913846
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.1026384724660777,
+              "min": 0.10112335656083404,
+              "max": 0.10415358837132135,
+              "sample_std": 0.0021426974617627663
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.30379220638928217,
+              "min": 0.3005390198943231,
+              "max": 0.30704539288424126,
+              "sample_std": 0.004600700462100141
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 1.6040445519324427,
+              "min": 1.4004767168580736,
+              "max": 1.8076123870068117,
+              "sample_std": 0.2878883932251021
+            },
+            "tilt_rms_deg": {
+              "mean": 1.8514683723392071,
+              "min": 1.6478902548035592,
+              "max": 2.055046489874855,
+              "sample_std": 0.28790293482129714
+            },
+            "tilt_max_deg": {
+              "mean": 5.014638484148303,
+              "min": 4.974582406300439,
+              "max": 5.054694561996167,
+              "sample_std": 0.0566478485479218
+            },
+            "swing_rms_deg": {
+              "mean": 1.7618870411293595,
+              "min": 1.5313959564629012,
+              "max": 1.9923781257958177,
+              "sample_std": 0.3259636179413906
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8061554286544594,
+              "min": 1.7092536701121912,
+              "max": 1.903057187196728,
+              "sample_std": 0.1370397811482788
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.09501600627259,
+              "min": 4.741540815644384,
+              "max": 5.448491196900796,
+              "sample_std": 0.4998894085488242
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.11057947850320099,
+              "min": 0.10828796938396316,
+              "max": 0.1128709876224388,
+              "sample_std": 0.003240683274727748
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.31008394644175397,
+              "min": 0.30181012075256347,
+              "max": 0.31835777213094446,
+              "sample_std": 0.011700956502364118
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.073110894363939,
+              "min": 2.0399972703646694,
+              "max": 2.1062245183632093,
+              "sample_std": 0.046829736159090814
+            }
+          }
+        },
+        "late_walk": {
+          "left": {
+            "tilt_mean_deg": {
+              "mean": 13.067656560269329,
+              "min": 13.05881918170045,
+              "max": 13.076493938838208,
+              "sample_std": 0.012497940627934181
+            },
+            "tilt_rms_deg": {
+              "mean": 13.080108826433143,
+              "min": 13.068215234526631,
+              "max": 13.092002418339657,
+              "sample_std": 0.016820078979521345
+            },
+            "tilt_max_deg": {
+              "mean": 14.342973850981469,
+              "min": 14.014044968432339,
+              "max": 14.671902733530597,
+              "sample_std": 0.4651756867572054
+            },
+            "swing_rms_deg": {
+              "mean": 0.7042129088100236,
+              "min": 0.649362718287994,
+              "max": 0.7590630993320533,
+              "sample_std": 0.07756988333500255
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8947085201388094,
+              "min": 1.7599118642392682,
+              "max": 2.029505176038351,
+              "sample_std": 0.19063125893567068
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.5516596422269915,
+              "min": 5.021592551423777,
+              "max": 6.081726733030206,
+              "sample_std": 0.7496280687815569
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.10180327448813868,
+              "min": 0.09853742806047652,
+              "max": 0.10506912091580084,
+              "sample_std": 0.004618604310627547
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.30062324156742515,
+              "min": 0.29313530783165526,
+              "max": 0.30811117530319504,
+              "sample_std": 0.010589537443276816
+            }
+          },
+          "right": {
+            "tilt_mean_deg": {
+              "mean": 1.3115365697761496,
+              "min": 1.1805522880077643,
+              "max": 1.4425208515445351,
+              "sample_std": 0.18523974773454954
+            },
+            "tilt_rms_deg": {
+              "mean": 1.4420670586781759,
+              "min": 1.2910262889961257,
+              "max": 1.593107828360226,
+              "sample_std": 0.2136039049556263
+            },
+            "tilt_max_deg": {
+              "mean": 2.9434261911446633,
+              "min": 2.2702777989313225,
+              "max": 3.6165745833580036,
+              "sample_std": 0.9519755857577497
+            },
+            "swing_rms_deg": {
+              "mean": 1.3988184278898192,
+              "min": 1.2666900175385707,
+              "max": 1.5309468382410678,
+              "sample_std": 0.18685778989353335
+            },
+            "acc_rms_m_s2": {
+              "mean": 1.8229294789099888,
+              "min": 1.6817061956085917,
+              "max": 1.964152762211386,
+              "sample_std": 0.19971988256769363
+            },
+            "alpha_rms_rad_s2": {
+              "mean": 5.21012481748789,
+              "min": 4.729619078501104,
+              "max": 5.690630556474677,
+              "sample_std": 0.6795377328732198
+            },
+            "relative_speed_demeaned_rms_m_s": {
+              "mean": 0.10985659173144574,
+              "min": 0.10663583242330073,
+              "max": 0.11307735103959077,
+              "sample_std": 0.004554841494718073
+            },
+            "omega_rms_rad_s": {
+              "mean": 0.306481512057344,
+              "min": 0.29736769574358546,
+              "max": 0.31559532837110243,
+              "sample_std": 0.012888882635894421
+            }
+          },
+          "torso": {
+            "acc_rms_m_s2": {
+              "mean": 2.1042661185984732,
+              "min": 2.0249794769766196,
+              "max": 2.1835527602203264,
+              "sample_std": 0.11212824389664021
+            }
+          }
+        }
+      }
+    }
+  },
+  "semantics": {
+    "aggregation": "Arithmetic mean of per-run metrics, n=2 per controller; no significance claim",
+    "tilt": "Angle between endpoint local +Z and frozen H0/world vertical; mean over samples",
+    "swing": "RMS angular distance from each axis to normalized mean axis of that run/window",
+    "velocity": "Derivative of endpoint-minus-torso IMU position in fixed H0, demeaned per window; not absolute translation",
+    "acceleration": "3D vector norm RMS, gravity removed; angular metrics use full 3D rotation",
+    "hold": "Learning prediction ablation; measured disturbances, gravity and moving-base inverse dynamics retained",
+    "measurement": "Joint/IMU model reconstruction; not external optical or liquid-surface ground truth",
+    "timing": "MPC through timing enqueue; PID through command enqueue; both exclude device actuation delay"
+  }
+}

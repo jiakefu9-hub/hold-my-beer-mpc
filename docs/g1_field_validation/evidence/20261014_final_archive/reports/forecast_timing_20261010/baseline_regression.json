@@ -1,0 +1,7 @@
+{
+  "baseline_commit": "50907c986cd475e3d44c03cb6fb4974350955bfc",
+  "compared_commands": 200,
+  "zero_and_nonzero_neutral": true,
+  "max_numerical_difference": 0.0,
+  "network_forbidden": true
+}

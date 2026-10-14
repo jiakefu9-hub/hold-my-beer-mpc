@@ -1,0 +1,17 @@
+[
+  {
+    "name": "posture_causality_qgravity20",
+    "base_config": "evaluation/spike_suppression_20261014/configs/s00_original.yaml",
+    "overrides": {"mpc_q_gravity": [20.0, 20.0]}
+  },
+  {
+    "name": "posture_causality_qgravity15",
+    "base_config": "evaluation/spike_suppression_20261014/configs/s00_original.yaml",
+    "overrides": {"mpc_q_gravity": [15.0, 15.0]}
+  },
+  {
+    "name": "posture_causality_qgravity10",
+    "base_config": "evaluation/spike_suppression_20261014/configs/s00_original.yaml",
+    "overrides": {"mpc_q_gravity": [10.0, 10.0]}
+  }
+]

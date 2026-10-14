@@ -1,3 +1,9 @@
 # Preserve the byte-exact CSV evidence emitted by the simulation recorder.
 # These files use the producer's CRLF convention and are checksum-verified.
 evaluation_summary/full_task_template_v2_final_freeze/**/*.csv -text -diff
+# Curated hardware evidence is checksum-addressed; preserve original bytes.
+docs/g1_field_validation/evidence/20261014_final_archive/** -text
+docs/g1_field_validation/evidence/20261014_final_archive/runs/**/*.csv -diff
+# Historical producer formatting is evidence too; do not rewrite it for lint.
+docs/g1_field_validation/evidence/20261014_final_archive/reports/walk_h0_predictor_study_20260925/benchmark/*.csv whitespace=cr-at-eol
+docs/g1_field_validation/evidence/20261014_final_archive/runs/**/controller_config.yaml whitespace=-blank-at-eol

@@ -1,0 +1,3317 @@
+{
+  "method": "Diagnostic only. No training or hardware output; detected torso IMU raw acceleration maxima are impact proxies, not verified foot contact labels.",
+  "filter_gain": 0.17179581869313998,
+  "low_frequency_filter_group_delay_ms": 9.641726877953767,
+  "runs": [
+    {
+      "source": "evaluation/hardware_shadow/commissioning/morning_M01_mpc_learned_zero_payload75_walk_20261013_150426_750630_999f/raw.jsonl",
+      "sample_count": 1658,
+      "filter_current_reconstruction_rmse": [
+        2.8714783223816236e-16,
+        2.8186349139679106e-16,
+        1.065392558106668e-15
+      ],
+      "window": "command task elapsed [5,15), raw grid matching first to last command anchors",
+      "raw_acc_norm": {
+        "p50": 2.2185913733754052,
+        "p90": 5.8674523721659515,
+        "p95": 8.111658147116549,
+        "p99": 14.371219254078758,
+        "max": 26.191180907966206
+      },
+      "filtered_acc_norm": {
+        "p50": 1.5182589048503372,
+        "p90": 3.08140074492358,
+        "p95": 4.258176489712205,
+        "p99": 7.667374944758345,
+        "max": 13.089122627608893
+      },
+      "raw_vector_rms": 4.017786355474689,
+      "filtered_vector_rms": 2.299944617784287,
+      "raw_power_above_15hz_fraction": 0.7078046306024991,
+      "cross_correlation_best_filtered_delay_ms": 2.0,
+      "cross_correlation_best": 0.744407969349492,
+      "query_to_write_ms": {
+        "p50": 3.6386885000001534,
+        "p90": 4.065138499999998,
+        "p95": 4.303276250000421,
+        "p99": 4.766598159999926,
+        "max": 6.901521
+      },
+      "anchor_to_write_ms": {
+        "p50": 5.252485500000042,
+        "p90": 5.733519300000056,
+        "p95": 5.902096400000101,
+        "p99": 6.452300740000156,
+        "max": 8.603757
+      },
+      "imu_age_at_query_ms": {
+        "p50": 2.5090519999999996,
+        "p90": 4.6134067,
+        "p95": 5.0564658,
+        "p99": 5.49599921,
+        "max": 6.069951
+      },
+      "peaks_selection": {
+        "raw_norm_height_m_s2": 5.8674523721659515,
+        "min_prominence_m_s2": 1,
+        "min_spacing_ms": 250
+      },
+      "peaks": [
+        {
+          "approx_task_s": 5.015194588,
+          "raw_norm_m_s2": 8.591390008259644,
+          "filtered_peak_m_s2": 2.1693333801833052,
+          "filtered_peak_lag_ms": 6.000000000000002,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 11.396243,
+              "interval_index": 3,
+              "norm_m_s2": 0.612349723086424,
+              "current_filtered_norm_m_s2": 0.23955095035814805,
+              "predicted_max_over_horizon": 1.0080964825331002,
+              "predicted_peak_time_error_ms": 12.0,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 5.509194588000001,
+          "raw_norm_m_s2": 26.191180907966206,
+          "filtered_peak_m_s2": 13.089122627608893,
+          "filtered_peak_lag_ms": 10.000000000000009,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.110777999999932,
+              "interval_index": 2,
+              "norm_m_s2": 0.5953665655742546,
+              "current_filtered_norm_m_s2": 4.3517504354591585,
+              "predicted_max_over_horizon": 11.21754706148781,
+              "predicted_peak_time_error_ms": 18.000000000000014,
+              "predicted_peak_interval_index": 5
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.694659,
+              "interval_index": 3,
+              "norm_m_s2": 1.744660736014005,
+              "current_filtered_norm_m_s2": 3.2262051655857955,
+              "predicted_max_over_horizon": 12.014372672949564,
+              "predicted_peak_time_error_ms": 16.000000000000014,
+              "predicted_peak_interval_index": 6
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.633230000000008,
+              "interval_index": 5,
+              "norm_m_s2": 2.713168734930953,
+              "current_filtered_norm_m_s2": 4.099975472800548,
+              "predicted_max_over_horizon": 8.818210348278313,
+              "predicted_peak_time_error_ms": 16.000000000000014,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.067194588,
+          "raw_norm_m_s2": 19.94122486701696,
+          "filtered_peak_m_s2": 9.495399817891526,
+          "filtered_peak_lag_ms": 40.000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.076597999999937,
+              "interval_index": 2,
+              "norm_m_s2": 0.888726243388605,
+              "current_filtered_norm_m_s2": 2.439150152235192,
+              "predicted_max_over_horizon": 7.094927183633446,
+              "predicted_peak_time_error_ms": 36.00000000000003,
+              "predicted_peak_interval_index": 8
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.458617999999923,
+              "interval_index": 3,
+              "norm_m_s2": 2.1235712619939506,
+              "current_filtered_norm_m_s2": 2.2234287374941393,
+              "predicted_max_over_horizon": 2.6127232238068476,
+              "predicted_peak_time_error_ms": -6.000000000000005,
+              "predicted_peak_interval_index": 2
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.46251600000005,
+              "interval_index": 5,
+              "norm_m_s2": 0.5179718392893127,
+              "current_filtered_norm_m_s2": 3.476667558822819,
+              "predicted_max_over_horizon": 3.1937466799081426,
+              "predicted_peak_time_error_ms": -30.00000000000003,
+              "predicted_peak_interval_index": 0
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.637194588000001,
+          "raw_norm_m_s2": 11.790087580973054,
+          "filtered_peak_m_s2": 7.222662574490895,
+          "filtered_peak_lag_ms": 2.0000000000000018,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.71614700000012,
+              "interval_index": 2,
+              "norm_m_s2": 4.4801653339153225,
+              "current_filtered_norm_m_s2": 1.805276072022603,
+              "predicted_max_over_horizon": 5.151475777498445,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.406855999999912,
+              "interval_index": 3,
+              "norm_m_s2": 4.679242575494204,
+              "current_filtered_norm_m_s2": 1.7425064844896507,
+              "predicted_max_over_horizon": 4.822861991832229,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.604902999999958,
+              "interval_index": 5,
+              "norm_m_s2": 4.3837680007159685,
+              "current_filtered_norm_m_s2": 2.5187703603346856,
+              "predicted_max_over_horizon": 5.408542984723315,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.093194588,
+          "raw_norm_m_s2": 17.768472097615415,
+          "filtered_peak_m_s2": 7.91412657695335,
+          "filtered_peak_lag_ms": 4.0000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.569340999999621,
+              "interval_index": 2,
+              "norm_m_s2": 3.7593364223020984,
+              "current_filtered_norm_m_s2": 2.2937988569349614,
+              "predicted_max_over_horizon": 7.577986872098166,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.149235999999956,
+              "interval_index": 3,
+              "norm_m_s2": 4.017710014247348,
+              "current_filtered_norm_m_s2": 3.4559785735626596,
+              "predicted_max_over_horizon": 7.268422582636601,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.409439999999897,
+              "interval_index": 5,
+              "norm_m_s2": 3.457674556014007,
+              "current_filtered_norm_m_s2": 2.485127743190187,
+              "predicted_max_over_horizon": 7.12926662869984,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.611194588,
+          "raw_norm_m_s2": 13.481118409978125,
+          "filtered_peak_m_s2": 7.699193641324861,
+          "filtered_peak_lag_ms": 1.9999999999997797,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.233373999999792,
+              "interval_index": 1,
+              "norm_m_s2": 4.893861600931714,
+              "current_filtered_norm_m_s2": 5.988607002411829,
+              "predicted_max_over_horizon": 6.194091981086809,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.696629999999764,
+              "interval_index": 2,
+              "norm_m_s2": 5.78407983960343,
+              "current_filtered_norm_m_s2": 5.484680271305318,
+              "predicted_max_over_horizon": 6.944040825711423,
+              "predicted_peak_time_error_ms": -10.000000000000231,
+              "predicted_peak_interval_index": 1
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.44083500000005,
+              "interval_index": 4,
+              "norm_m_s2": 4.831785809223881,
+              "current_filtered_norm_m_s2": 2.962819703486974,
+              "predicted_max_over_horizon": 7.235256909604912,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.087194588000001,
+          "raw_norm_m_s2": 19.428775602121778,
+          "filtered_peak_m_s2": 8.176027269493595,
+          "filtered_peak_lag_ms": 4.0000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.702162999999818,
+              "interval_index": 2,
+              "norm_m_s2": 4.793790995576967,
+              "current_filtered_norm_m_s2": 4.989749415714419,
+              "predicted_max_over_horizon": 7.811727533341007,
+              "predicted_peak_time_error_ms": 7.999999999999563,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.234955000000049,
+              "interval_index": 2,
+              "norm_m_s2": 2.7391035981401686,
+              "current_filtered_norm_m_s2": 6.517951803898339,
+              "predicted_max_over_horizon": 8.620024705940176,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.51049900000002,
+              "interval_index": 5,
+              "norm_m_s2": 3.09914310791038,
+              "current_filtered_norm_m_s2": 1.705555739105676,
+              "predicted_max_over_horizon": 6.938488070462946,
+              "predicted_peak_time_error_ms": 17.999999999999794,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.711194588000001,
+          "raw_norm_m_s2": 12.197930759106601,
+          "filtered_peak_m_s2": 3.0024590731958987,
+          "filtered_peak_lag_ms": -18.000000000000238,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.179523999999994,
+              "interval_index": 2,
+              "norm_m_s2": 1.0018619804024766,
+              "current_filtered_norm_m_s2": 2.2854860369286136,
+              "predicted_max_over_horizon": 1.7933597270959618,
+              "predicted_peak_time_error_ms": 25.9999999999998,
+              "predicted_peak_interval_index": 6
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.618417999999966,
+              "interval_index": 3,
+              "norm_m_s2": 1.4318267027946514,
+              "current_filtered_norm_m_s2": 2.7822082447137517,
+              "predicted_max_over_horizon": 2.2584135783930916,
+              "predicted_peak_time_error_ms": -18.000000000000238,
+              "predicted_peak_interval_index": 0
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.985162000000006,
+              "interval_index": 4,
+              "norm_m_s2": 1.9190011624764598,
+              "current_filtered_norm_m_s2": 2.68818067874556,
+              "predicted_max_over_horizon": 2.635476716613399,
+              "predicted_peak_time_error_ms": -28.000000000000025,
+              "predicted_peak_interval_index": 0
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.109194588000001,
+          "raw_norm_m_s2": 16.93543515458756,
+          "filtered_peak_m_s2": 8.120570097809516,
+          "filtered_peak_lag_ms": 6.000000000000227,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.6784689999998,
+              "interval_index": 2,
+              "norm_m_s2": 2.126932110022363,
+              "current_filtered_norm_m_s2": 2.2927237284832893,
+              "predicted_max_over_horizon": 8.19909589365139,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.408661999999907,
+              "interval_index": 3,
+              "norm_m_s2": 1.5015261167666611,
+              "current_filtered_norm_m_s2": 2.738570640288851,
+              "predicted_max_over_horizon": 8.16705266468921,
+              "predicted_peak_time_error_ms": 10.000000000000675,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.827712999999754,
+              "interval_index": 5,
+              "norm_m_s2": 2.204107230988238,
+              "current_filtered_norm_m_s2": 1.5725459356604263,
+              "predicted_max_over_horizon": 6.72036244755654,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.617194588,
+          "raw_norm_m_s2": 15.094609305429227,
+          "filtered_peak_m_s2": 6.597771730978552,
+          "filtered_peak_lag_ms": 9.999999999999787,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.032715000000024,
+              "interval_index": 2,
+              "norm_m_s2": 3.1384073656597944,
+              "current_filtered_norm_m_s2": 3.8604145489715735,
+              "predicted_max_over_horizon": 6.378811927372547,
+              "predicted_peak_time_error_ms": 24.00000000000002,
+              "predicted_peak_interval_index": 6
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.726569999999661,
+              "interval_index": 3,
+              "norm_m_s2": 4.5037079395496855,
+              "current_filtered_norm_m_s2": 3.0646001780658687,
+              "predicted_max_over_horizon": 6.143012976297359,
+              "predicted_peak_time_error_ms": 17.999999999999794,
+              "predicted_peak_interval_index": 6
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.098157999999927,
+              "interval_index": 5,
+              "norm_m_s2": 3.5644529183603177,
+              "current_filtered_norm_m_s2": 2.675162025366139,
+              "predicted_max_over_horizon": 5.967938420017133,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.127194588,
+          "raw_norm_m_s2": 19.096360790002375,
+          "filtered_peak_m_s2": 9.298816930429389,
+          "filtered_peak_lag_ms": 2.000000000000668,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.663258999999201,
+              "interval_index": 1,
+              "norm_m_s2": 4.973075958534324,
+              "current_filtered_norm_m_s2": 3.439658899279615,
+              "predicted_max_over_horizon": 8.31641005502957,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.54504799999956,
+              "interval_index": 3,
+              "norm_m_s2": 5.1770448091296695,
+              "current_filtered_norm_m_s2": 2.6760069282075087,
+              "predicted_max_over_horizon": 7.9831162915887175,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.800851999999153,
+              "interval_index": 5,
+              "norm_m_s2": 4.388890855485796,
+              "current_filtered_norm_m_s2": 2.540277657847743,
+              "predicted_max_over_horizon": 7.407380753611432,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.667194588000001,
+          "raw_norm_m_s2": 19.588311284410153,
+          "filtered_peak_m_s2": 8.392746034788743,
+          "filtered_peak_lag_ms": -1.9999999999997797,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.559837999999154,
+              "interval_index": 2,
+              "norm_m_s2": 6.963854809977724,
+              "current_filtered_norm_m_s2": 3.5639673041056414,
+              "predicted_max_over_horizon": 6.963854809977724,
+              "predicted_peak_time_error_ms": 0.0,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.888454999999134,
+              "interval_index": 3,
+              "norm_m_s2": 7.4778782216275275,
+              "current_filtered_norm_m_s2": 4.7178207420700815,
+              "predicted_max_over_horizon": 7.4778782216275275,
+              "predicted_peak_time_error_ms": 0.0,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.364613999999342,
+              "interval_index": 5,
+              "norm_m_s2": 7.391777296584201,
+              "current_filtered_norm_m_s2": 1.8298481286792148,
+              "predicted_max_over_horizon": 7.391777296584201,
+              "predicted_peak_time_error_ms": 8.881784197001252e-13,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.143194588,
+          "raw_norm_m_s2": 15.771202496270696,
+          "filtered_peak_m_s2": 8.815822660064782,
+          "filtered_peak_lag_ms": 2.000000000000668,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.872386999999705,
+              "interval_index": 2,
+              "norm_m_s2": 7.672362287513191,
+              "current_filtered_norm_m_s2": 1.3765657552880577,
+              "predicted_max_over_horizon": 7.672362287513191,
+              "predicted_peak_time_error_ms": 0.0,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.042964999999576,
+              "interval_index": 3,
+              "norm_m_s2": 7.539476707913806,
+              "current_filtered_norm_m_s2": 2.9397432972153026,
+              "predicted_max_over_horizon": 7.539476707913806,
+              "predicted_peak_time_error_ms": -1.9999999999997797,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.043598999999197,
+              "interval_index": 5,
+              "norm_m_s2": 8.064361187108217,
+              "current_filtered_norm_m_s2": 1.7608977150828955,
+              "predicted_max_over_horizon": 8.064361187108217,
+              "predicted_peak_time_error_ms": 8.881784197001252e-13,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.695194588,
+          "raw_norm_m_s2": 16.113661732669605,
+          "filtered_peak_m_s2": 5.807360933299297,
+          "filtered_peak_lag_ms": 9.999999999999787,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.485736999999773,
+              "interval_index": 2,
+              "norm_m_s2": 2.9248130793803875,
+              "current_filtered_norm_m_s2": 3.095558165231811,
+              "predicted_max_over_horizon": 3.812469939440452,
+              "predicted_peak_time_error_ms": -8.000000000000007,
+              "predicted_peak_interval_index": 1
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.416901000000038,
+              "interval_index": 3,
+              "norm_m_s2": 2.732110794170705,
+              "current_filtered_norm_m_s2": 6.705765290139793,
+              "predicted_max_over_horizon": 6.879405408391984,
+              "predicted_peak_time_error_ms": -17.999999999999794,
+              "predicted_peak_interval_index": 0
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.242670000000025,
+              "interval_index": 5,
+              "norm_m_s2": 2.2581399287103343,
+              "current_filtered_norm_m_s2": 5.735328412597886,
+              "predicted_max_over_horizon": 7.882029324713687,
+              "predicted_peak_time_error_ms": -25.9999999999998,
+              "predicted_peak_interval_index": 1
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.147194588000001,
+          "raw_norm_m_s2": 15.835957533786294,
+          "filtered_peak_m_s2": 7.775428231030725,
+          "filtered_peak_lag_ms": 6.000000000000227,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.163561999999679,
+              "interval_index": 1,
+              "norm_m_s2": 3.8335610043833057,
+              "current_filtered_norm_m_s2": 3.2016805106671007,
+              "predicted_max_over_horizon": 7.553316870596061,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.914613999999602,
+              "interval_index": 2,
+              "norm_m_s2": 2.022324766228673,
+              "current_filtered_norm_m_s2": 3.9221207589417664,
+              "predicted_max_over_horizon": 8.66866186756267,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.764388999999554,
+              "interval_index": 4,
+              "norm_m_s2": 2.0989841855653464,
+              "current_filtered_norm_m_s2": 2.535772269555195,
+              "predicted_max_over_horizon": 7.275270732914089,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.677194588,
+          "raw_norm_m_s2": 14.558883877887995,
+          "filtered_peak_m_s2": 8.96307388548981,
+          "filtered_peak_lag_ms": 8.000000000000007,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.300681999999782,
+              "interval_index": 2,
+              "norm_m_s2": 4.099778927133175,
+              "current_filtered_norm_m_s2": 2.5186942931691436,
+              "predicted_max_over_horizon": 7.442888791260021,
+              "predicted_peak_time_error_ms": 11.999999999999567,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.918520000000157,
+              "interval_index": 3,
+              "norm_m_s2": 4.002271088345548,
+              "current_filtered_norm_m_s2": 1.35929846527047,
+              "predicted_max_over_horizon": 7.599992911588958,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.438105999999628,
+              "interval_index": 5,
+              "norm_m_s2": 5.1858296417423935,
+              "current_filtered_norm_m_s2": 2.986506252576835,
+              "predicted_max_over_horizon": 7.477549426595111,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.159194588,
+          "raw_norm_m_s2": 15.310451794466806,
+          "filtered_peak_m_s2": 8.464823378519313,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.668443999998445,
+              "interval_index": 2,
+              "norm_m_s2": 3.6167722320445055,
+              "current_filtered_norm_m_s2": 3.3045086201479896,
+              "predicted_max_over_horizon": 7.412295731592427,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.582393999999056,
+              "interval_index": 3,
+              "norm_m_s2": 5.004841777786362,
+              "current_filtered_norm_m_s2": 4.419741026373245,
+              "predicted_max_over_horizon": 8.00613388540032,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.783899999998752,
+              "interval_index": 5,
+              "norm_m_s2": 5.058666944848765,
+              "current_filtered_norm_m_s2": 1.6145606007081097,
+              "predicted_max_over_horizon": 7.34590860648698,
+              "predicted_peak_time_error_ms": 4.000000000001336,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.683194588000001,
+          "raw_norm_m_s2": 14.69683570760689,
+          "filtered_peak_m_s2": 6.360476837369776,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.603325000000382,
+              "interval_index": 2,
+              "norm_m_s2": 6.296481368983673,
+              "current_filtered_norm_m_s2": 5.653062400083655,
+              "predicted_max_over_horizon": 6.296481368983673,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.57960999999952,
+              "interval_index": 3,
+              "norm_m_s2": 6.583814464411201,
+              "current_filtered_norm_m_s2": 5.403669642529642,
+              "predicted_max_over_horizon": 6.583814464411201,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.39228999999976,
+              "interval_index": 4,
+              "norm_m_s2": 5.122465574142245,
+              "current_filtered_norm_m_s2": 1.1500264313048247,
+              "predicted_max_over_horizon": 6.021304591145509,
+              "predicted_peak_time_error_ms": -9.99999999999801,
+              "predicted_peak_interval_index": 3
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.167194588000001,
+          "raw_norm_m_s2": 18.879716383997874,
+          "filtered_peak_m_s2": 9.035455802452828,
+          "filtered_peak_lag_ms": 3.9999999999995595,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 11.10983300000079,
+              "interval_index": 2,
+              "norm_m_s2": 1.662490450460365,
+              "current_filtered_norm_m_s2": 3.0378488398983596,
+              "predicted_max_over_horizon": 7.975697682492382,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.92962399999942,
+              "interval_index": 3,
+              "norm_m_s2": 2.350661926160339,
+              "current_filtered_norm_m_s2": 3.2644310300192605,
+              "predicted_max_over_horizon": 8.143728059049645,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.695332999999934,
+              "interval_index": 5,
+              "norm_m_s2": 2.014601090220727,
+              "current_filtered_norm_m_s2": 2.271562169813188,
+              "predicted_max_over_horizon": 7.342807828656407,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.695194588000001,
+          "raw_norm_m_s2": 20.36171675403983,
+          "filtered_peak_m_s2": 8.284645530420981,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.555380000001335,
+              "interval_index": 2,
+              "norm_m_s2": 4.704118505159702,
+              "current_filtered_norm_m_s2": 5.382040256685259,
+              "predicted_max_over_horizon": 6.548474094543488,
+              "predicted_peak_time_error_ms": 4.000000000001336,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.561456000000362,
+              "interval_index": 3,
+              "norm_m_s2": 5.746519256366538,
+              "current_filtered_norm_m_s2": 4.79515432145516,
+              "predicted_max_over_horizon": 7.5522165417994485,
+              "predicted_peak_time_error_ms": 5.999999999998451,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.16133900000095,
+              "interval_index": 5,
+              "norm_m_s2": 4.617221911231999,
+              "current_filtered_norm_m_s2": 2.3141459238731956,
+              "predicted_max_over_horizon": 7.400186322484683,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        }
+      ],
+      "forecast_rmse": {
+        "0": {
+          "interval_ms": [
+            0,
+            6
+          ],
+          "learned_filtered_rmse": 0.4522587881666551,
+          "hold_filtered_rmse": 0.5280930824269218,
+          "learned_raw_rmse": 2.525509285067937,
+          "hold_raw_rmse": 2.719965221585295
+        },
+        "1": {
+          "interval_ms": [
+            6,
+            12
+          ],
+          "learned_filtered_rmse": 1.0058787702982983,
+          "hold_filtered_rmse": 1.5491626995838186,
+          "learned_raw_rmse": 2.817923282313991,
+          "hold_raw_rmse": 3.451873358310613
+        },
+        "3": {
+          "interval_ms": [
+            18,
+            24
+          ],
+          "learned_filtered_rmse": 1.0715630090338197,
+          "hold_filtered_rmse": 2.340284314399513,
+          "learned_raw_rmse": 2.760365159694614,
+          "hold_raw_rmse": 3.5683456512449183
+        },
+        "5": {
+          "interval_ms": [
+            30,
+            36
+          ],
+          "learned_filtered_rmse": 1.1074556998774459,
+          "hold_filtered_rmse": 2.672342361352425,
+          "learned_raw_rmse": 2.785809450818823,
+          "hold_raw_rmse": 3.763041814578041
+        },
+        "8": {
+          "interval_ms": [
+            48,
+            54
+          ],
+          "learned_filtered_rmse": 1.1355816747417309,
+          "hold_filtered_rmse": 2.850272149074963,
+          "learned_raw_rmse": 2.774370971629355,
+          "hold_raw_rmse": 3.8051334046159058
+        }
+      },
+      "peak_summary": {
+        "count": 20,
+        "median_raw": 15.974809633227949,
+        "median_filtered": 8.148298683651555,
+        "median_filtered_lag_ms": 3.9999999999997815,
+        "6ms": {
+          "count": 20,
+          "median_predicted_norm": 3.796448713342702,
+          "median_predicted_over_raw": 0.23362828297541643,
+          "peak_time_error_median_ms": 6.000000000000449,
+          "peak_time_abs_error_p90_ms": 24.200000000000003,
+          "peak_time_within_6ms_fraction": 0.45
+        },
+        "12ms": {
+          "count": 19,
+          "median_predicted_norm": 4.017710014247348,
+          "median_predicted_over_raw": 0.27110112057790803,
+          "peak_time_error_median_ms": 5.999999999998451,
+          "peak_time_abs_error_p90_ms": 17.999999999999794,
+          "peak_time_within_6ms_fraction": 0.47368421052631576
+        },
+        "24ms": {
+          "count": 19,
+          "median_predicted_norm": 3.5644529183603177,
+          "median_predicted_over_raw": 0.22675995187468304,
+          "peak_time_error_median_ms": 4.000000000001336,
+          "peak_time_abs_error_p90_ms": 26.399999999999846,
+          "peak_time_within_6ms_fraction": 0.47368421052631576
+        }
+      }
+    },
+    {
+      "source": "evaluation/hardware_shadow/commissioning/morning_M01_mpc_learned_zero_payload75_walk_20261013_164838_063152_fd65/raw.jsonl",
+      "sample_count": 1657,
+      "filter_current_reconstruction_rmse": [
+        3.066607390718812e-16,
+        2.5724911847147644e-16,
+        1.055964758886358e-15
+      ],
+      "window": "command task elapsed [5,15), raw grid matching first to last command anchors",
+      "raw_acc_norm": {
+        "p50": 2.253591671241962,
+        "p90": 5.691474932189513,
+        "p95": 8.456848336881128,
+        "p99": 14.455523802361308,
+        "max": 26.352272514794315
+      },
+      "filtered_acc_norm": {
+        "p50": 1.5329811857545323,
+        "p90": 3.2121960098049236,
+        "p95": 4.285469763109747,
+        "p99": 7.956568647939457,
+        "max": 13.499226800883493
+      },
+      "raw_vector_rms": 4.0552082081610505,
+      "filtered_vector_rms": 2.343975517368261,
+      "raw_power_above_15hz_fraction": 0.7106192212496666,
+      "cross_correlation_best_filtered_delay_ms": 2.0,
+      "cross_correlation_best": 0.7434453988662846,
+      "query_to_write_ms": {
+        "p50": 3.6927430000002204,
+        "p90": 4.307580799999977,
+        "p95": 4.574664999999989,
+        "p99": 4.965466040000095,
+        "max": 5.454269999999983
+      },
+      "anchor_to_write_ms": {
+        "p50": 4.049225000000156,
+        "p90": 4.755398200000105,
+        "p95": 5.044331399999891,
+        "p99": 5.527092399999685,
+        "max": 6.1006620000001455
+      },
+      "imu_age_at_query_ms": {
+        "p50": 1.757927,
+        "p90": 2.5651062000000002,
+        "p95": 2.788047399999999,
+        "p99": 3.2599564400000016,
+        "max": 4.4758379999999995
+      },
+      "peaks_selection": {
+        "raw_norm_height_m_s2": 5.691474932189513,
+        "min_prominence_m_s2": 1,
+        "min_spacing_ms": 250
+      },
+      "peaks": [
+        {
+          "approx_task_s": 5.009989829,
+          "raw_norm_m_s2": 9.891740835715872,
+          "filtered_peak_m_s2": 3.394039100129393,
+          "filtered_peak_lag_ms": 2.0,
+          "predicted_before": {}
+        },
+        {
+          "approx_task_s": 5.5079898290000004,
+          "raw_norm_m_s2": 26.352272514794315,
+          "filtered_peak_m_s2": 13.499226800883493,
+          "filtered_peak_lag_ms": 12.00000000000001,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.400340999999976,
+              "interval_index": 1,
+              "norm_m_s2": 0.9177074504397542,
+              "current_filtered_norm_m_s2": 3.344495775442995,
+              "predicted_max_over_horizon": 11.942143327485184,
+              "predicted_peak_time_error_ms": 10.000000000000009,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.455964999999958,
+              "interval_index": 2,
+              "norm_m_s2": 1.4460996588129655,
+              "current_filtered_norm_m_s2": 3.779403890049743,
+              "predicted_max_over_horizon": 10.739826543776433,
+              "predicted_peak_time_error_ms": 16.000000000000014,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.411853999999956,
+              "interval_index": 4,
+              "norm_m_s2": 0.9414662460266363,
+              "current_filtered_norm_m_s2": 2.5821532921513413,
+              "predicted_max_over_horizon": 11.275488618283166,
+              "predicted_peak_time_error_ms": 16.000000000000014,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.083989829,
+          "raw_norm_m_s2": 18.06581949481884,
+          "filtered_peak_m_s2": 8.794944074609985,
+          "filtered_peak_lag_ms": 6.000000000000005,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.544941000000026,
+              "interval_index": 1,
+              "norm_m_s2": 2.3948639892963803,
+              "current_filtered_norm_m_s2": 2.0060774041002922,
+              "predicted_max_over_horizon": 7.081604231723439,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.407075999999906,
+              "interval_index": 2,
+              "norm_m_s2": 3.271036285065424,
+              "current_filtered_norm_m_s2": 0.9405842631436702,
+              "predicted_max_over_horizon": 7.311077651816054,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.32019200000002,
+              "interval_index": 4,
+              "norm_m_s2": 1.4749668436061525,
+              "current_filtered_norm_m_s2": 2.0277186782630845,
+              "predicted_max_over_horizon": 7.200905602201439,
+              "predicted_peak_time_error_ms": 10.000000000000009,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.6279898290000006,
+          "raw_norm_m_s2": 13.240578357936814,
+          "filtered_peak_m_s2": 5.629510366526462,
+          "filtered_peak_lag_ms": 20.000000000000018,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.798812999999962,
+              "interval_index": 2,
+              "norm_m_s2": 4.124883654720923,
+              "current_filtered_norm_m_s2": 4.12055826411405,
+              "predicted_max_over_horizon": 5.250386764791638,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.022809999999943,
+              "interval_index": 3,
+              "norm_m_s2": 4.362984276818861,
+              "current_filtered_norm_m_s2": 4.103213347449328,
+              "predicted_max_over_horizon": 5.41685120155923,
+              "predicted_peak_time_error_ms": 12.00000000000001,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.986838000000013,
+              "interval_index": 5,
+              "norm_m_s2": 5.604903376004458,
+              "current_filtered_norm_m_s2": 1.769668634617082,
+              "predicted_max_over_horizon": 6.629831519565305,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.097989829,
+          "raw_norm_m_s2": 16.73204667238208,
+          "filtered_peak_m_s2": 6.802202758934692,
+          "filtered_peak_lag_ms": 8.000000000000007,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 11.784640999999763,
+              "interval_index": 2,
+              "norm_m_s2": 1.7067810751952996,
+              "current_filtered_norm_m_s2": 2.150217128299979,
+              "predicted_max_over_horizon": 5.618001423656404,
+              "predicted_peak_time_error_ms": 28.000000000000025,
+              "predicted_peak_interval_index": 7
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 17.510233999999514,
+              "interval_index": 3,
+              "norm_m_s2": 0.7830951989333708,
+              "current_filtered_norm_m_s2": 2.833195517144154,
+              "predicted_max_over_horizon": 4.448613600166824,
+              "predicted_peak_time_error_ms": 28.000000000000025,
+              "predicted_peak_interval_index": 8
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.838007999999693,
+              "interval_index": 5,
+              "norm_m_s2": 2.507070503122348,
+              "current_filtered_norm_m_s2": 2.090111131470298,
+              "predicted_max_over_horizon": 3.13783134915852,
+              "predicted_peak_time_error_ms": 16.000000000000014,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.6039898290000005,
+          "raw_norm_m_s2": 14.220300044067884,
+          "filtered_peak_m_s2": 6.744393242882875,
+          "filtered_peak_lag_ms": -12.00000000000001,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.052413999999786,
+              "interval_index": 2,
+              "norm_m_s2": 6.586233511830937,
+              "current_filtered_norm_m_s2": 6.74439324288288,
+              "predicted_max_over_horizon": 6.824434853662099,
+              "predicted_peak_time_error_ms": 7.999999999999563,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.946954999999871,
+              "interval_index": 2,
+              "norm_m_s2": 5.572908510156808,
+              "current_filtered_norm_m_s2": 4.990909127238785,
+              "predicted_max_over_horizon": 6.232890354096186,
+              "predicted_peak_time_error_ms": 13.99999999999979,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.20659599999986,
+              "interval_index": 4,
+              "norm_m_s2": 5.829859420851639,
+              "current_filtered_norm_m_s2": 2.682918823777921,
+              "predicted_max_over_horizon": 6.374660376098274,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.091989829000001,
+          "raw_norm_m_s2": 17.420406591587206,
+          "filtered_peak_m_s2": 9.121930541869087,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.470353999999958,
+              "interval_index": 2,
+              "norm_m_s2": 3.7790135236674525,
+              "current_filtered_norm_m_s2": 4.452097649710549,
+              "predicted_max_over_horizon": 7.260111601391229,
+              "predicted_peak_time_error_ms": 5.999999999999783,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.379674000000065,
+              "interval_index": 3,
+              "norm_m_s2": 4.558210124745322,
+              "current_filtered_norm_m_s2": 5.067267968632185,
+              "predicted_max_over_horizon": 7.807431127417324,
+              "predicted_peak_time_error_ms": 5.999999999999783,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.8940449999997,
+              "interval_index": 5,
+              "norm_m_s2": 2.5842432812980194,
+              "current_filtered_norm_m_s2": 2.869892400963207,
+              "predicted_max_over_horizon": 7.64757774090836,
+              "predicted_peak_time_error_ms": 11.999999999999567,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.625989829,
+          "raw_norm_m_s2": 17.069696533989287,
+          "filtered_peak_m_s2": 10.30102679987258,
+          "filtered_peak_lag_ms": 2.000000000000224,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.424807999999786,
+              "interval_index": 2,
+              "norm_m_s2": 6.985986194942212,
+              "current_filtered_norm_m_s2": 5.044810917489512,
+              "predicted_max_over_horizon": 7.529642234255601,
+              "predicted_peak_time_error_ms": 5.999999999999783,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.443385999999727,
+              "interval_index": 3,
+              "norm_m_s2": 6.527284807939608,
+              "current_filtered_norm_m_s2": 5.507738081227912,
+              "predicted_max_over_horizon": 7.39573505740247,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.485478999999646,
+              "interval_index": 5,
+              "norm_m_s2": 6.463556236852479,
+              "current_filtered_norm_m_s2": 1.5416955184512264,
+              "predicted_max_over_horizon": 7.521679327737546,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.105989829,
+          "raw_norm_m_s2": 16.351040159733316,
+          "filtered_peak_m_s2": 8.736468653926133,
+          "filtered_peak_lag_ms": 9.999999999999787,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.903310999999526,
+              "interval_index": 2,
+              "norm_m_s2": 3.3387217654882124,
+              "current_filtered_norm_m_s2": 3.429363514759794,
+              "predicted_max_over_horizon": 7.985585094514048,
+              "predicted_peak_time_error_ms": 18.000000000000682,
+              "predicted_peak_interval_index": 5
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.534460999999666,
+              "interval_index": 3,
+              "norm_m_s2": 2.434564534843046,
+              "current_filtered_norm_m_s2": 2.861723701251459,
+              "predicted_max_over_horizon": 7.758290971482862,
+              "predicted_peak_time_error_ms": 17.999999999999794,
+              "predicted_peak_interval_index": 6
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.769589999999788,
+              "interval_index": 5,
+              "norm_m_s2": 1.918771529066774,
+              "current_filtered_norm_m_s2": 2.8937588560899106,
+              "predicted_max_over_horizon": 6.651433765826787,
+              "predicted_peak_time_error_ms": 17.999999999999794,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.631989829,
+          "raw_norm_m_s2": 16.89585211695807,
+          "filtered_peak_m_s2": 8.801039773557573,
+          "filtered_peak_lag_ms": 4.000000000000448,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.977289999999471,
+              "interval_index": 1,
+              "norm_m_s2": 4.731062249593635,
+              "current_filtered_norm_m_s2": 5.505818869292412,
+              "predicted_max_over_horizon": 6.245697402733782,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.185993999999091,
+              "interval_index": 2,
+              "norm_m_s2": 4.622687647447996,
+              "current_filtered_norm_m_s2": 5.000727573153883,
+              "predicted_max_over_horizon": 6.6409833891615415,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.63985799999935,
+              "interval_index": 4,
+              "norm_m_s2": 4.936519374074833,
+              "current_filtered_norm_m_s2": 2.186968954783166,
+              "predicted_max_over_horizon": 6.683075902572308,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.117989829,
+          "raw_norm_m_s2": 18.786438996920175,
+          "filtered_peak_m_s2": 8.14906157600073,
+          "filtered_peak_lag_ms": 3.9999999999995595,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.766256000000027,
+              "interval_index": 1,
+              "norm_m_s2": 3.3609965932376107,
+              "current_filtered_norm_m_s2": 4.2036428423035685,
+              "predicted_max_over_horizon": 7.273804057941434,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.47913700000003,
+              "interval_index": 2,
+              "norm_m_s2": 2.1802090679823354,
+              "current_filtered_norm_m_s2": 4.270931963695324,
+              "predicted_max_over_horizon": 7.248665529350957,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.565889999999648,
+              "interval_index": 5,
+              "norm_m_s2": 5.029015878434684,
+              "current_filtered_norm_m_s2": 1.3079241838996862,
+              "predicted_max_over_horizon": 7.970376732241469,
+              "predicted_peak_time_error_ms": 7.999999999999119,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.629989829,
+          "raw_norm_m_s2": 18.055219688437404,
+          "filtered_peak_m_s2": 8.553235022101969,
+          "filtered_peak_lag_ms": 24.00000000000002,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.657006999999162,
+              "interval_index": 2,
+              "norm_m_s2": 4.252122140994213,
+              "current_filtered_norm_m_s2": 2.2710598071649963,
+              "predicted_max_over_horizon": 7.205063016566653,
+              "predicted_peak_time_error_ms": 24.00000000000002,
+              "predicted_peak_interval_index": 6
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.189284999999387,
+              "interval_index": 3,
+              "norm_m_s2": 4.822650472091073,
+              "current_filtered_norm_m_s2": 2.5395239593259857,
+              "predicted_max_over_horizon": 7.719637798960012,
+              "predicted_peak_time_error_ms": 24.00000000000002,
+              "predicted_peak_interval_index": 7
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.34197199999977,
+              "interval_index": 5,
+              "norm_m_s2": 3.9343310037655566,
+              "current_filtered_norm_m_s2": 2.705901775542373,
+              "predicted_max_over_horizon": 5.663514037673156,
+              "predicted_peak_time_error_ms": 18.000000000000682,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.135989829,
+          "raw_norm_m_s2": 23.87918603765321,
+          "filtered_peak_m_s2": 8.919629356691004,
+          "filtered_peak_lag_ms": 8.000000000000007,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.119681999999571,
+              "interval_index": 1,
+              "norm_m_s2": 1.563651254583343,
+              "current_filtered_norm_m_s2": 0.5803898124806365,
+              "predicted_max_over_horizon": 7.131182137492652,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 17.506391999999593,
+              "interval_index": 3,
+              "norm_m_s2": 1.232675530364713,
+              "current_filtered_norm_m_s2": 2.525168015731608,
+              "predicted_max_over_horizon": 7.16831794919801,
+              "predicted_peak_time_error_ms": 10.000000000000675,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.277366999999828,
+              "interval_index": 4,
+              "norm_m_s2": 1.6799129963658266,
+              "current_filtered_norm_m_s2": 1.714486949716167,
+              "predicted_max_over_horizon": 7.224757610885467,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.667989829,
+          "raw_norm_m_s2": 17.366501260111207,
+          "filtered_peak_m_s2": 8.64446549776451,
+          "filtered_peak_lag_ms": 1.9999999999997797,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.747326999999473,
+              "interval_index": 2,
+              "norm_m_s2": 5.496951990549171,
+              "current_filtered_norm_m_s2": 3.789686058358683,
+              "predicted_max_over_horizon": 6.562650063478058,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.897874999999395,
+              "interval_index": 3,
+              "norm_m_s2": 4.839752657475416,
+              "current_filtered_norm_m_s2": 4.453408272945829,
+              "predicted_max_over_horizon": 7.083808683326222,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.040079999999357,
+              "interval_index": 5,
+              "norm_m_s2": 4.771397123897675,
+              "current_filtered_norm_m_s2": 0.9909447360674136,
+              "predicted_max_over_horizon": 6.884811437814546,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.145989829000001,
+          "raw_norm_m_s2": 15.800546502456086,
+          "filtered_peak_m_s2": 8.01544553720659,
+          "filtered_peak_lag_ms": 8.000000000000007,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.39390599999934,
+              "interval_index": 1,
+              "norm_m_s2": 1.4803470892404973,
+              "current_filtered_norm_m_s2": 2.2357229341375726,
+              "predicted_max_over_horizon": 7.752810732595586,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.995681999999675,
+              "interval_index": 2,
+              "norm_m_s2": 2.5624848401250877,
+              "current_filtered_norm_m_s2": 3.833056420664055,
+              "predicted_max_over_horizon": 7.888166351012422,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.963864999999586,
+              "interval_index": 4,
+              "norm_m_s2": 2.0146551330411873,
+              "current_filtered_norm_m_s2": 3.306569439907242,
+              "predicted_max_over_horizon": 7.670447582108155,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.667989829,
+          "raw_norm_m_s2": 14.686977573433335,
+          "filtered_peak_m_s2": 6.670346960126403,
+          "filtered_peak_lag_ms": -14.000000000000234,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.323027999999731,
+              "interval_index": 1,
+              "norm_m_s2": 4.828114650081096,
+              "current_filtered_norm_m_s2": 6.415350061869955,
+              "predicted_max_over_horizon": 6.358063863680183,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.668765999999444,
+              "interval_index": 2,
+              "norm_m_s2": 5.144076628711712,
+              "current_filtered_norm_m_s2": 6.4851449912986014,
+              "predicted_max_over_horizon": 6.8266123118155555,
+              "predicted_peak_time_error_ms": -16.000000000000014,
+              "predicted_peak_interval_index": 0
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.18916700000007,
+              "interval_index": 4,
+              "norm_m_s2": 4.07253653211412,
+              "current_filtered_norm_m_s2": 2.099049860959139,
+              "predicted_max_over_horizon": 7.476983857986821,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.155989829000001,
+          "raw_norm_m_s2": 19.931887334859283,
+          "filtered_peak_m_s2": 8.799409529079234,
+          "filtered_peak_lag_ms": 7.999999999999119,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.086124000000751,
+              "interval_index": 2,
+              "norm_m_s2": 4.48385353616018,
+              "current_filtered_norm_m_s2": 0.8776171063160868,
+              "predicted_max_over_horizon": 7.963375624435786,
+              "predicted_peak_time_error_ms": 6.000000000002004,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.109725999999824,
+              "interval_index": 3,
+              "norm_m_s2": 5.05638518608074,
+              "current_filtered_norm_m_s2": 4.262314017890645,
+              "predicted_max_over_horizon": 8.350821169680884,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.04919399999939,
+              "interval_index": 5,
+              "norm_m_s2": 5.827839546273074,
+              "current_filtered_norm_m_s2": 2.717996611644361,
+              "predicted_max_over_horizon": 9.041843879652982,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.687989829000001,
+          "raw_norm_m_s2": 16.211585796556008,
+          "filtered_peak_m_s2": 9.57090106428599,
+          "filtered_peak_lag_ms": 1.9999999999988916,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.874751999999319,
+              "interval_index": 2,
+              "norm_m_s2": 7.525714033805578,
+              "current_filtered_norm_m_s2": 4.081057142648332,
+              "predicted_max_over_horizon": 7.525714033805578,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.749351999999604,
+              "interval_index": 3,
+              "norm_m_s2": 7.662581276935928,
+              "current_filtered_norm_m_s2": 4.037669749036366,
+              "predicted_max_over_horizon": 7.662581276935928,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.161998999999824,
+              "interval_index": 4,
+              "norm_m_s2": 7.010885274738424,
+              "current_filtered_norm_m_s2": 1.1240202393509175,
+              "predicted_max_over_horizon": 7.303470121856543,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.169989829,
+          "raw_norm_m_s2": 16.32578619941057,
+          "filtered_peak_m_s2": 9.262781636131152,
+          "filtered_peak_lag_ms": 8.000000000000895,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.55313399999902,
+              "interval_index": 2,
+              "norm_m_s2": 1.9353139820862184,
+              "current_filtered_norm_m_s2": 1.7710121016666671,
+              "predicted_max_over_horizon": 7.372797107091307,
+              "predicted_peak_time_error_ms": 18.000000000000682,
+              "predicted_peak_interval_index": 5
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 20.183178999999996,
+              "interval_index": 4,
+              "norm_m_s2": 0.5789429403765441,
+              "current_filtered_norm_m_s2": 1.309357111710149,
+              "predicted_max_over_horizon": 6.952410504200357,
+              "predicted_peak_time_error_ms": 18.000000000000682,
+              "predicted_peak_interval_index": 7
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.11628199999916,
+              "interval_index": 5,
+              "norm_m_s2": 0.8513012618181822,
+              "current_filtered_norm_m_s2": 2.808529524796404,
+              "predicted_max_over_horizon": 6.968837622575104,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.701989829,
+          "raw_norm_m_s2": 22.41711203299351,
+          "filtered_peak_m_s2": 11.132143630654644,
+          "filtered_peak_lag_ms": -7.999999999999119,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.14806899999887,
+              "interval_index": 1,
+              "norm_m_s2": 6.7851747006892555,
+              "current_filtered_norm_m_s2": 7.5001840937469995,
+              "predicted_max_over_horizon": 8.303733809708612,
+              "predicted_peak_time_error_ms": -9.99999999999801,
+              "predicted_peak_interval_index": 0
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.9689539999992,
+              "interval_index": 2,
+              "norm_m_s2": 7.699589149674676,
+              "current_filtered_norm_m_s2": 5.0645844618574625,
+              "predicted_max_over_horizon": 7.76793109345729,
+              "predicted_peak_time_error_ms": -9.99999999999801,
+              "predicted_peak_interval_index": 1
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.277240999998952,
+              "interval_index": 4,
+              "norm_m_s2": 7.276516129451691,
+              "current_filtered_norm_m_s2": 3.377580036715867,
+              "predicted_max_over_horizon": 7.276516129451691,
+              "predicted_peak_time_error_ms": -3.9999999999995595,
+              "predicted_peak_interval_index": 4
+            }
+          }
+        }
+      ],
+      "forecast_rmse": {
+        "0": {
+          "interval_ms": [
+            0,
+            6
+          ],
+          "learned_filtered_rmse": 0.49995860073741116,
+          "hold_filtered_rmse": 0.5702200459844398,
+          "learned_raw_rmse": 2.653397557649425,
+          "hold_raw_rmse": 2.83765773416876
+        },
+        "1": {
+          "interval_ms": [
+            6,
+            12
+          ],
+          "learned_filtered_rmse": 1.1229527564716308,
+          "hold_filtered_rmse": 1.5955617117351695,
+          "learned_raw_rmse": 2.9465371528954085,
+          "hold_raw_rmse": 3.55848897428527
+        },
+        "3": {
+          "interval_ms": [
+            18,
+            24
+          ],
+          "learned_filtered_rmse": 1.2077422892959175,
+          "hold_filtered_rmse": 2.386753171820265,
+          "learned_raw_rmse": 2.9079045311064418,
+          "hold_raw_rmse": 3.707695532017765
+        },
+        "5": {
+          "interval_ms": [
+            30,
+            36
+          ],
+          "learned_filtered_rmse": 1.194811198767116,
+          "hold_filtered_rmse": 2.7506892006581936,
+          "learned_raw_rmse": 2.9349358488219734,
+          "hold_raw_rmse": 3.8940655742667243
+        },
+        "8": {
+          "interval_ms": [
+            48,
+            54
+          ],
+          "learned_filtered_rmse": 1.2020050276313456,
+          "hold_filtered_rmse": 2.9278371059489783,
+          "learned_raw_rmse": 2.953539759833435,
+          "hold_raw_rmse": 3.9148251616638197
+        }
+      },
+      "peak_summary": {
+        "count": 20,
+        "median_raw": 16.982774325473677,
+        "median_filtered": 8.765706364268059,
+        "median_filtered_lag_ms": 5.0000000000002265,
+        "6ms": {
+          "count": 19,
+          "median_predicted_norm": 4.124883654720923,
+          "median_predicted_over_raw": 0.22495880399234836,
+          "peak_time_error_median_ms": 7.999999999999563,
+          "peak_time_abs_error_p90_ms": 19.200000000000546,
+          "peak_time_within_6ms_fraction": 0.42105263157894735
+        },
+        "12ms": {
+          "count": 19,
+          "median_predicted_norm": 4.558210124745322,
+          "median_predicted_over_raw": 0.26165922711279355,
+          "peak_time_error_median_ms": 8.000000000000007,
+          "peak_time_abs_error_p90_ms": 19.200000000000546,
+          "peak_time_within_6ms_fraction": 0.3157894736842105
+        },
+        "24ms": {
+          "count": 19,
+          "median_predicted_norm": 4.07253653211412,
+          "median_predicted_over_raw": 0.2676939402544109,
+          "peak_time_error_median_ms": 8.000000000000007,
+          "peak_time_abs_error_p90_ms": 16.39999999999997,
+          "peak_time_within_6ms_fraction": 0.42105263157894735
+        }
+      }
+    },
+    {
+      "source": "evaluation/hardware_shadow/commissioning/morning_M01_mpc_learned_zero_payload75_walk_20261014_124321_974583_1119/raw.jsonl",
+      "sample_count": 1666,
+      "filter_current_reconstruction_rmse": [
+        2.6687615096957786e-16,
+        2.781469863060355e-16,
+        1.122785217460436e-15
+      ],
+      "window": "command task elapsed [5,15), raw grid matching first to last command anchors",
+      "raw_acc_norm": {
+        "p50": 2.205575201946765,
+        "p90": 5.975895496070774,
+        "p95": 8.41825465164103,
+        "p99": 14.644174688074518,
+        "max": 29.106344821850463
+      },
+      "filtered_acc_norm": {
+        "p50": 1.4980687244179414,
+        "p90": 3.2146290783413636,
+        "p95": 4.666109706123843,
+        "p99": 7.868698876751106,
+        "max": 16.814942972912004
+      },
+      "raw_vector_rms": 4.083780760897445,
+      "filtered_vector_rms": 2.371591651287909,
+      "raw_power_above_15hz_fraction": 0.7114384555049132,
+      "cross_correlation_best_filtered_delay_ms": 2.0,
+      "cross_correlation_best": 0.7468910520091587,
+      "query_to_write_ms": {
+        "p50": 3.5260354999996357,
+        "p90": 3.8303919999999048,
+        "p95": 3.9348644999999127,
+        "p99": 4.128066199999032,
+        "max": 6.5778620000000005
+      },
+      "anchor_to_write_ms": {
+        "p50": 5.250366499999881,
+        "p90": 5.54705199999983,
+        "p95": 5.654606249999889,
+        "p99": 5.943639249999344,
+        "max": 6.853856000001102
+      },
+      "imu_age_at_query_ms": {
+        "p50": 2.925369,
+        "p90": 3.9284814999999997,
+        "p95": 4.2637745,
+        "p99": 5.177100349999999,
+        "max": 6.462104
+      },
+      "peaks_selection": {
+        "raw_norm_height_m_s2": 5.975895496070774,
+        "min_prominence_m_s2": 1,
+        "min_spacing_ms": 250
+      },
+      "peaks": [
+        {
+          "approx_task_s": 5.043496220000001,
+          "raw_norm_m_s2": 12.132169171545668,
+          "filtered_peak_m_s2": 2.730058375378313,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.5427359999999934,
+              "interval_index": 1,
+              "norm_m_s2": 1.5845049074805617,
+              "current_filtered_norm_m_s2": 1.6782324606148402,
+              "predicted_max_over_horizon": 1.6928213641625562,
+              "predicted_peak_time_error_ms": -9.999999999999995,
+              "predicted_peak_interval_index": 0
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.641805,
+              "interval_index": 2,
+              "norm_m_s2": 1.6020079982364877,
+              "current_filtered_norm_m_s2": 2.424292531383509,
+              "predicted_max_over_horizon": 2.238011285394107,
+              "predicted_peak_time_error_ms": -16.0,
+              "predicted_peak_interval_index": 0
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.331168999999996,
+              "interval_index": 5,
+              "norm_m_s2": 1.3278559182745249,
+              "current_filtered_norm_m_s2": 1.710087957474254,
+              "predicted_max_over_horizon": 1.566481031818476,
+              "predicted_peak_time_error_ms": -27.999999999999996,
+              "predicted_peak_interval_index": 0
+            }
+          }
+        },
+        {
+          "approx_task_s": 5.519496220000001,
+          "raw_norm_m_s2": 29.106344821850463,
+          "filtered_peak_m_s2": 16.814942972912004,
+          "filtered_peak_lag_ms": 4.0000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.754367999999956,
+              "interval_index": 2,
+              "norm_m_s2": 11.503587789932528,
+              "current_filtered_norm_m_s2": 0.5671372529999668,
+              "predicted_max_over_horizon": 11.503587789932528,
+              "predicted_peak_time_error_ms": 2.0000000000000018,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.72321600000004,
+              "interval_index": 3,
+              "norm_m_s2": 10.340525149744481,
+              "current_filtered_norm_m_s2": 4.57537669220687,
+              "predicted_max_over_horizon": 11.206357818789934,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.94496099999999,
+              "interval_index": 5,
+              "norm_m_s2": 11.590274381890218,
+              "current_filtered_norm_m_s2": 2.8922117614309046,
+              "predicted_max_over_horizon": 11.804308282803165,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.0854962200000005,
+          "raw_norm_m_s2": 21.058838086901353,
+          "filtered_peak_m_s2": 9.248193057603496,
+          "filtered_peak_lag_ms": 6.000000000000005,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.698641999999925,
+              "interval_index": 2,
+              "norm_m_s2": 2.7176989890519057,
+              "current_filtered_norm_m_s2": 1.2794313029061917,
+              "predicted_max_over_horizon": 7.218197913112911,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.44063200000012,
+              "interval_index": 3,
+              "norm_m_s2": 2.162315383951223,
+              "current_filtered_norm_m_s2": 2.8344956807075574,
+              "predicted_max_over_horizon": 6.991586988106865,
+              "predicted_peak_time_error_ms": 10.000000000000009,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.600181000000056,
+              "interval_index": 5,
+              "norm_m_s2": 1.2213917519566742,
+              "current_filtered_norm_m_s2": 3.3814438399883398,
+              "predicted_max_over_horizon": 7.162307580672089,
+              "predicted_peak_time_error_ms": 10.000000000000009,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.631496220000001,
+          "raw_norm_m_s2": 16.064058444594437,
+          "filtered_peak_m_s2": 6.708036187436981,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.14219000000005,
+              "interval_index": 2,
+              "norm_m_s2": 4.888336263713524,
+              "current_filtered_norm_m_s2": 4.717277270933834,
+              "predicted_max_over_horizon": 5.397762226740186,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.44820899999999,
+              "interval_index": 3,
+              "norm_m_s2": 4.378220167437212,
+              "current_filtered_norm_m_s2": 3.4469389747680026,
+              "predicted_max_over_horizon": 6.070949880625172,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.161295000000088,
+              "interval_index": 5,
+              "norm_m_s2": 4.651981936260287,
+              "current_filtered_norm_m_s2": 1.1816639098891626,
+              "predicted_max_over_horizon": 5.310394475529871,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.0934962200000005,
+          "raw_norm_m_s2": 16.533315433901496,
+          "filtered_peak_m_s2": 7.4118861831374,
+          "filtered_peak_lag_ms": 4.0000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.72242499999998,
+              "interval_index": 2,
+              "norm_m_s2": 5.859727229371109,
+              "current_filtered_norm_m_s2": 2.087907592643574,
+              "predicted_max_over_horizon": 6.445580877002422,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.597092999999784,
+              "interval_index": 3,
+              "norm_m_s2": 7.075183435600377,
+              "current_filtered_norm_m_s2": 2.9069230828185963,
+              "predicted_max_over_horizon": 7.075183435600377,
+              "predicted_peak_time_error_ms": -4.440892098500626e-13,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.849754999999977,
+              "interval_index": 5,
+              "norm_m_s2": 7.084986147763706,
+              "current_filtered_norm_m_s2": 1.4878654224414298,
+              "predicted_max_over_horizon": 7.084986147763706,
+              "predicted_peak_time_error_ms": -2.000000000000224,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.605496220000001,
+          "raw_norm_m_s2": 14.286493673310328,
+          "filtered_peak_m_s2": 7.8546675033559135,
+          "filtered_peak_lag_ms": 8.000000000000007,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.953640999999955,
+              "interval_index": 2,
+              "norm_m_s2": 6.108825691146986,
+              "current_filtered_norm_m_s2": 5.8855588308573825,
+              "predicted_max_over_horizon": 6.311517026208548,
+              "predicted_peak_time_error_ms": 7.999999999999563,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.63914899999996,
+              "interval_index": 2,
+              "norm_m_s2": 5.846576019936684,
+              "current_filtered_norm_m_s2": 2.7468187720508035,
+              "predicted_max_over_horizon": 6.462631197995162,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.70288899999984,
+              "interval_index": 4,
+              "norm_m_s2": 6.316233961959188,
+              "current_filtered_norm_m_s2": 3.1402441918713766,
+              "predicted_max_over_horizon": 6.316233961959188,
+              "predicted_peak_time_error_ms": -4.0000000000000036,
+              "predicted_peak_interval_index": 4
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.095496220000001,
+          "raw_norm_m_s2": 21.071463710452957,
+          "filtered_peak_m_s2": 9.875764681314605,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.554016999999583,
+              "interval_index": 2,
+              "norm_m_s2": 4.154055168534937,
+              "current_filtered_norm_m_s2": 4.882066682502008,
+              "predicted_max_over_horizon": 7.569579324266013,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.690518999999515,
+              "interval_index": 3,
+              "norm_m_s2": 5.895474862676668,
+              "current_filtered_norm_m_s2": 5.896008974933748,
+              "predicted_max_over_horizon": 8.786457474837958,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.68344499999953,
+              "interval_index": 5,
+              "norm_m_s2": 3.078761876209067,
+              "current_filtered_norm_m_s2": 1.9175435201801834,
+              "predicted_max_over_horizon": 7.271827755407109,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.61149622,
+          "raw_norm_m_s2": 19.972216708929054,
+          "filtered_peak_m_s2": 8.24797457810786,
+          "filtered_peak_lag_ms": 2.000000000000224,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.699188999999443,
+              "interval_index": 2,
+              "norm_m_s2": 4.269331586494536,
+              "current_filtered_norm_m_s2": 3.362069449257289,
+              "predicted_max_over_horizon": 7.372713350559202,
+              "predicted_peak_time_error_ms": 22.00000000000024,
+              "predicted_peak_interval_index": 6
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.719018999999502,
+              "interval_index": 3,
+              "norm_m_s2": 2.1379524599895876,
+              "current_filtered_norm_m_s2": 2.969764924736812,
+              "predicted_max_over_horizon": 6.613667881489919,
+              "predicted_peak_time_error_ms": 21.999999999999797,
+              "predicted_peak_interval_index": 7
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.932828999999494,
+              "interval_index": 5,
+              "norm_m_s2": 3.047287951378216,
+              "current_filtered_norm_m_s2": 2.710534937653354,
+              "predicted_max_over_horizon": 5.1845739085446745,
+              "predicted_peak_time_error_ms": 16.000000000000014,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.11549622,
+          "raw_norm_m_s2": 21.037151285737437,
+          "filtered_peak_m_s2": 9.823392645729006,
+          "filtered_peak_lag_ms": 5.999999999999339,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.580636000000254,
+              "interval_index": 2,
+              "norm_m_s2": 3.006420582227246,
+              "current_filtered_norm_m_s2": 4.632295889603654,
+              "predicted_max_over_horizon": 7.16810968812536,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.621519000000085,
+              "interval_index": 3,
+              "norm_m_s2": 2.3501288312514594,
+              "current_filtered_norm_m_s2": 1.4560482610537144,
+              "predicted_max_over_horizon": 7.3017585846913935,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.77938499999999,
+              "interval_index": 5,
+              "norm_m_s2": 1.9514289359437575,
+              "current_filtered_norm_m_s2": 1.2339096423255917,
+              "predicted_max_over_horizon": 7.03558815346029,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.64349622,
+          "raw_norm_m_s2": 20.522074899796973,
+          "filtered_peak_m_s2": 8.934805081975671,
+          "filtered_peak_lag_ms": 1.9999999999997797,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.44444799999944,
+              "interval_index": 2,
+              "norm_m_s2": 7.553496034211688,
+              "current_filtered_norm_m_s2": 5.635300597264553,
+              "predicted_max_over_horizon": 7.7108616583793195,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.577712999999328,
+              "interval_index": 3,
+              "norm_m_s2": 6.700024484841385,
+              "current_filtered_norm_m_s2": 4.375221993611464,
+              "predicted_max_over_horizon": 7.716931184148723,
+              "predicted_peak_time_error_ms": 4.000000000000448,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.657169999999788,
+              "interval_index": 5,
+              "norm_m_s2": 7.236589751592354,
+              "current_filtered_norm_m_s2": 3.2994752597166364,
+              "predicted_max_over_horizon": 7.729734797104333,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.12949622,
+          "raw_norm_m_s2": 17.198216763879227,
+          "filtered_peak_m_s2": 8.924739041477626,
+          "filtered_peak_lag_ms": 6.000000000000227,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.593336999999202,
+              "interval_index": 2,
+              "norm_m_s2": 1.279291306210505,
+              "current_filtered_norm_m_s2": 3.316048158995903,
+              "predicted_max_over_horizon": 7.626305482586343,
+              "predicted_peak_time_error_ms": 10.000000000000675,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.145845999999686,
+              "interval_index": 3,
+              "norm_m_s2": 2.2059912450046566,
+              "current_filtered_norm_m_s2": 3.200389871899038,
+              "predicted_max_over_horizon": 7.596096535398842,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.226501999998987,
+              "interval_index": 5,
+              "norm_m_s2": 4.272311514192927,
+              "current_filtered_norm_m_s2": 3.166664927542752,
+              "predicted_max_over_horizon": 7.647574000755249,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.653496220000001,
+          "raw_norm_m_s2": 14.785392082668077,
+          "filtered_peak_m_s2": 8.25433890611032,
+          "filtered_peak_lag_ms": 4.000000000000448,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.573429999999547,
+              "interval_index": 1,
+              "norm_m_s2": 7.926442831814009,
+              "current_filtered_norm_m_s2": 4.3558468192995,
+              "predicted_max_over_horizon": 7.926442831814009,
+              "predicted_peak_time_error_ms": -3.9999999999995595,
+              "predicted_peak_interval_index": 1
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.757654999999701,
+              "interval_index": 2,
+              "norm_m_s2": 7.609977885079148,
+              "current_filtered_norm_m_s2": 6.594637874509768,
+              "predicted_max_over_horizon": 7.686186903744478,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.783055999999526,
+              "interval_index": 4,
+              "norm_m_s2": 7.213396117894824,
+              "current_filtered_norm_m_s2": 0.9103367602713,
+              "predicted_max_over_horizon": 7.660841779095244,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.139496220000002,
+          "raw_norm_m_s2": 16.25156413972162,
+          "filtered_peak_m_s2": 9.066795086965126,
+          "filtered_peak_lag_ms": 3.9999999999995595,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.930741999999768,
+              "interval_index": 1,
+              "norm_m_s2": 4.028009798698084,
+              "current_filtered_norm_m_s2": 0.30464554335833194,
+              "predicted_max_over_horizon": 8.029907219646796,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.666309000000098,
+              "interval_index": 2,
+              "norm_m_s2": 3.3002316230221056,
+              "current_filtered_norm_m_s2": 2.7184938591186496,
+              "predicted_max_over_horizon": 7.430410014291409,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.495587999999735,
+              "interval_index": 5,
+              "norm_m_s2": 7.463954628143325,
+              "current_filtered_norm_m_s2": 1.7115405281766516,
+              "predicted_max_over_horizon": 7.4822669658627685,
+              "predicted_peak_time_error_ms": 7.999999999999119,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.66349622,
+          "raw_norm_m_s2": 19.354785535744405,
+          "filtered_peak_m_s2": 8.97040662499987,
+          "filtered_peak_lag_ms": 5.999999999999339,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.937504999999568,
+              "interval_index": 2,
+              "norm_m_s2": 7.261611432193834,
+              "current_filtered_norm_m_s2": 5.206379209076965,
+              "predicted_max_over_horizon": 7.320081869108201,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.730271999999545,
+              "interval_index": 3,
+              "norm_m_s2": 7.632258009749318,
+              "current_filtered_norm_m_s2": 6.3838249007015975,
+              "predicted_max_over_horizon": 7.632258009749318,
+              "predicted_peak_time_error_ms": 0.0,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.892933000000063,
+              "interval_index": 5,
+              "norm_m_s2": 6.502637575058749,
+              "current_filtered_norm_m_s2": 3.0093712383928732,
+              "predicted_max_over_horizon": 7.365716662852605,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.15549622,
+          "raw_norm_m_s2": 14.27771585100858,
+          "filtered_peak_m_s2": 7.80372506998051,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.923974000000001,
+              "interval_index": 2,
+              "norm_m_s2": 7.487119377664347,
+              "current_filtered_norm_m_s2": 2.19516169774485,
+              "predicted_max_over_horizon": 7.487119377664347,
+              "predicted_peak_time_error_ms": -8.881784197001252e-13,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.8961329999997,
+              "interval_index": 3,
+              "norm_m_s2": 7.079290755639446,
+              "current_filtered_norm_m_s2": 1.0764435878687864,
+              "predicted_max_over_horizon": 7.079290755639446,
+              "predicted_peak_time_error_ms": 0.0,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.52783599999964,
+              "interval_index": 5,
+              "norm_m_s2": 7.118712726997577,
+              "current_filtered_norm_m_s2": 2.7814445163413226,
+              "predicted_max_over_horizon": 7.118712726997577,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.66349622,
+          "raw_norm_m_s2": 13.568524703379401,
+          "filtered_peak_m_s2": 6.917193155355655,
+          "filtered_peak_lag_ms": 3.9999999999995595,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.735549000000063,
+              "interval_index": 1,
+              "norm_m_s2": 4.448065716943842,
+              "current_filtered_norm_m_s2": 6.226335121937913,
+              "predicted_max_over_horizon": 6.718619866570862,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.30982600000008,
+              "interval_index": 2,
+              "norm_m_s2": 4.690027823723423,
+              "current_filtered_norm_m_s2": 5.853860113144688,
+              "predicted_max_over_horizon": 7.261589187517149,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 30.315510999999518,
+              "interval_index": 5,
+              "norm_m_s2": 4.746863330801074,
+              "current_filtered_norm_m_s2": 3.7192530682291918,
+              "predicted_max_over_horizon": 6.954303569592227,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.14749622,
+          "raw_norm_m_s2": 16.85041940341009,
+          "filtered_peak_m_s2": 9.550448714055031,
+          "filtered_peak_lag_ms": 3.9999999999995595,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.648605000000089,
+              "interval_index": 2,
+              "norm_m_s2": 1.8265786384954588,
+              "current_filtered_norm_m_s2": 3.5947206253519286,
+              "predicted_max_over_horizon": 6.468754949620996,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.91654200000059,
+              "interval_index": 3,
+              "norm_m_s2": 3.2157088044597097,
+              "current_filtered_norm_m_s2": 2.847721956260175,
+              "predicted_max_over_horizon": 7.204654385950207,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.529644000000687,
+              "interval_index": 5,
+              "norm_m_s2": 0.7750044770335014,
+              "current_filtered_norm_m_s2": 2.7691555292185983,
+              "predicted_max_over_horizon": 7.088305816087298,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.64549622,
+          "raw_norm_m_s2": 18.913018258651583,
+          "filtered_peak_m_s2": 9.86481990430121,
+          "filtered_peak_lag_ms": 18.000000000000682,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.872535999999045,
+              "interval_index": 2,
+              "norm_m_s2": 1.2963510718860582,
+              "current_filtered_norm_m_s2": 4.295988345762979,
+              "predicted_max_over_horizon": 6.5027152444908705,
+              "predicted_peak_time_error_ms": 16.000000000000014,
+              "predicted_peak_interval_index": 5
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.642455999999584,
+              "interval_index": 3,
+              "norm_m_s2": 1.0761276754055362,
+              "current_filtered_norm_m_s2": 2.083657313957998,
+              "predicted_max_over_horizon": 6.124055069690004,
+              "predicted_peak_time_error_ms": 16.00000000000179,
+              "predicted_peak_interval_index": 6
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.920623999999506,
+              "interval_index": 5,
+              "norm_m_s2": 0.9331227687899737,
+              "current_filtered_norm_m_s2": 2.6856601233899884,
+              "predicted_max_over_horizon": 6.537874699573521,
+              "predicted_peak_time_error_ms": 16.00000000000179,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.165496220000001,
+          "raw_norm_m_s2": 14.256357487686337,
+          "filtered_peak_m_s2": 8.866050130427137,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.406492000000654,
+              "interval_index": 2,
+              "norm_m_s2": 6.094353409265335,
+              "current_filtered_norm_m_s2": 4.471573017026775,
+              "predicted_max_over_horizon": 8.411164168099809,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 14.536924999999812,
+              "interval_index": 3,
+              "norm_m_s2": 8.001864538522588,
+              "current_filtered_norm_m_s2": 4.971548994526335,
+              "predicted_max_over_horizon": 8.001864538522588,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 26.70572700000129,
+              "interval_index": 5,
+              "norm_m_s2": 5.463345347914237,
+              "current_filtered_norm_m_s2": 2.160714269476135,
+              "predicted_max_over_horizon": 8.130307041483887,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.691496220000001,
+          "raw_norm_m_s2": 16.049410858871504,
+          "filtered_peak_m_s2": 6.575581216819181,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 6.608404999999706,
+              "interval_index": 2,
+              "norm_m_s2": 5.529130994382656,
+              "current_filtered_norm_m_s2": 6.093500944932743,
+              "predicted_max_over_horizon": 6.6549866772267015,
+              "predicted_peak_time_error_ms": -3.9999999999995595,
+              "predicted_peak_interval_index": 1
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.65552599999964,
+              "interval_index": 3,
+              "norm_m_s2": 5.382033654004284,
+              "current_filtered_norm_m_s2": 5.221975607767734,
+              "predicted_max_over_horizon": 6.153285979430814,
+              "predicted_peak_time_error_ms": -3.9999999999995595,
+              "predicted_peak_interval_index": 2
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.396279999999493,
+              "interval_index": 4,
+              "norm_m_s2": 6.254654977901446,
+              "current_filtered_norm_m_s2": 3.0272841113760935,
+              "predicted_max_over_horizon": 6.254654977901446,
+              "predicted_peak_time_error_ms": -3.9999999999995595,
+              "predicted_peak_interval_index": 4
+            }
+          }
+        }
+      ],
+      "forecast_rmse": {
+        "0": {
+          "interval_ms": [
+            0,
+            6
+          ],
+          "learned_filtered_rmse": 0.39697093845842885,
+          "hold_filtered_rmse": 0.5541437082480987,
+          "learned_raw_rmse": 2.521578063230395,
+          "hold_raw_rmse": 2.794646404603627
+        },
+        "1": {
+          "interval_ms": [
+            6,
+            12
+          ],
+          "learned_filtered_rmse": 0.871964839236782,
+          "hold_filtered_rmse": 1.6024313002568327,
+          "learned_raw_rmse": 2.715637208762651,
+          "hold_raw_rmse": 3.5863667615070143
+        },
+        "3": {
+          "interval_ms": [
+            18,
+            24
+          ],
+          "learned_filtered_rmse": 0.9532770049971414,
+          "hold_filtered_rmse": 2.400231139010613,
+          "learned_raw_rmse": 2.6852694307140297,
+          "hold_raw_rmse": 3.711253607912275
+        },
+        "5": {
+          "interval_ms": [
+            30,
+            36
+          ],
+          "learned_filtered_rmse": 0.9906979958891704,
+          "hold_filtered_rmse": 2.816424473700123,
+          "learned_raw_rmse": 2.704057775948429,
+          "hold_raw_rmse": 3.954505025503461
+        },
+        "8": {
+          "interval_ms": [
+            48,
+            54
+          ],
+          "learned_filtered_rmse": 1.0484220711884265,
+          "hold_filtered_rmse": 3.019347258883993,
+          "learned_raw_rmse": 2.7255728603834095,
+          "hold_raw_rmse": 3.9797212205977126
+        }
+      },
+      "peak_summary": {
+        "count": 20,
+        "median_raw": 16.691867418655793,
+        "median_filtered": 8.895394585952381,
+        "median_filtered_lag_ms": 3.9999999999995595,
+        "6ms": {
+          "count": 20,
+          "median_predicted_norm": 4.668200990328683,
+          "median_predicted_over_raw": 0.3160625243848701,
+          "peak_time_error_median_ms": 4.999999999999671,
+          "peak_time_abs_error_p90_ms": 10.600000000000618,
+          "peak_time_within_6ms_fraction": 0.6
+        },
+        "12ms": {
+          "count": 20,
+          "median_predicted_norm": 5.036030738863854,
+          "median_predicted_over_raw": 0.30313184169031393,
+          "peak_time_error_median_ms": 4.0000000000000036,
+          "peak_time_abs_error_p90_ms": 16.000000000000178,
+          "peak_time_within_6ms_fraction": 0.6
+        },
+        "24ms": {
+          "count": 20,
+          "median_predicted_norm": 5.105104339357656,
+          "median_predicted_over_raw": 0.342907131930939,
+          "peak_time_error_median_ms": 6.000000000000116,
+          "peak_time_abs_error_p90_ms": 16.000000000000192,
+          "peak_time_within_6ms_fraction": 0.55
+        }
+      }
+    },
+    {
+      "source": "evaluation/hardware_shadow/commissioning/morning_M01_mpc_learned_zero_payload75_walk_20261014_125333_831147_ee9f/raw.jsonl",
+      "sample_count": 1663,
+      "filter_current_reconstruction_rmse": [
+        0.009766891828215453,
+        0.0015830579184251707,
+        0.004652372227312681
+      ],
+      "window": "command task elapsed [5,15), raw grid matching first to last command anchors",
+      "raw_acc_norm": {
+        "p50": 2.224397575091801,
+        "p90": 6.03306126791679,
+        "p95": 8.54741330497047,
+        "p99": 14.267877595478518,
+        "max": 24.134682251509616
+      },
+      "filtered_acc_norm": {
+        "p50": 1.5040325522697762,
+        "p90": 3.1853775391016903,
+        "p95": 4.147699586893651,
+        "p99": 7.796788974656795,
+        "max": 12.325009417032419
+      },
+      "raw_vector_rms": 4.0646689448348114,
+      "filtered_vector_rms": 2.2853887873909913,
+      "raw_power_above_15hz_fraction": 0.7393496781656145,
+      "cross_correlation_best_filtered_delay_ms": 2.0,
+      "cross_correlation_best": 0.7363230816198861,
+      "query_to_write_ms": {
+        "p50": 3.516365000001187,
+        "p90": 3.8693881999998236,
+        "p95": 3.976942999999711,
+        "p99": 4.390345459999906,
+        "max": 5.300713
+      },
+      "anchor_to_write_ms": {
+        "p50": 4.222912000000356,
+        "p90": 4.691455800000099,
+        "p95": 4.908110900000384,
+        "p99": 5.257507900000496,
+        "max": 6.305926999999656
+      },
+      "imu_age_at_query_ms": {
+        "p50": 2.01227,
+        "p90": 3.1013651999999996,
+        "p95": 3.3078204999999996,
+        "p99": 3.8609448599999987,
+        "max": 5.852867
+      },
+      "peaks_selection": {
+        "raw_norm_height_m_s2": 6.03306126791679,
+        "min_prominence_m_s2": 1,
+        "min_spacing_ms": 250
+      },
+      "peaks": [
+        {
+          "approx_task_s": 5.136526557000001,
+          "raw_norm_m_s2": 7.214459254991526,
+          "filtered_peak_m_s2": 2.7848814312916548,
+          "filtered_peak_lag_ms": 13.999999999999984,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.9427460000000005,
+              "interval_index": 2,
+              "norm_m_s2": 0.7026829933654101,
+              "current_filtered_norm_m_s2": 1.7246616298027004,
+              "predicted_max_over_horizon": 2.1516994627013077,
+              "predicted_peak_time_error_ms": 32.0,
+              "predicted_peak_interval_index": 7
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.620453000000005,
+              "interval_index": 3,
+              "norm_m_s2": 0.5136417126813815,
+              "current_filtered_norm_m_s2": 0.9552885278276967,
+              "predicted_max_over_horizon": 2.201903009751417,
+              "predicted_peak_time_error_ms": 32.0,
+              "predicted_peak_interval_index": 8
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.686159,
+              "interval_index": 5,
+              "norm_m_s2": 0.38928324353525134,
+              "current_filtered_norm_m_s2": 0.6283492144202212,
+              "predicted_max_over_horizon": 1.7274686584589738,
+              "predicted_peak_time_error_ms": 20.000000000000018,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 5.528526557000001,
+          "raw_norm_m_s2": 22.233463766536147,
+          "filtered_peak_m_s2": 12.325009417032419,
+          "filtered_peak_lag_ms": 10.000000000000009,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.863822999999993,
+              "interval_index": 2,
+              "norm_m_s2": 3.472285503223745,
+              "current_filtered_norm_m_s2": 4.263030164272777,
+              "predicted_max_over_horizon": 10.623152677887202,
+              "predicted_peak_time_error_ms": 12.00000000000001,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.64739100000001,
+              "interval_index": 3,
+              "norm_m_s2": 0.90114765215175,
+              "current_filtered_norm_m_s2": 4.701958033560298,
+              "predicted_max_over_horizon": 11.026046015395137,
+              "predicted_peak_time_error_ms": 12.00000000000001,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.75774200000003,
+              "interval_index": 5,
+              "norm_m_s2": 1.7268469443912497,
+              "current_filtered_norm_m_s2": 2.614014935902719,
+              "predicted_max_over_horizon": 8.704765981923174,
+              "predicted_peak_time_error_ms": 18.000000000000014,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.104526557000001,
+          "raw_norm_m_s2": 24.134682251509616,
+          "filtered_peak_m_s2": 9.599709631268915,
+          "filtered_peak_lag_ms": 2.0000000000000018,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.533943999999961,
+              "interval_index": 2,
+              "norm_m_s2": 5.182650727520765,
+              "current_filtered_norm_m_s2": 0.5108411931287815,
+              "predicted_max_over_horizon": 7.720920912703875,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.024191999999935,
+              "interval_index": 3,
+              "norm_m_s2": 6.058586024666523,
+              "current_filtered_norm_m_s2": 1.6442895729187983,
+              "predicted_max_over_horizon": 6.744012437169649,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.588268999999997,
+              "interval_index": 5,
+              "norm_m_s2": 3.318803036226659,
+              "current_filtered_norm_m_s2": 2.1571483656045505,
+              "predicted_max_over_horizon": 6.098327393464266,
+              "predicted_peak_time_error_ms": 6.000000000000005,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 6.628526557000001,
+          "raw_norm_m_s2": 10.858326473655422,
+          "filtered_peak_m_s2": 5.462509445320874,
+          "filtered_peak_lag_ms": 4.0000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 12.02848099999998,
+              "interval_index": 2,
+              "norm_m_s2": 3.7462095782226545,
+              "current_filtered_norm_m_s2": 2.694792284505619,
+              "predicted_max_over_horizon": 6.160350430273277,
+              "predicted_peak_time_error_ms": 10.000000000000009,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 12.02848099999998,
+              "interval_index": 2,
+              "norm_m_s2": 3.7462095782226545,
+              "current_filtered_norm_m_s2": 2.694792284505619,
+              "predicted_max_over_horizon": 6.160350430273277,
+              "predicted_peak_time_error_ms": 10.000000000000009,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 29.577160000000102,
+              "interval_index": 5,
+              "norm_m_s2": 2.9583001416179178,
+              "current_filtered_norm_m_s2": 3.201404470410081,
+              "predicted_max_over_horizon": 5.14769957227232,
+              "predicted_peak_time_error_ms": 10.000000000000009,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.104526557000001,
+          "raw_norm_m_s2": 16.906570209478264,
+          "filtered_peak_m_s2": 8.628088813196044,
+          "filtered_peak_lag_ms": 4.0000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 8.022770999999818,
+              "interval_index": 1,
+              "norm_m_s2": 3.933799457547428,
+              "current_filtered_norm_m_s2": 2.9800124259535465,
+              "predicted_max_over_horizon": 7.139634924811183,
+              "predicted_peak_time_error_ms": 2.000000000000224,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.829901999999894,
+              "interval_index": 2,
+              "norm_m_s2": 1.93386485036016,
+              "current_filtered_norm_m_s2": 2.0928493552277505,
+              "predicted_max_over_horizon": 6.474877804586309,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.86451799999967,
+              "interval_index": 4,
+              "norm_m_s2": 2.282329219935015,
+              "current_filtered_norm_m_s2": 2.197380465924358,
+              "predicted_max_over_horizon": 6.546409926523966,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 7.598526557000001,
+          "raw_norm_m_s2": 14.63350677374759,
+          "filtered_peak_m_s2": 7.029582704689888,
+          "filtered_peak_lag_ms": 29.999999999999805,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.982033000000001,
+              "interval_index": 2,
+              "norm_m_s2": 1.2333615070596933,
+              "current_filtered_norm_m_s2": 2.8583886971756445,
+              "predicted_max_over_horizon": 6.270324860076696,
+              "predicted_peak_time_error_ms": 17.999999999999794,
+              "predicted_peak_interval_index": 5
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.844183000000012,
+              "interval_index": 3,
+              "norm_m_s2": 1.224258282378423,
+              "current_filtered_norm_m_s2": 1.8238724734502023,
+              "predicted_max_over_horizon": 6.190766951855475,
+              "predicted_peak_time_error_ms": 17.999999999999794,
+              "predicted_peak_interval_index": 6
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.041113000000006,
+              "interval_index": 5,
+              "norm_m_s2": 2.379329159660701,
+              "current_filtered_norm_m_s2": 2.759624215693597,
+              "predicted_max_over_horizon": 6.331411016139592,
+              "predicted_peak_time_error_ms": 17.999999999999794,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.110526557,
+          "raw_norm_m_s2": 17.125821264631448,
+          "filtered_peak_m_s2": 10.437249214418813,
+          "filtered_peak_lag_ms": 1.9999999999997797,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 11.673839999999824,
+              "interval_index": 2,
+              "norm_m_s2": 3.6399843445421625,
+              "current_filtered_norm_m_s2": 4.1347195642441745,
+              "predicted_max_over_horizon": 7.426534345032778,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 17.9005339999998,
+              "interval_index": 3,
+              "norm_m_s2": 5.044007910040552,
+              "current_filtered_norm_m_s2": 2.584311428733847,
+              "predicted_max_over_horizon": 7.84647988000284,
+              "predicted_peak_time_error_ms": 4.0000000000000036,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.005375999999856,
+              "interval_index": 4,
+              "norm_m_s2": 3.466834255589624,
+              "current_filtered_norm_m_s2": 2.232705356918645,
+              "predicted_max_over_horizon": 8.456377832228993,
+              "predicted_peak_time_error_ms": 9.999999999999787,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 8.648526557,
+          "raw_norm_m_s2": 17.791009591436293,
+          "filtered_peak_m_s2": 8.75491056791234,
+          "filtered_peak_lag_ms": 4.0000000000000036,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.94513099999983,
+              "interval_index": 2,
+              "norm_m_s2": 6.19945893769086,
+              "current_filtered_norm_m_s2": 4.497018819382913,
+              "predicted_max_over_horizon": 7.591348418500354,
+              "predicted_peak_time_error_ms": 5.999999999999783,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.306137999999692,
+              "interval_index": 3,
+              "norm_m_s2": 5.843082258856125,
+              "current_filtered_norm_m_s2": 2.6314223120673734,
+              "predicted_max_over_horizon": 7.8884188453082915,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.948026999999875,
+              "interval_index": 5,
+              "norm_m_s2": 5.588353212910525,
+              "current_filtered_norm_m_s2": 2.477495000892495,
+              "predicted_max_over_horizon": 7.65640679337492,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.128526557,
+          "raw_norm_m_s2": 14.061618855752975,
+          "filtered_peak_m_s2": 6.981331910733659,
+          "filtered_peak_lag_ms": 4.000000000000448,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.448142999999298,
+              "interval_index": 2,
+              "norm_m_s2": 4.337634892868448,
+              "current_filtered_norm_m_s2": 3.986645266842273,
+              "predicted_max_over_horizon": 7.809217722123991,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.93049799999946,
+              "interval_index": 3,
+              "norm_m_s2": 4.340770298613975,
+              "current_filtered_norm_m_s2": 4.327306498941528,
+              "predicted_max_over_horizon": 7.409653820872006,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.866210000000002,
+              "interval_index": 5,
+              "norm_m_s2": 5.880086522219599,
+              "current_filtered_norm_m_s2": 1.921305378119903,
+              "predicted_max_over_horizon": 7.839578276662064,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 9.656526557000001,
+          "raw_norm_m_s2": 21.586092314135733,
+          "filtered_peak_m_s2": 8.340351951141495,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.126313999999859,
+              "interval_index": 2,
+              "norm_m_s2": 7.410923122903992,
+              "current_filtered_norm_m_s2": 5.530798438210333,
+              "predicted_max_over_horizon": 7.410923122903992,
+              "predicted_peak_time_error_ms": -8.881784197001252e-13,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.0511630000002,
+              "interval_index": 3,
+              "norm_m_s2": 8.264622135377198,
+              "current_filtered_norm_m_s2": 4.90319068234523,
+              "predicted_max_over_horizon": 8.264622135377198,
+              "predicted_peak_time_error_ms": -8.881784197001252e-13,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.063436000000053,
+              "interval_index": 5,
+              "norm_m_s2": 6.626448794609554,
+              "current_filtered_norm_m_s2": 2.9281327575561105,
+              "predicted_max_over_horizon": 7.122784249191166,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.142526557,
+          "raw_norm_m_s2": 18.743184072144473,
+          "filtered_peak_m_s2": 8.909934358839626,
+          "filtered_peak_lag_ms": 3.9999999999995595,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.733659000000117,
+              "interval_index": 2,
+              "norm_m_s2": 4.2214836122960335,
+              "current_filtered_norm_m_s2": 3.693566038750299,
+              "predicted_max_over_horizon": 7.694687432965347,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.997765999999913,
+              "interval_index": 3,
+              "norm_m_s2": 5.5260716486087125,
+              "current_filtered_norm_m_s2": 5.047653050003766,
+              "predicted_max_over_horizon": 7.881002726568754,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.5939429999994,
+              "interval_index": 5,
+              "norm_m_s2": 3.7313819137144177,
+              "current_filtered_norm_m_s2": 1.4858419168110593,
+              "predicted_max_over_horizon": 7.0826691303446685,
+              "predicted_peak_time_error_ms": 5.999999999999339,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 10.666526557000001,
+          "raw_norm_m_s2": 16.81749918666135,
+          "filtered_peak_m_s2": 9.965952733360643,
+          "filtered_peak_lag_ms": 11.999999999999567,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 11.903804000000129,
+              "interval_index": 2,
+              "norm_m_s2": 4.673264910439586,
+              "current_filtered_norm_m_s2": 4.302897414900749,
+              "predicted_max_over_horizon": 7.481109757397525,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 17.952579000000135,
+              "interval_index": 3,
+              "norm_m_s2": 4.771977478917992,
+              "current_filtered_norm_m_s2": 0.5333251335454233,
+              "predicted_max_over_horizon": 7.8275070807750335,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 29.71573199999966,
+              "interval_index": 5,
+              "norm_m_s2": 5.31534958804523,
+              "current_filtered_norm_m_s2": 3.1562936584106582,
+              "predicted_max_over_horizon": 7.496279747670396,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.154526557,
+          "raw_norm_m_s2": 14.800347154306104,
+          "filtered_peak_m_s2": 9.024021299766916,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.945751999999473,
+              "interval_index": 1,
+              "norm_m_s2": 5.813409440915974,
+              "current_filtered_norm_m_s2": 2.0990758749475984,
+              "predicted_max_over_horizon": 8.49672958439115,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.580946999999455,
+              "interval_index": 2,
+              "norm_m_s2": 4.577589695759908,
+              "current_filtered_norm_m_s2": 3.466439377814879,
+              "predicted_max_over_horizon": 7.762836458916159,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.368523999999226,
+              "interval_index": 4,
+              "norm_m_s2": 5.397118845896901,
+              "current_filtered_norm_m_s2": 1.201731434696219,
+              "predicted_max_over_horizon": 7.907902639352016,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 11.676526557,
+          "raw_norm_m_s2": 16.002506580252096,
+          "filtered_peak_m_s2": 8.647555495060498,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.809761999999942,
+              "interval_index": 1,
+              "norm_m_s2": 4.422639662616185,
+              "current_filtered_norm_m_s2": 5.210454417831382,
+              "predicted_max_over_horizon": 7.676501333660137,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.82173399999953,
+              "interval_index": 2,
+              "norm_m_s2": 4.949519229906988,
+              "current_filtered_norm_m_s2": 6.425602115914958,
+              "predicted_max_over_horizon": 7.190263960794949,
+              "predicted_peak_time_error_ms": 8.000000000000007,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.029029999999786,
+              "interval_index": 4,
+              "norm_m_s2": 4.825032175947687,
+              "current_filtered_norm_m_s2": 0.8659663583413387,
+              "predicted_max_over_horizon": 7.10686434827289,
+              "predicted_peak_time_error_ms": 2.000000000000668,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.162526557000001,
+          "raw_norm_m_s2": 23.48704690100181,
+          "filtered_peak_m_s2": 9.483778603364588,
+          "filtered_peak_lag_ms": 3.9999999999995595,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 7.90541900000008,
+              "interval_index": 2,
+              "norm_m_s2": 7.921959858654419,
+              "current_filtered_norm_m_s2": 1.040161311178561,
+              "predicted_max_over_horizon": 7.921959858654419,
+              "predicted_peak_time_error_ms": 1.9999999999988916,
+              "predicted_peak_interval_index": 2
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 13.86999099999997,
+              "interval_index": 2,
+              "norm_m_s2": 5.035326370176207,
+              "current_filtered_norm_m_s2": 4.048395981936197,
+              "predicted_max_over_horizon": 8.572264056828729,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 3
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 25.47351599999992,
+              "interval_index": 5,
+              "norm_m_s2": 8.11590296561421,
+              "current_filtered_norm_m_s2": 1.6197923028226338,
+              "predicted_max_over_horizon": 8.11590296561421,
+              "predicted_peak_time_error_ms": 1.9999999999997797,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 12.686526557,
+          "raw_norm_m_s2": 15.0652863527169,
+          "filtered_peak_m_s2": 8.847023821885315,
+          "filtered_peak_lag_ms": 8.000000000000007,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.096678999998886,
+              "interval_index": 2,
+              "norm_m_s2": 6.283250913061423,
+              "current_filtered_norm_m_s2": 4.558085727288987,
+              "predicted_max_over_horizon": 6.513274222578327,
+              "predicted_peak_time_error_ms": 18.000000000000682,
+              "predicted_peak_interval_index": 5
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.476094999999468,
+              "interval_index": 3,
+              "norm_m_s2": 5.073086573839731,
+              "current_filtered_norm_m_s2": 1.5311547441008564,
+              "predicted_max_over_horizon": 5.951247028672865,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.623901999999312,
+              "interval_index": 5,
+              "norm_m_s2": 4.617018165108222,
+              "current_filtered_norm_m_s2": 2.3294752808393304,
+              "predicted_max_over_horizon": 7.301498510625385,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.172526557000001,
+          "raw_norm_m_s2": 21.33772997469225,
+          "filtered_peak_m_s2": 9.540285535565515,
+          "filtered_peak_lag_ms": 4.000000000001336,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.878352999999507,
+              "interval_index": 2,
+              "norm_m_s2": 5.275298499253397,
+              "current_filtered_norm_m_s2": 1.367509584206516,
+              "predicted_max_over_horizon": 7.319391879329786,
+              "predicted_peak_time_error_ms": 6.000000000002004,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 16.078249999999628,
+              "interval_index": 3,
+              "norm_m_s2": 6.593248873180033,
+              "current_filtered_norm_m_s2": 4.494507689871487,
+              "predicted_max_over_horizon": 7.338009878059183,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.3892809999996,
+              "interval_index": 5,
+              "norm_m_s2": 5.303986813852412,
+              "current_filtered_norm_m_s2": 1.2989694715622473,
+              "predicted_max_over_horizon": 6.431355201884924,
+              "predicted_peak_time_error_ms": 6.000000000002004,
+              "predicted_peak_interval_index": 6
+            }
+          }
+        },
+        {
+          "approx_task_s": 13.690526557000002,
+          "raw_norm_m_s2": 15.611800968429566,
+          "filtered_peak_m_s2": 7.606096598637322,
+          "filtered_peak_lag_ms": 2.000000000000668,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 11.9826819999993,
+              "interval_index": 2,
+              "norm_m_s2": 6.066617178555657,
+              "current_filtered_norm_m_s2": 4.765065765699042,
+              "predicted_max_over_horizon": 6.373478398928211,
+              "predicted_peak_time_error_ms": 4.000000000001336,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 17.674364999999526,
+              "interval_index": 3,
+              "norm_m_s2": 6.33379192428539,
+              "current_filtered_norm_m_s2": 3.468199806713138,
+              "predicted_max_over_horizon": 6.762018060273387,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 24.084068000000514,
+              "interval_index": 4,
+              "norm_m_s2": 6.390924321374583,
+              "current_filtered_norm_m_s2": 0.7768382593471894,
+              "predicted_max_over_horizon": 6.66533201198063,
+              "predicted_peak_time_error_ms": 3.9999999999995595,
+              "predicted_peak_interval_index": 5
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.174526557,
+          "raw_norm_m_s2": 19.44921625131818,
+          "filtered_peak_m_s2": 10.033572666709537,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 10.014307999998806,
+              "interval_index": 2,
+              "norm_m_s2": 5.040824279210945,
+              "current_filtered_norm_m_s2": 2.8681422408506023,
+              "predicted_max_over_horizon": 7.777274665866667,
+              "predicted_peak_time_error_ms": 6.000000000002004,
+              "predicted_peak_interval_index": 3
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.463753999998886,
+              "interval_index": 3,
+              "norm_m_s2": 4.6234461683693295,
+              "current_filtered_norm_m_s2": 3.440474381425561,
+              "predicted_max_over_horizon": 7.868996675366678,
+              "predicted_peak_time_error_ms": 6.000000000000227,
+              "predicted_peak_interval_index": 4
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 28.009110999999365,
+              "interval_index": 5,
+              "norm_m_s2": 3.426407885227149,
+              "current_filtered_norm_m_s2": 1.5995237622380232,
+              "predicted_max_over_horizon": 7.652135827602355,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 7
+            }
+          }
+        },
+        {
+          "approx_task_s": 14.690526557000002,
+          "raw_norm_m_s2": 14.559744705137842,
+          "filtered_peak_m_s2": 6.101555533907079,
+          "filtered_peak_lag_ms": 0.0,
+          "predicted_before": {
+            "6ms": {
+              "actual_lead_from_write_ms": 9.731363000000215,
+              "interval_index": 2,
+              "norm_m_s2": 5.108563294572067,
+              "current_filtered_norm_m_s2": 4.148772404291089,
+              "predicted_max_over_horizon": 6.98460513187728,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 4
+            },
+            "12ms": {
+              "actual_lead_from_write_ms": 15.794264000000169,
+              "interval_index": 3,
+              "norm_m_s2": 4.728419946324389,
+              "current_filtered_norm_m_s2": 0.32839844612023344,
+              "predicted_max_over_horizon": 7.2953440695763785,
+              "predicted_peak_time_error_ms": 12.000000000000455,
+              "predicted_peak_interval_index": 5
+            },
+            "24ms": {
+              "actual_lead_from_write_ms": 27.85525999999905,
+              "interval_index": 5,
+              "norm_m_s2": 5.180526356038178,
+              "current_filtered_norm_m_s2": 4.01528393774268,
+              "predicted_max_over_horizon": 7.849986218298486,
+              "predicted_peak_time_error_ms": 18.000000000000682,
+              "predicted_peak_interval_index": 8
+            }
+          }
+        }
+      ],
+      "forecast_rmse": {
+        "0": {
+          "interval_ms": [
+            0,
+            6
+          ],
+          "learned_filtered_rmse": 0.4339360442874604,
+          "hold_filtered_rmse": 0.5802622196377544,
+          "learned_raw_rmse": 2.6019156522975067,
+          "hold_raw_rmse": 2.86686929924456
+        },
+        "1": {
+          "interval_ms": [
+            6,
+            12
+          ],
+          "learned_filtered_rmse": 0.876876360544522,
+          "hold_filtered_rmse": 1.6129823218292467,
+          "learned_raw_rmse": 2.733300456161243,
+          "hold_raw_rmse": 3.6046184147413576
+        },
+        "3": {
+          "interval_ms": [
+            18,
+            24
+          ],
+          "learned_filtered_rmse": 0.9649557054029658,
+          "hold_filtered_rmse": 2.4025152069285123,
+          "learned_raw_rmse": 2.739432399310528,
+          "hold_raw_rmse": 3.7257317085031274
+        },
+        "5": {
+          "interval_ms": [
+            30,
+            36
+          ],
+          "learned_filtered_rmse": 0.9967588991533662,
+          "hold_filtered_rmse": 2.7219607840390045,
+          "learned_raw_rmse": 2.7510819285951795,
+          "hold_raw_rmse": 3.855827484899716
+        },
+        "8": {
+          "interval_ms": [
+            48,
+            54
+          ],
+          "learned_filtered_rmse": 1.089418458945372,
+          "hold_filtered_rmse": 2.829337789266028,
+          "learned_raw_rmse": 2.8141507687202627,
+          "hold_raw_rmse": 3.8606421707430534
+        }
+      },
+      "peak_summary": {
+        "count": 20,
+        "median_raw": 16.862034698069806,
+        "median_filtered": 8.800967194898828,
+        "median_filtered_lag_ms": 3.9999999999997815,
+        "6ms": {
+          "count": 20,
+          "median_predicted_norm": 4.857044594825265,
+          "median_predicted_over_raw": 0.2771263832747217,
+          "peak_time_error_median_ms": 6.000000000000116,
+          "peak_time_abs_error_p90_ms": 17.999999999999883,
+          "peak_time_within_6ms_fraction": 0.65
+        },
+        "12ms": {
+          "count": 20,
+          "median_predicted_norm": 4.86074835441249,
+          "median_predicted_over_raw": 0.30176366937530097,
+          "peak_time_error_median_ms": 6.000000000000227,
+          "peak_time_abs_error_p90_ms": 12.600000000000398,
+          "peak_time_within_6ms_fraction": 0.6
+        },
+        "24ms": {
+          "count": 20,
+          "median_predicted_norm": 4.7210251705279545,
+          "median_predicted_over_raw": 0.28698129335371825,
+          "peak_time_error_median_ms": 6.000000000000227,
+          "peak_time_abs_error_p90_ms": 18.00000000000008,
+          "peak_time_within_6ms_fraction": 0.6
+        }
+      }
+    }
+  ]
+}

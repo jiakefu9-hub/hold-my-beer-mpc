@@ -1,0 +1,807 @@
+{
+  "schema": "g1_hardware_mpc_preflight_v1",
+  "passed": true,
+  "dds_initialized": false,
+  "publisher_created": false,
+  "robot_connected": false,
+  "host": {
+    "schema": "g1_mpc_host_evidence_v1",
+    "kernel_release": "6.8.1-1057-realtime",
+    "kernel_version": "#58~22.04.1-Ubuntu SMP PREEMPT_RT Tue Jul 21 17:39:19 UTC 2026",
+    "kernel_realtime_raw": "1",
+    "preempt_rt_active": true,
+    "process_scheduler": "SCHED_OTHER",
+    "process_scheduler_priority": 0,
+    "allowed_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "selected_control_cpu": 7,
+    "selected_cpu_smt_siblings": "6-7",
+    "scaling_driver": "intel_pstate",
+    "scaling_governor": "powersave",
+    "energy_performance_preference": "balance_performance",
+    "frequency_khz_snapshot": "400000",
+    "platform_profile": "performance",
+    "isolated_cpus": "6-7",
+    "nohz_full_cpus": "6-7",
+    "rt_priority_limits": [
+      0,
+      0
+    ],
+    "memlock_bytes_limits": [
+      4154826752,
+      4154826752
+    ],
+    "capabilities": {
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000"
+    },
+    "numerical_thread_environment": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": null
+    },
+    "system_settings_changed": false,
+    "scope": "current kernel and calling process; cpuset and PID namespace may be sandbox-restricted",
+    "limitations": [
+      "PREEMPT_RT kernel does not imply SCHED_FIFO/RR for the control thread",
+      "pinning a CPU is not exclusive-core isolation; SMT sibling may remain busy",
+      "governor label alone does not specify current CPU frequency or performance",
+      "host compute and local DDS Write durations do not measure motor execution latency"
+    ]
+  },
+  "warmup": {
+    "samples": 30,
+    "max_core_ms": 2.156735,
+    "median_core_ms": 1.6065104999999997
+  },
+  "solver_status": "solved",
+  "serialized_bytes": 1004,
+  "actuation": "measured_torque_preview",
+  "native_delay": {
+    "backend": "native_mujoco",
+    "abi": 2,
+    "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/g1_arm_delay/libg1_arm_delay.so",
+    "retain_gil": true,
+    "sha256": "42907e683b37be5acfba9b9bdff452a43356323c9fadd5568ee3746ec4dfd265",
+    "source_sha256": "97a19cbd213a6c718b37a510aab7ed761a6d11643b54d5cc238c43d8e3941a42",
+    "mujoco_version": 3006000
+  },
+  "offline_packet_right_tau_nm": [
+    -2.0351326551075353,
+    -0.14121214498743725,
+    -0.05538592275677565,
+    -1.863544739855721,
+    0.0795466472733721
+  ],
+  "field_output_supported": false,
+  "core": {
+    "schema": "g1_hardware_mpc_core_v1",
+    "model": "measured_state_acceleration_mpc",
+    "solver": "daqp_exact_state_elimination_45_inputs_full_QP_checked",
+    "solver_package_version": "0.9.1",
+    "state": "measured q,dq; previous solution only warm-starts optimization",
+    "tracking_offset_model": "light pitch and yaw centering represented by exact input-coordinate substitution",
+    "actuation": "measured_torque_preview",
+    "frame": "fixed H0",
+    "config": {
+      "schema": "g1_hardware_mpc_config_v1",
+      "control_period_s": 0.006,
+      "horizon": 9,
+      "prediction_backend": "cpp_pinocchio",
+      "solver_backend": "daqp",
+      "kinematics_library": "build/right_arm_rnea/libright_arm_rnea.so",
+      "q_ee_acc": 0.01,
+      "q_ee_alpha": 0.0005,
+      "q_ee_omega": 1.0,
+      "q_gravity": [
+        30.0,
+        30.0
+      ],
+      "q_posture": [
+        4.0,
+        4.0,
+        1.5,
+        0.2,
+        0.2
+      ],
+      "q_vel": 0.08,
+      "r_ddq": 0.0025,
+      "terminal_scale": 2.0,
+      "regularization": 1e-06,
+      "reference_offset_limit_deg": [
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        5.0
+      ],
+      "reference_max_dq_rad_s": 0.07,
+      "reference_max_ddq_rad_s2": 0.2,
+      "solver_eps_abs": 0.001,
+      "solver_eps_rel": 1e-05,
+      "solver_max_iter": 1000,
+      "solver_check_termination": 10,
+      "solver_time_limit_s": 0.0035,
+      "solver_rho": 0.001,
+      "solver_adaptive_rho": true,
+      "mpc_start_s": 3.3,
+      "mpc_handoff_duration_s": 1.5,
+      "q_ee_vel": 0.0
+    },
+    "library": "/home/fjk/g1_ws/hold-my-beer-mpc/build/right_arm_rnea/libright_arm_rnea.so",
+    "library_sha256": "319627730241b6eb2128832f9cd3ea123f619eb30058343f44361bbb6e48e03c",
+    "xml_sha256": {
+      "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/scene.xml": "d1e1b4b4454d3934e7d264ae0f254e41e3a7a8eb878c8555bea2b5c44d0a4163",
+      "/home/fjk/g1_ws/hold-my-beer-mpc/resources/g1_description/g1_23dof_rev_1_0.xml": "99133f420ddfbc83627929bc926bc267dd4b19acc159814826b7db0a6fbfe683"
+    },
+    "cost": {
+      "term_names": [
+        "linear_acceleration",
+        "angular_acceleration",
+        "angular_velocity",
+        "gravity",
+        "posture",
+        "velocity",
+        "control"
+      ],
+      "Q_ee_acc": [
+        [
+          0.01,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.01,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.01
+        ]
+      ],
+      "Q_ee_alpha": [
+        [
+          0.0005,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0005,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0005
+        ]
+      ],
+      "Q_ee_omega": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "Qg": [
+        [
+          30.0,
+          0.0
+        ],
+        [
+          0.0,
+          30.0
+        ]
+      ],
+      "Qq": [
+        [
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.5,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.2,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.2
+        ]
+      ],
+      "Qv": [
+        [
+          0.08,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.08,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.08,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.08
+        ]
+      ],
+      "R": [
+        [
+          0.0025,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0025,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0025,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0025,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0025
+        ]
+      ],
+      "posture_reference": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "terminal_scale": 2.0,
+      "Q_ee_vel": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "linear_velocity_semantics": "v_E-v_IMU = omega_IMU x r_IMU_E + J_v*dq; fixed H0",
+      "linear_velocity_target": "zero relative to translating IMU origin, not zero world speed"
+    },
+    "offline_only": true,
+    "field_output_supported": false,
+    "torque_config": {
+      "schema": "g1_measured_torque_preview_v1",
+      "q_min_deg": [
+        -20.0,
+        -20.0,
+        -25.0,
+        -40.0,
+        -40.0
+      ],
+      "q_max_deg": [
+        20.0,
+        20.0,
+        20.0,
+        40.0,
+        40.0
+      ],
+      "q_margin_deg": [
+        5.0,
+        5.0,
+        5.0,
+        0.0,
+        0.0
+      ],
+      "max_dq_rad_s": 5.0,
+      "max_ddq_rad_s2": 15.0,
+      "kp": [
+        20.0,
+        20.0,
+        2.0,
+        20.0,
+        20.0
+      ],
+      "kd": [
+        1.0,
+        1.0,
+        0.2,
+        1.0,
+        1.0
+      ],
+      "tau_abs_nm": [
+        10,
+        6,
+        4,
+        7,
+        1.5
+      ],
+      "perturbation_nm": 0.1,
+      "regularization": 5.0,
+      "candidate_scales": [
+        1.0,
+        0.5,
+        0.25,
+        0.125
+      ],
+      "max_joint_error_rad_s2": 4.0,
+      "max_abs_qacc_rad_s2": 15.0,
+      "second_pass_error_rad_s2": 5.0,
+      "rescue_passes": 2,
+      "transition_rate_nm_s": [
+        50.0,
+        40.0,
+        30.0,
+        50.0,
+        20.0
+      ],
+      "yaw_feedback_in_prediction": true,
+      "pitch_feedback_in_prediction": true,
+      "pitch_feedback_kp": 2.0,
+      "pitch_feedback_kd": 0.2,
+      "tau_ff_abs_nm": [
+        10,
+        6,
+        4,
+        7,
+        1.5
+      ],
+      "active_slew_reference": "none",
+      "recovery_envelope_enabled": false,
+      "recovery_reentry_enabled": false,
+      "enforce_mapper_state_envelope": false,
+      "planning_actuation_constraints_enabled": true,
+      "anchor_shoulder_yaw_reference": true,
+      "predictive_braking_enabled": true,
+      "braking_deceleration_rad_s2": 4.0,
+      "braking_reaction_s": 0.012,
+      "braking_margin_deg": 1.0,
+      "braking_velocity_weight": 50.0,
+      "braking_min_deceleration_rad_s2": 6.0
+    },
+    "inverse_dynamics": {
+      "frame": "fixed_H0; acceleration_at_torso_IMU_excludes_gravity",
+      "base": "virtual_frozen_upstream_joints_with_measured_torso_motion",
+      "bottle_mass_kg_from_xml": 0.25,
+      "bottle_com_local_m": [
+        0.0,
+        0.0,
+        0.000212
+      ],
+      "bottle_diagonal_inertia_kg_m2": [
+        0.0009031911494166669,
+        0.0009031911494166669,
+        0.0001318234375
+      ],
+      "model_joint_armature_kg_m2": [
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.01
+      ],
+      "hardware_parameters_calibrated": false,
+      "friction_compensation": "none; do not transfer simulation friction",
+      "external_hand_wrench": "assumed_zero; no contact-force feedback",
+      "upstream_reactions": "represented_by_observed_torso_motion_not_contact_solver"
+    },
+    "recovery_envelope": {
+      "enabled": false
+    },
+    "forward_model": "conditional rigid right arm with observed moving torso, not full-body contact dynamics",
+    "unmodelled": [
+      "unknown ground/contact reactions",
+      "actuator delay and torque gain",
+      "physical friction and payload inertia error",
+      "future arm-to-base reaction"
+    ],
+    "output_semantics": "a includes modeled pitch and yaw feedback; packet tau=(M*a+b)-PD, device adds PD once",
+    "shoulder_yaw_execution": {
+      "nominal_reference_rad": 0.0,
+      "reference_anchored": true,
+      "packet_kp": 2.0,
+      "packet_kd": 0.2,
+      "semantics": "fixed nominal packet q/dq; PD modeled inside prediction, not added after final torque check"
+    },
+    "planning_actuation_constraints": {
+      "enabled": true,
+      "semantics": "absolute total/feedforward limits inside the acceleration MPC; no torque-rate rows",
+      "local_model": "current conditional arm mass and bias frozen across 54 ms horizon"
+    },
+    "predictive_braking": {
+      "enabled": true,
+      "semantics": "soft horizon cost plus latched first-action braking; no abort gate",
+      "deceleration_rad_s2": 4.0,
+      "reaction_s": 0.012,
+      "margin_deg": 1.0,
+      "velocity_weight": 50.0,
+      "minimum_deceleration_rad_s2": 6.0,
+      "physical_guarantee": false
+    },
+    "variant": "learned_yaw_aware_direct_v1",
+    "torque_mapping": "direct M*a+b; one final affine consistency/envelope check; no candidate search",
+    "pitch_feedback_prediction": {
+      "enabled": true,
+      "kp": 2.0,
+      "kd": 0.2,
+      "target_rad": 0.0,
+      "physical_identification": false,
+      "packet_gain_changed": false,
+      "added_after_planning": false,
+      "equation": "a=u+F*x+f; effort=(a-F*x-f)^T R (a-F*x-f)"
+    },
+    "yaw_feedback_prediction": {
+      "enabled": true,
+      "kp": 2.0,
+      "kd": 0.2,
+      "target_rad": 0.0,
+      "physical_identification": false,
+      "equation": "a=u+F*x+f; effort=(a-F*x-f)^T R (a-F*x-f)",
+      "acceleration_limits_apply_to": "net model acceleration including yaw PD"
+    },
+    "candidate_search_enabled": false,
+    "acceleration_forecast_alignment": {
+      "enabled": true,
+      "version": "acceleration_interval_write_alignment_v1",
+      "query_to_write_budget_ms": 3.5,
+      "budget_source": "normal field host timestamps; not identified motor or DDS latency",
+      "fields": [
+        "interval_acc_world",
+        "interval_alpha_world"
+      ],
+      "unchanged": [
+        "measured_q_dq",
+        "node_zero",
+        "node_omega",
+        "node_attitude",
+        "interval_omega",
+        "interval_attitude",
+        "current_inverse_dynamics_bias"
+      ],
+      "tail_policy": "hold final trained interval mean; no extra learned horizon",
+      "state_propagated": false,
+      "hardware_delay_identified": false,
+      "physical_performance_validated": false
+    },
+    "timing_policy": {
+      "policy": "bounded_occasional_lateness_v1",
+      "soft_ms": 10.0,
+      "hard_ms": 20.0,
+      "worker_timeout_ms": 18.0,
+      "source_max_age_ms": 25.0,
+      "latest_max_age_ms": 10.0,
+      "max_consecutive_late": 2,
+      "safety_certified": false,
+      "failed_solutions_reused": false
+    },
+    "zero_arm_neutral_experiment": {
+      "enabled": true,
+      "target_q_rad": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "target_q_deg": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "left_uses_body_imu": false,
+      "right_mpc_uses_measured_body_imu": true,
+      "baseline_164546_files_unchanged": true
+    }
+  },
+  "acceleration_forecast_alignment": {
+    "enabled": true,
+    "version": "acceleration_interval_write_alignment_v1",
+    "query_to_write_budget_ms": 3.5,
+    "budget_source": "normal field host timestamps; not identified motor or DDS latency",
+    "fields": [
+      "interval_acc_world",
+      "interval_alpha_world"
+    ],
+    "unchanged": [
+      "measured_q_dq",
+      "node_zero",
+      "node_omega",
+      "node_attitude",
+      "interval_omega",
+      "interval_attitude",
+      "current_inverse_dynamics_bias"
+    ],
+    "tail_policy": "hold final trained interval mean; no extra learned horizon",
+    "state_propagated": false,
+    "hardware_delay_identified": false,
+    "physical_performance_validated": false,
+    "applied": true,
+    "lead_from_anchor_ms": 3.5,
+    "estimated_host_write_monotonic_ns": 503500000,
+    "acceleration_interval_left_monotonic_ns": [
+      503500000,
+      509500000,
+      515500000,
+      521500000,
+      527500000,
+      533500000,
+      539500000,
+      545500000,
+      551500000
+    ],
+    "acc_interval_h0_m_s2": [
+      [
+        -0.015743627002634025,
+        -0.20076374843216402,
+        0.00854378861945172
+      ],
+      [
+        -0.02408852362443314,
+        -0.330359073778137,
+        0.011850451493413754
+      ],
+      [
+        -0.027085652820959566,
+        -0.3651186975454189,
+        0.011398188972752455
+      ],
+      [
+        -0.027793273490155222,
+        -0.37269247418233376,
+        0.0105477732786312
+      ],
+      [
+        -0.0282412127237033,
+        -0.361719395302575,
+        0.005649796944424683
+      ],
+      [
+        -0.031407048796602895,
+        -0.33905115247031736,
+        -0.004968297102747611
+      ],
+      [
+        -0.03765682338477156,
+        -0.3228949645560618,
+        -0.02055262348848284
+      ],
+      [
+        -0.041791765325572675,
+        -0.31251267451915143,
+        -0.035215881733669935
+      ],
+      [
+        -0.04267904461355928,
+        -0.30905783566031664,
+        -0.04033654791615132
+      ]
+    ],
+    "alpha_interval_h0_rad_s2": [
+      [
+        0.20494309823012946,
+        0.16079380004601213,
+        0.21222390246163964
+      ],
+      [
+        0.35432884120169833,
+        0.333620142075268,
+        0.34334217973911096
+      ],
+      [
+        0.3769242080740165,
+        0.414057459881244,
+        0.32110753649584095
+      ],
+      [
+        0.32651231279869686,
+        0.4332199818652126,
+        0.22743426445817652
+      ],
+      [
+        0.23794489913289948,
+        0.4128629686822065,
+        0.08213582237127576
+      ],
+      [
+        0.13531326466428528,
+        0.3422487482818146,
+        -0.08680456179207985
+      ],
+      [
+        0.03969982607653779,
+        0.24368585890545474,
+        -0.2514140823598462
+      ],
+      [
+        -0.03309432586420657,
+        0.13773588235864426,
+        -0.4061892731785179
+      ],
+      [
+        -0.05781156006066536,
+        0.09318713603789233,
+        -0.46835088882558185
+      ]
+    ],
+    "extrapolated_tail_ms": 3.5
+  },
+  "predictor_manifest": {
+    "schema": "g1_hardware_mpc_frozen_predictor_v1",
+    "bank_sha256": "0e7b25f9a8ddb6dcb893891cee21cfbc216f9174f6efe2e7c1d3f400ce1705c7",
+    "bank_bytes": 6728216,
+    "fitting_performed": false,
+    "source_study": "walk_h0_refinement_20260925",
+    "source_sha256": {
+      "evaluation/hardware_shadow/commissioning/walk_h0_refinement_20260925/local/models/legs_current_imu_knn8.npz": "0cc98596d0528e774a3d299e326924a8973717efb2538cff41b605cda84a789d",
+      "evaluation/hardware_shadow/commissioning/walk_h0_refinement_20260925/local/models/legs_current_imu_delta_knn8.npz": "e9096dab443435783f8ac4310c8da1f51590829bc2777242b599d73b1fe99861",
+      "evaluation/hardware_shadow/commissioning/walk_h0_refinement_20260925/innovation/model.npz": "a6f63cdf7da34466944f7b6b45ce94b122219e6ea2384b47d61fb10dbb39a586"
+    },
+    "source_program_sha256": {
+      "tools/g1_commissioning/walk_h0_study/refine_local.py": "9dcc1ceee85f1490ee573e45310ec5e5388c28ad807b6141d5258fc4e4721ad6",
+      "tools/g1_commissioning/walk_h0_study/refine_innovation.py": "a27d76db6100a9965f467ed6620296c532951a2ee05a9788e6cb32c0e282655a",
+      "tools/g1_commissioning/walk_h0_study/methods.py": "0da3b71049fecd0b023109f8f6838253fe4ddd2b72b336c7ca35576af03b2879"
+    },
+    "development_runs": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      7,
+      8
+    ],
+    "excluded_run": 6,
+    "comparison_runs_not_in_bank": [
+      9,
+      10,
+      11,
+      12
+    ],
+    "old_five_runs_excluded": true,
+    "rows": 15099,
+    "feature_count": 33,
+    "neighbors": 8,
+    "features": "qf[0:12], dqf[0:12], H0 filtered acc/omega/alpha; standardize then IMU scale0.5",
+    "target_order": [
+      "acc3",
+      "omega3",
+      "alpha3",
+      "diagnostic_rpy3"
+    ],
+    "horizons_ms": [
+      6,
+      12,
+      18,
+      24,
+      30,
+      36,
+      42,
+      48,
+      54
+    ],
+    "grid_ms": 2,
+    "filter_hz": 15,
+    "target_contract": "acc/alpha left interval samples h-6,h-4,h-2ms; omega/rpy endpoint h",
+    "filter_caveat": "Future FILTERED estimates, not raw instantaneous acceleration. No fixed time advance or delay compensation.",
+    "alpha_contract": "15Hz causal lowpass of backward difference of 15Hz filtered omega on 2ms grid",
+    "innovation": "weighted historical future + decay[h,group]*(current - weighted historical current)",
+    "rotation_adapter": "Measured node0 R; world-left SO3 exponential integration of trapezoidal predicted omega. RPY forecasts diagnostic only.",
+    "frame": "fixed H0 yaw reference per run; torso IMU origin; gravity [0,0,-9.81]",
+    "status": "Offline-fitted candidate; no claim of hardware MPC or raw-impact validation."
+  },
+  "limitations": "offline compatibility only; not a 6 ms field or closed-loop performance certificate"
+}

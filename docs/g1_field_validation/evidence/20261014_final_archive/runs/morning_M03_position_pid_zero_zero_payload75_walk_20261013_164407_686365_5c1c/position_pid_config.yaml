@@ -1,0 +1,7 @@
+# Explicit zero-neutral POSITION PID experiment. Old PID defaults remain intact.
+# Same feedback gains, physical-time scaling and 0.07/0.2 reference governor.
+# Absolute reference box = union(old nonzero neutral +/-5 deg, zero +/-5 deg).
+# These are commanded reference limits, NOT measured joint-angle guarantees.
+schema: g1_position_pid_zero_v1
+q_reference_min_deg: [-9.0, -5.0, -5.0, -12.8, -5.0]
+q_reference_max_deg: [5.0, 6.0, 5.0, 5.0, 5.0]
