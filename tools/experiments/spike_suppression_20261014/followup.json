@@ -1,0 +1,6 @@
+[
+ {"name":"s05_original_solver1500","base_config":"configs/simulation_optimization_20261010/baseline.yaml","overrides":{"research_delta_acceleration_weight":0,"mpc_osqp_max_iter":1500}},
+ {"name":"s06_delta004_solver1500","base_config":"configs/simulation_optimization_20261010/baseline.yaml","overrides":{"research_delta_acceleration_weight":0.004,"mpc_osqp_max_iter":1500}},
+ {"name":"s07_original_delay4","base_config":"configs/simulation_optimization_20261010/baseline.yaml","latency_ms":4,"overrides":{"research_delta_acceleration_weight":0}},
+ {"name":"s08_delta00025_delay4","base_config":"configs/simulation_optimization_20261010/baseline.yaml","latency_ms":4,"overrides":{"research_delta_acceleration_weight":0.00025}}
+]

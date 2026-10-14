@@ -1,0 +1,7 @@
+[
+ {"name":"s00_original","base_config":"configs/simulation_optimization_20261010/baseline.yaml","overrides":{"research_delta_acceleration_weight":0}},
+ {"name":"s01_delta00025","base_config":"configs/simulation_optimization_20261010/baseline.yaml","overrides":{"research_delta_acceleration_weight":0.00025}},
+ {"name":"s02_delta001","base_config":"configs/simulation_optimization_20261010/baseline.yaml","overrides":{"research_delta_acceleration_weight":0.001}},
+ {"name":"s03_delta004","base_config":"configs/simulation_optimization_20261010/baseline.yaml","overrides":{"research_delta_acceleration_weight":0.004}},
+ {"name":"s04_delta016","base_config":"configs/simulation_optimization_20261010/baseline.yaml","overrides":{"research_delta_acceleration_weight":0.016}}
+]
