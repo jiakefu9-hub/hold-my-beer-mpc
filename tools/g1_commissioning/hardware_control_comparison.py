@@ -12,6 +12,15 @@ BASELINE_CONFIG = ORIGINAL_MPC_CONFIG
 TORQUE_CONFIG = ORIGINAL_TORQUE_CONFIG
 ORIGINAL_TORQUE_SHA256 = '41e153ca138147e2dc006bb7f15a511872a69e5299f925c401322234f703b879'
 CONFIG_PATH = ROOT / 'configs/hardware_acceleration_pid_20261012.yaml'
+PID_ATTITUDE_CONFIG = CONFIG_DIR / 'c_attitude600_50.yaml'
+PID_REGULARIZED_CONFIG = CONFIG_DIR / 'c_regularization0024.yaml'
+PID_BASELINE_VALUES = dict(schema='g1_acceleration_pid_v1', kp=400., ki=50., kd=40.,
+    acc_weight=.4, regularization=.012, posture_kp=24., posture_kd=8., integral_limit=.1)
+PID_CANDIDATE_VALUES = {
+    CONFIG_PATH.resolve(): PID_BASELINE_VALUES,
+    PID_ATTITUDE_CONFIG.resolve(): dict(PID_BASELINE_VALUES, kp=600., kd=50.),
+    PID_REGULARIZED_CONFIG.resolve(): dict(PID_BASELINE_VALUES, regularization=.024),
+}
 BASELINE_VALUES = dict(
     schema='g1_hardware_mpc_config_v1', q_ee_acc=.01, q_ee_alpha=.0005,
     q_ee_omega=1., mpc_start_s=3.3, mpc_handoff_duration_s=1.5,
@@ -32,6 +41,23 @@ TRIALS = {
     'T06': dict(name='mpc_acc002_optional', aligned=True,
                 config=CONFIG_DIR/'mpc_acc002.yaml',
                 pid_config=None, purpose='可选：MPC 仅线加速度权重 0.02；对照 T02/T04'),
+    'T07': dict(name='mpc_original_timing_repeat', aligned=False, config=BASELINE_CONFIG,
+                pid_config=None, purpose='重复 T01；补齐关闭时间对齐的 MPC 对照'),
+    'T08': dict(name='c_attitude600_50_aligned', aligned=True, config=BASELINE_CONFIG,
+                pid_config=PID_ATTITUDE_CONFIG,
+                purpose='C 仅增强任务姿态反馈 Kp/Kd=600/50；对照 T03/T05，其他参数原样'),
+    'T09': dict(name='c_attitude600_50_aligned_repeat', aligned=True, config=BASELINE_CONFIG,
+                pid_config=PID_ATTITUDE_CONFIG,
+                purpose='历史预留：T08 无综合收益且 yaw 接近外界，当前不安排重复'),
+    'T10': dict(name='mpc_acc002_original_timing', aligned=False,
+                config=CONFIG_DIR/'mpc_acc002.yaml', pid_config=None,
+                purpose='关闭对齐，MPC 仅线加速度权重 0.01→0.02；对照 T01/T07'),
+    'T11': dict(name='c_original_timing', aligned=False, config=BASELINE_CONFIG,
+                pid_config=CONFIG_PATH,
+                purpose='原 C 400/50/40，仅关闭时间对齐；对照 T03/T05'),
+    'T12': dict(name='c_regularization0024_aligned', aligned=True, config=BASELINE_CONFIG,
+                pid_config=PID_REGULARIZED_CONFIG,
+                purpose='原 C 仅分配正则 0.012→0.024，仍开启对齐；对照 T03/T05'),
 }
 
 COMMON_VALUES = dict(BASELINE_VALUES)
@@ -55,9 +81,19 @@ def validate_comparison_torque(config):
         raise ValueError('comparison torque config differs from the successful field baseline')
 
 
+def validate_trial_pid_config(config):
+    path = Path(config).resolve()
+    if path not in PID_CANDIDATE_VALUES:
+        raise ValueError('C requires an explicitly reviewed T-series PID config')
+    if yaml.safe_load(path.read_text()) != PID_CANDIDATE_VALUES[path]:
+        raise ValueError('T series PID configuration differs from its reviewed parameters')
+
+
 def validate_series():
     if yaml.safe_load(ORIGINAL_MPC_CONFIG.read_text()) != BASELINE_VALUES:
         raise ValueError('164546 baseline changed; comparison requires revalidation')
     for config in CANDIDATE_CONFIGS:
         validate_trial_config(config)
+    for config in PID_CANDIDATE_VALUES:
+        validate_trial_pid_config(config)
     validate_comparison_torque(TORQUE_CONFIG)

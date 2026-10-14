@@ -15,6 +15,7 @@ from hardware_control_comparison import (
     ROOT, BASELINE_CONFIG, MODEL_CONFIG, TORQUE_CONFIG, TRIALS,
     CANDIDATE_CONFIGS, ZERO_NEUTRAL_MPC_CONFIGS, validate_trial_config,
     validate_comparison_torque, ORIGINAL_TORQUE_CONFIG, ORIGINAL_MPC_CONFIG,
+    PID_ATTITUDE_CONFIG, PID_REGULARIZED_CONFIG, PID_BASELINE_VALUES, validate_trial_pid_config,
 )
 
 
@@ -31,9 +32,11 @@ BASELINE_OVERLAY = {
     'r_ddq': .0025,
     'terminal_scale': 2.,
 }
-OVERRIDES = {'T06': {'q_ee_acc': .02}}
+OVERRIDES = {'T06': {'q_ee_acc': .02}, 'T10': {'q_ee_acc': .02}}
 PARENTS = {'T01': None, 'T02': 'T01', 'T03': 'T02',
-           'T04': 'T02', 'T05': 'T03', 'T06': 'T02'}
+           'T04': 'T02', 'T05': 'T03', 'T06': 'T02',
+           'T07': 'T01', 'T08': 'T03', 'T09': 'T08',
+           'T10': 'T01', 'T11': 'T03', 'T12': 'T03'}
 
 
 def legacy_args(command):
@@ -51,7 +54,7 @@ class TrialSeriesTests(unittest.TestCase):
         for number, trial in TRIALS.items():
             with self.subTest(trial=number):
                 self.assertTrue(trial['name'])
-                self.assertEqual(trial['aligned'], number != 'T01')
+                self.assertEqual(trial['aligned'], number not in ('T01', 'T07', 'T10', 'T11'))
                 expected = dict(BASELINE_OVERLAY, **OVERRIDES.get(number, {}))
                 self.assertEqual(yaml.safe_load(trial['config'].read_text()), expected)
                 validate_trial_config(trial['config'])
@@ -64,7 +67,7 @@ class TrialSeriesTests(unittest.TestCase):
                          candidates | {BASELINE_CONFIG.resolve()})
 
     def test_each_named_comparison_changes_only_one_factor(self):
-        factors = {'T06': 'q_ee_acc'}
+        factors = {'T06': 'q_ee_acc', 'T10': 'q_ee_acc'}
         for number, factor in factors.items():
             with self.subTest(trial=number):
                 child = load_mpc_config(TRIALS[number]['config'])
@@ -74,6 +77,63 @@ class TrialSeriesTests(unittest.TestCase):
                          load_mpc_config(TRIALS['T02']['config']))
         self.assertEqual(load_mpc_config(TRIALS['T01']['config']),
                          load_mpc_config(TRIALS['T01']['config']))
+
+    def test_c_attitude_candidate_changes_only_task_feedback_gains(self):
+        original = yaml.safe_load(TRIALS['T03']['pid_config'].read_text())
+        candidate = yaml.safe_load(PID_ATTITUDE_CONFIG.read_text())
+        self.assertEqual(original, PID_BASELINE_VALUES)
+        self.assertEqual({k for k in candidate if candidate[k] != original[k]}, {'kp', 'kd'})
+        self.assertEqual((candidate['kp'], candidate['ki'], candidate['kd']), (600., 50., 50.))
+        self.assertEqual(TRIALS['T08']['pid_config'], TRIALS['T09']['pid_config'])
+        validate_trial_pid_config(PID_ATTITUDE_CONFIG)
+
+    def test_c_candidate_admission_rejects_unreviewed_file_and_changed_parameters(self):
+        with self.assertRaises(ValueError):
+            validate_trial_pid_config(ROOT / 'configs/unreviewed_pid.yaml')
+        candidate = yaml.safe_load(PID_ATTITUDE_CONFIG.read_text())
+        real_read = Path.read_text
+        def read(path, *args, **kwargs):
+            return (yaml.safe_dump(dict(candidate, kp=1200.))
+                    if path.resolve() == PID_ATTITUDE_CONFIG.resolve()
+                    else real_read(path, *args, **kwargs))
+        with mock.patch.object(Path, 'read_text', read), self.assertRaises(ValueError):
+            g1_walk_mpc.validate_acceleration_pid_selection(
+                PID_ATTITUDE_CONFIG, BASELINE_CONFIG, MODEL_CONFIG, TORQUE_CONFIG,
+                'learned_filtered', 'measured_torque_preview', None, True, 1.)
+
+    def test_c_regularization_and_timing_are_separate_factors(self):
+        original = yaml.safe_load(TRIALS['T03']['pid_config'].read_text())
+        candidate = yaml.safe_load(PID_REGULARIZED_CONFIG.read_text())
+        self.assertEqual({k for k in candidate if candidate[k] != original[k]}, {'regularization'})
+        self.assertEqual(candidate['regularization'], .024)
+        self.assertEqual(TRIALS['T11']['pid_config'], TRIALS['T03']['pid_config'])
+        self.assertEqual(TRIALS['T12']['aligned'], TRIALS['T03']['aligned'])
+        validate_trial_pid_config(PID_REGULARIZED_CONFIG)
+
+    def test_new_c_variants_direct_process_output_parity(self):
+        from test_mpc_compute_process import ComputeProcessTests
+        for number in ('T11', 'T12'):
+            with self.subTest(trial=number):
+                case = ComputeProcessTests()
+                self.addCleanup(case.doCleanups)
+                spec = TRIALS[number]
+                case.check_runtime_parity(dict(
+                    config=BASELINE_CONFIG, model_config=MODEL_CONFIG,
+                    torque_config=TORQUE_CONFIG, predictor_mode='learned_filtered',
+                    stationary=False, field_trial=True, assumed_command_delay_s=None,
+                    zero_arm_neutral=True, left_pd_gain_scale=1., align_accel_forecast=spec['aligned'],
+                    acceleration_pid_config=spec['pid_config']))
+
+    def test_c_attitude_candidate_direct_process_output_parity(self):
+        from test_mpc_compute_process import ComputeProcessTests
+        case = ComputeProcessTests()
+        self.addCleanup(case.doCleanups)
+        case.check_runtime_parity(dict(
+            config=BASELINE_CONFIG, model_config=MODEL_CONFIG,
+            torque_config=TORQUE_CONFIG, predictor_mode='learned_filtered',
+            stationary=False, field_trial=True, assumed_command_delay_s=None,
+            zero_arm_neutral=True, left_pd_gain_scale=1., align_accel_forecast=True,
+            acceleration_pid_config=PID_ATTITUDE_CONFIG))
 
     def test_effective_configs_keep_frequency_solver_and_no_velocity_cost(self):
         baseline = load_mpc_config(BASELINE_CONFIG)

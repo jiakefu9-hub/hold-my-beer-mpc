@@ -87,12 +87,16 @@ def main(argv=None):
         for trial_id in selected:
             spec = TRIALS[trial_id]
             trial = dict(name=spec["name"], config=str(spec["config"]),
-                         aligned=spec["aligned"], compare_to={'T02':'T01','T03':'T02','T04':'T02','T05':'T03','T06':'T02'}.get(trial_id),
-                         replay_repeat_of={'T04':'T02','T05':'T03'}.get(trial_id),
+                         aligned=spec["aligned"], compare_to={'T02':'T01','T03':'T02','T04':'T02','T05':'T03','T06':'T02',
+                                                            'T07':'T01','T08':'T03','T09':'T08',
+                                                            'T10':'T01','T11':'T03','T12':'T03'}.get(trial_id),
+                         replay_repeat_of={'T04':'T02','T05':'T03','T07':'T01','T09':'T08'}.get(trial_id),
                          independent_repeat_evidence=False)
             report["trials"][trial_id] = trial
             try:
                 trial["config_sha256"] = sha256_file(spec["config"])
+                if spec['pid_config'] is not None:
+                    trial['pid_config_sha256'] = sha256_file(spec['pid_config'])
                 trial["preflight"] = preflight(
                     config=spec["config"], model_config=MODEL_CONFIG,
                     mode="learned_filtered", cpu=args.cpu,
@@ -162,7 +166,7 @@ def main(argv=None):
                         if not result["complete_release"]:
                             result["status"] = "failed"
                         result["live_timing_validated"] = False
-                        result["replay_repeat_of"] = {'T04':'T02','T05':'T03'}.get(trial_id)
+                        result["replay_repeat_of"] = {'T04':'T02','T05':'T03','T07':'T01','T09':'T08'}.get(trial_id)
                         source_result["variants"][trial_id] = result
                     except Exception as exc:
                         source_result["variants"][trial_id] = dict(

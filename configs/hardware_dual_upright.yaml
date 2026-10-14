@@ -1,0 +1,15 @@
+# Independent stationary rod-alignment task, not a walking comparison baseline.
+schema: g1_dual_upright_v1
+tilt_gain_per_s: 2.0
+damping: 0.03
+nullspace_gain_per_s: 0.15
+max_reference_speed_rad_s: 0.12
+max_reference_acceleration_rad_s2: 0.4
+# Per arm: shoulder pitch, shoulder roll, shoulder yaw, elbow pitch, wrist roll.
+# Roll/yaw remain at the zero entry reference; wrist roll compensates body roll.
+active_joints: [true, false, false, true, true]
+left_q_min_deg: [-20, -20, -20, -40, -40]
+left_q_max_deg: [20, 20, 25, 40, 40]
+right_q_min_deg: [-20, -20, -25, -40, -40]
+right_q_max_deg: [20, 20, 20, 40, 40]
+pd_torque_envelope_nm: [10, 6, 4, 7, 1.5]

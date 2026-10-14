@@ -57,6 +57,7 @@ from hardware_pid_control import (
 from endpoint_pose import EndpointModel
 from pid_timing import PeriodicClock, pin_control_thread, timing_summary
 from arm_execution_record import command_evidence as execution_evidence
+from hardware_interactive_walk import PausableWalk, SpacebarInput, PROTOCOL as INTERACTIVE_WALK_PROTOCOL
 
 ROOT = Path(__file__).resolve().parents[2]
 PERMIT = "PID_WALK_H0_CAPTURE"
@@ -306,6 +307,9 @@ def load_pid_parameters(config_path: Path, profile):
         )
     }
     selected["pid_q_offset_limit_deg"] = profile["pid_q_offset_limit_deg_array"].tolist()
+    # Only the explicit reviewed zero-position trial supplies these overrides.
+    # Keep shared model parameters and legacy/default PID behavior unchanged.
+    selected.update(profile.get('position_pid_parameter_overrides', {}))
     return PidParameters.from_mapping(selected), selected
 
 
@@ -837,9 +841,15 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     sequence = 0
     original_affinity = set(os.sched_getaffinity(0))
     cycle_timings = []
+    interactive_walk = PausableWalk() if getattr(args, 'space_pause_walk', False) else None
+    keyboard = keyboard_thread = None
+    velocity_wakeup = threading.Event() if interactive_walk is not None else None
+    epoch_ns = None
 
     def request_stop(_signal=None, _frame=None):
         stop_requested.set()
+        if velocity_wakeup is not None:
+            velocity_wakeup.set()
 
     previous_sigint = previous_sigterm = None
 
@@ -1006,12 +1016,30 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
         fsm_thread.join(FSM_RPC_TIMEOUT_S + 0.5)
         if fsm_thread.is_alive():
             raise RuntimeError("FSM startup observer did not stop")
-        print(
-            f"REAL {controller_label} OUTPUT: 3 s arm entry, 2 s baseline, "
-            f"10 s at {0.0 if runtime is not None and runtime.stationary else 0.5} m/s, "
-            "3 s stop-settle with heading hold, then >=3 s release after zero-speed ack. "
-            "Robot must already be stationary in FSM 500."
+        continuous_stationary_hold = bool(
+            runtime is not None
+            and getattr(runtime, "continuous_stationary_hold", False)
         )
+        if continuous_stationary_hold:
+            print(
+                f"REAL {controller_label} OUTPUT: 3 s arm entry, then continuous "
+                "stationary control until one Ctrl+C; Ctrl+C starts >=3 s gradual "
+                "arm release. Robot must already be stationary in FSM 500."
+            )
+        elif interactive_walk is not None:
+            print(
+                f"REAL {controller_label} M10 OUTPUT: 3 s arm entry, 2 s baseline, "
+                "20 s accumulated forward requests at 0.5 m/s. Tap SPACE to pause/resume; "
+                "paused arms keep live control. After 20 s: 3 s stop-settle, then gradual release. "
+                "Ctrl+C ends the run with gradual release. Robot must already be in FSM 500."
+            )
+        else:
+            print(
+                f"REAL {controller_label} OUTPUT: 3 s arm entry, 2 s baseline, "
+                f"10 s at {0.0 if runtime is not None and runtime.stationary else 0.5} m/s, "
+                "3 s stop-settle with heading hold, then >=3 s release after zero-speed ack. "
+                "Robot must already be stationary in FSM 500."
+            )
         print(f"Type exactly: EXECUTE {profile['robot_id']}")
         reply = input("> ")
         if reply != f"EXECUTE {profile['robot_id']}" or stop_requested.is_set():
@@ -1042,6 +1070,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                 profile["target_q_array"][5:10], pid_parameters,
                 model=EndpointModel(args.controller_config),
                 control_dt=CONTROL_PERIOD_S,
+                reference_bounds_rad=profile.get('position_pid_reference_bounds_rad'),
             )
             plan = HardwarePidPlan(
                 _arm_slots(initial), profile["target_q_array"],
@@ -1053,6 +1082,37 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                             'core':getattr(runtime.controller,'metadata',{})})
             if hasattr(runtime, 'prepare_startup'):
                 runtime.prepare_startup()
+        if interactive_walk is not None:
+            keyboard = SpacebarInput()
+            keyboard.open()
+            journal.record({'schema':'g1_pid_event_v1', 'event':'interactive_walk_enabled',
+                            **INTERACTIVE_WALK_PROTOCOL})
+
+            def keyboard_worker():
+                try:
+                    while not task_started.wait(.01):
+                        if worker_stop.is_set():
+                            return
+                    while not worker_stop.is_set() and not stop_requested.is_set():
+                        keys = keyboard.poll(.05)
+                        if b' ' not in keys:
+                            continue
+                        now_s = (monotonic_ns()-epoch_ns)*1e-9
+                        changed, snapshot, reason = interactive_walk.toggle(now_s)
+                        if changed:
+                            velocity_wakeup.set()
+                        journal.record({'schema':'g1_pid_event_v1', 'event':'space_key',
+                            'task_elapsed_s':now_s, 'accepted':changed, 'reason':reason,
+                            'walk_schedule':snapshot.evidence()})
+                        if changed:
+                            action = 'PAUSED (arms active)' if snapshot.phase == 'paused_hold' else 'RESUMED'
+                            print(f'M10 {action}; walking {snapshot.walking_elapsed_s:.2f}/20.00 s', flush=True)
+                except Exception as exc:
+                    interlock.trip(f'M10 keyboard failure: {exc}', release_blocking=False)
+                    request_stop()
+
+            keyboard_thread = threading.Thread(target=keyboard_worker, name='mpc_keyboard', daemon=True)
+            keyboard_thread.start()
         # Publisher creation occurs only after both state gates and typed confirmation.
         publisher = ChannelPublisher("rt/arm_sdk", LowCmd_)
         publisher.Init()
@@ -1082,7 +1142,18 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                         return
                 if worker_stop.is_set():
                     return
+                # This opt-in stationary tool never acquires or refreshes a
+                # locomotion velocity lease.  Repeated SetVelocity(0) calls
+                # add no stopping behavior after the final FSM=500 gate and
+                # can eventually time out, needlessly ending a continuous
+                # arm-only hold.  The regular timed PID/MPC paths are unchanged.
+                if continuous_stationary_hold:
+                    while not worker_stop.is_set() and not stop_requested.is_set():
+                        worker_stop.wait(VELOCITY_RPC_PERIOD_S)
+                    return
                 while not worker_stop.is_set():
+                    if velocity_wakeup is not None:
+                        velocity_wakeup.clear()
                     iteration = time.monotonic()
                     task_s = (monotonic_ns() - epoch_ns) * 1e-9
                     failure_now = health(streams, interlock, journal)
@@ -1112,7 +1183,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     # load the synchronous Loco service while the arms enter.
                     # A requested abort still sends zero immediately below.
                     if task_s < WALK_START_S and not stop_requested.is_set():
-                        worker_stop.wait(min(
+                        (velocity_wakeup or worker_stop).wait(min(
                             VELOCITY_RPC_PERIOD_S,
                             max(0.001, WALK_START_S - task_s),
                         ))
@@ -1121,6 +1192,14 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     wz = motion["yaw_rate_rad_s"]
                     duration = motion["duration_s"]
                     with loco_rpc_lock:
+                        if interactive_walk is not None:
+                            # Re-read after the RPC lock: a SPACE received during
+                            # a preceding RPC must replace its stale motion intent.
+                            task_s = (monotonic_ns()-epoch_ns)*1e-9
+                            walk_snapshot = interactive_walk.snapshot(task_s)
+                            motion = walk_snapshot.motion(task_s, heading['correction_rad_s'],
+                                inhibited=stop_requested.is_set() or bool(health(streams, interlock, journal)))
+                            vx, wz, duration = (motion['vx_m_s'], motion['yaw_rate_rad_s'], motion['duration_s'])
                         begin = monotonic_ns()
                         rc, raw = client.send_velocity(vx, wz, duration)
                         end = monotonic_ns()
@@ -1132,6 +1211,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                         "duration_s": duration, "zero_command": vx == 0.0 and wz == 0.0,
                         "walking_active": motion["walking_active"],
                         "heading_hold_active": motion["heading_hold_active"],
+                        **({'walk_schedule':walk_snapshot.evidence()} if interactive_walk is not None else {}),
                         **heading,
                     })
                     if rc != 0:
@@ -1142,7 +1222,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                         with last_zero_lock:
                             last_zero_reply_ns = end
                     delay = max(0.001, VELOCITY_RPC_PERIOD_S - (time.monotonic() - iteration))
-                    worker_stop.wait(delay)
+                    (velocity_wakeup or worker_stop).wait(delay)
             except Exception as exc:
                 velocity_failed.set()
                 stop_requested.set()
@@ -1152,7 +1232,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                     "reason": repr(exc),
                 })
             finally:
-                if client is not None:
+                if client is not None and not continuous_stationary_hold:
                     try:
                         with loco_rpc_lock:
                             begin = monotonic_ns()
@@ -1172,6 +1252,12 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                             "schema": "g1_pid_event_v1", "event": "velocity_final_zero_exception",
                             "reason": repr(exc), "physical_stop_verified": False,
                         })
+                elif client is not None:
+                    journal.record({
+                        "schema": "g1_pid_event_v1",
+                        "event": "velocity_output_not_used",
+                        "reason": "continuous stationary arm-only tool never acquired a velocity lease",
+                    })
 
         velocity_thread = threading.Thread(target=velocity_worker, name="pid_velocity", daemon=True)
         velocity_thread.start()
@@ -1212,6 +1298,9 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             loop_begin_ns = monotonic_ns()
             actual_dt = CONTROL_PERIOD_S if last_iteration_ns is None else (loop_begin_ns - last_iteration_ns) * 1e-9
             task_s = (loop_begin_ns - epoch_ns) * 1e-9
+            walk_snapshot = interactive_walk.snapshot(task_s) if interactive_walk is not None else None
+            plan_task_s = task_s if walk_snapshot is None else walk_snapshot.plan_time_s
+            scheduled_release_s = RELEASE_START_S if walk_snapshot is None else walk_snapshot.release_start_s
             failure = health(streams, interlock, journal)
             if failure:
                 raise RuntimeError(failure)
@@ -1238,23 +1327,26 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
             heading = streams.heading_current()
             yaw0 = heading["reference_rad"] if heading["reference_frozen"] else 0.0
             controller_begin_ns = monotonic_ns()
-            if runtime is not None and abort_start_s is None and task_s < RELEASE_START_S:
+            scheduled_control_active = (
+                scheduled_release_s is None or task_s < scheduled_release_s or continuous_stationary_hold
+            )
+            if runtime is not None and abort_start_s is None and scheduled_control_active:
                 runtime.prepare(monotonic_ns(), low, imu, yaw0, task_s,
                                 heading_frozen=heading["reference_frozen"])
             if abort_start_s is None:
-                if task_s < RELEASE_START_S:
+                if scheduled_control_active:
                     frame = plan.sample(
-                        task_s, _arm_slots(low), _arm_dq(low), imu.quaternion,
+                        plan_task_s, _arm_slots(low), _arm_dq(low), imu.quaternion,
                         yaw0, actual_dt,
                     )
                 else:
                     with last_zero_lock:
                         zero_reply = last_zero_reply_ns
                     zero_after_heading = zero_reply >= (
-                        epoch_ns + int(RELEASE_START_S * 1e9)
+                        epoch_ns + int(scheduled_release_s * 1e9)
                     )
                     zero_ack_timed_out = (
-                        task_s - RELEASE_START_S >= ZERO_SPEED_ACK_WAIT_S
+                        task_s - scheduled_release_s >= ZERO_SPEED_ACK_WAIT_S
                     )
                     if (
                         normal_release_start_s is None
@@ -1269,7 +1361,7 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                             "duration_s": WEIGHT_RELEASE_DURATION_S,
                             "zero_velocity_reply_ns": zero_reply,
                             "zero_velocity_acknowledged": zero_after_heading,
-                            "zero_velocity_ack_wait_s": task_s - RELEASE_START_S,
+                            "zero_velocity_ack_wait_s": task_s - scheduled_release_s,
                         })
                     if normal_release_start_s is None:
                         held_q = (
@@ -1359,6 +1451,10 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                         "release_elapsed_s": release_elapsed_s,
                     },
                 }
+            if walk_snapshot is not None:
+                frame['diagnostics']['walk_schedule'] = walk_snapshot.evidence()
+                if abort_start_s is None and scheduled_control_active:
+                    frame['stage'] = walk_snapshot.phase
             if runtime is not None and runtime.stationary:
                 frame["stage"] = {"forward_walk": "stationary_hold",
                                   "stop_settle": "stationary_hold_tail"}.get(frame["stage"], frame["stage"])
@@ -1485,6 +1581,8 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
                         else "operator_stop_release_completed") if abort_start_s is not None
                 else "normal_release_completed",
             "final_weight": 0.0, "physical_stop_verified": False,
+            **({'walk_schedule':interactive_walk.snapshot(task_s).evidence()}
+               if interactive_walk is not None else {}),
         })
         return (3 if velocity_failed.is_set() else 130) if abort_start_s is not None else 0
     except Exception as exc:
@@ -1516,16 +1614,27 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
     finally:
         worker_stop.set()
         fsm_poll_stop.set()
-        for worker in (velocity_thread, fsm_thread):
+        if velocity_wakeup is not None:
+            velocity_wakeup.set()
+        for worker in (velocity_thread, fsm_thread, keyboard_thread):
             if worker is not None and worker.is_alive():
                 worker.join()
+        if keyboard is not None:
+            try:
+                keyboard.close()
+            except Exception as exc:
+                journal.record({'schema':'g1_pid_event_v1', 'event':'keyboard_restore_failed',
+                                'reason':repr(exc)})
         os.sched_setaffinity(0, original_affinity)
         journal.record({
             "schema": "g1_pid_event_v1", "event": "control_timing_summary",
             "all_normal_loop_stages": timing_summary(cycle_timings),
-            "primary_5_18": timing_summary([
-                row for row in cycle_timings if WALK_START_S <= row["task_elapsed_s"] < RELEASE_START_S
-            ]),
+            **({'interactive_control': timing_summary([
+                row for row in cycle_timings if row['stage'] in
+                ('forward_walk', 'paused_hold', 'stop_settle')])}
+               if interactive_walk is not None else
+               {'primary_5_18': timing_summary([
+                   row for row in cycle_timings if WALK_START_S <= row['task_elapsed_s'] < RELEASE_START_S])}),
         })
         shutdown = {}
         for name, endpoint, endpoint_kind in (
@@ -1552,12 +1661,15 @@ def run_device(args, profile, pid_parameters, pid_mapping, journal, runtime=None
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("nic", help="robot-facing wired network interface")
+    parser.add_argument("nic", nargs='?', help="robot-facing wired network interface; omitted only for preflight")
     parser.add_argument("--profile", required=True, type=Path)
     parser.add_argument("--controller-config", type=Path, default=ROOT / "configs/g1.yaml")
-    parser.add_argument("--output-dir", required=True, type=Path,
+    parser.add_argument("--output-dir", type=Path,
                         help="new directory; raw.jsonl and exact inputs are stored here")
-    parser.add_argument("--permit-real-output", required=True, choices=[PERMIT])
+    parser.add_argument("--permit-real-output", choices=[PERMIT])
+    parser.add_argument('--preflight', action='store_true', help='zero-position PID offline checks; never initialize DDS')
+    parser.add_argument('--zero-arm-neutral', action='store_true', help='explicit zero-neutral position PID experiment')
+    parser.add_argument('--position-pid-config', type=Path, help='reviewed zero-neutral reference-box/governor config')
     parser.add_argument("--cpu", type=int, default=None,
                         help="control thread CPU (default CPU 7 if available, else first allowed)")
     parser.add_argument("--allow-first-6ms-field-trial", action="store_true",
@@ -1569,8 +1681,23 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     journal = None
     try:
+        if not args.preflight and not (args.nic and args.output_dir and args.permit_real_output == PERMIT):
+            raise ValueError('real PID output requires NIC, new output directory and exact output permit')
+        if bool(args.zero_arm_neutral) != (args.position_pid_config is not None):
+            raise ValueError('zero position PID requires both --zero-arm-neutral and --position-pid-config')
+        if args.preflight and not args.zero_arm_neutral:
+            raise ValueError('this preflight is specific to the explicit zero-position PID experiment')
         profile = load_profile(args.profile)
+        if args.zero_arm_neutral:
+            from hardware_position_pid_zero import prepare_profile
+            profile = prepare_profile(profile, args.position_pid_config, args.controller_config)
         pid_parameters, pid_mapping = load_pid_parameters(args.controller_config, profile)
+        if args.zero_arm_neutral:
+            pid_mapping['position_pid_reference_experiment'] = profile['position_pid_reference_experiment']
+        if args.preflight:
+            from hardware_position_pid_zero import preflight
+            print(json.dumps(preflight(profile, pid_parameters, args.controller_config), indent=2))
+            return 0
         if FIELD_OUTPUT_LOCKED and not args.allow_first_6ms_field_trial:
             raise RuntimeError(
                 "6 ms hardware PID output locked pending first field validation; "
@@ -1584,6 +1711,13 @@ def main(argv=None):
         journal = Journal(args.output_dir)
         shutil.copy2(args.profile, args.output_dir / "arm_profile.conf")
         shutil.copy2(args.controller_config, args.output_dir / "controller_config.yaml")
+        if args.zero_arm_neutral:
+            shutil.copy2(args.position_pid_config, args.output_dir/'position_pid_config.yaml')
+            (args.output_dir/'effective_profile.json').write_text(json.dumps(json_safe(profile), indent=2)+'\n')
+            print('EXPERIMENT: zero-neutral POSITION PID; original feedback gains; '
+                  f'reference limits {pid_parameters.hardware_max_dq:g} rad/s, '
+                  f'{pid_parameters.hardware_max_ddq:g} rad/s^2; '
+                  'explicit absolute reference box preserves the old negative pitch/elbow command range.')
         journal.record({
             "schema": "g1_pid_session_v1", "event": "session_start",
             "program": "g1_walk_pid.py", "publisher_created": False,
@@ -1618,6 +1752,13 @@ def main(argv=None):
             },
             "profile_sha256": hashlib.sha256(args.profile.read_bytes()).hexdigest(),
             "controller_config_sha256": hashlib.sha256(args.controller_config.read_bytes()).hexdigest(),
+            **({
+                'zero_arm_neutral_experiment': profile['zero_arm_neutral_experiment'],
+                'position_pid_reference_experiment': profile['position_pid_reference_experiment'],
+                'position_pid_config_sha256': hashlib.sha256(args.position_pid_config.read_bytes()).hexdigest(),
+                'zero_position_pid_source_sha256': hashlib.sha256(
+                    Path(__file__).with_name('hardware_position_pid_zero.py').read_bytes()).hexdigest(),
+            } if args.zero_arm_neutral else {}),
         })
         result = run_device(args, profile, pid_parameters, pid_mapping, journal)
         journal.record({

@@ -462,6 +462,8 @@ def build_parser(*, learned=False):
     parser.add_argument("--pid-6ms-validated", action="store_true",
                         help="operator confirms current 6 ms PID trial passed; not software-generated evidence")
     if learned:
+        parser.add_argument('--space-pause-walk', action='store_true',
+                            help='M10: SPACE pauses/resumes walking with live arm control; 20 s forward budget')
         parser.add_argument('--acceleration-pid-config', type=Path,
                             help='explicit C controller: task PID plus constrained acceleration allocation')
         parser.add_argument('--align-accel-forecast', action='store_true',
@@ -476,9 +478,10 @@ def build_parser(*, learned=False):
 
 def validate_acceleration_pid_selection(pid_config, config, model_config, torque_config,
                                         predictor_mode, actuation, delay, zero_neutral, left_scale):
-    from hardware_acceleration_pid import CONFIG_PATH, load_pid_config
-    if (Path(pid_config).resolve() != CONFIG_PATH.resolve()
-            or Path(config).resolve() != COMPARISON_MPC_CONFIG.resolve()
+    from hardware_acceleration_pid import load_pid_config
+    from hardware_control_comparison import validate_trial_pid_config
+    validate_trial_pid_config(pid_config)
+    if (Path(config).resolve() != COMPARISON_MPC_CONFIG.resolve()
             or Path(model_config).resolve() != (ROOT/'configs/g1_payload75.yaml').resolve()
             or Path(torque_config or '').resolve() != COMPARISON_TORQUE_CONFIG.resolve()
             or predictor_mode != 'learned_filtered' or actuation != 'measured_torque_preview'
@@ -560,6 +563,18 @@ def main(argv=None, *, learned=False):
         left_gain_scale=float(getattr(args,'left_pd_gain_scale',1.))
         align_accel = bool(getattr(args, 'align_accel_forecast', False))
         acceleration_pid_config = getattr(args, 'acceleration_pid_config', None)
+        space_pause_walk = bool(getattr(args, 'space_pause_walk', False))
+        if space_pause_walk:
+            from hardware_interactive_walk import PROTOCOL, SpacebarInput
+            if (not learned or args.task != 'walk' or not zero_neutral
+                    or left_gain_scale != 1. or align_accel or acceleration_pid_config is not None
+                    or args.predictor != 'learned_filtered'
+                    or args.mpc_config.resolve() != LEARNED_ACC_ALPHA_OMEGA1_MPC_CONFIG.resolve()
+                    or args.torque_config.resolve() != LEARNED_TORQUE_CONFIG.resolve()
+                    or args.controller_config.resolve() != (ROOT/'configs/g1_payload75.yaml').resolve()):
+                raise ValueError('M10 requires the unchanged M01 controller/configs, zero neutral and normal left PD')
+            if args.execute:
+                SpacebarInput.require_terminal()
         if acceleration_pid_config is not None:
             validate_acceleration_pid_selection(acceleration_pid_config, args.mpc_config,
                 args.controller_config, args.torque_config, args.predictor, args.actuation,
@@ -662,6 +677,8 @@ def main(argv=None, *, learned=False):
                 'hardware_mpc_braking.py','field_performance.py')],
             ROOT/'cpp/g1_arm_delay/delay.cpp', ROOT/'cpp/g1_arm_delay/CMakeLists.txt',
             ROOT / "arm_mpc.py", ROOT / "kinematics_helper.py"]
+        if space_pause_walk:
+            source_paths.append(Path(__file__).with_name('hardware_interactive_walk.py'))
         if learned:
             source_paths += [Path(__file__).with_name(name) for name in
                              ('g1_walk_mpc_learned.py', 'hardware_mpc_learned.py', 'mpc_timing_grace.py',
@@ -679,7 +696,9 @@ def main(argv=None, *, learned=False):
             "publisher_created": False, "mode_setter_registered": False, "lowcmd_topic_created": False,
             "network_interface": args.nic, "control_nominal_period_ms": 6.,
             "mpc_start_s": runtime.mpc_start_s,
-            "primary_metric_window_s": [5., 18.], "forward_speed_m_s": .5 if args.task == "walk" else 0.,
+            "primary_metric_window_s": None if space_pause_walk else [5., 18.],
+            **({'walk_protocol': PROTOCOL} if space_pause_walk else {}),
+            "forward_speed_m_s": .5 if args.task == "walk" else 0.,
             "heading_target": "fixed_run_h0_positive_x", "host_before_control": host_evidence(),
             "requested_control_cpu": args.cpu, "requested_fifo_priority": args.rt_priority,
             "performance_setup": performance_setup,

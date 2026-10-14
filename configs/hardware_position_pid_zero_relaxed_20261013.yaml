@@ -1,0 +1,8 @@
+# Independent M07/V04: double the position PID reference speed/acceleration.
+# Original PID config and shared payload/model config remain unchanged.
+# All gains, absolute reference bounds, 6 ms period and lifecycle are unchanged.
+schema: g1_position_pid_zero_v1
+q_reference_min_deg: [-9.0, -5.0, -5.0, -12.8, -5.0]
+q_reference_max_deg: [5.0, 6.0, 5.0, 5.0, 5.0]
+hardware_pid_max_dq: 0.14
+hardware_pid_max_ddq: 0.40

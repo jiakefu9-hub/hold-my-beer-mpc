@@ -1,0 +1,11 @@
+# T12: strengthen ||ddq - ddq_posture||^2 only, for all five right-arm joints.
+# Compare to T03/T05: same alignment and task PID; unchanged limits/packet PD.
+schema: g1_acceleration_pid_v1
+kp: 400.0
+ki: 50.0
+kd: 40.0
+acc_weight: 0.4
+regularization: 0.024
+posture_kp: 24.0
+posture_kd: 8.0
+integral_limit: 0.1

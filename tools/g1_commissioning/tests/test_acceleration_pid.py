@@ -139,8 +139,8 @@ class AccelerationPidTests(unittest.TestCase):
         for k in TRIALS:
             cmd=build_command(k)
             self.assertIn('--preflight',cmd);self.assertNotIn('--execute',cmd)
-            self.assertEqual('--acceleration-pid-config' in cmd,k in ('T03','T05'))
-            self.assertEqual('--align-accel-forecast' in cmd,k!='T01')
+            self.assertEqual('--acceleration-pid-config' in cmd,k in ('T03','T05','T08','T09','T11','T12'))
+            self.assertEqual('--align-accel-forecast' in cmd,k not in ('T01','T07','T10','T11'))
         self.assertEqual(TRIALS['T03']['pid_config'],TRIALS['T05']['pid_config'])
         self.assertEqual(TRIALS['T02']['config'],TRIALS['T04']['config'])
 

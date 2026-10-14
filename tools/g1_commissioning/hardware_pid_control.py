@@ -233,7 +233,8 @@ class RightArmHardwarePid:
     """Simulation PID reused with hardware FK and a reviewed q-reference box."""
 
     def __init__(self, nominal_right_q, parameters: PidParameters,
-                 model: EndpointModel | None = None, control_dt: float = CONTROL_PERIOD_S):
+                 model: EndpointModel | None = None, control_dt: float = CONTROL_PERIOD_S,
+                 *, reference_bounds_rad=None):
         from arm_pid import ArmPIDPolicy
 
         self.nominal = np.asarray(nominal_right_q, dtype=float).copy()
@@ -261,6 +262,16 @@ class RightArmHardwarePid:
         )
         self.minimum = self.nominal - parameters.q_offset_limit_rad
         self.maximum = self.nominal + parameters.q_offset_limit_rad
+        if reference_bounds_rad is not None:
+            # Explicit zero-neutral trial: preserve the old absolute reference
+            # range as well as the zero-centered entry range. Not an MPC bound.
+            bounds = np.asarray(reference_bounds_rad, dtype=float)
+            if (bounds.shape != (2, 5) or not np.isfinite(bounds).all()
+                    or np.any(bounds[0] >= bounds[1])
+                    or np.any(self.nominal < bounds[0])
+                    or np.any(self.nominal > bounds[1])):
+                raise ValueError('invalid explicit PID reference bounds')
+            self.minimum, self.maximum = bounds.copy()
         self._last_dq = np.zeros(5, dtype=float)
         self._command_q = None
         self._command_dq = np.zeros(5, dtype=float)

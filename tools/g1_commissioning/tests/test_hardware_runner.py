@@ -50,9 +50,9 @@ class Clock:
 
 
 class Harness:
-    def __init__(self, failure=None, stationary=False, torque=False):
+    def __init__(self, failure=None, stationary=False, torque=False, continuous=False):
         self.clock, self.failure, self.stationary = Clock(), failure, stationary
-        self.torque = torque
+        self.torque, self.continuous = torque, continuous
         self.rows, self.writes, self.velocities, self.closed, self.registrations = [], [], [], [], []
         self.factory_calls = self.publisher_count = 0
         self.epoch = None
@@ -103,6 +103,7 @@ class Harness:
 
         class Runtime:
             stationary = harness.stationary
+            continuous_stationary_hold = harness.continuous
             controller = Controller()
             actuation = 'measured_torque_preview' if harness.torque else 'reference_servo'
             field_trial = harness.torque
@@ -154,8 +155,27 @@ class Harness:
                 return SimpleNamespace(frame=frame,motor_cmd=motors,mode_pr=0,mode_machine=4,crc=0)
 
             def create_plan(self, initial, profile):
-                return HardwarePidPlan(initial, profile["target_q_array"],
-                                       profile["kp_array"], profile["kd_array"], self.controller)
+                parent = HardwarePidPlan(initial, profile["target_q_array"],
+                                         profile["kp_array"], profile["kd_array"], self.controller)
+                if not harness.continuous:
+                    return parent
+
+                class ContinuousPlan:
+                    def sample(self, task_s, measured_slots, measured_dq,
+                               imu_quaternion, yaw0_rad, dt):
+                        if task_s < 3.:
+                            return parent.sample(task_s, measured_slots, measured_dq,
+                                                 imu_quaternion, yaw0_rad, dt)
+                        return {
+                            'stage':'continuous_stationary_test',
+                            'q_rad':profile['target_q_array'].copy(),
+                            'dq_rad_s':np.zeros(13),
+                            'kp':profile['kp_array'], 'kd':profile['kd_array'],
+                            'weight':1., 'terminal':False,
+                            'diagnostics':{'mpc_active':True},
+                        }
+
+                return ContinuousPlan()
 
             def set_epoch(self, epoch):
                 harness.epoch = epoch
@@ -175,7 +195,7 @@ class Harness:
                     if task_s >= .1 and harness.injected_at is None:
                         harness.injected_at = now
                         harness.handlers[signal.SIGINT](None,None)
-                if task_s >= 6 and harness.injected_at is None:
+                if task_s >= 6 and harness.injected_at is None and not harness.continuous:
                     harness.injected_at = now
                     if harness.failure == "compute":
                         raise RuntimeError("injected MPC solve failure")
@@ -196,6 +216,9 @@ class Harness:
                         harness.streams.interlock.observe_fsm(0, 1, now, now)
                     if harness.failure == "operator":
                         harness.handlers[signal.SIGINT](None, None)
+                if harness.continuous and task_s >= 20 and harness.injected_at is None:
+                    harness.injected_at = now
+                    harness.handlers[signal.SIGINT](None, None)
 
         return Runtime()
 
@@ -370,6 +393,18 @@ class Harness:
 
 
 class FieldRunnerTest(unittest.TestCase):
+    def test_continuous_stationary_runtime_waits_for_operator_then_releases(self):
+        h=Harness(stationary=True,continuous=True)
+        self.assertEqual(h.run(),130)
+        active=[r for r in h.rows if r.get('event')=='dds_write'
+                and 18. <= r.get('task_elapsed_s',-1) < 20.]
+        self.assertTrue(active)
+        self.assertTrue(all(r['stage']=='continuous_stationary_test'
+                            and r['weight']==1. for r in active))
+        self.assert_gradual_release(h)
+        self.assertEqual(h.velocities,[])
+        self.assertTrue(any(r.get('event')=='velocity_output_not_used' for r in h.rows))
+
     def test_slow_startup_uses_fresh_predictor_epoch_before_first_write(self):
         h=Harness('startup_delay',stationary=True,torque=True)
         self.assertEqual(h.run(),130)

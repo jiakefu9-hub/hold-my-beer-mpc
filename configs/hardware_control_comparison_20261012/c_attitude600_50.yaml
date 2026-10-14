@@ -1,0 +1,11 @@
+# T08/T09: stronger task attitude feedback only; not firmware joint PD.
+# Preserve T03/T05 separately. No change to allocation, limits or timing.
+schema: g1_acceleration_pid_v1
+kp: 600.0
+ki: 50.0
+kd: 50.0
+acc_weight: 0.4
+regularization: 0.012
+posture_kp: 24.0
+posture_kd: 8.0
+integral_limit: 0.1

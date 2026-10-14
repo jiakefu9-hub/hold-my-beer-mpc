@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print or run ONE T01..T06 field experiment. No automatic series execution."""
+"""Print or run ONE numbered field experiment. No automatic series execution."""
 import argparse
 from datetime import datetime
 import os
