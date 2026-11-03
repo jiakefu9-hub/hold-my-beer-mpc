@@ -1,0 +1,30 @@
+[
+  {
+    "name": "d01_position_pid_balanced_payload75_leftpd20",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid_balanced.yaml",
+    "overrides": {
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    },
+    "replay_id": "D01",
+    "title": "Position PID",
+    "controller_label": "PID"
+  },
+  {
+    "name": "d02_mpc_no_preview_payload75_leftpd20",
+    "base_config": "configs/simulation_showcase_20261103/D02_mpc_current_hold.yaml",
+    "overrides": {
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    },
+    "title": "No-Preview MPC",
+    "controller_label": "NO-PREVIEW MPC"
+  },
+  {
+    "name": "d03_mpc_disturbance_preview_payload75_leftpd20",
+    "base_config": "configs/simulation_showcase_20261103/D03_mpc_predictive.yaml",
+    "overrides": {
+      "xml_path": "resources/g1_description/scene_payload75.xml"
+    },
+    "title": "Disturbance-Preview MPC",
+    "controller_label": "DISTURBANCE-PREVIEW MPC"
+  }
+]

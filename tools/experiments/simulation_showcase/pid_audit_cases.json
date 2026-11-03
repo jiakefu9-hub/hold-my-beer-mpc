@@ -1,0 +1,72 @@
+[
+  {
+    "name": "pid_damping012",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+    "overrides": {
+      "pid_kd_pose": [
+        0.12,
+        0.12
+      ]
+    }
+  },
+  {
+    "name": "pid_time20",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+    "overrides": {
+      "pid_kp_pose": [
+        0.36,
+        0.36
+      ],
+      "pid_kd_pose": [
+        0.36,
+        0.36
+      ],
+      "pid_de_g_alpha": 0.021535925657277022
+    }
+  },
+  {
+    "name": "pid_time20_d0036",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+    "overrides": {
+      "pid_kp_pose": [
+        0.36,
+        0.36
+      ],
+      "pid_kd_pose": [
+        0.036,
+        0.036
+      ],
+      "pid_de_g_alpha": 0.021535925657277022
+    }
+  },
+  {
+    "name": "pid_kp012_d0012",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+    "overrides": {
+      "pid_kp_pose": [
+        0.12,
+        0.12
+      ],
+      "pid_kd_pose": [
+        0.012,
+        0.012
+      ],
+      "pid_de_g_alpha": 0.021535925657277022
+    }
+  },
+  {
+    "name": "pid_kp006_d0006",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+    "overrides": {
+      "pid_kp_pose": [
+        0.06,
+        0.06
+      ],
+      "pid_kd_pose": [
+        0.006,
+        0.006
+      ],
+      "pid_de_g_alpha": 0.021535925657277022
+    }
+  }
+]

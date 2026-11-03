@@ -1,0 +1,12 @@
+[
+  {
+    "name": "pid_balanced_heldout_pair02minus",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid_balanced.yaml",
+    "scenario": "heldout_pair_02_minus"
+  },
+  {
+    "name": "pid_soft_heldout_pair02minus",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid_soft.yaml",
+    "scenario": "heldout_pair_02_minus"
+  }
+]

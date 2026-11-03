@@ -1,0 +1,1761 @@
+{
+  "simulation_only": true,
+  "physical_dt_s": 0.002,
+  "control_dt_s": 0.006,
+  "evaluation_window_s": [
+    0,
+    8
+  ],
+  "runs": {
+    "d01_position_pid": {
+      "result": {
+        "complete": true,
+        "name": "d01_position_pid",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 15.461224814000161,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/configs/simulation_showcase_20261103/D01_position_pid.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        },
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_060538_d01_position_pid",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.764940123618725,
+              "tilt_rms": 4.866131307735714,
+              "tilt_max": 7.16120164903654,
+              "swing_rms": 2.4098390504798504,
+              "acc": 2.5987393786580846,
+              "alpha": 12.057947936276493,
+              "speed": 0.46516384817286854,
+              "speed_tracking_rms": 0.18423625084653514,
+              "omega": 0.36618277470589883
+            },
+            "right": {
+              "tilt_mean": 0.3025443411075732,
+              "tilt_rms": 0.3409472536263734,
+              "tilt_max": 1.0624038450159128,
+              "swing_rms": 0.3257449169724489,
+              "acc": 9.419199902769332,
+              "alpha": 79.74405910282807,
+              "speed": 0.48969216470399074,
+              "speed_tracking_rms": 0.23736800152052934,
+              "omega": 0.49478464008250933
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.373682386371598,
+              "tilt_rms": 4.412067792952898,
+              "tilt_max": 5.298151918143682,
+              "swing_rms": 2.2550814478761367,
+              "acc": 2.709715388184672,
+              "alpha": 12.500535843782124,
+              "speed": 0.508682825231254,
+              "speed_tracking_rms": 0.17525753845126135,
+              "omega": 0.37102735712282353
+            },
+            "right": {
+              "tilt_mean": 0.3115948124934177,
+              "tilt_rms": 0.3507185450818073,
+              "tilt_max": 1.0624038450159128,
+              "swing_rms": 0.33322380377011696,
+              "acc": 9.473990786445357,
+              "alpha": 79.95301911755065,
+              "speed": 0.5297501365808202,
+              "speed_tracking_rms": 0.2265317796118451,
+              "omega": 0.49778731472906623
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.329971072607229,
+              "tilt_rms": 6.366380500895263,
+              "tilt_max": 7.16120164903654,
+              "swing_rms": 2.116873522801531,
+              "acc": 2.096902918850035,
+              "alpha": 10.095392842432924,
+              "speed": 0.21645822112813304,
+              "speed_tracking_rms": 0.21645822112813304,
+              "omega": 0.3461270337930374
+            },
+            "right": {
+              "tilt_mean": 0.26634245556419545,
+              "tilt_rms": 0.29868236861193237,
+              "tilt_max": 0.6437946300503247,
+              "swing_rms": 0.2911809570661747,
+              "acc": 9.196772714112427,
+              "alpha": 78.90268529607214,
+              "speed": 0.27649819535181747,
+              "speed_tracking_rms": 0.27649819535181747,
+              "omega": 0.4825871501471973
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.2492328430804824
+        },
+        "right_arm_q_absmax": [
+          0.04260728850692686,
+          0.04004075671279611,
+          0.02304444959004028,
+          0.043352929182539544,
+          0.032528487817670586
+        ],
+        "right_arm_dq_absmax": [
+          0.5343176651939598,
+          0.6942242738545844,
+          0.46789070165136704,
+          0.770444171152771,
+          0.5994645143350258
+        ],
+        "right_arm_qacc_absmax": [
+          78.72287702302245,
+          93.23021263433856,
+          92.47890367274505,
+          77.97268365373746,
+          77.40581074963076
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.438343953893491,
+          5.686536623114123,
+          2.236078025764167,
+          4.785794672004011,
+          1.1448989435396624
+        ]
+      },
+      "diagnostics": {
+        "stored_acc_rms": 9.419199902769332,
+        "windows": {
+          "full": {
+            "acc_rms": 9.419199902769332,
+            "dominant_frequency_hz": 12.20703125,
+            "power_fraction_above_30hz": 0.16715392731959056
+          },
+          "middle": {
+            "acc_rms": 9.429855270440926,
+            "dominant_frequency_hz": 12.20703125,
+            "power_fraction_above_30hz": 0.16474638631549338
+          },
+          "stop": {
+            "acc_rms": 9.196772714112427,
+            "dominant_frequency_hz": 11.875,
+            "power_fraction_above_30hz": 0.1503943632379065
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 4.559921643493204,
+        "reference_speed_saturated_fraction": [
+          0.9602698650674663,
+          0.8808095952023988,
+          0.0,
+          0.9610194902548725,
+          0.8793103448275862
+        ],
+        "reference_speed_sign_flip_fraction": [
+          0.15153788447111777,
+          0.3675918979744936,
+          0.16654163540885222,
+          0.15153788447111777,
+          0.3668417104276069
+        ],
+        "fresh_jacobian_reconstruction": {
+          "acc_rms": 9.419655424965859,
+          "alpha_rms": 79.74330982388416,
+          "acc_component_rms": [
+            2.53918958113402,
+            2.960438183378247,
+            8.574277249922881
+          ],
+          "max_sample_difference": 0.07935002951191272,
+          "relative_rms_difference": 4.8361028667898154e-05,
+          "note": "Fresh FK of saved qpos/qvel; small sample-stage difference from online recorder. No gravity added."
+        }
+      }
+    },
+    "pid_damping012": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_063702_pid_damping012",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.7668989699008595,
+              "tilt_rms": 4.867242124620471,
+              "tilt_max": 7.114786383196448,
+              "swing_rms": 2.4155440994334403,
+              "acc": 2.491122787943427,
+              "alpha": 11.59479899500253,
+              "speed": 0.4648099556161978,
+              "speed_tracking_rms": 0.18321280059589684,
+              "omega": 0.3666244082096927
+            },
+            "right": {
+              "tilt_mean": 0.28762253222405465,
+              "tilt_rms": 0.3369525835065932,
+              "tilt_max": 1.2328923431219472,
+              "swing_rms": 0.3352754323948428,
+              "acc": 8.582958260248011,
+              "alpha": 32.12779970028157,
+              "speed": 0.4894814999658064,
+              "speed_tracking_rms": 0.23669436622956916,
+              "omega": 0.3906317085996752
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.378827239136458,
+              "tilt_rms": 4.416983968448213,
+              "tilt_max": 5.310207873870483,
+              "swing_rms": 2.264047410243518,
+              "acc": 2.6105593102992017,
+              "alpha": 11.99451668860093,
+              "speed": 0.5084281711519216,
+              "speed_tracking_rms": 0.1743487870583355,
+              "omega": 0.3709650805777861
+            },
+            "right": {
+              "tilt_mean": 0.27920058316892304,
+              "tilt_rms": 0.33005261925076645,
+              "tilt_max": 1.2328923431219472,
+              "swing_rms": 0.3291129624205023,
+              "acc": 8.518780739092225,
+              "alpha": 31.992474081806844,
+              "speed": 0.5293059130294883,
+              "speed_tracking_rms": 0.2251773852167048,
+              "omega": 0.382697108822613
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.3191858929584654,
+              "tilt_rms": 6.356983560485735,
+              "tilt_max": 7.114786383196448,
+              "swing_rms": 2.1265279779422315,
+              "acc": 1.94123261684317,
+              "alpha": 9.834790099440529,
+              "speed": 0.21504570052923175,
+              "speed_tracking_rms": 0.21504570052923175,
+              "omega": 0.34872183677424573
+            },
+            "right": {
+              "tilt_mean": 0.3213103284445809,
+              "tilt_rms": 0.3632441214413148,
+              "tilt_max": 0.9214442465393521,
+              "swing_rms": 0.3567476621587115,
+              "acc": 8.835007717194312,
+              "alpha": 32.66349608365177,
+              "speed": 0.278031825106332,
+              "speed_tracking_rms": 0.278031825106332,
+              "omega": 0.4208768827255308
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.2478883786342556
+        },
+        "right_arm_q_absmax": [
+          0.041023948719722626,
+          0.03762176339167195,
+          0.007259524997342798,
+          0.04382633442579579,
+          0.03162504616441251
+        ],
+        "right_arm_dq_absmax": [
+          0.5654182709722415,
+          0.608510226792061,
+          0.4168420072856093,
+          0.8856765260032573,
+          0.544167082832382
+        ],
+        "right_arm_qacc_absmax": [
+          78.72287702302245,
+          71.45463972368225,
+          71.58686238523345,
+          77.97268365373746,
+          49.20023114960131
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.464718014120862,
+          4.358869805558822,
+          1.5723126774362466,
+          4.59098633861154,
+          0.7973017682286335
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8010679994185921,
+          "p95": 0.8594778501901601,
+          "p99": 0.974417739853377,
+          "max": 1.239872999576619
+        },
+        "name": "pid_damping012",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+        "overrides": {
+          "pid_kd_pose": [
+            0.12,
+            0.12
+          ]
+        },
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 15.174923353999475,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/pid_damping012.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 8.582958260248011,
+        "windows": {
+          "full": {
+            "acc_rms": 8.582958260248011,
+            "dominant_frequency_hz": 11.23046875,
+            "power_fraction_above_30hz": 0.07565603996915403
+          },
+          "middle": {
+            "acc_rms": 8.374193845505507,
+            "dominant_frequency_hz": 11.23046875,
+            "power_fraction_above_30hz": 0.07640513366682242
+          },
+          "stop": {
+            "acc_rms": 8.835007717194312,
+            "dominant_frequency_hz": 11.25,
+            "power_fraction_above_30hz": 0.08321151618790591
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 5.2414785073640235
+      }
+    },
+    "pid_time20": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_063718_pid_time20",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.758362941180588,
+              "tilt_rms": 4.8595580468885755,
+              "tilt_max": 7.135584191083015,
+              "swing_rms": 2.4133301958611515,
+              "acc": 2.527902770141068,
+              "alpha": 11.443251908357102,
+              "speed": 0.4653272093073434,
+              "speed_tracking_rms": 0.18388376917251667,
+              "omega": 0.3656888846481671
+            },
+            "right": {
+              "tilt_mean": 0.4001306794853233,
+              "tilt_rms": 0.4611846793038707,
+              "tilt_max": 1.3341326171291341,
+              "swing_rms": 0.45291136958640843,
+              "acc": 9.069468604106623,
+              "alpha": 32.7748428529116,
+              "speed": 0.49582462650793585,
+              "speed_tracking_rms": 0.24945557353482634,
+              "omega": 0.4747405574578666
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.367918637062318,
+              "tilt_rms": 4.406534960044867,
+              "tilt_max": 5.2762009532839835,
+              "swing_rms": 2.260452088390987,
+              "acc": 2.648009459433238,
+              "alpha": 11.889179534456135,
+              "speed": 0.5089647095040247,
+              "speed_tracking_rms": 0.1750710186600865,
+              "omega": 0.3704367103026704
+            },
+            "right": {
+              "tilt_mean": 0.40197445360232864,
+              "tilt_rms": 0.46313815786474777,
+              "tilt_max": 1.3341326171291341,
+              "swing_rms": 0.4563988543540979,
+              "acc": 9.077875562830798,
+              "alpha": 32.96311863691979,
+              "speed": 0.5355072244252322,
+              "speed_tracking_rms": 0.23927080067662843,
+              "omega": 0.47340916796673227
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.320140157653668,
+              "tilt_rms": 6.356596623902371,
+              "tilt_max": 7.135584191083015,
+              "swing_rms": 2.118767377965263,
+              "acc": 1.9757645830014232,
+              "alpha": 9.45143963533968,
+              "speed": 0.21556149128899507,
+              "speed_tracking_rms": 0.21556149128899507,
+              "omega": 0.3460467835663903
+            },
+            "right": {
+              "tilt_mean": 0.39275558301730223,
+              "tilt_rms": 0.4532865859935214,
+              "tilt_max": 1.1834525069330937,
+              "swing_rms": 0.43704671856145216,
+              "acc": 9.03576255041136,
+              "alpha": 32.0106678949168,
+              "speed": 0.28659789184885204,
+              "speed_tracking_rms": 0.28659789184885204,
+              "omega": 0.48002918996370897
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.2510901634975102
+        },
+        "right_arm_q_absmax": [
+          0.041311248969653824,
+          0.03770084784051921,
+          0.007273542552667257,
+          0.046386910359943766,
+          0.03146643174176902
+        ],
+        "right_arm_dq_absmax": [
+          0.5746521761792664,
+          0.593981236483044,
+          0.34457678592391683,
+          0.9584737053618595,
+          0.5307866954555994
+        ],
+        "right_arm_qacc_absmax": [
+          78.72287702302245,
+          68.30947146085887,
+          47.42234908687412,
+          77.97268365373746,
+          43.22397091431343
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.498372157287916,
+          3.8013528540640085,
+          1.3238253298434162,
+          4.74690302406699,
+          0.699133283729531
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8024320004551555,
+          "p95": 0.8674200498717255,
+          "p99": 1.0113982597977154,
+          "max": 1.2719759997708024
+        },
+        "name": "pid_time20",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+        "overrides": {
+          "pid_kp_pose": [
+            0.36,
+            0.36
+          ],
+          "pid_kd_pose": [
+            0.36,
+            0.36
+          ],
+          "pid_de_g_alpha": 0.021535925657277022
+        },
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 15.014770462999877,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/pid_time20.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 9.069468604106623,
+        "windows": {
+          "full": {
+            "acc_rms": 9.069468604106623,
+            "dominant_frequency_hz": 10.25390625,
+            "power_fraction_above_30hz": 0.05361301680724712
+          },
+          "middle": {
+            "acc_rms": 9.044010251331466,
+            "dominant_frequency_hz": 10.25390625,
+            "power_fraction_above_30hz": 0.05472337167055135
+          },
+          "stop": {
+            "acc_rms": 9.03576255041136,
+            "dominant_frequency_hz": 10.0,
+            "power_fraction_above_30hz": 0.05201936275047382
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 6.372031890911669
+      }
+    },
+    "pid_time20_d0036": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_063733_pid_time20_d0036",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.779121985506232,
+              "tilt_rms": 4.880798778971139,
+              "tilt_max": 7.147138102136456,
+              "swing_rms": 2.4208034730662904,
+              "acc": 2.4010046839367285,
+              "alpha": 11.255637194847312,
+              "speed": 0.46497298488986166,
+              "speed_tracking_rms": 0.18293546133504093,
+              "omega": 0.36474289132454896
+            },
+            "right": {
+              "tilt_mean": 0.3237111802277398,
+              "tilt_rms": 0.3834906384498604,
+              "tilt_max": 1.7560791616502762,
+              "swing_rms": 0.379810351986642,
+              "acc": 4.761660922606647,
+              "alpha": 17.22655366110515,
+              "speed": 0.48304166998082804,
+              "speed_tracking_rms": 0.2226686503015536,
+              "omega": 0.28528254810498155
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.385523490305558,
+              "tilt_rms": 4.423593733723584,
+              "tilt_max": 5.324707541192955,
+              "swing_rms": 2.2648742731398235,
+              "acc": 2.5318067499282444,
+              "alpha": 11.725680124397691,
+              "speed": 0.5086382577946552,
+              "speed_tracking_rms": 0.1740539003095822,
+              "omega": 0.36942284511071904
+            },
+            "right": {
+              "tilt_mean": 0.3289296953218924,
+              "tilt_rms": 0.39495462606481896,
+              "tilt_max": 1.7560791616502762,
+              "swing_rms": 0.39251590502556105,
+              "acc": 4.90204368776844,
+              "alpha": 17.71775042197206,
+              "speed": 0.5241395062677682,
+              "speed_tracking_rms": 0.2122199640518777,
+              "omega": 0.2917670171140203
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.353515966308927,
+              "tilt_rms": 6.390481790904076,
+              "tilt_max": 7.147138102136456,
+              "swing_rms": 2.127971956321246,
+              "acc": 1.7843586482267701,
+              "alpha": 9.136768892303841,
+              "speed": 0.21482056283654355,
+              "speed_tracking_rms": 0.21482056283654355,
+              "omega": 0.3453895335706705
+            },
+            "right": {
+              "tilt_mean": 0.3028371198511296,
+              "tilt_rms": 0.33371952638915836,
+              "tilt_max": 0.726389071382782,
+              "swing_rms": 0.3209121414422773,
+              "acc": 4.152944069239831,
+              "alpha": 15.102848576792136,
+              "speed": 0.26030249051220544,
+              "speed_tracking_rms": 0.26030249051220544,
+              "omega": 0.257718241814396
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.251401518470707
+        },
+        "right_arm_q_absmax": [
+          0.03877795342177596,
+          0.036966070205440085,
+          0.007218424971118054,
+          0.045342696721693526,
+          0.031411745936268505
+        ],
+        "right_arm_dq_absmax": [
+          0.6497190223283638,
+          0.5878510336472222,
+          0.36496549296865566,
+          0.8247706550060184,
+          0.45753718787719627
+        ],
+        "right_arm_qacc_absmax": [
+          78.72287702302245,
+          26.665621003049388,
+          46.55904012037608,
+          77.97268365373746,
+          16.1272016285432
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.646757358114362,
+          2.03347235313275,
+          1.3705655144425095,
+          4.824079665920157,
+          0.4226422260071351
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8119960002659354,
+          "p95": 0.9197063501233059,
+          "p99": 1.2265379292512075,
+          "max": 1.5421140014950652
+        },
+        "name": "pid_time20_d0036",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+        "overrides": {
+          "pid_kp_pose": [
+            0.36,
+            0.36
+          ],
+          "pid_kd_pose": [
+            0.036,
+            0.036
+          ],
+          "pid_de_g_alpha": 0.021535925657277022
+        },
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 15.033936438001547,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/pid_time20_d0036.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 4.761660922606647,
+        "windows": {
+          "full": {
+            "acc_rms": 4.761660922606647,
+            "dominant_frequency_hz": 7.32421875,
+            "power_fraction_above_30hz": 0.01187041811152031
+          },
+          "middle": {
+            "acc_rms": 4.11293041505681,
+            "dominant_frequency_hz": 7.32421875,
+            "power_fraction_above_30hz": 0.012282176278996826
+          },
+          "stop": {
+            "acc_rms": 4.152944069239831,
+            "dominant_frequency_hz": 7.5,
+            "power_fraction_above_30hz": 0.009673268865750583
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 4.1005409441964265
+      }
+    },
+    "pid_kp012_d0012": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_063934_pid_kp012_d0012",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.781164172908717,
+              "tilt_rms": 4.883032876231149,
+              "tilt_max": 7.117397981404004,
+              "swing_rms": 2.4226953777987297,
+              "acc": 2.356641777412914,
+              "alpha": 11.2197309781742,
+              "speed": 0.46506230945799504,
+              "speed_tracking_rms": 0.1824670098020805,
+              "omega": 0.3640303079164685
+            },
+            "right": {
+              "tilt_mean": 0.6446283234226126,
+              "tilt_rms": 0.7283552449181627,
+              "tilt_max": 2.37016488951862,
+              "swing_rms": 0.7173070017515347,
+              "acc": 3.190945114456877,
+              "alpha": 13.074758117141952,
+              "speed": 0.4794098090522596,
+              "speed_tracking_rms": 0.21410941477942755,
+              "omega": 0.2583907834664384
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.38737592815715,
+              "tilt_rms": 4.425718512884317,
+              "tilt_max": 5.300313402555365,
+              "swing_rms": 2.266534106997297,
+              "acc": 2.486667853514045,
+              "alpha": 11.687345318133108,
+              "speed": 0.5087858177168961,
+              "speed_tracking_rms": 0.1735715437348141,
+              "omega": 0.36864771449062245
+            },
+            "right": {
+              "tilt_mean": 0.6448099663442022,
+              "tilt_rms": 0.7366417302978238,
+              "tilt_max": 2.37016488951862,
+              "swing_rms": 0.7304939050537382,
+              "acc": 3.322473005446486,
+              "alpha": 13.54547482068322,
+              "speed": 0.5208782236206887,
+              "speed_tracking_rms": 0.2032866681421224,
+              "omega": 0.26465337262523675
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.356317151914989,
+              "tilt_rms": 6.393130135592688,
+              "tilt_max": 7.117397981404004,
+              "swing_rms": 2.1326041757915513,
+              "acc": 1.7420488742968419,
+              "alpha": 9.112390123993663,
+              "speed": 0.21438919084836522,
+              "speed_tracking_rms": 0.21438919084836522,
+              "omega": 0.34494314866678594
+            },
+            "right": {
+              "tilt_mean": 0.6439017517362536,
+              "tilt_rms": 0.6942209005311618,
+              "tilt_max": 1.2526427445813377,
+              "swing_rms": 0.6440935384505863,
+              "acc": 2.5991048708543216,
+              "alpha": 10.992131123571735,
+              "speed": 0.2528088798057598,
+              "speed_tracking_rms": 0.2528088798057598,
+              "omega": 0.23165352217125815
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.253464918625153
+        },
+        "right_arm_q_absmax": [
+          0.03698262570680492,
+          0.03468624992847701,
+          0.007456142669731954,
+          0.04054808407180691,
+          0.02898002805453151
+        ],
+        "right_arm_dq_absmax": [
+          0.6597995693131383,
+          0.47949826839977683,
+          0.35543354477280775,
+          0.7549646504333113,
+          0.36237479960432795
+        ],
+        "right_arm_qacc_absmax": [
+          78.72287702302245,
+          19.013571086582914,
+          50.07571862198661,
+          77.97268365373746,
+          14.672906738512491
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.927752797105507,
+          1.6574365225644394,
+          1.251119323512773,
+          4.235870476353398,
+          0.34812157192524684
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8048850004342967,
+          "p95": 0.878506349545205,
+          "p99": 1.1742506795599166,
+          "max": 1.3823690005665412
+        },
+        "name": "pid_kp012_d0012",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+        "overrides": {
+          "pid_kp_pose": [
+            0.12,
+            0.12
+          ],
+          "pid_kd_pose": [
+            0.012,
+            0.012
+          ],
+          "pid_de_g_alpha": 0.021535925657277022
+        },
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 15.148071605999576,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/pid_kp012_d0012.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 3.190945114456877,
+        "windows": {
+          "full": {
+            "acc_rms": 3.190945114456877,
+            "dominant_frequency_hz": 4.8828125,
+            "power_fraction_above_30hz": 0.01933533858879435
+          },
+          "middle": {
+            "acc_rms": 2.8179205226604194,
+            "dominant_frequency_hz": 4.8828125,
+            "power_fraction_above_30hz": 0.01983960548386751
+          },
+          "stop": {
+            "acc_rms": 2.5991048708543216,
+            "dominant_frequency_hz": 1.25,
+            "power_fraction_above_30hz": 0.01692799349567444
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 2.927469364938912
+      }
+    },
+    "pid_kp006_d0006": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_063949_pid_kp006_d0006",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.778210861838414,
+              "tilt_rms": 4.880118290645311,
+              "tilt_max": 7.10290369557285,
+              "swing_rms": 2.4194352047605716,
+              "acc": 2.3668644526749363,
+              "alpha": 11.250363943699163,
+              "speed": 0.4651812616441865,
+              "speed_tracking_rms": 0.18291355481229818,
+              "omega": 0.3637662504969627
+            },
+            "right": {
+              "tilt_mean": 1.050905078216204,
+              "tilt_rms": 1.1846467672767667,
+              "tilt_max": 3.071164794610253,
+              "swing_rms": 1.1613784269108212,
+              "acc": 2.8159254699519356,
+              "alpha": 12.058233228606747,
+              "speed": 0.4774933173421426,
+              "speed_tracking_rms": 0.20995408588683007,
+              "omega": 0.27723184012167457
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.385457278631182,
+              "tilt_rms": 4.4243362967892335,
+              "tilt_max": 5.285756987908022,
+              "swing_rms": 2.2633515651010296,
+              "acc": 2.4968801511943464,
+              "alpha": 11.718389289907977,
+              "speed": 0.5089040863930111,
+              "speed_tracking_rms": 0.17410649638654657,
+              "omega": 0.368448090120515
+            },
+            "right": {
+              "tilt_mean": 1.0432657041499491,
+              "tilt_rms": 1.1902822365053327,
+              "tilt_max": 3.071164794610253,
+              "swing_rms": 1.17742352572307,
+              "acc": 2.9480823345250458,
+              "alpha": 12.52105757402384,
+              "speed": 0.5193716182047953,
+              "speed_tracking_rms": 0.19961948900190235,
+              "omega": 0.28399224283596564
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.349225194667344,
+              "tilt_rms": 6.385825395758007,
+              "tilt_max": 7.10290369557285,
+              "swing_rms": 2.1314484960459135,
+              "acc": 1.752881835426427,
+              "alpha": 9.141709584596896,
+              "speed": 0.214556645980412,
+              "speed_tracking_rms": 0.214556645980412,
+              "omega": 0.3444030263358242
+            },
+            "right": {
+              "tilt_mean": 1.0814625744812227,
+              "tilt_rms": 1.1618315738246745,
+              "tilt_max": 1.9235377483204295,
+              "swing_rms": 1.0555622551846298,
+              "acc": 2.209620659087341,
+              "alpha": 9.994869278249736,
+              "speed": 0.24700572735333404,
+              "speed_tracking_rms": 0.24700572735333404,
+              "omega": 0.24835677949723944
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.2529571182113566
+        },
+        "right_arm_q_absmax": [
+          0.034575234508267445,
+          0.03084756478773548,
+          0.007264656390071941,
+          0.03759186754840365,
+          0.025869020460463122
+        ],
+        "right_arm_dq_absmax": [
+          0.7429631625809191,
+          0.41479759322019194,
+          0.3314232051979527,
+          0.6295041220139282,
+          0.2902179932903294
+        ],
+        "right_arm_qacc_absmax": [
+          78.72287702302245,
+          19.148680372654677,
+          48.91307491773331,
+          77.97268365373746,
+          9.828013643321171
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.834582002495354,
+          1.381557373252834,
+          1.149176029612928,
+          4.028844669709386,
+          0.2547718685357065
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8031890001802822,
+          "p95": 0.8711622516784701,
+          "p99": 1.060896010658325,
+          "max": 1.6948390002653468
+        },
+        "name": "pid_kp006_d0006",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid.yaml",
+        "overrides": {
+          "pid_kp_pose": [
+            0.06,
+            0.06
+          ],
+          "pid_kd_pose": [
+            0.006,
+            0.006
+          ],
+          "pid_de_g_alpha": 0.021535925657277022
+        },
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 14.882005825000306,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/pid_kp006_d0006.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 2.8159254699519356,
+        "windows": {
+          "full": {
+            "acc_rms": 2.8159254699519356,
+            "dominant_frequency_hz": 2.44140625,
+            "power_fraction_above_30hz": 0.02633913236245674
+          },
+          "middle": {
+            "acc_rms": 2.4823319017865177,
+            "dominant_frequency_hz": 2.44140625,
+            "power_fraction_above_30hz": 0.02670338979839701
+          },
+          "stop": {
+            "acc_rms": 2.209620659087341,
+            "dominant_frequency_hz": 1.25,
+            "power_fraction_above_30hz": 0.028327060225959214
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 2.553733996873115
+      }
+    },
+    "pid_balanced_heldout_pair02minus": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_075307_pid_balanced_heldout_pair02minus",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.787204314810238,
+              "tilt_rms": 4.888251704233214,
+              "tilt_max": 7.118272245387353,
+              "swing_rms": 2.422358178779436,
+              "acc": 2.3751008000633345,
+              "alpha": 11.269617343738032,
+              "speed": 0.4652318898024265,
+              "speed_tracking_rms": 0.1828790368217923,
+              "omega": 0.36420868828694625
+            },
+            "right": {
+              "tilt_mean": 0.6448235614410744,
+              "tilt_rms": 0.7293341434841251,
+              "tilt_max": 2.433206579424362,
+              "swing_rms": 0.7181615689457974,
+              "acc": 3.2053016029782904,
+              "alpha": 13.10765025669123,
+              "speed": 0.47953743360862533,
+              "speed_tracking_rms": 0.214398786747639,
+              "omega": 0.2593468623295412
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.394910488933848,
+              "tilt_rms": 4.4328901812888954,
+              "tilt_max": 5.324346270457583,
+              "swing_rms": 2.267079293590985,
+              "acc": 2.508555304069215,
+              "alpha": 11.747297298409613,
+              "speed": 0.5089800275257543,
+              "speed_tracking_rms": 0.17411406302989801,
+              "omega": 0.36886890958601265
+            },
+            "right": {
+              "tilt_mean": 0.6450593549782702,
+              "tilt_rms": 0.7378553026923201,
+              "tilt_max": 2.433206579424362,
+              "swing_rms": 0.7315843075582981,
+              "acc": 3.3397510424934747,
+              "alpha": 13.585258956074242,
+              "speed": 0.5210259054686174,
+              "speed_tracking_rms": 0.20366972302734077,
+              "omega": 0.2658232268586036
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.3563796183158,
+              "tilt_rms": 6.393196554324342,
+              "tilt_max": 7.118272245387353,
+              "swing_rms": 2.1326524039445145,
+              "acc": 1.7418726124525536,
+              "alpha": 9.111827484238173,
+              "speed": 0.2143848939762667,
+              "speed_tracking_rms": 0.2143848939762667,
+              "omega": 0.3449387674382136
+            },
+            "right": {
+              "tilt_mean": 0.6438803872922919,
+              "tilt_rms": 0.6942043455740612,
+              "tilt_max": 1.252827718981566,
+              "swing_rms": 0.64407421498117,
+              "acc": 2.5988543104473933,
+              "alpha": 10.99160737309638,
+              "speed": 0.25280184825701546,
+              "speed_tracking_rms": 0.25280184825701546,
+              "omega": 0.2316376982505383
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.253466123625768
+        },
+        "right_arm_q_absmax": [
+          0.03698664849100595,
+          0.03450531773391116,
+          0.007454184327348706,
+          0.0405534280673346,
+          0.029511988388414036
+        ],
+        "right_arm_dq_absmax": [
+          0.6684302425803628,
+          0.4748899229253422,
+          0.3537402413705545,
+          0.758994975275114,
+          0.36153153351411926
+        ],
+        "right_arm_qacc_absmax": [
+          79.84691474584494,
+          19.07168010996125,
+          50.63498894561318,
+          61.84199182007291,
+          14.530575244140369
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.921256267099013,
+          1.6594620107600129,
+          1.2580804694835603,
+          4.282909441158921,
+          0.34712312936724043
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8153399994625943,
+          "p95": 0.9035020495502976,
+          "p99": 1.2212644501778414,
+          "max": 1.4896240008965833
+        },
+        "name": "pid_balanced_heldout_pair02minus",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid_balanced.yaml",
+        "scenario": "heldout_pair_02_minus",
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 15.198863404000804,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/pid_balanced_heldout_pair02minus.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 3.2053016029782904,
+        "windows": {
+          "full": {
+            "acc_rms": 3.2053016029782904,
+            "dominant_frequency_hz": 4.8828125,
+            "power_fraction_above_30hz": 0.019387036923414813
+          },
+          "middle": {
+            "acc_rms": 2.8196133812777013,
+            "dominant_frequency_hz": 4.8828125,
+            "power_fraction_above_30hz": 0.019758566260715444
+          },
+          "stop": {
+            "acc_rms": 2.5988543104473933,
+            "dominant_frequency_hz": 1.25,
+            "power_fraction_above_30hz": 0.016935398262994814
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 2.9395437196840604
+      }
+    },
+    "pid_soft_heldout_pair02minus": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_075322_pid_soft_heldout_pair02minus",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.782551451604175,
+              "tilt_rms": 4.883696381523385,
+              "tilt_max": 7.10290646896741,
+              "swing_rms": 2.419836117073498,
+              "acc": 2.380981611317894,
+              "alpha": 11.283094963320814,
+              "speed": 0.4652258895748619,
+              "speed_tracking_rms": 0.1832942102417664,
+              "omega": 0.3638391352211539
+            },
+            "right": {
+              "tilt_mean": 1.0504254802625266,
+              "tilt_rms": 1.1850146528982755,
+              "tilt_max": 3.1132444705000157,
+              "swing_rms": 1.1616576301188106,
+              "acc": 2.8298916690673326,
+              "alpha": 12.070716719944166,
+              "speed": 0.47752935473561997,
+              "speed_tracking_rms": 0.2102812471840707,
+              "omega": 0.2778789272918113
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.390883675135743,
+              "tilt_rms": 4.429269228264983,
+              "tilt_max": 5.3193268131861435,
+              "swing_rms": 2.264315531229018,
+              "acc": 2.5136037691823123,
+              "alpha": 11.757658287368873,
+              "speed": 0.5089546857792056,
+              "speed_tracking_rms": 0.17460504330745696,
+              "omega": 0.36853835308135546
+            },
+            "right": {
+              "tilt_mean": 1.042666089652601,
+              "tilt_rms": 1.1907401773380362,
+              "tilt_max": 3.1132444705000157,
+              "swing_rms": 1.1777812908127332,
+              "acc": 2.9647514357385707,
+              "alpha": 12.536073890593332,
+              "speed": 0.5194131487917637,
+              "speed_tracking_rms": 0.2000497862823481,
+              "omega": 0.28478237622503133
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.349222557477901,
+              "tilt_rms": 6.385823999195617,
+              "tilt_max": 7.10290646896741,
+              "swing_rms": 2.1314519115440915,
+              "acc": 1.7528695140767478,
+              "alpha": 9.141720086856834,
+              "speed": 0.21456037133443034,
+              "speed_tracking_rms": 0.21456037133443034,
+              "omega": 0.34440167076353473
+            },
+            "right": {
+              "tilt_mean": 1.0814630427022298,
+              "tilt_rms": 1.1618304343621015,
+              "tilt_max": 1.9235109987587826,
+              "swing_rms": 1.0555637429674638,
+              "acc": 2.209622137476861,
+              "alpha": 9.99491952464025,
+              "speed": 0.24700475019721518,
+              "speed_tracking_rms": 0.24700475019721518,
+              "omega": 0.2483535462415176
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.2521590325819174
+        },
+        "right_arm_q_absmax": [
+          0.03457542503902807,
+          0.03139603722894137,
+          0.007264624565880362,
+          0.037592267458180346,
+          0.026435502400967936
+        ],
+        "right_arm_dq_absmax": [
+          0.7530562854201853,
+          0.41253919861515576,
+          0.32811764483030764,
+          0.6456116199885323,
+          0.28994409298746654
+        ],
+        "right_arm_qacc_absmax": [
+          79.84691474584494,
+          19.179718046614337,
+          50.03233557133694,
+          62.4249580995133,
+          10.394253454750924
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.83666991779112,
+          1.3821155134539531,
+          1.1505706687983661,
+          4.100723320130151,
+          0.25065178208874916
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8232064992625965,
+          "p95": 0.8815962489279626,
+          "p99": 1.040181050266254,
+          "max": 1.3906460008001886
+        },
+        "name": "pid_soft_heldout_pair02minus",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid_soft.yaml",
+        "scenario": "heldout_pair_02_minus",
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 14.986829355000737,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/pid_soft_heldout_pair02minus.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 2.8298916690673326,
+        "windows": {
+          "full": {
+            "acc_rms": 2.8298916690673326,
+            "dominant_frequency_hz": 2.44140625,
+            "power_fraction_above_30hz": 0.026172925253687338
+          },
+          "middle": {
+            "acc_rms": 2.4837294123038753,
+            "dominant_frequency_hz": 2.44140625,
+            "power_fraction_above_30hz": 0.026280613388343723
+          },
+          "stop": {
+            "acc_rms": 2.209622137476861,
+            "dominant_frequency_hz": 1.25,
+            "power_fraction_above_30hz": 0.028327491477983024
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 2.5676841136775854
+      }
+    },
+    "d01_position_pid_balanced": {
+      "result": {
+        "complete": true,
+        "path": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/20261103_075403_d01_position_pid_balanced",
+        "windows": {
+          "full": {
+            "left": {
+              "tilt_mean": 4.781164172908717,
+              "tilt_rms": 4.883032876231149,
+              "tilt_max": 7.117397981404004,
+              "swing_rms": 2.4226953777987297,
+              "acc": 2.356641777412914,
+              "alpha": 11.2197309781742,
+              "speed": 0.46506230945799504,
+              "speed_tracking_rms": 0.1824670098020805,
+              "omega": 0.3640303079164685
+            },
+            "right": {
+              "tilt_mean": 0.6446283234226126,
+              "tilt_rms": 0.7283552449181627,
+              "tilt_max": 2.37016488951862,
+              "swing_rms": 0.7173070017515347,
+              "acc": 3.190945114456877,
+              "alpha": 13.074758117141952,
+              "speed": 0.4794098090522596,
+              "speed_tracking_rms": 0.21410941477942755,
+              "omega": 0.2583907834664384
+            }
+          },
+          "walk": {
+            "left": {
+              "tilt_mean": 4.38737592815715,
+              "tilt_rms": 4.425718512884317,
+              "tilt_max": 5.300313402555365,
+              "swing_rms": 2.266534106997297,
+              "acc": 2.486667853514045,
+              "alpha": 11.687345318133108,
+              "speed": 0.5087858177168961,
+              "speed_tracking_rms": 0.1735715437348141,
+              "omega": 0.36864771449062245
+            },
+            "right": {
+              "tilt_mean": 0.6448099663442022,
+              "tilt_rms": 0.7366417302978238,
+              "tilt_max": 2.37016488951862,
+              "swing_rms": 0.7304939050537382,
+              "acc": 3.322473005446486,
+              "alpha": 13.54547482068322,
+              "speed": 0.5208782236206887,
+              "speed_tracking_rms": 0.2032866681421224,
+              "omega": 0.26465337262523675
+            }
+          },
+          "stop": {
+            "left": {
+              "tilt_mean": 6.356317151914989,
+              "tilt_rms": 6.393130135592688,
+              "tilt_max": 7.117397981404004,
+              "swing_rms": 2.1326041757915513,
+              "acc": 1.7420488742968419,
+              "alpha": 9.112390123993663,
+              "speed": 0.21438919084836522,
+              "speed_tracking_rms": 0.21438919084836522,
+              "omega": 0.34494314866678594
+            },
+            "right": {
+              "tilt_mean": 0.6439017517362536,
+              "tilt_rms": 0.6942209005311618,
+              "tilt_max": 1.2526427445813377,
+              "swing_rms": 0.6440935384505863,
+              "acc": 2.5991048708543216,
+              "alpha": 10.992131123571735,
+              "speed": 0.2528088798057598,
+              "speed_tracking_rms": 0.2528088798057598,
+              "omega": 0.23165352217125815
+            }
+          }
+        },
+        "gates": {
+          "status": "PASS",
+          "fallen": false,
+          "nan_inf_count": 0,
+          "tail_complete": true,
+          "qp_failure_count": 0,
+          "qp_fallback_count": 0,
+          "runtime_mapping_safety_fallback_count": 0,
+          "xy_displacement_m": 3.253464918625153
+        },
+        "right_arm_q_absmax": [
+          0.03698262570680492,
+          0.03468624992847701,
+          0.007456142669731954,
+          0.04054808407180691,
+          0.02898002805453151
+        ],
+        "right_arm_dq_absmax": [
+          0.6597995693131383,
+          0.47949826839977683,
+          0.35543354477280775,
+          0.7549646504333113,
+          0.36237479960432795
+        ],
+        "right_arm_qacc_absmax": [
+          78.72287702302245,
+          19.013571086582914,
+          50.07571862198661,
+          77.97268365373746,
+          14.672906738512491
+        ],
+        "right_arm_ddq_des_absmax": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "right_arm_cpp_executor_actuator_tau_absmax": [
+          6.927752797105507,
+          1.6574365225644394,
+          1.251119323512773,
+          4.235870476353398,
+          0.34812157192524684
+        ],
+        "policy_compute_ms": {
+          "p50": 0.8193399989977479,
+          "p95": 0.9040987994012538,
+          "p99": 1.2509431292346558,
+          "max": 1.7548560008435743
+        },
+        "name": "d01_position_pid_balanced",
+        "base_config": "configs/simulation_showcase_20261103/D01_position_pid_balanced.yaml",
+        "returncode": 0,
+        "cpu": 2,
+        "wall_s": 15.254237430999638,
+        "config": "/home/fjk/g1_ws/hold-my-beer-mpc/evaluation/simulation_showcase_20261103/configs/d01_position_pid_balanced.yaml",
+        "source_sha256": {
+          "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+          "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+          "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+          "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+          "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+          "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+          "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+          "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+          "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+          "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+          "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+          "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+          "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+          "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+          "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+          "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+          "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+          "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+          "tools/experiments/simulation_showcase/replay.py": "303c85bcab30c5de172ca29b7e2b1425caaa68d23193f124a779fd0e5d7c5bf6",
+          "tools/experiments/simulation_showcase/package.py": "6bab527e16981d71f09fa30ddfa2be1bfb756ab7a9b4d934035ccfe27839af67",
+          "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+          "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+          "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+          "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+          "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+        }
+      },
+      "diagnostics": {
+        "stored_acc_rms": 3.190945114456877,
+        "windows": {
+          "full": {
+            "acc_rms": 3.190945114456877,
+            "dominant_frequency_hz": 4.8828125,
+            "power_fraction_above_30hz": 0.01933533858879435
+          },
+          "middle": {
+            "acc_rms": 2.8179205226604194,
+            "dominant_frequency_hz": 4.8828125,
+            "power_fraction_above_30hz": 0.01983960548386751
+          },
+          "stop": {
+            "acc_rms": 2.5991048708543216,
+            "dominant_frequency_hz": 1.25,
+            "power_fraction_above_30hz": 0.01692799349567444
+          }
+        },
+        "bandwidth_diagnostic_sg53_acc_rms": 2.927469364938912,
+        "reference_speed_saturated_fraction": [
+          0.005247376311844078,
+          0.0,
+          0.0,
+          0.005997001499250375,
+          0.0
+        ],
+        "reference_speed_sign_flip_fraction": [
+          0.05926481620405101,
+          0.016504126031507877,
+          0.01800450112528132,
+          0.05926481620405101,
+          0.015753938484621154
+        ]
+      }
+    }
+  },
+  "selected_config_repeat_max_metric_difference": 0.0
+}

@@ -1,0 +1,23 @@
+[
+  {
+    "name": "d01_payload75_leftrollkp50",
+    "base_config": "configs/simulation_showcase_20261103/D01_position_pid_balanced_left_roll_kp50.yaml",
+    "replay_id": "D01_R50",
+    "title": "Position PID - left shoulder roll Kp 50",
+    "controller_label": "PID"
+  },
+  {
+    "name": "d02_payload75_leftrollkp50_strict",
+    "base_config": "configs/simulation_showcase_20261103/D02_mpc_current_hold_left_roll_kp50.yaml",
+    "replay_id": "D02_R50",
+    "title": "No-Preview MPC - left shoulder roll Kp 50",
+    "controller_label": "NO-PREVIEW MPC"
+  },
+  {
+    "name": "d03_payload75_leftrollkp50_strict",
+    "base_config": "configs/simulation_showcase_20261103/D03_mpc_predictive_left_roll_kp50.yaml",
+    "replay_id": "D03_R50",
+    "title": "Disturbance-Preview MPC - left shoulder roll Kp 50",
+    "controller_label": "DISTURBANCE-PREVIEW MPC"
+  }
+]
