@@ -1,68 +1,31 @@
-# G1 真机实验入口
+# 真机实验与复现入口
 
-**2026-10-15：本阶段实验与录像已经完成，当前转入论文及面试准备。**
-手机端优先[项目交接](../PROJECT_HANDOFF_FOR_MOBILE.md)、[关键数据归档](evidence/20261014_final_archive/README.md)和
-[最新状态](EXPERIMENT_STATUS.md)。以下操作导航和旧进度保留作历史说明，不是新的执行计划。
+本阶段实验和主对照录像已完成。首先读 [最终实验清单](../FINAL_EXPERIMENTS.md)、
+[精选数据归档](evidence/20261014_final_archive/README.md)和[实验状态](EXPERIMENT_STATUS.md)。
 
-当前进度与下一步：[实验进度简表](EXPERIMENT_STATUS.md)；右臂三轮辨识及联合分析已完成，暂不写回物理参数；
-新版不加学习前馈 MPC 加入预测内轻度 pitch 回正后已完整走停，随后同版学习前馈 MPC 也已
-首次完整走停，两轮均正常退权且操作者确认平顺。完整证据见[成功对照](sessions/20261008_MPC_REFINED_AND_LEARNED_SUCCESS.md)。
-
-这里区分“如何操作”“已经证实什么”“每次实际发生了什么”。
-截至 2026-10-07：H1、离线 HIL、A2/A3 和 IMU 零点观察已有记录；6 ms PID 已完成真机功能复验并冻结。
-旧 `hold_current` 直立力矩 MPC 已首次完整走停退权；独立 refined `hold_current` 修正版和
-`learned_filtered` 已各完成一次完整走停退权。单轮成功不等于硬实时或统计效果已经验证。
-没有将单轮成功或离线回放称为硬实时验收。
-
-采集／预测更新（2026-09-25）：旧五条带牵拉轨迹已撤回；十二条固定 H0 新轨迹已完成离线审计、
-方法比较与画图。当前入口是[十二条 H0 预测研究](H0_WALK_PREDICTOR_STUDY.md)，不是下方旧五条报告。
-
-## 现在最常用的几份文件
-
-| 想做什么 | 看哪里 |
+| 目的 | 文档 |
 | --- | --- |
-| 看当前十二条 H0 轨迹、预测代码与可复算结果 | [H0_WALK_PREDICTOR_STUDY.md](H0_WALK_PREDICTOR_STUDY.md)：24 页图集、方法比较、下一步模板方案 |
-| 快速回忆已知结论和未知项 | [KNOWN_RESULTS.md](KNOWN_RESULTS.md) |
-| 查某天实验的成果、参数与证据路径 | [sessions/README.md](sessions/README.md) |
-| 下一步看步态相位、采走动时的原始扰动 | [RAW_WALK_CAPTURE.md](RAW_WALK_CAPTURE.md) |
-| 做“左臂固定、右臂 PID”的首次真机持瓶实验 | [HARDWARE_PID.md](HARDWARE_PID.md)：程序、完整 `[5,18)` 指标与仿真差异 |
-| 查已成功的旧版右臂 MPC | [HARDWARE_MPC.md](HARDWARE_MPC.md)：预测模型、程序对应关系、时间验证和现场命令 |
-| 查新版微调 MPC 与学习扰动前馈 | [HARDWARE_MPC_LEARNED.md](HARDWARE_MPC_LEARNED.md)：程序、模型和现场命令；[成功对照](sessions/20261008_MPC_REFINED_AND_LEARNED_SUCCESS.md)：两轮实测证据 |
-| 辨识右臂力矩通道、摩擦与耦合 | [HARDWARE_ARM_IDENTIFICATION.md](HARDWARE_ARM_IDENTIFICATION.md)：原地小幅激励、三轮采集与离线拟合 |
-| 看 MPC 按仿真迁移了哪些、还缺哪些 | [HARDWARE_MPC_TORQUE_MIGRATION.md](HARDWARE_MPC_TORQUE_MIGRATION.md)：实测状态、候选筛选、闭环对照与当前阻碍 |
-| 看 MPC 延迟／负载偏差和提前制动的离线研究 | [HARDWARE_MPC_ROBUSTNESS.md](HARDWARE_MPC_ROBUSTNESS.md)：失败归因、20 秒模型闭环、因果状态预测及尚未通过的时间条件 |
-| 看五条轨迹是否可用、如何对齐及能否预测扰动 | [WALK_DATASET_AUDIT.md](WALK_DATASET_AUDIT.md)：离线审计与世界系模板建议 |
-| 比较相位模板、多关节和 IMU 历史预测方法 | [WALK_PREDICTOR_METHOD_STUDY.md](WALK_PREDICTOR_METHOD_STUDY.md)：论文依据与五条实测数据比较 |
-| 看五条腿部／身体 IMU 曲线 | [WALK_SIGNAL_GALLERY.md](WALK_SIGNAL_GALLERY.md)：22 张图、HTML 与 PDF |
-| 测普通调度下的通信往返、收包和 6 ms 主机抖动 | [TIMING_VALIDATION.md](TIMING_VALIDATION.md)，集成到只读 phase probe；尚无本轮真机数字 |
-| 查 A1/A2/A3 的完整操作与接口依据 | [RUNBOOK.md](RUNBOOK.md)；这是原来的长篇现场 README |
-| 只做首次 H1 状态读取 | [详细指南](h1/G1_H1_FIELD_RUNBOOK.md)、[现场速查](h1/G1_H1_FIELD_CHECKLIST.md) |
-| 理解瓶子中心、身体系和世界系 | [ENDPOINT_FRAME.md](ENDPOINT_FRAME.md) |
-| 复做 IMU 零点时机实验 | [IMU_ZERO_REFERENCE_TEST.md](IMU_ZERO_REFERENCE_TEST.md) |
-| 编译程序、找 profile 和源码 | [工具说明](../../tools/g1_commissioning/README.md) |
-| 写下一次 PID/MPC 或采集实验记录 | [SESSION_TEMPLATE.md](SESSION_TEMPLATE.md) |
+| 当前学习 MPC 的模型与程序 | [HARDWARE_MPC_LEARNED](HARDWARE_MPC_LEARNED.md) |
+| 力矩执行、日志和跟踪分析 | [HARDWARE_MPC_EXECUTION](HARDWARE_MPC_EXECUTION.md) |
+| 位置 PID 与评价定义 | [HARDWARE_PID](HARDWARE_PID.md) |
+| 末端坐标和瓶轴方向 | [ENDPOINT_FRAME](ENDPOINT_FRAME.md) |
+| 学习预测器的输入、标签和验证 | [H0 研究](H0_WALK_PREDICTOR_STUDY.md)、[细化](H0_WALK_PREDICTOR_REFINEMENT.md) |
+| 最终六轮和录像实验 | [上午结果及录像](sessions/20261013_MORNING_RESULTS_AND_VIDEO_PLAN.md) |
+| C 前馈 PID 对照 | [最终 T 系列](sessions/20261012_FINAL_COMPARISON.md) |
+| 逐轮结果、故障和修复 | [session 索引](sessions/README.md) |
+| 首次接机、模式与停止条件 | [RUNBOOK](RUNBOOK.md)、[H1 检查](h1/G1_H1_FIELD_CHECKLIST.md) |
+| 程序、构建和 profile | [工具说明](../../tools/g1_commissioning/README.md) |
+| 追加实验记录格式 | [SESSION_TEMPLATE](SESSION_TEMPLATE.md) |
 
-## 当前能力边界
+最终常规实验：双臂零中立位，正常左臂 PD 20/1，右臂 6 ms MPC 或位置 PID，
+75 mm／250 g 名义负载模型，PC1 内置腿部行走。实际附件与安装并非每轮完整称量辨识。
+学习 MPC 主基线关闭时间对齐、无额外肩 roll 回正；`hold_current` 保留当前扰动及逆动力学补偿。
+M08 增益实验、M10 交互暂停、T 系列 C 等必须按各自 session 条件解释。
 
-| 路径 | 状态／不要混淆的地方 |
-| --- | --- |
-| H1 state-only | 已有真实状态与审计 PASS；不等于所有硬件语义、现场验收均完成 |
-| Publisher-absent HIL | 离线输出链记录 would-write；没有给电机发命令 |
-| 独立 A2 / A3 | 已实测 `rt/arm_sdk` 静态响应／双臂平衡控臂，不是整机低层接管 |
-| 30 秒 phase observer | 已实测；本机 `GetPhase` 返回 7301，未取得可用官方相位 |
-| 21 秒 walk collector | 十二条固定 H0 轨迹已采集并离线研究；旧五条因吊绳牵拉全部撤回；第 06 条缺完整会话尾标记，单独补充分析 |
-| 真机 PID | 20 ms 和 6 ms 均有现场功能复验；6 ms 平顺、退权正常，0.934% 超时，不称为硬实时通过 |
-| 真机 MPC | 已有多轮学习/保持MPC完整走停及PID/C对照；重复次数仍有限，存在少量截止时间超期，不称为硬实时验收。旧位置参考版禁止现场输出 |
-| production adapter | 本次不变；`cpp/unitree_arm_adapter` 仍禁止真实 publisher |
+`tools/g1_commissioning/` 已经有实际控臂／行走输出能力，目录名不表示只读。
+参数与操作条件是原机器的已记录配置，不是新机器的自动运行授权。
+当前整理只做离线验证；实际运行仍沿用入口的显式 execute、状态检查及停止退权流程。
 
-旧五条轨迹仅保留历史审计和方法参考，不再作为训练／检验数据。十二条新版轨迹用走前最后两秒平均
-朝向定义本轮固定 H0，航向保持以 H0 +X 为目标；原始日志不改写，全部 IMU 样本离线派生到 H0。
-冻结模型已接入独立 MPC 候选，研究精度不代表真机控制效果；采集程序不在线构造扰动模板。
-本导航不发出运行授权，也不修改任何停止门或模式要求。
-
-## 文件怎么放
-
-`h1/` 放只读现场指南；`sessions/` 放按日期排列的真实记录和离线准备记录；
-本层放可复用操作指南、坐标定义和结论索引。代码、原始数据、官方 PDF 不混进来。
-完整原始目录留在本地 `evaluation/`，每次记录引用实际目录和哈希；此次选定20轮原始日志及关键派生数据已复制至上方Git归档，其余原始数据和录像仍不随克隆提供。
-整个项目的分区见 [文档总导航](../README.md)。
+旧五条受吊绳牵拉轨迹已撤回；相关历史报告移到 Git 恢复点，当前预测器依据十二条固定 H0 数据。
+系统辨识没有得到可靠可分离参数，因此没有将拟合值强行写回模型。
+完整研究、负结果与边界见 [已知结论](KNOWN_RESULTS.md)。

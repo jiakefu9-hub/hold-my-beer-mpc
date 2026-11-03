@@ -1,7 +1,11 @@
 # G1 Arm SDK commissioning tools
 
-This directory contains isolated A1a/A1b/A2/A3 and raw walking-capture field tools, not the production hardware
-adapter and not an extension of the publisher-absent HIL. The operator-facing
+This directory contains the field-tested Python MPC/PID Arm SDK controllers,
+final experiment launchers, offline analyses, and earlier A1a/A1b/A2/A3 tools.
+It is separate from the publisher-absent C++ HIL adapter. Start with the
+[final experiment index](../../docs/FINAL_EXPERIMENTS.md) and
+[installation/reproduction guide](../../docs/QUICKSTART.md).
+The operator-facing
 entry and latest evidence index are in
 [`docs/g1_field_validation/README.md`](../../docs/g1_field_validation/README.md);
 the detailed staged procedure is in [RUNBOOK.md](../../docs/g1_field_validation/RUNBOOK.md).
@@ -59,7 +63,9 @@ adds inverse dynamics and locally corrected, forward-checked torque candidates.
 The 2026-10-07 hold-current upright torque baseline completed one physical walk/stop/release.
 The independent [learned variant](../../docs/g1_field_validation/HARDWARE_MPC_LEARNED.md)
 includes yaw PD in prediction and removes redundant same-model candidates;
-its evidence is offline only, not field performance or hard real-time acceptance.
+its walk/stop/release trials are recorded through 2026-10-13. Measured field
+timing and deadline misses must still be reported; functional completion does
+not prove hard real-time guarantees.
 The old persistent-reference servo and nominal inverse preview remain offline comparisons.
 The hardware candidate uses DAQP 0.9.1 (pinned in `requirements-hardware-mpc.txt`);
 the simulation's OSQP implementation is unchanged. Runtime forecasts use a tracked

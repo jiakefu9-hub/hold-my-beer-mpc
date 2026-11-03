@@ -18,12 +18,12 @@ weight-1 保持 20 秒的第二次复测，
 A1b 新增独立单次模式 RPC 工具，
 不改 A1a 只读路径、A2 profile 或生产控制链。
 离线实现、参数和仍需取得的 FSM 事实见
-[A3 离线准备记录](sessions/20260915_A3_OFFLINE_PREPARATION.md)，实际执行和 IMU 结果见
+[A3 离线准备记录](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20260915_A3_OFFLINE_PREPARATION.md)，实际执行和 IMU 结果见
 [A3 实机记录](sessions/20260916_A3_HARDWARE.md)。同日的
 [IMU 零点连续观察](sessions/20260916_IMU_ZERO_REFERENCE.md)用三个独立非零航向对照覆盖
 FSM 0/1/4/500，确认 yaw 参考在开机／早期 IMU 初始化后已建立，后续三个模式入口不重置。
 
-2026-09-15 随后完成 [A2 只读复查、构建及离线预览](sessions/20260915_A2_PREPARATION.md)，
+2026-09-15 随后完成 [A2 只读复查、构建及离线预览](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20260915_A2_PREPARATION.md)，
 因现场尚只掌握“拔网线”处置、没有确认可靠停止／断线恢复方法，停在输出前；没有控臂。
 
 后续已实测遥控器 `L2+B → FSM=1`（用户看到下垂）、`L2+↑ → FSM=4`
@@ -583,10 +583,10 @@ A1a 使用的 query 会发送查询 RPC，但不发送控制命令。在本次�
 | --- | --- |
 | [2026-09-15 A1a 现场记录](sessions/20260915_A1A.md) | 已悬挂条件下只读：500 条状态及审计通过，FSM=0；balance getter 返回 7301；未切模式或控臂 |
 | [2026-09-15 A1b 模式切换](sessions/20260915_A1B.md) | 重启后恢复有线连接；电脑单次请求 0→1→4，返回和读回成功；未控臂或行走 |
-| [2026-09-15 A2 准备与暂停](sessions/20260915_A2_PREPARATION.md) | FSM=4、编译和离线预览完成；异常停止／断线处置未确认，未执行手臂输出 |
+| [2026-09-15 A2 准备与暂停](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20260915_A2_PREPARATION.md) | FSM=4、编译和离线预览完成；异常停止／断线处置未确认，未执行手臂输出 |
 | [2026-09-15 首次 A2 与无响应调查](sessions/20260915_A2_FIRST_EXECUTION.md) | 已发送 311 帧，未证实手臂响应；官方资料、问题报告和只读 DDS 发现交叉核查；未自动重跑 |
 | [2026-09-15 A2 5°／weight 0.5响应验证](sessions/20260915_A2_WEIGHT05.md) | 首轮升权重时中止；后续有界重试完整执行，FSM=4下右肩约1.87°且现场可见，证明本机Arm SDK静态响应 |
-| [2026-09-15 A3 离线准备](sessions/20260915_A3_OFFLINE_PREPARATION.md) | 独立 A3 入口、双臂加单腰零位目标、weight 3/5/3 秒离线测试通过；未连接机器人，尚无硬件结果 |
+| [2026-09-15 A3 离线准备](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20260915_A3_OFFLINE_PREPARATION.md) | 独立 A3 入口、双臂加单腰零位目标、weight 3/5/3 秒离线测试通过；未连接机器人，尚无硬件结果 |
 | [2026-09-16 A3 实机验证](sessions/20260916_A3_HARDWARE.md) | FSM 500 下首次 3/5/3 秒及第二次 3/20/3 秒完整执行；双臂编码器确认响应，weight 正常退零；复查仍为 FSM 500 |
 | [2026-09-16 IMU 零点连续观察](sessions/20260916_IMU_ZERO_REFERENCE.md) | 只读覆盖 FSM 0→1→4→500；三个独立非零航向对照均未回零，确认 yaw 参考在开机／早期初始化后已建立，模式入口不重置 |
 | [H1 现场详细指南](h1/G1_H1_FIELD_RUNBOOK.md)、[H1 速查](h1/G1_H1_FIELD_CHECKLIST.md) | 仍然只适用于 state-only，不因本文计划而解除它们的输出禁令 |
@@ -594,7 +594,7 @@ A1a 使用的 query 会发送查询 RPC，但不发送控制命令。在本次�
 | [2026-09-11 HIL 结果](sessions/20260911_HIL_OFFLINE.md) | 合成输入、本地输出链通过；没有给机器人发送控制命令 |
 | [H1 原始证据](../../evaluation/hardware_shadow/state_inspection/g1_h1_tick_repeat_fix_20260911_01/) | 本地 JSONL、摘要、审计与 tick 诊断；Git 忽略，不随克隆提供 |
 | [HIL 原始证据](../../evaluation/hardware_shadow/publisher_absent_hil/g1_hil_offline_20260911_01/) | 本地测试、回执与无网络调用证据；Git 忽略，不随克隆提供 |
-| [硬件集成计划](../hardware/HARDWARE_INTEGRATION_PLAN.md) | 完整项目 H/O 阶段门；其中 O2 为未来悬挂 PD commissioning，O3/O4 涉及 MPC，本文不解禁 |
+| [硬件集成计划](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/hardware/HARDWARE_INTEGRATION_PLAN.md) | 完整项目 H/O 阶段门；其中 O2 为未来悬挂 PD commissioning，O3/O4 涉及 MPC，本文不解禁 |
 | [架构](../../ARCHITECTURE.md)、[离线准备](../hardware/HARDWARE_OFFLINE_PREPARATION.md) | 当前状态入口、离线链路及尚不存在的真实输出适配器 |
 
 ## 10. 本方案的依据

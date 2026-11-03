@@ -120,10 +120,9 @@ MPC 执行层仍使用既有安全候选回退：本次正式复跑中 D02 为 2
 在本机图形桌面的终端运行，任选一组：
 
 ```bash
-cd /home/fjk/g1_ws/hold-my-beer-mpc
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/replay.py D01
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/replay.py D02
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/replay.py D03
+python tools/experiments/simulation_showcase/replay.py D01
+python tools/experiments/simulation_showcase/replay.py D02
+python tools/experiments/simulation_showcase/replay.py D03
 ```
 
 三组自动使用同一视角与 1× 速度，循环回放全程。顶部只显示任务时间；左右用略微放大的原生 MuJoCo 字体标出实际控制方式及实时倾角。鼠标拖动/滚轮调整视角；空格暂停/继续，R 重头播放，G 隐藏/显示指示线；关窗口或 Ctrl+C 退出。
@@ -135,8 +134,8 @@ cd /home/fjk/g1_ws/hold-my-beer-mpc
 左肩 roll 刚度对照可直接比较：
 
 ```bash
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/replay.py D03
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/replay.py D03_R50
+python tools/experiments/simulation_showcase/replay.py D03
+python tools/experiments/simulation_showcase/replay.py D03_R50
 ```
 
 橙色 = 左臂真实末端轴，青色 = 右臂真实末端轴，灰色虚线 = 世界竖直。
@@ -144,14 +143,18 @@ cd /home/fjk/g1_ws/hold-my-beer-mpc
 
 ## 重新计算
 
-已有小回放包可直接使用；只有要重新算物理仿真时才需构建和启动计算：
+2026-11-03 仓库交接验收补充：本页上述 PASS 和指标对应已保存的原展示轨迹。
+本次重新计算的 D02/D03 完整结束，但分别有 6/1 次 QP 回退，严格检查为 FAIL；
+整理前后程序对照结果一致。新复算不保证逐值重现旧轨迹，尚未定位旧、新运行差异的根因。
+原配置和回放不作替换，详见 [验收记录](../../../history/REPOSITORY_CLEANUP_20261103.md)。
+
+完整安装、构建与独立复跑见 [快速开始](../../../QUICKSTART.md)。从仓库根目录运行：
 
 ```bash
 bash cpp/build_runtime.sh
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/run_study.py tools/experiments/simulation_showcase/cases.json --cpus 2
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/run_study.py tools/experiments/simulation_showcase/alternatives.json --cpus 2
-/home/fjk/miniforge3/envs/g1_mpc/bin/python tools/experiments/simulation_showcase/package.py
+python tools/experiments/simulation_showcase/run_study.py tools/experiments/simulation_showcase/cases.json --cpus 2 --keep --run-suffix my_reproduction_01
 ```
 
-研究入口会复用相同名称的缓存；如要真正重跑，在 `cases.json` 中给实验名称增加独立后缀，保留原结果。
-默认只保留新运行的必要紧凑数据；`--keep` 可保留新运行的所有大文件。不会清理旧研究或真机数据。
+研究入口会复用相同名称的缓存；换一个新的 `--run-suffix` 才会真正重跑。
+`--keep` 保留新运行的大文件；不会改动提交的精选回放或旧真机数据。
+`package.py` 用于维护者重新选择展示资产，普通复现不需要运行它。

@@ -172,7 +172,7 @@ Ctrl-C、速度 RPC 超时、模式查询过期或可处理计算／预测器故
 DDS、RPC、日志线程避开 SMT 同核 6–7；只有两个主线程可选 FIFO 20。
 工作线程保持普通调度，计算与传输分别拥有 Python 执行锁；不把实时优先级套在整个 Python 进程上。
 隔离不等于没有所有 IRQ。较早两轮离线平均 **5.079／4.963 ms** 没有模拟持续 SDK 回调争用，
-不足以代表现场；历史证据见 [准备记录](sessions/20261005_MPC_FIELD_PREP.md)。
+不足以代表现场；历史证据见 [准备记录](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20261005_MPC_FIELD_PREP.md)。
 现已增加两路 500 Hz SDK 消息反序列化／回调／CRC／日志的离线并发测试，
 计时和重复结果以 [最新复盘](sessions/20261005_MPC_OFFLINE_POSTMORTEM.md) 为准。
 不包含真实 DDS Write、网络及完整 RPC 查询，仍不是硬实时验收。
@@ -307,4 +307,4 @@ python tools/g1_commissioning/analyze_mpc_field_trial.py "$MPC_OUT/raw.jsonl" \
 PID 的历史现场计时来自 CPU 2／普通调度；与新 MPC 的 CPU 7／FIFO 时间不能直接当成算法公平速度对比。
 比较控制效果时也需保留瓶重、路径和完整 `[5,18)` 窗口，不为突出 MPC 而削弱 PID。
 
-旧位置参考实现只作 [历史对照](HARDWARE_MPC_REFERENCE_SERVO.md)。
+旧位置参考实现只作 [历史对照](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/HARDWARE_MPC_REFERENCE_SERVO.md)。

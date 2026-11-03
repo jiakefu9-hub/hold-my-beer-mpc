@@ -12,7 +12,7 @@
 [REALTIME_RUNTIME.md](../simulation/REALTIME_RUNTIME.md) 和
 [ARCHITECTURE.md](../../ARCHITECTURE.md)。两部分共用接口、Unitree 官方实现核对和
 H0-H3/O0-O4 阶段门见
-[HARDWARE_INTEGRATION_PLAN.md](HARDWARE_INTEGRATION_PLAN.md)。
+[HARDWARE_INTEGRATION_PLAN.md](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/hardware/HARDWARE_INTEGRATION_PLAN.md)。
 第一次真实 G1 操作请按
 [H1 现场操作手册](../g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md) 和
 [一页速查表](../g1_field_validation/h1/G1_H1_FIELD_CHECKLIST.md) 执行。

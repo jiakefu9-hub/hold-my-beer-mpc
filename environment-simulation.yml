@@ -1,0 +1,14 @@
+# Reproduction recipe based on the validated Linux Python 3.10 environment.
+# A new dependency solve is not a real-time or hardware qualification.
+name: g1_mpc
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pinocchio=4.1.0
+  - cmake
+  - make
+  - cxx-compiler
+  - pip:
+      - -r requirements-simulation.txt

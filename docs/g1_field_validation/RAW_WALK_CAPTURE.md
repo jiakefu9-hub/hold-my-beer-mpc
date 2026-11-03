@@ -5,7 +5,7 @@
 “IMU 世界 yaw=0”航向目标，现保留为历史研究数据，**不与新的固定 H0 轨迹混合建模板**。
 本轮只采数据，不构建模板，不运行 MPC，也不改变已有 H1、A2、A3 的入口。
 
-采集后的[五条轨迹离线审计](WALK_DATASET_AUDIT.md)已完成：记录可用，同腿周期约 1.014 秒，
+采集后的[五条轨迹离线审计](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/WALK_DATASET_AUDIT.md)已完成：记录可用，同腿周期约 1.014 秒，
 需要按腿部事件对齐；存在预测收益，但尚无可直接上机的扰动模板。以下时间表不变，航向参考和
 坐标派生方式已改为每轮固定 H0。
 

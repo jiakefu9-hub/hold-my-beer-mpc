@@ -1,222 +1,70 @@
-# hold-my-beer-mpc
+# G1 arm stabilization during walking
 
-`hold-my-beer-mpc` 研究 Unitree G1 行走及起停时的躯干扰动预测与右臂末端稳定控制。
-截至 2026-10-14，已完成学习 MPC、当前扰动保持 MPC、位置 PID 和前馈加速度 PID（C）的
-真机实验，以及主对照录像。本阶段实验已结束，当前工作是硕士论文和面试准备。
+Unitree G1 23DoF 行走及起停时的右臂末端姿态稳定：身体扰动预测、6 ms 加速度 MPC、
+耦合五关节逆动力学执行。左臂为固定关节 PD 对照，腿部由独立行走控制器负责。
 
-**手机或新窗口从[项目交接](docs/PROJECT_HANDOFF_FOR_MOBILE.md)开始，再读
-[关键真机数据归档](docs/g1_field_validation/evidence/20261014_final_archive/README.md)。**
-归档包含可直接阅读的结果、逐轮配置与数据，以及20轮无损压缩原始日志；不是整个本机数据盘的备份。
+真机实验与主对照录像已完成。当前交接版本保留三组展示仿真、可复算的真机精选数据，
+以及位置 PID、前馈加速度 PID（C）等对照。姿态收益较明确；线加速度与落脚冲击没有全面优势。
 
-真机为6 ms右臂加速度MPC、H0学习扰动预测及带实测移动基座输入的五关节逆动力学；
-腿部使用机器人内置行走控制。MuJoCo仿真使用独立的`FullTaskTemplatePredictor` v2及Torch腿部策略，
-两条预测链不能混用结论。真机姿态收益较明确，线加速度和冲击抑制没有全面优势；
-完整结果、失败和强对照均保留。现场独立入口成功不表示旧production adapter已开放，也不等于硬实时认证。
+## 从这里开始
 
-## 从哪里开始
+| 目标 | 入口 |
+| --- | --- |
+| 安装、打开三组回放、重跑仿真 | [快速开始](docs/QUICKSTART.md) |
+| 查最终配置、数据、指标和录像对应关系 | [最终实验清单](docs/FINAL_EXPERIMENTS.md) |
+| 看懂仿真与真机的控制链 | [架构](ARCHITECTURE.md) |
+| 找算法和实验文档 | [文档导航](docs/README.md) |
+| 研究真机实验及使用条件 | [真机入口](docs/g1_field_validation/README.md) |
+| 手机阅读、论文及面试准备 | [项目交接](docs/PROJECT_HANDOFF_FOR_MOBILE.md) |
 
-- 查文件放在哪里：[文档总导航](docs/README.md)。
-- 准备做真机实验：[G1 现场入口](docs/g1_field_validation/README.md)。
-- 当前实验结论：[实验状态](docs/g1_field_validation/EXPERIMENT_STATUS.md)、
-  [按日期查实验记录](docs/g1_field_validation/sessions/README.md)。
-- 身体扰动预测：[十二条 H0 轨迹研究](docs/g1_field_validation/H0_WALK_PREDICTOR_STUDY.md)。
-- 位置 PID 原理与历史操作：[左臂固定、右臂 PID 的 H0 实验](docs/g1_field_validation/HARDWARE_PID.md)。
-- 查程序／运行边界：[工具导航](tools/README.md)、[运行时架构](ARCHITECTURE.md)。
+## 三组展示仿真
 
-以下是当前冻结的**仿真**方案，与真机原始采集的时间表和坐标系约定分开使用。
-
-## 冻结方案
-
-```text
-task t=0:       立即发布正式前进命令，heading control 开启
-[0, 24 ms):    右臂固定姿态 PD；该区间属于 headline
-20 ms:         下肢产生第一份新的 policy action
-24 ms:         6 ms anchor 4，右臂 MPC/process 接管
-[0, 6.4 s):    planned vx=0.5 m/s, vy=0
-6.4 s:         planned vx/vy 直接切为零，不使用 ramp
-[0, 8.0 s):    唯一 headline
-8.052 s:       最后一个 54 ms horizon 的末节点
-```
-
-任务时钟、gait clock、continuous-H 和模板时钟都从 `t=0` 连续推进；24 ms 接管时
-不会 reset 或从模板开头重播。接管前最后一个物理步实际执行的右臂 PD 力矩作为
-`previous_executed_tau` 传入安全执行链。
-
-正式模板资产被显式固定，不扫描“最新”目录：
-
-- [`full_task_template.npz`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template.npz)，SHA256
-  `d4a0109adcff696936ef96160976161833ff9a7a7531e2e5d7ad9e50c10e17d4`；
-- [`full_task_template_manifest.json`](disturbance_template/data/full_task_template_v2/20260815_162850/full_task_template_manifest.json)，SHA256
-  `6b48ee196d1f7d923dde057d3c0fb0e182f08512a65402c4c39c5e070a3243c6`。
-
-这个模板提前知道 6.4 s 的停车时刻。它是固定任务 baseline，不泛化到任意速度、
-方向或未知停车时刻。
-
-## 唯一正式仿真入口
-
-所有正式 full-task 实验必须通过仓库根目录唯一的 [`run.sh`](run.sh) 启动。
-preflight 会在第一个 `mj_step` 前检查 parent/worker 都只绑定 CPU 7、六个数值库
-线程变量和 Torch intra/inter-op 都为 1，并确认控制循环关闭 GC。正式 nominal
-命令是：
+在已安装 MuJoCo 和 NumPy 的环境中，从仓库根目录执行：
 
 ```bash
-cd /path/to/hold-my-beer-mpc
-MPC_CONTROL_CPU=7 MPC_CONTROL_NUM_THREADS=1 ./run.sh \
-  --full-task-smoke \
-  --disturbance-predictor full_task_template \
-  --right-arm-runtime-mode process \
-  --startup-pd-duration 0.024 \
-  --headless \
-  --no-video \
-  --run-label final_freeze
+python tools/experiments/simulation_showcase/replay.py D01
+python tools/experiments/simulation_showcase/replay.py D02
+python tools/experiments/simulation_showcase/replay.py D03
 ```
 
-不要绕过 `run.sh` 直接执行 `python main_sim.py`；宽 CPU affinity 或缺失线程环境
-不是正式运行条件。
+- D01：右臂位置 PID。
+- D02：右臂 No-Preview MPC，未来扰动保持当前值。
+- D03：右臂 Disturbance-Preview MPC，使用历史任务模板预览。
 
-## 验证状态
+三组左臂均为名义 Kp=20、Kd=1，双臂零中立位，75 mm／250 g 圆环负载。
+回放直接读取已提交的物理轨迹，执行正运动学与绘图，不重算控制、不连接机器人。
+鼠标旋转／缩放，空格暂停，R 重播，G 切换竖直参考线。
+仿真正面放大与斜前方全身画面应使用同一条轨迹、同一倍速；参考线不放大实际角度。
+完整指标、原 PID 和刚度敏感性研究见[展示报告](docs/simulation/experiments/20261103_showcase/README.md)。
 
-轻量证据在
-[`evaluation_summary/full_task_template_v2_final_freeze/`](evaluation_summary/full_task_template_v2_final_freeze/)。
-以下数字只引用清理前已经完成的 CPU 7 受控历史证据，包含 nominal 3 次和
-`heldout_pair_02_minus` 3 次；本文不预填后续冻结复跑结果：
+## 仿真和真机的边界
 
-| 范围 | 完整 6 ms 区间 | mean / p95 / p99 / max | `>6 ms` |
-|---|---:|---|---:|
-| nominal，3 次 | 3,987 | 3.437 / 3.659 / 3.803 / 4.500 ms | 0 |
-| held-out，3 次 | 3,987 | 3.400 / 3.591 / 3.721 / 4.511 ms | 0 |
-| 合计 | 7,974 | 3.419 / 3.630 / 3.775 / 4.511 ms | 0 |
+| 内容 | 仿真 | 已完成的真机实验 |
+| --- | --- | --- |
+| 下肢 | 仓库 Torch 策略 `policy/motion.pt`；名义周期 0.8 s | PC1 内置运控；策略不可获取 |
+| 扰动预测 | 固定 0–8 s 任务模板；已知 6.4 s 停车 | 固定 H0 坐标系中的学习预测器 |
+| MPC | 6 ms、9 区间，q/dq 状态、ddq 输入 | 同类结构，独立的现场实现与配置 |
+| 执行 | MuJoCo 正动力学候选检查与 C++ worker | 实测移动基座输入的耦合右臂五自由度模型，M*a+b |
+| 评价 | 仿真状态和模型量 | 关节／IMU重建、统一离线滤波；不是独立末端传感器真值 |
 
-六条运行的 parent/worker affinity 均为 `[7]`，线程与 GC preflight 均通过；
-`predictor fallback=0`、`QP fallback=0`、`final_unsafe=0`、
-`NO_SAFE_TORQUE=0`、跌倒和 NaN/Inf 均为 0。16,074 次 mapper 执行调用中未认证
-输出为 0。rescue 和已认证 hold-last 仍作为诊断保留，不能与未认证输出混为一谈。
+D02 仍有状态反馈、当前 IMU 扰动和逆动力学补偿，不能称为开环或“全部前馈关闭”。
+仿真数字不能直接当作真机性能预报，同名权重和 PD 增益也不保证相同闭环响应。
+同步仿真中的计算长尾不会自动注入物理时间；真机存在少量 6 ms 超期，不宣称硬实时认证。
 
-这些是该主机上的 MuJoCo 完整控制区间结果，不能外推为目标 G1 的 deadline、
-DDS 延迟、接触估计或实际力矩安全证据。
-
-### r1 最终冻结复跑
-
-汇总语义修正后，从同一正式 `run.sh` 路径各执行了一条 nominal 和
-`heldout_pair_02_minus`。轻量证据写入
-`evaluation_summary/full_task_template_v2_final_freeze/final_runs_r1/`：
-
-| 场景 | 完整 6 ms 区间 | mean / p95 / p99 / max | `>6 ms` | tilt RMS | position RMS | XY displacement |
-|---|---:|---|---:|---:|---:|---:|
-| nominal | 1,329 | 3.302370 / 3.464462 / 3.630513 / 4.340295 ms | 0 | 0.002617404 rad | 0.013735420 m | 3.222744 m |
-| held-out | 1,329 | 3.299516 / 3.456565 / 3.532013 / 4.228574 ms | 0 | 0.002573218 rad | 0.013679703 m | 3.212114 m |
-
-两条运行都确认 parent/worker affinity 为 `[7]`、六个数值库线程环境变量为 `1`、
-Torch intra/inter-op 为 `1/1`、控制循环 GC 关闭、dynamic arming 为 `false`，并在
-24 ms 的 anchor 4 接管。每条各有 2,679 次 mapper 调用；nominal 的
-rescue/hold-last 为 `2/0`，held-out 为 `3/1`，所有实际输出仍通过认证。
-`predictor fallback`、`QP fallback`、`final_unsafe`、`NO_SAFE_TORQUE`、未认证输出、
-跌倒和 NaN/Inf 均为 0，因此显式冻结验收门均为 PASS。
-
-两条 r1 `full_task_smoke_summary` 均为 `status=PASS`、`smoke_passed=true`、
-`nominal_mapping_path_passed=false`。mapping fallback 原始计数分别为 `3/5`，并保留
-`MAPPING_SAFETY_FALLBACK_USED` warning；PASS 表示 task/protocol 门通过，不表示全程
-走 nominal mapping path。真正安全门仍是 `final_output_certified`、`final_unsafe`、
-`NO_SAFE_TORQUE`、跌倒、NaN/Inf 和完整 6 ms deadline。
-
-旧 tag `full-task-template-v2-final-freeze-20260816` 下 `final_runs/` 的原始 summary
-保持未改，仍使用“fallback 即 FAIL”的 legacy 汇总语义，仅作历史证据。
-
-### Experimental MPC-result latency 收尾
-
-正式 MuJoCo 基线仍是 zero-result-age 的 external-step/lockstep 路径。默认关闭的
-实验模式只把 source anchor 生成的 MPC 结果包延后到后续 2 ms physics tick 激活，
-并在 activation state 上重新执行现有 mapper/认证；它不是 asynchronous/free-running
-仿真，也不是完整 sensor-to-actuation latency 模型。
-
-短 smoke 中 nominal 的 0/2/4 ms 和 `heldout_pair_02_minus` 的 0 ms 均通过；
-`heldout_pair_02_minus` 的 2 ms 运行在 task/simulation time 44 ms fail closed。
-该拍 source packet 来自 42 ms，所有候选均在 44 ms 的真实 MuJoCo 状态上重新验收，
-最低真实 candidate 的 `max|qacc|` 为 `10.293 rad/s^2`，仍高于当前仿真门限
-`10 rad/s^2`，因此返回 `NO_SAFE_TORQUE`，未写 `d.ctrl`、未执行该拍 `mj_step`。
-这记录为当前冻结控制链对 2 ms MPC-result age 的边缘敏感性，而不是实现错误或
-真机安全门结论。实验已在该停止门收束：不进入 L1-D，不继续 4 ms held-out、
-完整任务或 async/free-running。设计、结果和证据路径见
-[EXPERIMENTAL_MPC_LATENCY_PLAN.md](docs/simulation/EXPERIMENTAL_MPC_LATENCY_PLAN.md)。
-
-## 运行时架构
-
-项目只维护一份正式 full-task predictor 和一份 MPC，不为 Simulation 与 Hardware
-重复控制算法：
-
-- **Simulation** 是当前正式路径：Python 拥有 MuJoCo，独立 C++ worker 执行右臂
-  RNEA、mapper 和 executor；
-- **Shadow** 只读真实状态，H1 已有 500/500 真实采集与审计 PASS，完整硬件语义／
-  现场验收仍为 PARTIAL；共享 full-task core 已通过
-  synthetic/replay H3-offline proposal 测试，现场 launcher 仍受 gate 限制；
-- **Publisher-absent HIL** 用 protocol-v3 把 offline-certified command 送到 C++
-  supervisor 和 recording command sink，只记录 would-write/receipt，DDS write 和
-  hardware output 始终为 0；
-- **Future / production Hardware output** 尚未授权。Stage 2 已移除/禁止构建真实
-  command publisher target；真机安全合同也不会直接照搬 MuJoCo 的
-  `max_abs_qacc=10 rad/s²`。
-- **独立现场工具** 位于 `tools/g1_commissioning/`：A2/A3 已实测 `rt/arm_sdk`，
-  phase observer 已实测且 walk collector 已采齐五条有效轨迹；不经过上述生产 adapter，不运行 MPC。
-
-Hardware IPC 现为 protocol-v3：3328 B 的 POSIX shared memory 包含 command、
-paired-state 和完整 receipt 三个 seqlock slot。state bridge 启动时绑定显式非零
-session nonce。HIL 在 2 ms 边界复核 session/source/task/policy、expiry、
-deadline、13-slot mask 和状态机；一个 6 ms proposal 只能在相对 `0/2/4 ms`
-的三拍内保持，且必须在有界 cache 精确命中它绑定的 source state。
-production policy 默认未验证、未授权，因而不可 arming。详见
-[ARCHITECTURE.md](ARCHITECTURE.md) 和
-[HARDWARE_OFFLINE_PREPARATION.md](docs/hardware/HARDWARE_OFFLINE_PREPARATION.md)。
-
-唯一的进程、IPC、数据流和平台替换地图见 [ARCHITECTURE.md](ARCHITECTURE.md)。
-若入口、进程/worker、IPC、模块边界或 Simulation/Shadow/Hardware 路径变化，
-代码与该架构图必须在同一次变更中更新。
-
-## 推荐阅读顺序
-
-1. [FULL_TASK_TEMPLATE.md](docs/simulation/FULL_TASK_TEMPLATE.md)：固定任务协议、continuous-H、
-   模板 schema、在线查询、24 ms handoff 与证据边界。
-2. [ARCHITECTURE.md](ARCHITECTURE.md)：共享控制核心、MuJoCo adapter、只读 hardware
-   shadow 与未来真机输出边界。
-3. [PRE_HARDWARE_FREEZE.md](docs/simulation/PRE_HARDWARE_FREEZE.md)：冻结门槛、安全结论及真机前缺口。
-4. [MPC_DESIGN.md](docs/design/MPC_DESIGN.md)：右臂 MPC 数学、QP 和执行合同。
-5. [HEADING_CONTROL.md](docs/simulation/HEADING_CONTROL.md)：direct-step planned/runtime command、20 ms 命令更新
-   和 heading controller 与 continuous-H 的边界。
-6. [REALTIME_RUNTIME.md](docs/simulation/REALTIME_RUNTIME.md)：完整 6 ms 计时口径和 CPU 7 环境。
-7. [HARDWARE_INTEGRATION_PLAN.md](docs/hardware/HARDWARE_INTEGRATION_PLAN.md)：Unitree 官方
-   契约核对、state/proposal/command/receipt 接口和 H0-H3/O0-O4 阶段门。
-8. [G1_H1_FIELD_RUNBOOK.md](docs/g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md) 与
-   [G1_H1_FIELD_CHECKLIST.md](docs/g1_field_validation/h1/G1_H1_FIELD_CHECKLIST.md)：第一次真实 G1 H1 只读现场
-   操作手册与一页速查表。
-9. [HARDWARE_SHADOW.md](docs/hardware/HARDWARE_SHADOW.md)、
-   [HARDWARE_OFFLINE_PREPARATION.md](docs/hardware/HARDWARE_OFFLINE_PREPARATION.md)：只读路径的
-   实现边界、证据和禁止声明。
-10. [disturbance_template/README.md](disturbance_template/README.md)：v2 的离线来源、
-   schema、parity 和本地产物边界。
-11. [right_arm_runtime/README.md](right_arm_runtime/README.md)：process、seqlock 与安全
-    输出链。
-
-[G1 现场实验入口](docs/g1_field_validation/README.md)统一链接操作方案、已知结论和
-历史证据；A2/A3 与旧版行走采集已有实机结果，真机 PID 程序尚未实测。之后 PID/MPC
-真机实验按同一规则归档。
-
-[CHALLENGE.md](docs/history/CHALLENGE.md) 保留工程案例；旧开发日志和路线图不是当前正式方案。
-
-## Git、证据与历史恢复
-
-正式运行所需的 v2 NPZ、manifest 和 held-out 初态 manifest 已纳入 Git。大型 raw、
-trajectory、视频和原始 evaluation 不进入活跃仓库；压缩归档、删除清单和 SHA256
-索引见
-[`cleanup_manifest.json`](evaluation_summary/full_task_template_v2_final_freeze/cleanup_manifest.json)。
-
-清理前的完整工作树可由本地分支
-`archive/pre-cleanup-full-task-v2-20260815`、commit
-`70eb33b51656b958648ea013bc9bd45aa72dfa73` 或 annotated tag
-`checkpoint/full-task-v2-24ms-20260815` 恢复。若只恢复历史 neural 文件，使用：
+## 仓库布局
 
 ```text
-git restore --source=<old-neural-commit> -- <path>
+main_sim.py / arm_*.py       仿真及控制器
+configs/                    有效配置与历史复现实验配置
+resources/ / policy/        物理模型、网格、下肢策略
+assets/                     已冻结的真机扰动预测器
+cpp/ / robot_model_backend/ 原生动力学、模型接口
+right_arm_runtime/          仿真执行及独立 shadow/HIL 边界
+tools/experiments/           仿真研究与展示入口
+tools/g1_commissioning/      实际真机实验、离线分析、测试
+docs/                       使用、算法、结果与精选真机归档
+evaluation/                 本机生成数据，Git 忽略
 ```
 
-若审阅整条历史 neural 路线，应从对应旧 commit 新建独立 archive 分支，不要把它
-重新混入当前正式控制分支。下肢 `policy/motion.pt` 和 Torch 推理仍是正式行走链的
-必要组成，不属于已移除的 neural disturbance predictor。
+完整本机数据、手机录像、SDK 安装和编译产物不随克隆提供；精选原始日志和展示回放已提交。
+[清理记录](docs/history/REPOSITORY_CLEANUP_20261103.md)给出了删除项和恢复版本。

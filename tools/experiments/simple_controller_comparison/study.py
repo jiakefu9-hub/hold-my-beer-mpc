@@ -53,7 +53,7 @@ def run_case(case, cpu, keep=False):
         ('RIGHT_ARM_EXECUTOR_LIBRARY', 'right-arm-executor', 'libright_arm_executor.so'),
         ('DDQ_TORQUE_MAPPER_LIBRARY', 'ddq-torque-mapper', 'libddq_torque_mapper.so'),
         ('RIGHT_ARM_SIM_RUNTIME_WORKER', 'right-arm-sim-runtime', 'right_arm_sim_runtime_worker')):
-        env[key] = '/tmp/hold-my-beer-mpc-'+directory+'-build/'+filename
+        env.setdefault(key, '/tmp/hold-my-beer-mpc-'+directory+'-build/'+filename)
     cmd = ['taskset', '-c', str(cpu), sys.executable, str(globals().get('ENTRY', HERE/'simulation_entry.py')), str(cfg),
            '--headless', '--no-video', '--full-task-smoke', '--run-label', name,
            '--evaluation-group', ROOT.name]
@@ -103,18 +103,20 @@ def main():
     parser.add_argument('cases', type=Path)
     parser.add_argument('--cpus', default='0,2,4')
     parser.add_argument('--keep', action='store_true')
+    parser.add_argument('--run-suffix', default='',
+                        help='Append a new label to each case to avoid reusing cached results')
     args = parser.parse_args()
     # A cleared /tmp must not turn one missing build into a batch of apparent
     # controller failures. These are the libraries used by run_case below.
-    required_builds = {
-        'right-arm-rnea': 'libright_arm_rnea.so',
-        'right-arm-executor': 'libright_arm_executor.so',
-        'ddq-torque-mapper': 'libddq_torque_mapper.so',
-        'right-arm-sim-runtime': 'right_arm_sim_runtime_worker',
-    }
-    missing = [str(Path('/tmp')/('hold-my-beer-mpc-'+name+'-build')/filename)
-               for name, filename in required_builds.items()
-               if not (Path('/tmp')/('hold-my-beer-mpc-'+name+'-build')/filename).is_file()]
+    required_builds = (
+        ('RIGHT_ARM_RNEA_LIBRARY', 'right-arm-rnea', 'libright_arm_rnea.so'),
+        ('RIGHT_ARM_EXECUTOR_LIBRARY', 'right-arm-executor', 'libright_arm_executor.so'),
+        ('DDQ_TORQUE_MAPPER_LIBRARY', 'ddq-torque-mapper', 'libddq_torque_mapper.so'),
+        ('RIGHT_ARM_SIM_RUNTIME_WORKER', 'right-arm-sim-runtime', 'right_arm_sim_runtime_worker'),
+    )
+    build_paths = [Path(os.environ.get(key, '/tmp/hold-my-beer-mpc-'+name+'-build/'+filename))
+                   for key, name, filename in required_builds]
+    missing = [str(path) for path in build_paths if not path.is_file()]
     if missing:
         parser.error('build the simulation C++ backends first; missing: '+', '.join(missing))
     for directory in ('results', 'logs', 'configs', 'source_before'):
@@ -132,6 +134,10 @@ def main():
             **globals().get('PROVENANCE_EXTRA', {})), indent=2))
         (ROOT/'preexisting.diff').write_bytes(subprocess.check_output(['git', 'diff'], cwd=REPO))
     cases = json.loads(args.cases.read_text())
+    if args.run_suffix:
+        if not re.fullmatch(r'[a-zA-Z0-9_-]+', args.run_suffix):
+            parser.error('--run-suffix must use letters, numbers, underscores or hyphens')
+        cases = [dict(case, name=case['name']+'_'+args.run_suffix) for case in cases]
     cpus = [int(x) for x in args.cpus.split(',')]
     def worker(index):
         return [run_case(c, cpus[index], args.keep) for c in cases[index::len(cpus)]]

@@ -7,8 +7,7 @@ export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/hold-my-beer-mpc-matplotlib}"
 mkdir -p "$MPLCONFIGDIR"
 
 RUN_ARGS=("$@")
-G1_MPC_CONDA="${G1_MPC_CONDA:-/home/fjk/miniforge3/bin/conda}"
-G1_MPC_PYTHON="${G1_MPC_PYTHON:-/home/fjk/miniforge3/envs/g1_mpc/bin/python}"
+source "$REPO_DIR/tools/python_environment.sh"
 
 # 【非核心代码】实时性能实验固定为单线程数值库，避免 BLAS/OpenMP
 # 在很小的矩阵上临时创建线程并引入不可重复的调度长尾。
@@ -61,8 +60,7 @@ if ! xdpyinfo -display "${DISPLAY:-}" >/dev/null 2>&1; then
 fi
 
 PYTHON_COMMAND=(
-    "$G1_MPC_CONDA" run --no-capture-output -n g1_mpc
-    python "$REPO_DIR/main_sim.py" "${MPC_CONFIG_FILE:-g1.yaml}" "${RUN_ARGS[@]}"
+    "$G1_MPC_PYTHON" "$REPO_DIR/main_sim.py" "${MPC_CONFIG_FILE:-g1.yaml}" "${RUN_ARGS[@]}"
 )
 
 # 默认选择最高频率组中编号最大的逻辑 CPU；本机对应 4.5 GHz 性能核。

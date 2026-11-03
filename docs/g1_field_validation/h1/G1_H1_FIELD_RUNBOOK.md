@@ -397,7 +397,7 @@ H1 的物理现场接受还要求：
 
 程序显示 PASS 也不证明型号、关节索引/正负号、mode、IMU frame 或主动控制安全已经
 验证。技术验收继续参考 [HARDWARE_SHADOW.md](../../hardware/HARDWARE_SHADOW.md) 和
-[HARDWARE_INTEGRATION_PLAN.md](../../hardware/HARDWARE_INTEGRATION_PLAN.md)，不在现场物理指南中展开。
+[HARDWARE_INTEGRATION_PLAN.md](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/hardware/HARDWARE_INTEGRATION_PLAN.md)，不在现场物理指南中展开。
 
 ## 13. 发给 Codex 的现场交接文字
 

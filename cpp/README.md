@@ -23,8 +23,9 @@ adapter 是 `unitree_arm_state_bridge -> read-only Python shadow`。二者共享
 运动学和 predictor 接口，但不共享平台 payload，也不维护两份 MPC。
 
 仿真 `ddq_torque_mapper` 依赖 MuJoCo 当前接触求解器，不得将它误称为真机可
-直接复用的接触验收。真机 floating-base RNEA 还需要经过验证的 base
-pose/twist/contact estimator；在此之前，2 ms Unitree 适配器只负责状态/命令
-协议、安全保护和通信。hardware shadow 仍只读、只兼容 legacy phase template，
-不支持最终 full-task v2 + 24 ms handoff，全部硬件输出均为
-hardware-unverified。
+直接复用的接触验收。这里的 Unitree 适配器和 hardware shadow 仍为只读／无 publisher
+路线，shadow 只兼容 legacy phase template，不支持最终 full-task v2 + 24 ms handoff。
+这不表示整个项目没有真机验证：最终真机实验使用
+[`tools/g1_commissioning`](../tools/g1_commissioning/README.md) 的独立 Python Arm SDK 入口，
+采用带实测移动基座输入的耦合右臂五自由度模型，不在线求全身脚地接触动力学。
+实验事实见 [最终实验清单](../docs/FINAL_EXPERIMENTS.md)。

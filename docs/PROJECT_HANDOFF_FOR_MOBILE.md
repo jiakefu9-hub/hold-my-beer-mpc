@@ -1,5 +1,7 @@
 # 手机端项目交接：论文与面试
 
+2026-11-03 整理后的入口：[最终实验清单](FINAL_EXPERIMENTS.md)、[快速开始](QUICKSTART.md)、[目录导航](README.md)。下文为实验结束时的技术交接，历史计划以最终清单为准。
+
 更新：2026-10-15（实验与分析截至 10 月 14 日）。仓库：[jiakefu9-hub/hold-my-beer-mpc](https://github.com/jiakefu9-hub/hold-my-beer-mpc)。
 
 ## 现在的任务与证据优先级

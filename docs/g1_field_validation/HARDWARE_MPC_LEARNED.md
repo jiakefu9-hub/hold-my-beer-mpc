@@ -1,5 +1,9 @@
 # 真机 MPC：学习扰动前馈版
 
+最终状态：本阶段真机实验已完成，主 MPC 采用零中立位、75 mm／250 g、6 ms，
+时间对齐关闭。学习 MPC、预测消融、位置 PID 与 C 的结果入口见
+[最终实验清单](../FINAL_EXPERIMENTS.md)。以下按日期介绍功能形成过程。
+
 对应程序：[`g1_walk_mpc_learned.py`](../../tools/g1_commissioning/g1_walk_mpc_learned.py)。
 准备日期：2026-10-07；2026-10-08 首次 hold-current 运行在停车时触及 pitch 预测边界，
 据此加入轻度 pitch 回正。随后修正版 `hold_current` 和 `learned_filtered` 均已各完成一次完整
@@ -19,17 +23,19 @@
 2026-10-10 新增默认关闭的 `--align-accel-forecast`，最初只在 164546 配置上调整未来区间
 线／角加速度取样时刻，保留当前实测状态和原姿态预测。它是局部前馈预览调整，
 不是完整执行延迟补偿；未传选项保持原行为。数据依据、离线验证及新／旧运行方式见
-[前馈时间调整准备](sessions/20261010_ACCELERATION_FORECAST_TIMING.md)。尚未真机验证。
+[前馈时间调整准备](sessions/20261010_ACCELERATION_FORECAST_TIMING.md)。随后已完成真机比较，
+未获得足以替换原 MPC 的综合收益；见 [10 月 12 日结果](sessions/20261012_FINAL_COMPARISON.md)。
 
-2026-10-11的01～08权重准备已归档为[历史离线记录](sessions/20261011_NUMBERED_MPC_VALIDATION.md)。
+2026-10-11的01～08权重准备已归档为[历史离线记录](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20261011_NUMBERED_MPC_VALIDATION.md)。
 2026-10-12清理了重复入口和未采用的调参配置，当前只保留T系列启动器及T06的0.02候选。
 
 2026-10-12 新增独立的 C 前馈加速度 PID 首次现场候选，通过显式
 `--acceleration-pid-config` 选择；未传选项仍是原 MPC。它复用实测 H0 输入、
 五关节逆动力学和既有接管/停车/退权流程，但以单拍受约束任务分配替代 MPC 轨迹优化。
-下一次优先按 [T01～T05 MPC/C 精简实验单](sessions/20261012_MPC_C_COMPARISON.md)执行，
+当时按 [T01～T05 MPC/C 实验单](sessions/20261012_MPC_C_COMPARISON.md)准备，
 两种控制器直接共用成功的torque基线：右肩roll正常范围[-15,+15]°、外边界[-20,+20]°。
-共同接管保留3.3～4.8 s的1.5 s过渡。第一次T01曾使用临时窄边界而提前安全退出，该改动已撤销；C 和时间对齐仍待现场验证，4 ms C仅保留在仿真研究。
+共同接管保留3.3～4.8 s的1.5 s过渡。第一次T01曾使用临时窄边界而提前安全退出，该改动已撤销；
+C 和时间对齐后来均已完成现场比较，4 ms C 仅保留在仿真研究。
 
 ## 1. 和已经成功的程序是什么关系
 
@@ -255,7 +261,7 @@ MPC 活跃阶段还检查最新速度、计划加速度，以及按现有加速�
 posture、pitch 与 yaw 名义参考。它准入 164546 及编号系列的五份精确权重候选，配对原无 roll torque 配置。
 左臂保持固定关节目标，不使用身体 IMU；默认 Kp/Kd 为 `20/1`，可通过 `--left-pd-gain-scale`
 显式选择增益倍率。原配置和现场 profile 不改写；定义、无网络验证与直接命令见
-[共同零中立位准备](sessions/20261009_ZERO_ARM_NEUTRAL_PREPARATION.md)。
+[共同零中立位准备](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20261009_ZERO_ARM_NEUTRAL_PREPARATION.md)。
 
 结果／命令／限制见 [离线准备记录](sessions/20261007_MPC_LEARNED_PREPARATION.md)。
 早期普通调度／powersave 的 CPU 7 并发检查有一次约 14 ms 长尾，按旧规则会退权。

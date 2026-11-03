@@ -1,15 +1,34 @@
-# 工具导航
+# 工具地图
 
-所有命令默认从仓库根目录执行。目录位置不是输出许可，运行前看对应程序的能力说明。
+所有命令从仓库根目录执行。环境和构建见 [快速开始](../docs/QUICKSTART.md)。
 
-| 位置 | 用途 | 说明 |
-| --- | --- | --- |
-| [g1_commissioning/](g1_commissioning/README.md) | 独立真机查询、A2/A3、原始行走采集和首次 PID | C++ 默认无 SDK／网络；Python PID 也需独立 profile、许可和人工确认；离线准备不代表真机通过 |
-| `realtime/run_hardware_state_inspection.sh` | H1 只读状态检查 | [H1 现场指南](../docs/g1_field_validation/h1/G1_H1_FIELD_RUNBOOK.md) |
-| `realtime/audit_hardware_state_trace.py` | 对保存的状态 trace 离线审计 | [H1 结果](../docs/g1_field_validation/sessions/20260911_H1.md) |
-| `realtime/run_hardware_shadow.sh` | 共享核心的 shadow／离线阶段入口 | [Shadow 边界](../docs/hardware/HARDWARE_SHADOW.md)；不是控臂实验启动器 |
-| `experiments/qa_qalpha/` | 现有仿真参数实验 | 不是真机 PID/MPC 部署工具 |
-| 根层 `build_*evidence.py`、`archive_*`、`prepare_data_cleanup.py` | 冻结仿真证据、归档与清理工具 | 本次未运行；不能把整理文档当作授权清理原始数据 |
+| 目录／入口 | 用途 |
+| --- | --- |
+| `experiments/simulation_showcase/replay.py` | D01/D02/D03 保存轨迹的回放；无 SDK、无控制输出 |
+| `experiments/simulation_showcase/run_study.py` | 三组展示仿真的重新计算 |
+| `g1_commissioning/g1_run_morning_20261013.py` | 最终 M 系列，默认只显示命令，显式选项才能运行 |
+| `g1_commissioning/g1_walk_mpc_learned.py` | 真机学习 MPC 独立入口 |
+| `g1_commissioning/g1_walk_pid.py` | 真机位置 PID 独立入口 |
+| `g1_commissioning/analyze_hardware_pid.py` | 原始日志末端重建与统一指标 |
+| `realtime/` | 早期只读采集及 shadow/HIL；不是最终现场控臂入口 |
+| `build_*evidence.py`、`archive_*`、`prepare_data_cleanup.py` | 历史归档工具及删除合同；复现展示无需运行 |
+| `visualize_bottle_mount.py` | 负载几何与坐标查看 |
 
-后续现场程序与测试仍放在 `g1_commissioning/`，不按每次实验另复制一套源码。
-实机具体参数随 session 保存；仓库中维护审阅模板，不提交本地原始数据。
+## 展示入口为什么依赖其他实验目录
+
+```text
+simulation_showcase/run_study.py
+  -> simple_controller_comparison/study.py          批运行、计时、保存
+  -> c_mpc_followup/simulation_entry.py              当前扰动保持适配
+     -> simple_controller_comparison/simulation_entry.py
+     -> simple_controller_comparison/controllers.py PID / C / MPC 选择
+     -> mpc_comprehensive/strategy.py                研究配置适配
+  -> mpc_comprehensive/metrics.py                    统一六项指标
+```
+
+这些目录中的 C、q-only MPC、预览修正等扩展只有明确配置才启用。
+正式 D01–D03 没有启用额外姿态预测校正或时间前视。
+因此保留这些源文件是运行依赖，不应因其研究日期较早而删除。
+历史候选 JSON/YAML 用于复现实验，默认只运行明确指定的 case 文件。
+
+现场源码、C++ 工具和停止条件详见 [g1_commissioning](g1_commissioning/README.md)。

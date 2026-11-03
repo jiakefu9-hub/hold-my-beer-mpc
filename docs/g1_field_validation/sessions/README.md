@@ -14,20 +14,20 @@
 | 09-11 | [Publisher-absent HIL](20260911_HIL_OFFLINE.md) | 完全离线输出链验证，无实际 command publisher |
 | 09-15 | [A1a](20260915_A1A.md) | 只读状态、服务查询；balance getter 未取得有效值 |
 | 09-15 | [A1b](20260915_A1B.md) | 电脑请求并读回 0→1→4 |
-| 09-15 | [A2 准备](20260915_A2_PREPARATION.md) | 当时停在输出前；后续另有停止验证与执行 |
+| 09-15 | [A2 准备](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20260915_A2_PREPARATION.md) | 当时停在输出前；后续另有停止验证与执行 |
 | 09-15 | [A2 停止联锁](20260915_A2_STOP_INTERLOCK.md) | 停止联锁准备／只读观察，不等于当时已控臂 |
 | 09-15 | [A2 首次执行](20260915_A2_FIRST_EXECUTION.md) | 未观察到有效右肩响应，保存失败调查 |
 | 09-15 | [A2 weight 0.5](20260915_A2_WEIGHT05.md) | 包含升权中止和后续成功有界重试；请读到后续结果 |
-| 09-15 | [A3 离线准备](20260915_A3_OFFLINE_PREPARATION.md) | 当日尚无 A3 真机结果 |
+| 09-15 | [A3 离线准备](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20260915_A3_OFFLINE_PREPARATION.md) | 当日尚无 A3 真机结果 |
 | 09-16 | [A3 实机与五次姿态实验](20260916_A3_HARDWARE.md) | FSM 500 双臂控臂、20 秒保持、B/W 系静态整定 |
 | 09-16 | [IMU 零点连续观察](20260916_IMU_ZERO_REFERENCE.md) | yaw 初始化时机与模式切换前后对照，只读 |
 | 09-17 | [相位观察与原始行走采集](20260917_WALK_CAPTURE.md) | 一次吊绳卡住排除；五条有效原始轨迹已采齐 |
 | 09-18 | [真机 PID 失败与三轮复验](20260918_PID_FIRST_FIELD.md) | 20 ms 基线；修复后动作平顺、正常退权，右臂更竖直；液面动态改善有限 |
 | 09-24 | [6 ms PID 离线准备](20260924_PID_6MS_OFFLINE.md) | 单次运动学解析雅可比、时间换算、定时回放；尚未进行 6 ms 实机实验 |
-| 09-27 | [真机 MPC 开发与离线验证](20260927_HARDWARE_MPC_PREPARATION.md) | 冻结 H0 预测库、参考轨迹 MPC、完整定时回放；没有连接机器人 |
+| 09-27 | [真机 MPC 开发与离线验证](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20260927_HARDWARE_MPC_PREPARATION.md) | 冻结 H0 预测库、参考轨迹 MPC、完整定时回放；没有连接机器人 |
 | 09-28 | [MPC 软件可靠性补充](20260928_MPC_ROBUSTNESS.md) | 假通信主循环故障测试、并发时间检查、日志关闭及结果标记；不改控制参数 |
 | 10-05 | [6 ms PID 现场复验](20261005_PID_6MS_FIELD.md) | 平顺、行走停车及退权正常；20/2141 次超时，冻结对比基线 |
-| 10-05 | [力矩 MPC 优化与首次试验准备](20261005_MPC_FIELD_PREP.md) | 保留 6 ms、多候选筛选；CPU／FIFO、非零力矩交还、整链离线计时；没有 MPC 真机输出 |
+| 10-05 | [力矩 MPC 优化与首次试验准备](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20261005_MPC_FIELD_PREP.md) | 保留 6 ms、多候选筛选；CPU／FIFO、非零力矩交还、整链离线计时；没有 MPC 真机输出 |
 | 10-05 | [MPC 四次启动失败](20261005_MPC_STARTUP_FAULTS.md) | 抬臂检查与不完整退权；启动积压；候选漏解；第四次成功发一拍后计算超时并完整退权 |
 | 10-05 | [MPC 整链性能与接管复盘](20261005_MPC_OFFLINE_POSTMORTEM.md) | SDK 回调并发、独立计算进程、数值等价优化、抬臂稳定后切入；只做离线验证，等待原地复验 |
 | 10-06 | [首次完整原地力矩 MPC](20261006_MPC_STATIONARY.md) | 平顺接管、姿态有响应、稳定保持及退权；实际加速度有偏差，1.786% 截止时间错过；行走／学习预测未验证 |

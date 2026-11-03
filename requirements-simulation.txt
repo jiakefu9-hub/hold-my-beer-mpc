@@ -1,0 +1,12 @@
+# Pinocchio and its C++ headers/libraries come from environment-simulation.yml.
+# Torch on the validated workstation was 2.11.0+cpu; GPU acceleration is unused.
+numpy==2.2.6
+scipy==1.15.3
+mujoco==3.6.0
+torch==2.11.0
+osqp==1.1.3
+daqp==0.9.1
+PyYAML==6.0.3
+matplotlib==3.10.8
+glfw==2.10.0
+Pillow==12.1.1

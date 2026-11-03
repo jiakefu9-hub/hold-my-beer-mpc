@@ -2,7 +2,8 @@
 # Local C++ kinematics only. No Unitree executable, network or robot command.
 set -euo pipefail
 MPC_REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MPC_PYTHON="${G1_MPC_PYTHON:-/home/fjk/miniforge3/envs/g1_mpc/bin/python}"
+source "$MPC_REPO_DIR/tools/python_environment.sh"
+MPC_PYTHON="$G1_MPC_PYTHON"
 MPC_PREFIX="$($MPC_PYTHON -c 'import sys; print(sys.prefix)')"
 MPC_MUJOCO="$($MPC_PYTHON -c 'import pathlib,mujoco; print(pathlib.Path(mujoco.__file__).parent)')"
 cmake -S "$MPC_REPO_DIR/cpp/right_arm_rnea" -B "$MPC_REPO_DIR/build/right_arm_rnea" \

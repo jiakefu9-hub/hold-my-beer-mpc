@@ -17,7 +17,7 @@
 先前阻塞项的处理和剩余边界（当前操作以 [MPC 程序文档](HARDWARE_MPC.md) 为准）：
 
 - 09-29 完整链路平均 8.5–8.7 ms 是历史结果；本轮保留模型修正和 6 ms，优化记录见
-  [2026-10-05](sessions/20261005_MPC_FIELD_PREP.md)。普通调度的长尾仍不等于硬实时通过。
+  [2026-10-05](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20261005_MPC_FIELD_PREP.md)。普通调度的长尾仍不等于硬实时通过。
 - 共享现场停止／退权路径已加入非零前馈连续性，不在该路径继续依赖 QP。
   无网络故障注入已检查，10-06 正常退权另有实机与人工确认；异常路径不能据此全部放行。
 - 首次试验配置不再使用统一 ±25 N·m；逐轴限值见 `hardware_mpc_torque_field.yaml`，
@@ -119,7 +119,7 @@ python tools/g1_commissioning/analyze_mpc_field_trial.py /path/to/run/raw.jsonl 
 ## 优化前的执行记录链检查（历史，2026-10-05）
 
 以下是加入遥测后、整链优化前的数字。当前准备和计时以
-[后续优化记录](sessions/20261005_MPC_FIELD_PREP.md)为准，不用旧版本数字冒充当前结果。
+[后续优化记录](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/sessions/20261005_MPC_FIELD_PREP.md)为准，不用旧版本数字冒充当前结果。
 
 - 62 项相关测试通过：PID、6 ms 周期、实测状态 MPC、力矩包／单次 PD、延迟任务、
   新执行分析、历史力矩分析和禁止真实输出检查。未初始化 DDS。

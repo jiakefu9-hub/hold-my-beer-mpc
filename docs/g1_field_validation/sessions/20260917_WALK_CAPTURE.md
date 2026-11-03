@@ -81,7 +81,7 @@
 
 ### 随后的离线审计（同日）
 
-已完成上述检查，见[五条轨迹审计](../WALK_DATASET_AUDIT.md)。五条均可用于离线研究；
+已完成上述检查，见[五条轨迹审计](https://github.com/jiakefu9-hub/hold-my-beer-mpc/blob/4a51a52d0958d3560928996622f64d4aaff7b84e/docs/g1_field_validation/WALK_DATASET_AUDIT.md)。五条均可用于离线研究；
 同腿周期约 1.014 秒，第 1 条与后四条相位约差半周期，不可按任务秒数直接平均。
 前三条拟合、后两条检验支持继续研究周期辅助预测，但起步、冲击和停车尚不能保证准确前馈；未导出上机模板。
 

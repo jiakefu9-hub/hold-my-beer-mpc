@@ -21,3 +21,5 @@ disturbance_template/artifacts/
 # === End local experiment outputs ===
 # Rebuildable native MPC kinematics library; never commit host-specific binaries.
 /build/
+# Printer-specific generated slices; keep editable CAD and generic STL.
+cad/*.gcode.3mf

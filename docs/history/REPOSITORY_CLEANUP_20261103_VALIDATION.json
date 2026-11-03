@@ -1,0 +1,1102 @@
+{
+  "date": "2026-11-03",
+  "cleanup_regression_check": "PASS: pre-cleanup runner and existing native libraries match post-cleanup runner and fresh build",
+  "strict_new_mpc_full_task_gate": "FAIL: existing QP fallbacks, not repaired or hidden by cleanup",
+  "scope": "Independent source checkout with shared Git objects; compressed raw archive excluded to conserve disk; same existing Python environment, no clean dependency install. No robot access.",
+  "checks": {
+    "archive_files_verified": 408,
+    "raw_runs": 20,
+    "run_records": 29,
+    "phase_runs": 10,
+    "phase_metrics_verified": 2448,
+    "replays_verified": 8,
+    "offline_tests": {
+      "simple_controllers": 7,
+      "c_mpc_followup": 5,
+      "morning_contracts": 16
+    },
+    "pre_post_match": {
+      "d02": {
+        "windows": true,
+        "gates": true,
+        "right_arm_q_absmax": true,
+        "right_arm_dq_absmax": true
+      },
+      "d03": {
+        "windows": true,
+        "gates": true,
+        "right_arm_q_absmax": true,
+        "right_arm_dq_absmax": true
+      }
+    }
+  },
+  "environment": {
+    "python": "3.10.20",
+    "mujoco": "3.6.0",
+    "numpy": "2.2.6",
+    "osqp": "1.1.3",
+    "scipy": "1.15.3",
+    "pinocchio": "4.1.0",
+    "torch": "2.11.0+cpu"
+  },
+  "simulations": {
+    "d03_mpc_disturbance_preview_payload75_leftpd20_before_cleanup_03": {
+      "complete": true,
+      "returncode": 0,
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 10.774070132535824,
+            "tilt_rms": 10.91953055822877,
+            "tilt_max": 16.95004528151907,
+            "swing_rms": 2.271394191524906,
+            "acc": 2.3460869320217954,
+            "alpha": 11.216245769701448,
+            "speed": 0.4780446977766825,
+            "speed_tracking_rms": 0.23663747907712102,
+            "omega": 0.42120431134251163
+          },
+          "right": {
+            "tilt_mean": 0.35440767738811746,
+            "tilt_rms": 0.3691609285531405,
+            "tilt_max": 0.6646490639662725,
+            "swing_rms": 0.20675983669263445,
+            "acc": 3.0081828559978327,
+            "alpha": 7.20250566792067,
+            "speed": 0.45607235629094733,
+            "speed_tracking_rms": 0.1849478180908323,
+            "omega": 0.0660358623127799
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 10.443551620132634,
+            "tilt_rms": 10.594386342430912,
+            "tilt_max": 16.95004528151907,
+            "swing_rms": 2.288036590702048,
+            "acc": 2.4540274928896744,
+            "alpha": 11.542068168518725,
+            "speed": 0.5211456438992531,
+            "speed_tracking_rms": 0.2364973286205069,
+            "omega": 0.44231825965467186
+          },
+          "right": {
+            "tilt_mean": 0.378303950296783,
+            "tilt_rms": 0.3869798530619826,
+            "tilt_max": 0.6646490639662725,
+            "swing_rms": 0.21137240160127835,
+            "acc": 3.1365250757021665,
+            "alpha": 7.6201103242093176,
+            "speed": 0.49684692248427725,
+            "speed_tracking_rms": 0.17207989695727374,
+            "omega": 0.0694640953872354
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 12.096144182148599,
+            "tilt_rms": 12.133286865879048,
+            "tilt_max": 13.515210824827664,
+            "swing_rms": 1.5275615576854422,
+            "acc": 1.8524620696747556,
+            "alpha": 9.805278955990769,
+            "speed": 0.23719725281151616,
+            "speed_tracking_rms": 0.23719725281151616,
+            "omega": 0.32323921199607936
+          },
+          "right": {
+            "tilt_mean": 0.2588225857534553,
+            "tilt_rms": 0.28702844658254634,
+            "tilt_max": 0.5172612858493962,
+            "swing_rms": 0.16329714481816138,
+            "acc": 2.4278925580763375,
+            "alpha": 5.207313517511808,
+            "speed": 0.2293087729143701,
+            "speed_tracking_rms": 0.2293087729143701,
+            "omega": 0.05002632671998179
+          }
+        }
+      },
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 1,
+        "qp_fallback_count": 1,
+        "runtime_mapping_safety_fallback_count": 4,
+        "xy_displacement_m": 3.171772552789514
+      },
+      "policy_compute_ms": {
+        "p50": 1.5047455017338507,
+        "p95": 1.6239593031059485,
+        "p99": 1.8233581064850988,
+        "max": 2.4065999969025142
+      },
+      "cpu": 2,
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+        "tools/experiments/simulation_showcase/audit_pid.py": "64421cdaaa95efe2c8a03b9da8ed1a7812f2fadb70be4fa6056fcc4c3fc4dbf7",
+        "tools/experiments/simulation_showcase/replay.py": "236ddc8eeaee736be636f960aa96866eedd95e37c71eb25cad1c48d2888cec31",
+        "tools/experiments/simulation_showcase/package.py": "1949025834377e3c939a1d0e1f8957a1a8b221db2111a2618b7abedd5a34f267",
+        "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+        "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+        "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+        "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+        "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+      }
+    },
+    "d02_mpc_no_preview_payload75_leftpd20_before_cleanup_03": {
+      "complete": true,
+      "returncode": 0,
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 10.838206657760955,
+            "tilt_rms": 10.985155652315353,
+            "tilt_max": 16.95434956953344,
+            "swing_rms": 2.2787919088815984,
+            "acc": 2.3324683563305344,
+            "alpha": 11.263359669728745,
+            "speed": 0.4790842441881881,
+            "speed_tracking_rms": 0.23715124891651868,
+            "omega": 0.4218841344703892
+          },
+          "right": {
+            "tilt_mean": 0.5902958200610802,
+            "tilt_rms": 0.6912942308377211,
+            "tilt_max": 1.4725740035524244,
+            "swing_rms": 0.6911040581520214,
+            "acc": 3.344142987500767,
+            "alpha": 9.902564315478417,
+            "speed": 0.45779680435706765,
+            "speed_tracking_rms": 0.18450026213329354,
+            "omega": 0.15214511577550463
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 10.485953331007426,
+            "tilt_rms": 10.635657682645991,
+            "tilt_max": 16.95434956953344,
+            "swing_rms": 2.282316615449406,
+            "acc": 2.4385595580379427,
+            "alpha": 11.58394870487924,
+            "speed": 0.5220256981682541,
+            "speed_tracking_rms": 0.2364520709143283,
+            "omega": 0.4429329468116923
+          },
+          "right": {
+            "tilt_mean": 0.5885430851837192,
+            "tilt_rms": 0.6932728582634626,
+            "tilt_max": 1.4725740035524244,
+            "swing_rms": 0.6931567826361777,
+            "acc": 3.481913439645466,
+            "alpha": 10.406924087672396,
+            "speed": 0.4982686158173317,
+            "speed_tracking_rms": 0.16985185991963148,
+            "omega": 0.15623474665756318
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 12.247219964775065,
+            "tilt_rms": 12.284110312036145,
+            "tilt_max": 13.695454417951504,
+            "swing_rms": 1.523751589100079,
+            "acc": 1.848175395903619,
+            "alpha": 9.877493855187474,
+            "speed": 0.23992758689784904,
+            "speed_tracking_rms": 0.23992758689784904,
+            "omega": 0.3243034583595888
+          },
+          "right": {
+            "tilt_mean": 0.5973067595705239,
+            "tilt_rms": 0.6833224304297478,
+            "tilt_max": 1.3380897939172944,
+            "swing_rms": 0.6795173828149165,
+            "acc": 2.7242571096572163,
+            "alpha": 7.555635264134242,
+            "speed": 0.23410065434260896,
+            "speed_tracking_rms": 0.23410065434260896,
+            "omega": 0.13454923641216535
+          }
+        }
+      },
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 6,
+        "qp_fallback_count": 6,
+        "runtime_mapping_safety_fallback_count": 2,
+        "xy_displacement_m": 3.1842319251780027
+      },
+      "policy_compute_ms": {
+        "p50": 1.509771500423085,
+        "p95": 1.675697202881565,
+        "p99": 2.011380100739188,
+        "max": 16.75631199759664
+      },
+      "cpu": 2,
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "719772255ad12111610f7ba3f872a6851967d8b31ec79014c60014a68f0981d6",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+        "tools/experiments/simulation_showcase/audit_pid.py": "64421cdaaa95efe2c8a03b9da8ed1a7812f2fadb70be4fa6056fcc4c3fc4dbf7",
+        "tools/experiments/simulation_showcase/replay.py": "236ddc8eeaee736be636f960aa96866eedd95e37c71eb25cad1c48d2888cec31",
+        "tools/experiments/simulation_showcase/package.py": "1949025834377e3c939a1d0e1f8957a1a8b221db2111a2618b7abedd5a34f267",
+        "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+        "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+        "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+        "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+        "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+      }
+    },
+    "d03_mpc_disturbance_preview_payload75_leftpd20_cleanup_repeat_02": {
+      "complete": true,
+      "returncode": 0,
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 10.774070132535824,
+            "tilt_rms": 10.91953055822877,
+            "tilt_max": 16.95004528151907,
+            "swing_rms": 2.271394191524906,
+            "acc": 2.3460869320217954,
+            "alpha": 11.216245769701448,
+            "speed": 0.4780446977766825,
+            "speed_tracking_rms": 0.23663747907712102,
+            "omega": 0.42120431134251163
+          },
+          "right": {
+            "tilt_mean": 0.35440767738811746,
+            "tilt_rms": 0.3691609285531405,
+            "tilt_max": 0.6646490639662725,
+            "swing_rms": 0.20675983669263445,
+            "acc": 3.0081828559978327,
+            "alpha": 7.20250566792067,
+            "speed": 0.45607235629094733,
+            "speed_tracking_rms": 0.1849478180908323,
+            "omega": 0.0660358623127799
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 10.443551620132634,
+            "tilt_rms": 10.594386342430912,
+            "tilt_max": 16.95004528151907,
+            "swing_rms": 2.288036590702048,
+            "acc": 2.4540274928896744,
+            "alpha": 11.542068168518725,
+            "speed": 0.5211456438992531,
+            "speed_tracking_rms": 0.2364973286205069,
+            "omega": 0.44231825965467186
+          },
+          "right": {
+            "tilt_mean": 0.378303950296783,
+            "tilt_rms": 0.3869798530619826,
+            "tilt_max": 0.6646490639662725,
+            "swing_rms": 0.21137240160127835,
+            "acc": 3.1365250757021665,
+            "alpha": 7.6201103242093176,
+            "speed": 0.49684692248427725,
+            "speed_tracking_rms": 0.17207989695727374,
+            "omega": 0.0694640953872354
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 12.096144182148599,
+            "tilt_rms": 12.133286865879048,
+            "tilt_max": 13.515210824827664,
+            "swing_rms": 1.5275615576854422,
+            "acc": 1.8524620696747556,
+            "alpha": 9.805278955990769,
+            "speed": 0.23719725281151616,
+            "speed_tracking_rms": 0.23719725281151616,
+            "omega": 0.32323921199607936
+          },
+          "right": {
+            "tilt_mean": 0.2588225857534553,
+            "tilt_rms": 0.28702844658254634,
+            "tilt_max": 0.5172612858493962,
+            "swing_rms": 0.16329714481816138,
+            "acc": 2.4278925580763375,
+            "alpha": 5.207313517511808,
+            "speed": 0.2293087729143701,
+            "speed_tracking_rms": 0.2293087729143701,
+            "omega": 0.05002632671998179
+          }
+        }
+      },
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 1,
+        "qp_fallback_count": 1,
+        "runtime_mapping_safety_fallback_count": 4,
+        "xy_displacement_m": 3.171772552789514
+      },
+      "policy_compute_ms": {
+        "p50": 1.5458489979209844,
+        "p95": 1.7009055485686984,
+        "p99": 2.059585327515377,
+        "max": 3.7619050053763203
+      },
+      "cpu": 2,
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "5583e4359ce06d333e5baa46e66c87f1c4fd69632c6991467621e7d6d23eac3b",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+        "tools/experiments/simulation_showcase/audit_pid.py": "64421cdaaa95efe2c8a03b9da8ed1a7812f2fadb70be4fa6056fcc4c3fc4dbf7",
+        "tools/experiments/simulation_showcase/replay.py": "236ddc8eeaee736be636f960aa96866eedd95e37c71eb25cad1c48d2888cec31",
+        "tools/experiments/simulation_showcase/package.py": "1949025834377e3c939a1d0e1f8957a1a8b221db2111a2618b7abedd5a34f267",
+        "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+        "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+        "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+        "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+        "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+      }
+    },
+    "d02_mpc_no_preview_payload75_leftpd20_cleanup_repeat_02": {
+      "complete": true,
+      "returncode": 0,
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 10.838206657760955,
+            "tilt_rms": 10.985155652315353,
+            "tilt_max": 16.95434956953344,
+            "swing_rms": 2.2787919088815984,
+            "acc": 2.3324683563305344,
+            "alpha": 11.263359669728745,
+            "speed": 0.4790842441881881,
+            "speed_tracking_rms": 0.23715124891651868,
+            "omega": 0.4218841344703892
+          },
+          "right": {
+            "tilt_mean": 0.5902958200610802,
+            "tilt_rms": 0.6912942308377211,
+            "tilt_max": 1.4725740035524244,
+            "swing_rms": 0.6911040581520214,
+            "acc": 3.344142987500767,
+            "alpha": 9.902564315478417,
+            "speed": 0.45779680435706765,
+            "speed_tracking_rms": 0.18450026213329354,
+            "omega": 0.15214511577550463
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 10.485953331007426,
+            "tilt_rms": 10.635657682645991,
+            "tilt_max": 16.95434956953344,
+            "swing_rms": 2.282316615449406,
+            "acc": 2.4385595580379427,
+            "alpha": 11.58394870487924,
+            "speed": 0.5220256981682541,
+            "speed_tracking_rms": 0.2364520709143283,
+            "omega": 0.4429329468116923
+          },
+          "right": {
+            "tilt_mean": 0.5885430851837192,
+            "tilt_rms": 0.6932728582634626,
+            "tilt_max": 1.4725740035524244,
+            "swing_rms": 0.6931567826361777,
+            "acc": 3.481913439645466,
+            "alpha": 10.406924087672396,
+            "speed": 0.4982686158173317,
+            "speed_tracking_rms": 0.16985185991963148,
+            "omega": 0.15623474665756318
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 12.247219964775065,
+            "tilt_rms": 12.284110312036145,
+            "tilt_max": 13.695454417951504,
+            "swing_rms": 1.523751589100079,
+            "acc": 1.848175395903619,
+            "alpha": 9.877493855187474,
+            "speed": 0.23992758689784904,
+            "speed_tracking_rms": 0.23992758689784904,
+            "omega": 0.3243034583595888
+          },
+          "right": {
+            "tilt_mean": 0.5973067595705239,
+            "tilt_rms": 0.6833224304297478,
+            "tilt_max": 1.3380897939172944,
+            "swing_rms": 0.6795173828149165,
+            "acc": 2.7242571096572163,
+            "alpha": 7.555635264134242,
+            "speed": 0.23410065434260896,
+            "speed_tracking_rms": 0.23410065434260896,
+            "omega": 0.13454923641216535
+          }
+        }
+      },
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 6,
+        "qp_fallback_count": 6,
+        "runtime_mapping_safety_fallback_count": 2,
+        "xy_displacement_m": 3.1842319251780027
+      },
+      "policy_compute_ms": {
+        "p50": 1.5561550026177429,
+        "p95": 1.776422297916724,
+        "p99": 2.338651150203075,
+        "max": 17.069747002096847
+      },
+      "cpu": 2,
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "5583e4359ce06d333e5baa46e66c87f1c4fd69632c6991467621e7d6d23eac3b",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+        "tools/experiments/simulation_showcase/audit_pid.py": "64421cdaaa95efe2c8a03b9da8ed1a7812f2fadb70be4fa6056fcc4c3fc4dbf7",
+        "tools/experiments/simulation_showcase/replay.py": "236ddc8eeaee736be636f960aa96866eedd95e37c71eb25cad1c48d2888cec31",
+        "tools/experiments/simulation_showcase/package.py": "1949025834377e3c939a1d0e1f8957a1a8b221db2111a2618b7abedd5a34f267",
+        "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+        "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+        "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+        "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+        "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+      }
+    },
+    "d03_mpc_disturbance_preview_payload75_leftpd20_cleanup_validation_01": {
+      "complete": true,
+      "returncode": 0,
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 10.774070132535824,
+            "tilt_rms": 10.91953055822877,
+            "tilt_max": 16.95004528151907,
+            "swing_rms": 2.271394191524906,
+            "acc": 2.3460869320217954,
+            "alpha": 11.216245769701448,
+            "speed": 0.4780446977766825,
+            "speed_tracking_rms": 0.23663747907712102,
+            "omega": 0.42120431134251163
+          },
+          "right": {
+            "tilt_mean": 0.35440767738811746,
+            "tilt_rms": 0.3691609285531405,
+            "tilt_max": 0.6646490639662725,
+            "swing_rms": 0.20675983669263445,
+            "acc": 3.0081828559978327,
+            "alpha": 7.20250566792067,
+            "speed": 0.45607235629094733,
+            "speed_tracking_rms": 0.1849478180908323,
+            "omega": 0.0660358623127799
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 10.443551620132634,
+            "tilt_rms": 10.594386342430912,
+            "tilt_max": 16.95004528151907,
+            "swing_rms": 2.288036590702048,
+            "acc": 2.4540274928896744,
+            "alpha": 11.542068168518725,
+            "speed": 0.5211456438992531,
+            "speed_tracking_rms": 0.2364973286205069,
+            "omega": 0.44231825965467186
+          },
+          "right": {
+            "tilt_mean": 0.378303950296783,
+            "tilt_rms": 0.3869798530619826,
+            "tilt_max": 0.6646490639662725,
+            "swing_rms": 0.21137240160127835,
+            "acc": 3.1365250757021665,
+            "alpha": 7.6201103242093176,
+            "speed": 0.49684692248427725,
+            "speed_tracking_rms": 0.17207989695727374,
+            "omega": 0.0694640953872354
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 12.096144182148599,
+            "tilt_rms": 12.133286865879048,
+            "tilt_max": 13.515210824827664,
+            "swing_rms": 1.5275615576854422,
+            "acc": 1.8524620696747556,
+            "alpha": 9.805278955990769,
+            "speed": 0.23719725281151616,
+            "speed_tracking_rms": 0.23719725281151616,
+            "omega": 0.32323921199607936
+          },
+          "right": {
+            "tilt_mean": 0.2588225857534553,
+            "tilt_rms": 0.28702844658254634,
+            "tilt_max": 0.5172612858493962,
+            "swing_rms": 0.16329714481816138,
+            "acc": 2.4278925580763375,
+            "alpha": 5.207313517511808,
+            "speed": 0.2293087729143701,
+            "speed_tracking_rms": 0.2293087729143701,
+            "omega": 0.05002632671998179
+          }
+        }
+      },
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 1,
+        "qp_fallback_count": 1,
+        "runtime_mapping_safety_fallback_count": 4,
+        "xy_displacement_m": 3.171772552789514
+      },
+      "policy_compute_ms": {
+        "p50": 1.53556499935803,
+        "p95": 1.6854511028213892,
+        "p99": 2.102059281460241,
+        "max": 2.532311002141796
+      },
+      "cpu": 2,
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "5583e4359ce06d333e5baa46e66c87f1c4fd69632c6991467621e7d6d23eac3b",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+        "tools/experiments/simulation_showcase/audit_pid.py": "64421cdaaa95efe2c8a03b9da8ed1a7812f2fadb70be4fa6056fcc4c3fc4dbf7",
+        "tools/experiments/simulation_showcase/replay.py": "236ddc8eeaee736be636f960aa96866eedd95e37c71eb25cad1c48d2888cec31",
+        "tools/experiments/simulation_showcase/package.py": "1949025834377e3c939a1d0e1f8957a1a8b221db2111a2618b7abedd5a34f267",
+        "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+        "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+        "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+        "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+        "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+      }
+    },
+    "d02_mpc_no_preview_payload75_leftpd20_cleanup_validation_01": {
+      "complete": true,
+      "returncode": 0,
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 10.838206657760955,
+            "tilt_rms": 10.985155652315353,
+            "tilt_max": 16.95434956953344,
+            "swing_rms": 2.2787919088815984,
+            "acc": 2.3324683563305344,
+            "alpha": 11.263359669728745,
+            "speed": 0.4790842441881881,
+            "speed_tracking_rms": 0.23715124891651868,
+            "omega": 0.4218841344703892
+          },
+          "right": {
+            "tilt_mean": 0.5902958200610802,
+            "tilt_rms": 0.6912942308377211,
+            "tilt_max": 1.4725740035524244,
+            "swing_rms": 0.6911040581520214,
+            "acc": 3.344142987500767,
+            "alpha": 9.902564315478417,
+            "speed": 0.45779680435706765,
+            "speed_tracking_rms": 0.18450026213329354,
+            "omega": 0.15214511577550463
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 10.485953331007426,
+            "tilt_rms": 10.635657682645991,
+            "tilt_max": 16.95434956953344,
+            "swing_rms": 2.282316615449406,
+            "acc": 2.4385595580379427,
+            "alpha": 11.58394870487924,
+            "speed": 0.5220256981682541,
+            "speed_tracking_rms": 0.2364520709143283,
+            "omega": 0.4429329468116923
+          },
+          "right": {
+            "tilt_mean": 0.5885430851837192,
+            "tilt_rms": 0.6932728582634626,
+            "tilt_max": 1.4725740035524244,
+            "swing_rms": 0.6931567826361777,
+            "acc": 3.481913439645466,
+            "alpha": 10.406924087672396,
+            "speed": 0.4982686158173317,
+            "speed_tracking_rms": 0.16985185991963148,
+            "omega": 0.15623474665756318
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 12.247219964775065,
+            "tilt_rms": 12.284110312036145,
+            "tilt_max": 13.695454417951504,
+            "swing_rms": 1.523751589100079,
+            "acc": 1.848175395903619,
+            "alpha": 9.877493855187474,
+            "speed": 0.23992758689784904,
+            "speed_tracking_rms": 0.23992758689784904,
+            "omega": 0.3243034583595888
+          },
+          "right": {
+            "tilt_mean": 0.5973067595705239,
+            "tilt_rms": 0.6833224304297478,
+            "tilt_max": 1.3380897939172944,
+            "swing_rms": 0.6795173828149165,
+            "acc": 2.7242571096572163,
+            "alpha": 7.555635264134242,
+            "speed": 0.23410065434260896,
+            "speed_tracking_rms": 0.23410065434260896,
+            "omega": 0.13454923641216535
+          }
+        }
+      },
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 6,
+        "qp_fallback_count": 6,
+        "runtime_mapping_safety_fallback_count": 2,
+        "xy_displacement_m": 3.1842319251780027
+      },
+      "policy_compute_ms": {
+        "p50": 1.5570850009680726,
+        "p95": 1.78906875080429,
+        "p99": 2.3294958860788024,
+        "max": 19.89058999606641
+      },
+      "cpu": 2,
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "5583e4359ce06d333e5baa46e66c87f1c4fd69632c6991467621e7d6d23eac3b",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+        "tools/experiments/simulation_showcase/audit_pid.py": "64421cdaaa95efe2c8a03b9da8ed1a7812f2fadb70be4fa6056fcc4c3fc4dbf7",
+        "tools/experiments/simulation_showcase/replay.py": "236ddc8eeaee736be636f960aa96866eedd95e37c71eb25cad1c48d2888cec31",
+        "tools/experiments/simulation_showcase/package.py": "1949025834377e3c939a1d0e1f8957a1a8b221db2111a2618b7abedd5a34f267",
+        "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+        "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+        "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+        "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+        "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+      }
+    },
+    "d01_position_pid_balanced_payload75_leftpd20_cleanup_validation_01": {
+      "complete": true,
+      "returncode": 0,
+      "windows": {
+        "full": {
+          "left": {
+            "tilt_mean": 10.91935864756607,
+            "tilt_rms": 11.059392609199739,
+            "tilt_max": 16.924676021823938,
+            "swing_rms": 2.258400048702055,
+            "acc": 2.3911826453339895,
+            "alpha": 11.976041469246617,
+            "speed": 0.4810308410404657,
+            "speed_tracking_rms": 0.2354868812874655,
+            "omega": 0.42398487627796244
+          },
+          "right": {
+            "tilt_mean": 0.6397040613797483,
+            "tilt_rms": 0.7223258466397903,
+            "tilt_max": 2.3585663505852987,
+            "swing_rms": 0.7137653173271175,
+            "acc": 3.2883313522718813,
+            "alpha": 13.477214228968947,
+            "speed": 0.4726084245064849,
+            "speed_tracking_rms": 0.21151142679878426,
+            "omega": 0.2587088685108511
+          }
+        },
+        "walk": {
+          "left": {
+            "tilt_mean": 10.595272783203889,
+            "tilt_rms": 10.741034470623045,
+            "tilt_max": 16.924676021823938,
+            "swing_rms": 2.2786313715639834,
+            "acc": 2.5124129554200234,
+            "alpha": 12.42191146269204,
+            "speed": 0.5244930682014664,
+            "speed_tracking_rms": 0.23488769683486402,
+            "omega": 0.4451211682835732
+          },
+          "right": {
+            "tilt_mean": 0.6395404685010917,
+            "tilt_rms": 0.7303732556799712,
+            "tilt_max": 2.3585663505852987,
+            "swing_rms": 0.7260462234575928,
+            "acc": 3.4290935132268525,
+            "alpha": 13.969488581557057,
+            "speed": 0.513732176037028,
+            "speed_tracking_rms": 0.20160282645757863,
+            "omega": 0.2654767317717118
+          }
+        },
+        "stop": {
+          "left": {
+            "tilt_mean": 12.215702105014804,
+            "tilt_rms": 12.250368909778151,
+            "tilt_max": 13.608866523103078,
+            "swing_rms": 1.5044694915119894,
+            "acc": 1.827538448975224,
+            "alpha": 9.99561447924706,
+            "speed": 0.23786852628066718,
+            "speed_tracking_rms": 0.23786852628066718,
+            "omega": 0.3260129732781552
+          },
+          "right": {
+            "tilt_mean": 0.6403584328943742,
+            "tilt_rms": 0.6891971946904656,
+            "tilt_max": 1.2734742996895931,
+            "swing_rms": 0.6436965533845449,
+            "acc": 2.6515818150404455,
+            "alpha": 11.29557753931172,
+            "speed": 0.24720562248773617,
+            "speed_tracking_rms": 0.24720562248773617,
+            "omega": 0.2296515028952923
+          }
+        }
+      },
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0,
+        "xy_displacement_m": 3.203231740202125
+      },
+      "policy_compute_ms": {
+        "p50": 0.82879299952765,
+        "p95": 0.9679371480160625,
+        "p99": 1.2573886304016924,
+        "max": 2.8168630014988594
+      },
+      "cpu": 2,
+      "source_sha256": {
+        "main_sim.py": "f13f0830c7e9b890fdf480b65f5938a0a157a2d1d28b1ff406f66d7475f931c1",
+        "arm_mpc.py": "d26a281c95e32ad00d77ed800a787a7308c4174755a1c691a29dc5436c874f29",
+        "arm_pid.py": "8e5c56c04495dcce6ee7fe98d617492549c946c0acd731cd860a840cac076cc6",
+        "sim_support.py": "25383bb876396d6fd78c468198d4096e791b759b9314c9df970c25195bc558a2",
+        "right_arm_control_setup.py": "cf9a3475f505e3bc905a104c7e8b435ae516c300d450f6ad38b61f6daf85ba48",
+        "kinematics_helper.py": "be5187039ebbb6b0b65d75d6bd7d86867daa09a7104b557908374ca9a72117a6",
+        "disturbance_predictor.py": "8efacf04d8cd835ba751aac2bf9374e50b79bf983a2b4123d2353a35709460ec",
+        "disturbance_template/preview_correction.py": "7894fb789691680a52c0e1ac6bffaf9afeee9c0ffee4ed539200eb0b6b4fea2f",
+        "right_arm_runtime/sim_mpc_latency.py": "e632434eed4042416361fe571b678d916ef383741dd66e43121ca9647b8674fd",
+        "tools/g1_commissioning/hardware_mpc_braking.py": "eb65650d33811c8d38ec178124321aa7f860dade77e33ff0c8f74c619a482e19",
+        "tools/experiments/simple_controller_comparison/report.py": "c26835622558cf4a576fa1d447adcc93265d66ad6217c5ad279c00a39e380f63",
+        "tools/experiments/simple_controller_comparison/study.py": "5583e4359ce06d333e5baa46e66c87f1c4fd69632c6991467621e7d6d23eac3b",
+        "tools/experiments/simple_controller_comparison/report_c_refinement.py": "1952fd064ae5f360d78e1d99996342c95b59828fcd3bc633f26052703e4c3def",
+        "tools/experiments/simple_controller_comparison/check_field_baseline_parity.py": "59cbd4efa929498e208fce093f0cba681d18c87ea0a3973099696d413ac96c49",
+        "tools/experiments/simple_controller_comparison/test_controllers.py": "12035b35407878f0db2628e9529f4b3921c81d13cff636ce7012dec65a684746",
+        "tools/experiments/simple_controller_comparison/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+        "tools/experiments/simple_controller_comparison/refine_c.py": "2817bf0456a4fea335574c609aee6e3ff8ccd0ae2214842f65301ccedc3fd7f5",
+        "tools/experiments/simple_controller_comparison/simulation_entry.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+        "tools/experiments/simulation_showcase/audit_pid.py": "64421cdaaa95efe2c8a03b9da8ed1a7812f2fadb70be4fa6056fcc4c3fc4dbf7",
+        "tools/experiments/simulation_showcase/replay.py": "236ddc8eeaee736be636f960aa96866eedd95e37c71eb25cad1c48d2888cec31",
+        "tools/experiments/simulation_showcase/package.py": "1949025834377e3c939a1d0e1f8957a1a8b221db2111a2618b7abedd5a34f267",
+        "tools/experiments/simulation_showcase/run_study.py": "02f1b1c2c423fe62c0c8e4296c58d99a979bdd99977ec96545899517e844fb73",
+        "tools/experiments/c_mpc_followup/simulation_entry.py": "6713260b9d5a7126c71438dbfa76a6fc3a9380be600fb3f15030c9fded3d56fb",
+        "tools/experiments/c_mpc_followup/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+        "tools/experiments/c_mpc_followup/efficient_c.py": "868020f843cc8657340511180fb8604fb6a9f610996c78ec6abf6ff796e62f9b",
+        "tools/experiments/mpc_comprehensive/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c"
+      }
+    }
+  },
+  "original_vs_fresh": {
+    "D01": {
+      "complete": true,
+      "returncode": 0,
+      "right": {
+        "tilt_mean": 0.6397040613797483,
+        "tilt_rms": 0.7223258466397903,
+        "tilt_max": 2.3585663505852987,
+        "swing_rms": 0.7137653173271175,
+        "acc": 3.2883313522718813,
+        "alpha": 13.477214228968947,
+        "speed": 0.4726084245064849,
+        "speed_tracking_rms": 0.21151142679878426,
+        "omega": 0.2587088685108511
+      },
+      "left": {
+        "tilt_mean": 10.91935864756607,
+        "tilt_rms": 11.059392609199739,
+        "tilt_max": 16.924676021823938,
+        "swing_rms": 2.258400048702055,
+        "acc": 2.3911826453339895,
+        "alpha": 11.976041469246617,
+        "speed": 0.4810308410404657,
+        "speed_tracking_rms": 0.2354868812874655,
+        "omega": 0.42398487627796244
+      },
+      "baseline_right": {
+        "tilt_mean": 0.6410740183289563,
+        "tilt_rms": 0.7238398872447058,
+        "tilt_max": 2.3563143761078096,
+        "swing_rms": 0.7152920705072999,
+        "acc": 3.2751633554642687,
+        "alpha": 13.333427617899687,
+        "speed": 0.47258926612421104,
+        "speed_tracking_rms": 0.21150668258993854,
+        "omega": 0.25948318108654145
+      },
+      "baseline_left": {
+        "tilt_mean": 10.919965001116882,
+        "tilt_rms": 11.060748676511755,
+        "tilt_max": 16.9469623607531,
+        "swing_rms": 2.2634491730140804,
+        "acc": 2.3817117598863455,
+        "alpha": 11.818370585421148,
+        "speed": 0.4809445658371544,
+        "speed_tracking_rms": 0.2353452510417142,
+        "omega": 0.42313846254903836
+      },
+      "right_percent_change": {
+        "tilt_mean": -0.2136971566526591,
+        "swing_rms": -0.21344472323028274,
+        "acc": 0.4020561840264669,
+        "alpha": 1.0783919573405853,
+        "speed": 0.004053918200663809,
+        "omega": -0.29840568951252644
+      },
+      "result_file": "d01_position_pid_balanced_payload75_leftpd20_cleanup_validation_01.json",
+      "diagnostics": {
+        "policy_compute_ms": {
+          "p50": 0.82879299952765,
+          "p95": 0.9679371480160625,
+          "p99": 1.2573886304016924,
+          "max": 2.8168630014988594
+        }
+      }
+    },
+    "D02": {
+      "complete": true,
+      "returncode": 0,
+      "right": {
+        "tilt_mean": 0.5902958200610802,
+        "tilt_rms": 0.6912942308377211,
+        "tilt_max": 1.4725740035524244,
+        "swing_rms": 0.6911040581520214,
+        "acc": 3.344142987500767,
+        "alpha": 9.902564315478417,
+        "speed": 0.45779680435706765,
+        "speed_tracking_rms": 0.18450026213329354,
+        "omega": 0.15214511577550463
+      },
+      "left": {
+        "tilt_mean": 10.838206657760955,
+        "tilt_rms": 10.985155652315353,
+        "tilt_max": 16.95434956953344,
+        "swing_rms": 2.2787919088815984,
+        "acc": 2.3324683563305344,
+        "alpha": 11.263359669728745,
+        "speed": 0.4790842441881881,
+        "speed_tracking_rms": 0.23715124891651868,
+        "omega": 0.4218841344703892
+      },
+      "baseline_right": {
+        "tilt_mean": 0.5883049781144987,
+        "tilt_rms": 0.6888034914231174,
+        "tilt_max": 1.4636736354064854,
+        "swing_rms": 0.6885675606713432,
+        "acc": 3.3410029436879936,
+        "alpha": 9.875128992952966,
+        "speed": 0.4579533869586372,
+        "speed_tracking_rms": 0.18409408405846303,
+        "omega": 0.1517824974065006
+      },
+      "baseline_left": {
+        "tilt_mean": 10.846514936513984,
+        "tilt_rms": 10.994670971800435,
+        "tilt_max": 16.974307377563647,
+        "swing_rms": 2.2866055393389817,
+        "acc": 2.322200296768187,
+        "alpha": 11.113665780678481,
+        "speed": 0.4789261870174728,
+        "speed_tracking_rms": 0.23697174308780794,
+        "omega": 0.42094768446289144
+      },
+      "right_percent_change": {
+        "tilt_mean": 0.3384030427487028,
+        "swing_rms": 0.3683730726735224,
+        "acc": 0.0939850657332153,
+        "alpha": 0.27782242181371153,
+        "speed": -0.03419182083342909,
+        "omega": 0.2389065769769605
+      },
+      "result_file": "d02_mpc_no_preview_payload75_leftpd20_cleanup_validation_01.json",
+      "diagnostics": {
+        "policy_compute_ms": {
+          "p50": 1.5570850009680726,
+          "p95": 1.78906875080429,
+          "p99": 2.3294958860788024,
+          "max": 19.89058999606641
+        }
+      }
+    },
+    "D03": {
+      "complete": true,
+      "returncode": 0,
+      "right": {
+        "tilt_mean": 0.35440767738811746,
+        "tilt_rms": 0.3691609285531405,
+        "tilt_max": 0.6646490639662725,
+        "swing_rms": 0.20675983669263445,
+        "acc": 3.0081828559978327,
+        "alpha": 7.20250566792067,
+        "speed": 0.45607235629094733,
+        "speed_tracking_rms": 0.1849478180908323,
+        "omega": 0.0660358623127799
+      },
+      "left": {
+        "tilt_mean": 10.774070132535824,
+        "tilt_rms": 10.91953055822877,
+        "tilt_max": 16.95004528151907,
+        "swing_rms": 2.271394191524906,
+        "acc": 2.3460869320217954,
+        "alpha": 11.216245769701448,
+        "speed": 0.4780446977766825,
+        "speed_tracking_rms": 0.23663747907712102,
+        "omega": 0.42120431134251163
+      },
+      "baseline_right": {
+        "tilt_mean": 0.3110921691287785,
+        "tilt_rms": 0.323350135216878,
+        "tilt_max": 0.5931243641125404,
+        "swing_rms": 0.1866443704961541,
+        "acc": 2.9985695044633394,
+        "alpha": 7.166315845170334,
+        "speed": 0.456717726740349,
+        "speed_tracking_rms": 0.1845228775606913,
+        "omega": 0.06525366354561485
+      },
+      "baseline_left": {
+        "tilt_mean": 10.80472081074751,
+        "tilt_rms": 10.94924443261265,
+        "tilt_max": 16.978003734000016,
+        "swing_rms": 2.2713637077929167,
+        "acc": 2.3399538831853084,
+        "alpha": 11.097357436422968,
+        "speed": 0.4786016315974228,
+        "speed_tracking_rms": 0.23648441103274154,
+        "omega": 0.4202701395889128
+      },
+      "right_percent_change": {
+        "tilt_mean": 13.923689683557484,
+        "swing_rms": 10.777429902122249,
+        "acc": 0.3205979224488287,
+        "alpha": 0.5049989915630881,
+        "speed": -0.1413061967197482,
+        "omega": 1.1987047541296425
+      },
+      "result_file": "d03_mpc_disturbance_preview_payload75_leftpd20_cleanup_validation_01.json",
+      "diagnostics": {
+        "policy_compute_ms": {
+          "p50": 1.53556499935803,
+          "p95": 1.6854511028213892,
+          "p99": 2.102059281460241,
+          "max": 2.532311002141796
+        }
+      }
+    }
+  }
+}
