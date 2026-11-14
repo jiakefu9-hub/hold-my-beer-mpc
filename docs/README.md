@@ -15,7 +15,6 @@
 | 逐次现场记录 | [session 索引](g1_field_validation/sessions/README.md) |
 | 精选原始日志、配置、复算数据 | [真机归档](g1_field_validation/evidence/20261014_final_archive/README.md) |
 | 预测器研究 | [十二条 H0 轨迹](g1_field_validation/H0_WALK_PREDICTOR_STUDY.md) |
-| 手机、论文和面试阅读 | [项目交接](PROJECT_HANDOFF_FOR_MOBILE.md) |
 | 工程困难及开发过程 | [Challenge](history/CHALLENGE.md)、[MPC 开发记录](history/MPC_DEVELOPMENT_LOG.md) |
 | 删除项、恢复版本、验收结果 | [仓库整理记录](history/REPOSITORY_CLEANUP_20261103.md) |
 

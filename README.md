@@ -15,7 +15,6 @@ Unitree G1 23DoF 行走及起停时的右臂末端姿态稳定：身体扰动预
 | 看懂仿真与真机的控制链 | [架构](ARCHITECTURE.md) |
 | 找算法和实验文档 | [文档导航](docs/README.md) |
 | 研究真机实验及使用条件 | [真机入口](docs/g1_field_validation/README.md) |
-| 手机阅读、论文及面试准备 | [项目交接](docs/PROJECT_HANDOFF_FOR_MOBILE.md) |
 
 ## 三组展示仿真
 

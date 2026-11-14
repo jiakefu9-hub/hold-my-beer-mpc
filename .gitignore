@@ -23,3 +23,9 @@ disturbance_template/artifacts/
 /build/
 # Printer-specific generated slices; keep editable CAD and generic STL.
 cad/*.gcode.3mf
+
+# Private authoring workspace, versioned in a separate private repository.
+/thesis/
+/docs/THESIS_WRITING_HANDOFF.md
+/docs/PROJECT_HANDOFF_FOR_MOBILE.md
+/docs/g1_field_validation/evidence/20261113_joint_boundary_check/
