@@ -18,6 +18,16 @@ ROOT = Path(__file__).resolve().parents[3]
 EVIDENCE = ROOT / 'docs/simulation/experiments/20261103_showcase'
 
 
+def replay_duration(case, frames):
+    """Use the selected recording's duration for validation and playback."""
+    duration = float(case.get('duration_s', frames['time'][-1]))
+    if not np.isfinite(duration) or duration <= 0:
+        raise ValueError('Replay duration must be finite and positive')
+    if frames['time'][-1] < duration-1e-9:
+        raise ValueError('Saved trajectory ends before the declared replay duration')
+    return duration
+
+
 def load_case(name):
     manifest = json.loads((EVIDENCE / 'manifest.json').read_text())
     case = manifest['cases'][name]
@@ -32,7 +42,8 @@ def load_case(name):
     assert frames['qvel'].shape == (n, model.nv)
     assert np.all(np.diff(frames['time']) > 0)
     assert all(np.isfinite(v).all() for v in frames.values())
-    assert frames['time'][0] <= .0021 and frames['time'][-1] >= 8.-1e-9
+    assert frames['time'][0] <= .0021
+    replay_duration(case, frames)
     for filename, expected in manifest['model_sha256'].items():
         if hashlib.sha256((ROOT / filename).read_bytes()).hexdigest() != expected:
             raise ValueError(f'Replay model changed: {filename}')
@@ -177,6 +188,7 @@ def interactive_replay(model, data, frames, case, speed, once, guides):
     glfw.set_cursor_pos_callback(window, cursor_callback)
     glfw.set_scroll_callback(window, scroll_callback)
     t = 0.
+    duration = replay_duration(case, frames)
     previous = time.monotonic()
     controller_label = case.get('controller_label', 'PID').upper()
     if 'PID' in controller_label:
@@ -189,10 +201,11 @@ def interactive_replay(model, data, frames, case, speed, once, guides):
                 t, state['restart'] = 0., False
             elif not state['paused']:
                 t += elapsed*speed
-            if t > 8.:
+            if t > duration:
                 if once:
+                    set_frame(model, data, frames, duration)
                     break
-                t %= 8.
+                t %= duration
             set_frame(model, data, frames, t)
             camera_at(camera, data)
             mujoco.mjv_updateScene(model, data, option, perturb, camera,
@@ -210,34 +223,37 @@ def interactive_replay(model, data, frames, case, speed, once, guides):
         glfw.terminate()
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     available_cases = tuple(json.loads(
         (EVIDENCE / 'manifest.json').read_text())['cases'])
     parser.add_argument('case', choices=available_cases)
     parser.add_argument('--speed', type=float, default=1.)
-    parser.add_argument('--once', action='store_true', help='Exit after one full 8 s task')
+    parser.add_argument('--once', action='store_true', help='Exit after the selected recording ends')
     parser.add_argument('--no-guides', action='store_true')
     parser.add_argument('--check', action='store_true', help='Validate files without a GUI')
     parser.add_argument('--render-check', type=Path, help='Save an offscreen frame, then exit')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if not np.isfinite(args.speed) or args.speed <= 0:
         parser.error('--speed must be finite and positive')
     case, frames, model = load_case(args.case)
+    duration = replay_duration(case, frames)
+    stop_time = float(case.get('stop_time_s', 6.4))
     data = mujoco.MjData(model)
     timing = '6 ms position PID, no preview' if args.case.startswith('D01') else '6 ms MPC, 9 intervals'
     print(f"{args.case}: {case['title']} | {timing} | {args.speed:g}x")
     print('Robot LEFT stays fixed PD. Gray: world up; orange/cyan: actual LEFT/RIGHT axes.')
-    print('Recorded 0-8 s, including stop at 6.4 s. No physical angle amplification.')
+    print(f'Recorded 0-{duration:g} s, including stop request at {stop_time:g} s. '
+          'No physical angle amplification.', flush=True)
     if args.check:
-        for t in (0., 3.2, 6.4, 8.):
+        for t in (0., min(stop_time, duration)/2, min(stop_time, duration), duration):
             set_frame(model, data, frames, t)
             assert np.isfinite(data.site_xmat).all()
-        print('PASS: hash, model, finite full trajectory and forward kinematics')
+        print('PASS: hash, model, finite saved trajectory and forward kinematics')
         return
     if args.render_check:
         from PIL import Image
-        set_frame(model, data, frames, 3.2)
+        set_frame(model, data, frames, min(stop_time, duration)/2)
         camera = mujoco.MjvCamera()
         camera_at(camera, data, reset=True)
         model.vis.global_.offwidth = max(1280, model.vis.global_.offwidth)
@@ -264,12 +280,15 @@ def main():
         print(f'Saved actual replay frame: {args.render_check}')
         return
 
-    print('Looping replay. SPACE: pause/resume; R: restart; G: guides; close window: exit.')
+    mode = 'Single replay' if args.once else 'Looping replay'
+    print(f'{mode}. SPACE: pause/resume; R: restart; G: guides; close window: exit.')
     print('Mouse: left rotate, right pan, middle/scroll zoom. Tracking follows translation.')
     set_frame(model, data, frames, 0.)
     try:
         interactive_replay(model, data, frames, case, args.speed, args.once,
                            not args.no_guides)
+        if args.once:
+            print(f'Replay closed at t = {data.time:.3f} / {duration:g} s', flush=True)
     except KeyboardInterrupt:
         pass
 

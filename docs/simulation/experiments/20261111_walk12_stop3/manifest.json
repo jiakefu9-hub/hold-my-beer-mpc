@@ -1,0 +1,84 @@
+{
+  "simulation_only": true,
+  "task": {
+    "walk": [
+      0.0,
+      12.0
+    ],
+    "stop": [
+      12.0,
+      15.0
+    ],
+    "record_end": 15.06,
+    "physics_dt": 0.002,
+    "control_dt": 0.006,
+    "horizon": 9,
+    "no_hardware_arm_raise_or_takeover_sequence": true,
+    "numerical_startup_fixed_pd_s": 0.024
+  },
+  "cases": {
+    "D01": {
+      "replay": "replays/D01.npz",
+      "replay_sha256": "2e83c7b3c615a23c501e6b1c2dfddd95afbd809f27ec83cd8face10a2325ea01",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/thesis_walk12_stop3_20261111/20261111_095511_thesis15_d01",
+      "metrics": "D01_metrics.json",
+      "duration_s": 15.0,
+      "stop_time_s": 12.0,
+      "title": "Position PID",
+      "controller_label": "PID",
+      "config": "evaluation/thesis_walk12_stop3_20261111/configs/D01.yaml",
+      "config_sha256": "e8b06c464f96cdc7b8ef4769d42c41a684f4c75a07cb0d700af9f38964d704c5"
+    },
+    "D03": {
+      "replay": "replays/D03.npz",
+      "replay_sha256": "fa42933575086fdd435769e24330647b2f3f59a077ccd5006929fcc2600637ad",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/thesis_walk12_stop3_20261111/20261111_095916_thesis15_d03",
+      "metrics": "D03_metrics.json",
+      "duration_s": 15.0,
+      "stop_time_s": 12.0,
+      "title": "Disturbance-Preview MPC",
+      "controller_label": "DISTURBANCE-PREVIEW MPC",
+      "config": "evaluation/thesis_walk12_stop3_20261111/configs/D03.yaml",
+      "config_sha256": "47309f5af03e812e4ba809cf256eba3635dd6aaacb7a036046317a7d947d7bf0"
+    },
+    "D02_FAILED": {
+      "title": "No-Preview MPC — incomplete; execution exited at 13.98 s",
+      "controller_label": "NO-PREVIEW MPC",
+      "replay": "failed_replays/D02_partial.npz",
+      "replay_sha256": "dce1677c81fe597bb7ea19b08e0e9c10472370bba85a7f6c68a3a40b01c2c96c",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "duration_s": 13.980000000001338,
+      "stop_time_s": 12.0,
+      "complete": false,
+      "failure": "NO_SAFE_TORQUE; execution-failure replay, not a 15 s success"
+    }
+  },
+  "model_sha256": {
+    "resources/g1_description/scene_payload75.xml": "f363dc1a8a3bfd04d76f654644ddfb62c474301b40e44b128ad874736ed55db0",
+    "resources/g1_description/g1_23dof_rev_1_0_payload75.xml": "6bfa298234adad38d7760aaaaaadd680fde44190797cf9d5f357aa6ca667849b"
+  },
+  "template": "evaluation/thesis_walk12_stop3_20261111/template/full_task_template.npz",
+  "template_sha256": "02ca654db420232197d2bb80e7f54cc8f10bdddcece09cbb40b98b1c37586687",
+  "template_manifest": "evaluation/thesis_walk12_stop3_20261111/template/full_task_template_manifest.json",
+  "template_manifest_sha256": "ad892f9bdf554d27bf28c224705d28142ed5667dcc0d876a21d98e8a80e77896",
+  "mpc_pair_configuration_difference": [
+    "research_hold_future_disturbance"
+  ],
+  "source_sha256": {
+    "tools/experiments/thesis_walk15/protocol.py": "c064eb53ade040e0f575ce94aa2e13b95b314c37cb4009d1caae3f37116e2578",
+    "tools/experiments/thesis_walk15/replay.py": "1204f04721f2be1b3453403aebb63f3e2a67372ce7c2508eabd2d0c6639c972b",
+    "tools/experiments/thesis_walk15/run.py": "8df9eb81342395b9da77dafe59e98f8a885ecb909c879fb3aed1dfcbf9ac6b71",
+    "tools/experiments/thesis_walk15/simulation_entry.py": "1b62db7a500b19e635b029343c986e8029bb49615b24184d95b7d2e0dc7213e4"
+  },
+  "failures": [
+    {
+      "case": "D02",
+      "returncode": 1,
+      "log": "evaluation/thesis_walk12_stop3_20261111/logs/D02.log"
+    }
+  ],
+  "complete": false,
+  "all_acceptance_gates_pass": false
+}

@@ -1,0 +1,93 @@
+{
+  "simulation_only": true,
+  "task": {
+    "walk": [
+      0.0,
+      12.0
+    ],
+    "stop": [
+      12.0,
+      15.0
+    ],
+    "record_end": 15.06,
+    "physics_dt": 0.002,
+    "control_dt": 0.006,
+    "horizon": 9,
+    "no_hardware_arm_raise_or_takeover_sequence": true,
+    "numerical_startup_fixed_pd_s": 0.024
+  },
+  "cases": {
+    "D01": {
+      "replay": "replays/D01.npz",
+      "replay_sha256": "2e83c7b3c615a23c501e6b1c2dfddd95afbd809f27ec83cd8face10a2325ea01",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/final_template11x4/20261112_143333_thesis15_d01",
+      "metrics": "D01_metrics.json",
+      "duration_s": 15.0,
+      "stop_time_s": 12.0,
+      "title": "Position PID",
+      "controller_label": "PID",
+      "config": "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/configs/D01.yaml",
+      "config_sha256": "767b8589e365b0a91b6870d58e80d0971b57c5da85033bdca963d0b206cb5c0c",
+      "wall_s": 22.722493560002476
+    },
+    "D02": {
+      "replay": "replays/D02.npz",
+      "replay_sha256": "2bc6349d8c156761d5b7ee738c45091a1d31132c23437face2cdc2300c052002",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/final_template11x4/20261112_143356_thesis15_d02",
+      "metrics": "D02_metrics.json",
+      "duration_s": 15.0,
+      "stop_time_s": 12.0,
+      "title": "No-Preview MPC",
+      "controller_label": "NO-PREVIEW MPC",
+      "config": "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/configs/D02.yaml",
+      "config_sha256": "a02165b9ec38f0ea71ab9bc542fb62cea707198aba21db1ae7196513505e5854",
+      "wall_s": 26.46709123600158
+    },
+    "D03": {
+      "replay": "replays/D03.npz",
+      "replay_sha256": "eac3021b166650ee039a5c73b5e97d9513e122971fb2f860923108f3e690f8b0",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/final_template11x4/20261112_143422_thesis15_d03",
+      "metrics": "D03_metrics.json",
+      "duration_s": 15.0,
+      "stop_time_s": 12.0,
+      "title": "Disturbance-Preview MPC",
+      "controller_label": "DISTURBANCE-PREVIEW MPC",
+      "config": "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/configs/D03.yaml",
+      "config_sha256": "0c8da725189b48c73a2b2ec713b579491f818fce1eb687143cece5c1d80c7e47",
+      "wall_s": 26.58053795700107
+    }
+  },
+  "model_sha256": {
+    "resources/g1_description/scene_payload75.xml": "f363dc1a8a3bfd04d76f654644ddfb62c474301b40e44b128ad874736ed55db0",
+    "resources/g1_description/g1_23dof_rev_1_0_payload75.xml": "6bfa298234adad38d7760aaaaaadd680fde44190797cf9d5f357aa6ca667849b"
+  },
+  "template": "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template.npz",
+  "template_sha256": "ab7bb5f80190bc6a971e1b0f46476f1622392437c4589c33c1d0fc8f50382245",
+  "template_manifest": "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template_manifest.json",
+  "template_manifest_sha256": "dd9f7fddefad2b8ba4f322ed6860df51503913e0645fc7769df2bc4671231fac",
+  "mpc_pair_configuration_difference": [
+    "research_hold_future_disturbance"
+  ],
+  "variant": "final_template11x4",
+  "template_design": "original11x4",
+  "common_configuration_adjustments": {
+    "ddq_execution_max_abs_qacc": {
+      "original": 10.0,
+      "value": 15.0
+    }
+  },
+  "adjustment_scope": "simulation execution acceptance only; MPC planned acceleration limit remains 8 rad/s^2",
+  "source_sha256": {
+    "tools/experiments/thesis_walk15/protocol.py": "f0585bba8d722f2672a56c8a12ee7fd856c5f77b1c1d3dba910d125db2a750fb",
+    "tools/experiments/thesis_walk15/replay.py": "d34b6fa82e9fb4835d9339522fef09e170b40e0ef722689b295826b8d000a530",
+    "tools/experiments/thesis_walk15/full_template.py": "fe23ab3eae2c699231134f7a4baf92f5ae94ad786dfaeee917fb3a085ab6aba6",
+    "tools/experiments/thesis_walk15/run.py": "a068112424a5ebe6595ce9ac7ffbc28728085b7d73159539712d5ad8655f25f3",
+    "tools/experiments/thesis_walk15/simulation_entry.py": "1b62db7a500b19e635b029343c986e8029bb49615b24184d95b7d2e0dc7213e4"
+  },
+  "failures": [],
+  "complete": true,
+  "all_acceptance_gates_pass": true
+}
