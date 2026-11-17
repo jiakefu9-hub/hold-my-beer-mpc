@@ -1,0 +1,36 @@
+{
+  "note": "Dependency paths consolidated after the run, without numerical controller changes; execution_sources holds the original retained-run entrypoints.",
+  "execution_source_sha256": {
+    "protocol.py": "6ddd085fbe711f4d7bd63f51e79bd6d109bb5c2054d99b9a1bdc19bad3257e87",
+    "replay.py": "8dafc1b4d5f559455491e4a7f71c06110e542e18ca4efe100e3b19c9e6bd55c3",
+    "full_template.py": "516900dedadecafe469e31ea76e09ed145f3d978813a9aec6a8a6fd9e6df2f05",
+    "metric_packager.py": "3c8bb393f3047e76e51fd9a138f601f4238ebfbb77c6ca1c006c7162c8627f88",
+    "run.py": "6cdbafc2e71ba635aef9c99b58361f90efcbc78f418f81eed265bd854114857c",
+    "simulation_entry.py": "d51a1b775e8e7b07c8d4bd070951e3105f38861e57192883798c6ad1ee3a9270"
+  },
+  "current_entrypoints_sha256": {
+    "tools/experiments/thesis_walk13/strategy.py": "74cd73640e3fc4d1bdb91eefe044bcfdbf3f858e394a47fdd92f8349de23d62c",
+    "tools/experiments/thesis_walk13/efficient_c.py": "a7ad7fd9482c927d321e2aec83dddeb303c0e6263f6b507be644cb57d33bd1b8",
+    "tools/experiments/thesis_walk13/runtime_base.py": "be15b11b7bebef7229222f761aa462a38932b15076008e0c6ee08d552ebb0193",
+    "tools/experiments/thesis_walk13/protocol.py": "52490ec24ab38d6c4858f88103620c2bde6fa9746132614334d1e1f8305c550a",
+    "tools/experiments/thesis_walk13/resampled_preview.py": "d4be32103a6ff09e43a288a8035be779df50af9dcc0f3ce606e7d31621df232b",
+    "tools/experiments/thesis_walk13/replay.py": "62391c72a30440c23f8cf854623f17805d896c309270bc222fde80b952eb80c2",
+    "tools/experiments/thesis_walk13/runtime_adapter.py": "bb28bf6a68cba53c659dcb36ec5a5bd2d18e026543b0451af92b294276c94f5b",
+    "tools/experiments/thesis_walk13/viewer.py": "3d9ba9f2c8e17a61dc754acf912d5af97dc679eeaea9e596ab9ba9dc29f88186",
+    "tools/experiments/thesis_walk13/full_template.py": "dc66e38b7b9668184368734806b0728c373c29050536a4dbafa820b71a3efffc",
+    "tools/experiments/thesis_walk13/metric_packager.py": "3c8bb393f3047e76e51fd9a138f601f4238ebfbb77c6ca1c006c7162c8627f88",
+    "tools/experiments/thesis_walk13/current_omega.py": "f49f8362b502207ac3aa66dc33153866e55363e963a8c832e1b6a0f78bb0cb3c",
+    "tools/experiments/thesis_walk13/run.py": "c9b2466d9a9d0b4dc8304adaacbcef9b677f9abddbb743e786fd5f71898c33fd",
+    "tools/experiments/thesis_walk13/controllers.py": "36c816f010d22770fbea466a477193ce8e6424dc15d319319340cb38e6455a4f",
+    "tools/experiments/thesis_walk13/simulation_entry.py": "e0396af1e65f5a024de2cae41795b0ce44617591df7227e28815ca684b6a206e"
+  },
+  "shared_support_origin": {
+    "simple_controller_comparison/simulation_entry.py": "runtime_base.py",
+    "simple_controller_comparison/controllers.py": "controllers.py",
+    "c_mpc_followup/simulation_entry.py": "runtime_adapter.py",
+    "c_mpc_followup/efficient_c.py": "efficient_c.py",
+    "c_mpc_followup/resampled_preview.py": "resampled_preview.py",
+    "mpc_comprehensive/strategy.py": "strategy.py",
+    "simulation_showcase/replay.py": "viewer.py"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "windows": {
+    "full": {
+      "left": {
+        "tilt_mean_deg": 11.017472109900355,
+        "swing_rms_deg": 2.0877286589104505,
+        "linear_acceleration_rms_m_s2": 2.2333204673123386,
+        "angular_acceleration_rms_rad_s2": 11.439308822456752,
+        "linear_speed_rms_m_s": 0.4726775847530893,
+        "angular_speed_rms_rad_s": 0.3909832883477511
+      },
+      "right": {
+        "tilt_mean_deg": 0.6302627363234412,
+        "swing_rms_deg": 0.7008125552824411,
+        "linear_acceleration_rms_m_s2": 3.11562789265401,
+        "angular_acceleration_rms_rad_s2": 12.948406669366694,
+        "linear_speed_rms_m_s": 0.4664357070534138,
+        "angular_speed_rms_rad_s": 0.24896503517257573
+      }
+    },
+    "walk": {
+      "left": {
+        "tilt_mean_deg": 10.626740069956238,
+        "swing_rms_deg": 2.0861759629864527,
+        "linear_acceleration_rms_m_s2": 2.362028074147528,
+        "angular_acceleration_rms_rad_s2": 11.920157109952088,
+        "linear_speed_rms_m_s": 0.526210047557985,
+        "angular_speed_rms_rad_s": 0.4115251862883031
+      },
+      "right": {
+        "tilt_mean_deg": 0.6385264733616012,
+        "swing_rms_deg": 0.7195752263968384,
+        "linear_acceleration_rms_m_s2": 3.2462638570486053,
+        "angular_acceleration_rms_rad_s2": 13.301329697406084,
+        "linear_speed_rms_m_s": 0.5193568425152203,
+        "angular_speed_rms_rad_s": 0.25590965067818733
+      }
+    },
+    "stop": {
+      "left": {
+        "tilt_mean_deg": 12.319912243047408,
+        "swing_rms_deg": 1.4273453734725092,
+        "linear_acceleration_rms_m_s2": 1.736720836874273,
+        "angular_acceleration_rms_rad_s2": 9.66522576219453,
+        "linear_speed_rms_m_s": 0.21255834270023632,
+        "angular_speed_rms_rad_s": 0.3129181594164001
+      },
+      "right": {
+        "tilt_mean_deg": 0.6027169461962422,
+        "swing_rms_deg": 0.6204581464287857,
+        "linear_acceleration_rms_m_s2": 2.633786428666707,
+        "angular_acceleration_rms_rad_s2": 11.695331567024626,
+        "linear_speed_rms_m_s": 0.2089610776465652,
+        "angular_speed_rms_rad_s": 0.22426855961692121
+      }
+    }
+  },
+  "gates": {
+    "status": "PASS",
+    "fallen": false,
+    "nan_inf_count": 0,
+    "tail_complete": true,
+    "qp_failure_count": 0,
+    "qp_fallback_count": 0,
+    "runtime_mapping_safety_fallback_count": 0
+  },
+  "scope": "new 13-second simulation; old 8-second statistics are not reused"
+}

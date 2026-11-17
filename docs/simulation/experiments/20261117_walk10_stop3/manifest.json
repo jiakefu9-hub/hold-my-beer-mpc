@@ -1,0 +1,154 @@
+{
+  "simulation_only": true,
+  "task": {
+    "walk": [
+      0.0,
+      10.0
+    ],
+    "stop": [
+      10.0,
+      13.0
+    ],
+    "record_end": 13.06,
+    "physics_dt": 0.002,
+    "control_dt": 0.006,
+    "horizon": 9,
+    "no_hardware_arm_raise_or_takeover_sequence": true,
+    "numerical_startup_fixed_pd_s": 0.024
+  },
+  "protocol": {
+    "physics_dt": 0.002,
+    "mpc_dt": 0.006,
+    "policy_dt": 0.02,
+    "gait_period": 0.8,
+    "stop_time": 10.0,
+    "headline_end": 13.0,
+    "record_end": 13.06,
+    "horizon": 9,
+    "protocol_name": "full_task_direct_step",
+    "protocol_version": "full_task_direct_step_walk10_stop3_v1",
+    "raw_schema_version": "full_task_raw_v1"
+  },
+  "cases": {
+    "D01": {
+      "replay": "replays/D01.npz",
+      "replay_sha256": "bb8e1a092c6340658a8228db3b28fdbcddc4e63735d609afcb44a2a4e8e2482e",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/thesis_walk10_stop3_20261117/20261117_044258_walk13_d01",
+      "metrics": "D01_metrics.json",
+      "duration_s": 13.0,
+      "stop_time_s": 10.0,
+      "config": "evaluation/thesis_walk10_stop3_20261117/configs/D01.yaml",
+      "config_sha256": "8bb66f4c29d84306df692a7df892a117bdb9bf627eb79daf31de546efff30567",
+      "title": "PID",
+      "controller_label": "PID",
+      "wall_s": 19.87060693300009,
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0
+      },
+      "adapter_audit": {
+        "enabled": false,
+        "control_calls": 0,
+        "future_template_values_consumed": null,
+        "vector_policy": "hold current acc/omega/alpha",
+        "posture_policy": "exp(omega_world * t) @ current_R; midpoint interval rotations"
+      },
+      "archived_config": "configs/D01.yaml"
+    },
+    "D02": {
+      "replay": "replays/D02.npz",
+      "replay_sha256": "e64e931c0525641b06d5eab17f4ade5082f74bfa334ff5a8753edadb68666d86",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/thesis_walk10_stop3_20261117/20261117_044317_walk13_d02",
+      "metrics": "D02_metrics.json",
+      "duration_s": 13.0,
+      "stop_time_s": 10.0,
+      "config": "evaluation/thesis_walk10_stop3_20261117/configs/D02.yaml",
+      "config_sha256": "c01cede13a79af49e5bde0e9c1e211d223e8e982158a7edf81e29234f7607497",
+      "title": "NO-PREVIEW MPC",
+      "controller_label": "NO-PREVIEW MPC",
+      "wall_s": 24.24823708400072,
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 6,
+        "qp_fallback_count": 6,
+        "runtime_mapping_safety_fallback_count": 0
+      },
+      "adapter_audit": {
+        "enabled": true,
+        "control_calls": 2177,
+        "future_template_values_consumed": false,
+        "vector_policy": "hold current acc/omega/alpha",
+        "posture_policy": "exp(omega_world * t) @ current_R; midpoint interval rotations"
+      },
+      "archived_config": "configs/D02.yaml"
+    },
+    "D03": {
+      "replay": "replays/D03.npz",
+      "replay_sha256": "a2629c7adca60e7462d74b66c0b3f83e12c00f0d562fb97cec9da637a917f926",
+      "xml_path": "resources/g1_description/scene_payload75.xml",
+      "source_run": "evaluation/thesis_walk10_stop3_20261117/20261117_044342_walk13_d03",
+      "metrics": "D03_metrics.json",
+      "duration_s": 13.0,
+      "stop_time_s": 10.0,
+      "config": "evaluation/thesis_walk10_stop3_20261117/configs/D03.yaml",
+      "config_sha256": "6e9a33de257c5d24347e2c6f88d6280db07238922987f766845328641ec867da",
+      "title": "DISTURBANCE-PREVIEW MPC",
+      "controller_label": "DISTURBANCE-PREVIEW MPC",
+      "wall_s": 23.91620248900017,
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 2,
+        "qp_fallback_count": 2,
+        "runtime_mapping_safety_fallback_count": 0
+      },
+      "adapter_audit": {
+        "enabled": false,
+        "control_calls": 0,
+        "future_template_values_consumed": null,
+        "vector_policy": "hold current acc/omega/alpha",
+        "posture_policy": "exp(omega_world * t) @ current_R; midpoint interval rotations"
+      },
+      "archived_config": "configs/D03.yaml"
+    }
+  },
+  "failures": [],
+  "model_sha256": {
+    "resources/g1_description/scene_payload75.xml": "f363dc1a8a3bfd04d76f654644ddfb62c474301b40e44b128ad874736ed55db0",
+    "resources/g1_description/g1_23dof_rev_1_0_payload75.xml": "6bfa298234adad38d7760aaaaaadd680fde44190797cf9d5f357aa6ca667849b"
+  },
+  "template": "evaluation/thesis_walk10_stop3_20261117/template/full_task_template.npz",
+  "template_sha256": "8ad60c4d2d87bafbedaa0814426f6a8b10774d48525f0ed1ca2065833267cde8",
+  "template_manifest": "evaluation/thesis_walk10_stop3_20261117/template/full_task_template_manifest.json",
+  "template_manifest_sha256": "d2f60a479d720e59e965c4a3101c173fa3f36cd3f37771e70898a9bc60e41576",
+  "template_design": "original11x4",
+  "configuration_basis": "docs/simulation/experiments/20261111_walk12_stop3/variants/current_omega11x4/manifest.json",
+  "baseline_definition": "hold current a/omega/alpha; integrate current world omega for future posture",
+  "change_scope": "10 s forward plus 3 s settle; fresh full-task template; control settings unchanged",
+  "source_sha256": {
+    "tools/experiments/thesis_walk13/protocol.py": "6ddd085fbe711f4d7bd63f51e79bd6d109bb5c2054d99b9a1bdc19bad3257e87",
+    "tools/experiments/thesis_walk13/replay.py": "8dafc1b4d5f559455491e4a7f71c06110e542e18ca4efe100e3b19c9e6bd55c3",
+    "tools/experiments/thesis_walk13/full_template.py": "516900dedadecafe469e31ea76e09ed145f3d978813a9aec6a8a6fd9e6df2f05",
+    "tools/experiments/thesis_walk13/metric_packager.py": "3c8bb393f3047e76e51fd9a138f601f4238ebfbb77c6ca1c006c7162c8627f88",
+    "tools/experiments/thesis_walk13/run.py": "6cdbafc2e71ba635aef9c99b58361f90efcbc78f418f81eed265bd854114857c",
+    "tools/experiments/thesis_walk13/simulation_entry.py": "d51a1b775e8e7b07c8d4bd070951e3105f38861e57192883798c6ad1ee3a9270"
+  },
+  "mpc_pair_configuration_difference": [
+    "research_current_omega_pose"
+  ],
+  "complete": true,
+  "all_acceptance_gates_pass": false,
+  "verification": "verification.json"
+}

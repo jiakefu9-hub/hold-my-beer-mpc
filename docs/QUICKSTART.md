@@ -9,8 +9,8 @@
 
 ```bash
 python -m pip install numpy==2.2.6 mujoco==3.6.0 glfw==2.10.0 PyYAML==6.0.3
-python tools/experiments/simulation_showcase/replay.py D03 --check
-python tools/experiments/simulation_showcase/replay.py D03
+python tools/experiments/thesis_walk13/replay.py D03 --check
+python tools/experiments/thesis_walk13/replay.py D03
 ```
 
 将 D03 换成 D01 或 D02 查看其他控制器。`--check` 无需显示器；普通回放使用鼠标调视角，
@@ -45,30 +45,14 @@ bash cpp/build_runtime.sh
 ## 重新运行三组展示仿真
 
 ```bash
-python tools/experiments/simulation_showcase/run_study.py \
-  tools/experiments/simulation_showcase/cases.json \
-  --cpus 2 --keep --run-suffix my_reproduction_01
+python tools/experiments/thesis_walk13/run.py --variant my_reproduction_01
 ```
 
-`--cpus` 选择本机可用 CPU；可以用 `python -c 'import os; print(sorted(os.sched_getaffinity(0)))'` 查看。
-三组按顺序运行，每组 8 秒物理任务。`--run-suffix` 使用新的名称避免命中原结果缓存；
-重复同一名称会读取已存结果。`--keep` 保留该次完整轨迹和诊断。
-研究路径允许指定 CPU，不能据此声称通过原 CPU 7 的正式实时门。
+先采集 11 条建模＋4 条检查轨迹，再运行位置 PID、无未来预览 MPC 与模板预览 MPC。任务为 10 s 前进＋3 s 停车观察，记录额外 60 ms 预测尾部。使用新的 `--variant` 名称，避免覆盖现有记录；入口固定使用本机 CPU 2，运行前确认该 CPU 在当前进程亲和性中可用。
 
-默认构建位置自动找到；自定义位置时还需导出对应文件路径：
-`RIGHT_ARM_RNEA_LIBRARY`、`RIGHT_ARM_EXECUTOR_LIBRARY`、`DDQ_TORQUE_MAPPER_LIBRARY`、
-`RIGHT_ARM_SIM_RUNTIME_WORKER`。批运行会尊重这些设置。
+复现入口只依赖当前 `thesis_walk13/` 支持模块、当前归档配置及共享模型/控制代码。配置、模板与原生库使用运行清单记录的参数；原生库默认由上述构建脚本生成到 `/tmp/hold-my-beer-mpc-*-build`。新结果保存在 `evaluation/thesis_walk10_stop3_<variant>/` 和当前结果目录的 `variants/<variant>/` 中。
 
-新结果写入 `evaluation/simulation_showcase_20261103/`，不会覆盖提交的精选回放。
-`results/<case>.json` 包含全程、行走、停车指标，日志在 `logs/`。
-`package.py` 是维护者重新选择展示资产的工具，不是普通复现所需步骤。
-原 CPU 7 冻结仿真入口仍为 `run.sh`，时间协议见 [Full Task](simulation/FULL_TASK_TEMPLATE.md)。
-
-**复现限制：** 保存的三组展示轨迹可以按哈希原样回放；重新运行数值仿真不保证与旧轨迹逐值一致。
-本次新运行 D02/D03 完整结束，但分别出现 6/1 次 QP 回退，严格 Full Task 状态为 FAIL。
-恢复整理前运行器和旧编译库得到相同结果，故不是本次清理新增的回归。
-不要把退出码 0 或 `complete=true` 当成所有门槛通过；同时查看结果的 `gates`。
-详细数值与检查边界见 [验收记录](history/REPOSITORY_CLEANUP_20261103.md)。
+保存轨迹的回放不重算控制。重新进行数值仿真不保证逐值重现，完整记录与严格验收状态分别报告；当前三组的具体状态见[结果说明](simulation/experiments/20261117_walk10_stop3/README.md)。
 
 ## 验证数据及重新计算真机指标
 

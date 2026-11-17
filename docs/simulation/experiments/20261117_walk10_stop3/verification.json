@@ -1,0 +1,249 @@
+{
+  "task_boundary_checks": {
+    "D01": {
+      "command_boundary": {
+        "9.998": {
+          "time_s": 9.998,
+          "planned": [
+            0.5,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.5,
+            0.0,
+            0.013331583701074123
+          ]
+        },
+        "10.0": {
+          "time_s": 10.0,
+          "planned": [
+            0.0,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.0,
+            0.0,
+            0.013330240733921528
+          ]
+        },
+        "10.002": {
+          "time_s": 10.002,
+          "planned": [
+            0.0,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.0,
+            0.0,
+            0.013330240733921528
+          ]
+        }
+      },
+      "strict_pre_step_last_time_s": 13.058,
+      "physical_record_end_s": 13.06,
+      "replay_frames": 6501,
+      "replay_end_s": 13.0,
+      "gates": {
+        "status": "PASS",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 0,
+        "qp_fallback_count": 0,
+        "runtime_mapping_safety_fallback_count": 0
+      }
+    },
+    "D02": {
+      "command_boundary": {
+        "9.998": {
+          "time_s": 9.998,
+          "planned": [
+            0.5,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.5,
+            0.0,
+            0.01285297516733408
+          ]
+        },
+        "10.0": {
+          "time_s": 10.0,
+          "planned": [
+            0.0,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.0,
+            0.0,
+            0.012860740534961224
+          ]
+        },
+        "10.002": {
+          "time_s": 10.002,
+          "planned": [
+            0.0,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.0,
+            0.0,
+            0.012860740534961224
+          ]
+        }
+      },
+      "strict_pre_step_last_time_s": 13.058,
+      "physical_record_end_s": 13.06,
+      "replay_frames": 6501,
+      "replay_end_s": 13.0,
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 6,
+        "qp_fallback_count": 6,
+        "runtime_mapping_safety_fallback_count": 0
+      }
+    },
+    "D03": {
+      "command_boundary": {
+        "9.998": {
+          "time_s": 9.998,
+          "planned": [
+            0.5,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.5,
+            0.0,
+            0.012855497188866138
+          ]
+        },
+        "10.0": {
+          "time_s": 10.0,
+          "planned": [
+            0.0,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.0,
+            0.0,
+            0.012876633554697037
+          ]
+        },
+        "10.002": {
+          "time_s": 10.002,
+          "planned": [
+            0.0,
+            0.0,
+            0.01269999984651804
+          ],
+          "runtime": [
+            0.0,
+            0.0,
+            0.012876633554697037
+          ]
+        }
+      },
+      "strict_pre_step_last_time_s": 13.058,
+      "physical_record_end_s": 13.06,
+      "replay_frames": 6501,
+      "replay_end_s": 13.0,
+      "gates": {
+        "status": "FAIL",
+        "fallen": false,
+        "nan_inf_count": 0,
+        "tail_complete": true,
+        "qp_failure_count": 2,
+        "qp_fallback_count": 2,
+        "runtime_mapping_safety_fallback_count": 0
+      }
+    }
+  },
+  "mpc_pair_config_difference": {
+    "research_current_omega_pose": [
+      true,
+      false
+    ]
+  },
+  "previous_comparison_config_changes": {
+    "D01": {
+      "full_task_template_manifest_sha256": [
+        "dd9f7fddefad2b8ba4f322ed6860df51503913e0645fc7769df2bc4671231fac",
+        "d2f60a479d720e59e965c4a3101c173fa3f36cd3f37771e70898a9bc60e41576"
+      ],
+      "full_task_template_manifest_path": [
+        "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template_manifest.json",
+        "evaluation/thesis_walk10_stop3_20261117/template/full_task_template_manifest.json"
+      ],
+      "research_hold_future_disturbance": [
+        null,
+        false
+      ],
+      "full_task_template_path": [
+        "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template.npz",
+        "evaluation/thesis_walk10_stop3_20261117/template/full_task_template.npz"
+      ],
+      "research_current_omega_pose": [
+        null,
+        false
+      ],
+      "full_task_template_sha256": [
+        "ab7bb5f80190bc6a971e1b0f46476f1622392437c4589c33c1d0fc8f50382245",
+        "8ad60c4d2d87bafbedaa0814426f6a8b10774d48525f0ed1ca2065833267cde8"
+      ]
+    },
+    "D02": {
+      "full_task_template_manifest_sha256": [
+        "dd9f7fddefad2b8ba4f322ed6860df51503913e0645fc7769df2bc4671231fac",
+        "d2f60a479d720e59e965c4a3101c173fa3f36cd3f37771e70898a9bc60e41576"
+      ],
+      "full_task_template_manifest_path": [
+        "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template_manifest.json",
+        "evaluation/thesis_walk10_stop3_20261117/template/full_task_template_manifest.json"
+      ],
+      "full_task_template_path": [
+        "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template.npz",
+        "evaluation/thesis_walk10_stop3_20261117/template/full_task_template.npz"
+      ],
+      "full_task_template_sha256": [
+        "ab7bb5f80190bc6a971e1b0f46476f1622392437c4589c33c1d0fc8f50382245",
+        "8ad60c4d2d87bafbedaa0814426f6a8b10774d48525f0ed1ca2065833267cde8"
+      ]
+    },
+    "D03": {
+      "full_task_template_manifest_sha256": [
+        "dd9f7fddefad2b8ba4f322ed6860df51503913e0645fc7769df2bc4671231fac",
+        "d2f60a479d720e59e965c4a3101c173fa3f36cd3f37771e70898a9bc60e41576"
+      ],
+      "full_task_template_manifest_path": [
+        "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template_manifest.json",
+        "evaluation/thesis_walk10_stop3_20261117/template/full_task_template_manifest.json"
+      ],
+      "full_task_template_path": [
+        "evaluation/thesis_walk12_stop3_20261111/variants/final_template11x4/template/full_task_template.npz",
+        "evaluation/thesis_walk10_stop3_20261117/template/full_task_template.npz"
+      ],
+      "research_current_omega_pose": [
+        null,
+        false
+      ],
+      "full_task_template_sha256": [
+        "ab7bb5f80190bc6a971e1b0f46476f1622392437c4589c33c1d0fc8f50382245",
+        "8ad60c4d2d87bafbedaa0814426f6a8b10774d48525f0ed1ca2065833267cde8"
+      ]
+    }
+  },
+  "template_build_count": 11,
+  "template_heldout_count": 4,
+  "all_collection_gates_pass": true
+}

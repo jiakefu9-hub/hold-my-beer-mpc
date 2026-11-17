@@ -3,29 +3,11 @@
 实验已完成。本页负责把控制器、配置、数据与展示编号对应起来；详细指标由链接中的结果文件维护。
 它不是新一轮上机计划。安装和命令见 [快速开始](QUICKSTART.md)。
 
-2026-11-12 新增完整 15 s 仿真：0–12 s 行走、12–15 s 停车，模板由 11 条建模轨迹建立，另用 4 条独立轨迹检查。位置 PID、无未来预览 MPC 与模板预览 MPC 三组均录满 15 s，验收通过，无 QP 回退或执行救援。当前默认回放为 `final_template11x4`，规划加速度上限为 8 rad/s²、执行验收上限为 15 rad/s²。配置、模板、指标和回放见[15 s 场景结果](simulation/experiments/20261111_walk12_stop3/README.md)；下方旧 8 s 配置与记录继续作为历史证据。
+2026-11-17 当前仿真为 **10 s 前进＋3 s 停车观察**，完整评价窗口 [0,13)。已重新采集 11 条建模＋4 条检查轨迹并运行位置 PID、无未来预览 MPC、模板预览 MPC；无预览保持当前躯干运动向量并按当前角速度外推姿态。三组录满 13 s，无跌倒或执行救援；QP 回退为 0/6/2，严格验收为 PASS/FAIL/FAIL。权重和约束未改，规划/执行加速度上限仍为 8/15 rad/s²。当前数据、清单及三条回放命令见[13 s 场景结果](simulation/experiments/20261117_walk10_stop3/README.md)和[运行清单](simulation/experiments/20261117_walk10_stop3/manifest.json)。真机统计仍使用原任务 [5,18)，仅在论文结果图中改为开始请求前进时为 0 s，10 s 停车、13 s 结束。
 
-## 三组仿真
+## 仿真保存范围
 
-| 展示编号 | 右臂控制器 | 配置 |
-| --- | --- | --- |
-| D01 | 位置 PID | [D01_position_pid_balanced.yaml](../configs/simulation_showcase_20261103/D01_position_pid_balanced.yaml) |
-| D02 | No-Preview MPC：当前测得扰动在预测窗内保持 | [D02_mpc_current_hold.yaml](../configs/simulation_showcase_20261103/D02_mpc_current_hold.yaml) |
-| D03 | Disturbance-Preview MPC：冻结仿真扰动模板 | [D03_mpc_predictive.yaml](../configs/simulation_showcase_20261103/D03_mpc_predictive.yaml) |
-
-共同：左臂名义 PD Kp=20、Kd=1，75 mm／250 g 圆环负载，2 ms 物理步长、6 ms 手臂控制。
-MPC 为 9 个预测区间；不启用额外姿态预测校正或区间前视。D02 与 D03 的配置只差
-`research_hold_future_disturbance`。D02 仍反馈当前状态和当前扰动，不能称为开环或全部前馈关闭。
-实际使用的场景由 [cases.json](../tools/experiments/simulation_showcase/cases.json) 覆盖为
-`scene_payload75.xml`，复现时应使用研究入口，不能只拿单个 YAML 推断场景。
-
-- [展示说明与全程指标](simulation/experiments/20261103_showcase/README.md)
-- [逐项指标 CSV](simulation/experiments/20261103_showcase/metrics.csv)
-- [配置、模型、轨迹哈希清单](simulation/experiments/20261103_showcase/manifest.json)
-- [回放程序](../tools/experiments/simulation_showcase/replay.py)：分别运行 `D01`、`D02`、`D03`。
-
-`D01_OLD`、`D01_SOFT`、`*_R50` 和 `stiff_left_baseline/` 是保留的历史对照，不属于最终三组。
-正面放大和斜前方视角可以来自同一轨迹。说明线与放大镜头只改变显示，不放大真实角度。
+当前保留 D01/D02/D03 的 13 s 结果、对应配置、完整运行数据、11＋4 采集轨迹与模板，以及当前复现/回放入口。2026-11-17 已按要求删除旧 8 s、12＋3 s 及其他被替代的仿真记录和专用试验脚本；参见[当前保存与清理说明](simulation/experiments/20261117_walk10_stop3/README.md#cleanup)。共享控制器、模型、行走策略与下列真机证据保留。
 
 ## 真机重复实验和录像记录
 

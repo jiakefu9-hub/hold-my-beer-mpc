@@ -1,0 +1,8 @@
+{
+  "variant": "walk10_stop3_current_omega11x4",
+  "selected_manifest": "manifest.json",
+  "complete": true,
+  "all_acceptance_gates_pass": false,
+  "reason": "User aligned simulation and hardware to 10 s forward plus 3 s settle; fresh 11+4 acquisition",
+  "acceptance_note": "D02 has 6 QP fallbacks; D03 has 2; complete trajectories retained, strict zero-fallback gates FAIL"
+}

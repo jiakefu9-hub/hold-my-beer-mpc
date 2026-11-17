@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SHOWCASE = ROOT / "docs/simulation/experiments/20261103_showcase"
+SHOWCASE = ROOT / "docs/simulation/experiments/20261117_walk10_stop3"
 
 
 def verify_hash(path, expected):
@@ -26,18 +26,25 @@ def main():
     args = parser.parse_args()
     manifest = json.loads((SHOWCASE / "manifest.json").read_text())
     spec = importlib.util.spec_from_file_location(
-        "showcase_replay", ROOT / "tools/experiments/simulation_showcase/replay.py")
+        "showcase_replay", ROOT / "tools/experiments/thesis_walk13/viewer.py")
     replay = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(replay)
     checked = {}
+    def config_path(case):
+        return (SHOWCASE / case['archived_config'] if 'archived_config' in case
+                else ROOT / case['config'])
     for name, case in manifest["cases"].items():
-        verify_hash(ROOT / case["config"], case["config_sha256"])
+        verify_hash(config_path(case), case["config_sha256"])
         _, frames, model = replay.load_case(name)
         metrics = json.loads((SHOWCASE / case["metrics"]).read_text())
-        if not metrics["complete"]:
+        gates = metrics['gates']
+        if not gates['tail_complete'] or gates['fallen'] or gates['nan_inf_count']:
             raise ValueError(f"Incomplete replay: {name}")
-        checked[name] = {"frames": len(frames["time"]), "model_nq": model.nq}
-    configs = [yaml.safe_load((ROOT / manifest["cases"][name]["config"]).read_text())
+        checked[name] = {"frames": len(frames["time"]), "model_nq": model.nq,
+                         'strict_acceptance': gates['status'],
+                         'qp_fallback_count': gates['qp_fallback_count']}
+    verify_hash(SHOWCASE / 'template/full_task_template.npz', manifest['template_sha256'])
+    configs = [yaml.safe_load(config_path(manifest["cases"][name]).read_text())
                for name in ("D02", "D03")]
     difference = sorted(key for key in configs[0].keys() | configs[1].keys()
                         if configs[0].get(key) != configs[1].get(key))
